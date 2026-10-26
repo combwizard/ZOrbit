@@ -1,0 +1,4 @@
+# Runtime dependencies (Windows 10/11, Python 3.12)
+pillow>=10.0
+pywebview>=6.0,<7
+pythonnet>=3.0,<4

@@ -1,0 +1,79 @@
+name: build
+
+on:
+  push:
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write   # needed to create the GitHub Release on tag pushes
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements*.txt
+
+      - name: Read version
+        id: ver
+        shell: pwsh
+        run: |
+          $m = Select-String -Path radial_menu\paths.py -Pattern '^VERSION\s*=\s*"([^"]+)"'
+          $v = $m.Matches[0].Groups[1].Value
+          "version=$v" >> $env:GITHUB_OUTPUT
+          if ($env:GITHUB_REF_TYPE -eq 'tag' -and $env:GITHUB_REF_NAME -ne "v$v") {
+            throw "Tag $env:GITHUB_REF_NAME does not match VERSION $v in radial_menu\paths.py"
+          }
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: |
+          $found = (Get-Command ISCC.exe -ErrorAction SilentlyContinue) -or
+                   (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe") -or
+                   (Test-Path "$env:ProgramFiles\Inno Setup 6\ISCC.exe")
+          if (-not $found) { choco install innosetup -y --no-progress }
+
+      - name: Build app, portable zip and installer
+        shell: pwsh
+        run: .\packaging\build.ps1
+
+      - name: Smoke test the built exe
+        shell: pwsh
+        run: |
+          $p = Start-Process dist\RadialMenu\RadialMenu.exe -ArgumentList '--check' -Wait -PassThru `
+                 -RedirectStandardOutput check.out -RedirectStandardError check.err
+          Get-Content check.out, check.err
+          if ($p.ExitCode -ne 0) { throw "RadialMenu.exe --check exited with $($p.ExitCode)" }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: RadialMenuSetup-${{ steps.ver.outputs.version }}
+          path: packaging/Output/RadialMenuSetup-${{ steps.ver.outputs.version }}.exe
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: RadialMenu-${{ steps.ver.outputs.version }}-portable
+          path: dist/RadialMenu-${{ steps.ver.outputs.version }}-portable.zip
+          if-no-files-found: error
+
+      - name: Create GitHub Release
+        if: github.ref_type == 'tag'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $v = "${{ steps.ver.outputs.version }}"
+          gh release create "$env:GITHUB_REF_NAME" `
+            "packaging\Output\RadialMenuSetup-$v.exe" `
+            "dist\RadialMenu-$v-portable.zip" `
+            --repo "$env:GITHUB_REPOSITORY" `
+            --title "Radial Menu for ZBrush $v" `
+            --generate-notes

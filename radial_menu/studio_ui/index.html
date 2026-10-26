@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Radial Menu Studio</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="app" id="app">
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo" aria-hidden="true">
+        <svg viewBox="0 0 32 32" width="26" height="26">
+          <circle cx="16" cy="16" r="14.5" fill="#1a1b1e" stroke="rgba(255,255,255,.10)"/>
+          <circle cx="16" cy="16" r="9.5" fill="none" stroke="rgba(248,107,51,.28)" stroke-width="1"/>
+          <g fill="none" stroke-width="1.6">
+            <circle cx="16" cy="6.6" r="2.3" stroke="#f86b33"/><circle cx="24.1" cy="11.3" r="2.3" stroke="#f86b33"/>
+            <circle cx="24.1" cy="20.7" r="2.3" stroke="#4dc8e9"/><circle cx="16" cy="25.4" r="2.3" stroke="#f86b33"/>
+            <circle cx="7.9" cy="20.7" r="2.3" stroke="#f86b33"/><circle cx="7.9" cy="11.3" r="2.3" stroke="#f86b33"/>
+          </g>
+          <circle cx="16" cy="16" r="2.6" fill="#f86b33"/>
+        </svg>
+      </span>
+      <span class="wordmark">Radial Menu <em>Studio</em></span>
+      <span class="version-chip mono" id="versionChip">v0.2.0</span>
+    </div>
+    <span class="path-hint mono" id="pathHint"></span>
+    <button class="problems-pill" id="problemsBtn" type="button" hidden aria-expanded="false" aria-controls="problems">
+      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4l9 16H3z"/><path d="M12 10v4M12 17v.4"/></svg>
+      <span id="problemsCount">0 problems</span>
+    </button>
+    <div class="spacer"></div>
+    <div class="dirty" id="dirty" hidden role="status"><i class="dot"></i>Unsaved changes</div>
+    <button class="btn" id="revertBtn" type="button" disabled>Revert</button>
+    <button class="btn primary" id="saveBtn" type="button">Save <kbd>Ctrl+S</kbd></button>
+    <div class="winctl" role="group" aria-label="Window">
+      <button class="winbtn" id="winMin" type="button" title="Minimise" aria-label="Minimise">
+        <svg viewBox="0 0 12 12" width="12" height="12"><path d="M2 6.5h8" stroke="currentColor" stroke-width="1.2"/></svg>
+      </button>
+      <button class="winbtn" id="winMax" type="button" title="Maximise" aria-label="Maximise">
+        <svg class="i-max" viewBox="0 0 12 12" width="12" height="12"><rect x="2" y="2" width="8" height="8" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.2"/></svg>
+        <svg class="i-restore" viewBox="0 0 12 12" width="12" height="12"><rect x="2" y="3.5" width="6.5" height="6.5" rx="1.3" fill="none" stroke="currentColor" stroke-width="1.2"/><path d="M4 3.5V3a1.3 1.3 0 0 1 1.3-1.3H9A1.3 1.3 0 0 1 10.3 3v3.7A1.3 1.3 0 0 1 9 8h-.5" fill="none" stroke="currentColor" stroke-width="1.2"/></svg>
+      </button>
+      <button class="winbtn close" id="winClose" type="button" title="Close" aria-label="Close">
+        <svg viewBox="0 0 12 12" width="12" height="12"><path d="M2.5 2.5l7 7M9.5 2.5l-7 7" stroke="currentColor" stroke-width="1.2"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <div class="problems" id="problems" hidden>
+    <div class="problems-head" id="problemsHead" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
+      <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4l9 16H3z"/><path d="M12 10v4M12 17v.4"/></svg>
+      <b>The config has problems</b>
+      <span class="problems-first" id="problemsFirst"></span>
+      <svg class="chev" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+    </div>
+    <div class="problems-list" id="problemsList"></div>
+  </div>
+
+  <div class="body">
+    <nav class="rail" aria-label="Screens">
+      <button class="rail-btn" type="button" data-screen="menus" title="Menus (Alt+1)"><span class="ri" data-i="menus"></span><span>Menus</span></button>
+      <button class="rail-btn" type="button" data-screen="library" title="Library (Alt+2)"><span class="ri" data-i="library"></span><span>Library</span></button>
+      <button class="rail-btn" type="button" data-screen="settings" title="Appearance &amp; Behaviour (Alt+3)"><span class="ri" data-i="settings"></span><span>Settings</span></button>
+      <button class="rail-btn" type="button" data-screen="status" title="Status (Alt+4)"><span class="ri" data-i="status"></span><span>Status</span></button>
+      <button class="rail-btn rail-bottom" type="button" data-screen="licence" title="Licence (Alt+5)"><span class="ri" data-i="licence"></span><span>Licence</span></button>
+    </nav>
+    <main class="screens" id="screens">
+      <section class="screen menus-screen" id="screen-menus" hidden></section>
+      <section class="screen library-screen" id="screen-library" hidden></section>
+      <section class="screen settings-screen" id="screen-settings" hidden></section>
+      <section class="screen status-screen" id="screen-status" hidden></section>
+      <section class="screen licence-screen" id="screen-licence" hidden></section>
+    </main>
+  </div>
+</div>
+<div id="toasts" aria-live="polite"></div>
+<div id="overlay-root"></div>
+
+<script>
+(function () {
+  // Browser-only development: ?mock loads recorded backend responses and a fake window.pywebview.api.
+  // Inside pywebview there is no ?mock, so dev/ is never touched.
+  var mock = /[?&]mock(=|&|$)/.test(location.search);
+  if (mock) document.write('<script src="dev/mock_data.js"><\/script><script src="dev/mock.js"><\/script>');
+  document.write('<script src="app.js"><\/script>');
+  document.write('<script src="window.js"><\/script>');
+})();
+</script>
+<script>
+// rail icons come from app.js's icon set; until it runs they stay empty. Filled in by app.js is not needed:
+// the small inline set below keeps the rail independent of boot order.
+(function () {
+  var P = {
+    menus: '<circle cx="12" cy="12" r="2"/><circle cx="12" cy="4.6" r="1.9"/><circle cx="18.4" cy="8.3" r="1.9"/><circle cx="18.4" cy="15.7" r="1.9"/><circle cx="12" cy="19.4" r="1.9"/><circle cx="5.6" cy="15.7" r="1.9"/><circle cx="5.6" cy="8.3" r="1.9"/>',
+    library: '<rect x="4" y="4" width="7" height="7" rx="1.6"/><rect x="13" y="4" width="7" height="7" rx="1.6"/><rect x="4" y="13" width="7" height="7" rx="1.6"/><rect x="13" y="13" width="7" height="7" rx="1.6"/>',
+    settings: '<path d="M4 7h8M18 7h2M4 12h5M13 12h7M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="11" cy="12" r="2"/><circle cx="9" cy="17" r="2"/>',
+    status: '<path d="M3 12h4l2.5-6 4 12 2.5-6H21"/>',
+    licence: '<circle cx="8" cy="15" r="4"/><path d="M11 12l9-9M16 7l3 3M14 9l2 2"/>'
+  };
+  document.querySelectorAll('.ri').forEach(function (n) {
+    n.innerHTML = '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">' + P[n.dataset.i] + '</svg>';
+  });
+})();
+</script>
+</body>
+</html>

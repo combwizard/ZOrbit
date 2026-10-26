@@ -1,0 +1,38 @@
+"""Records real Studio API responses from THIS machine into radial_menu/studio_ui/dev/mock_data.js, so the
+Studio UI can be developed in a plain browser: open studio_ui/index.html?mock in Edge.
+
+The output contains your own paths, hotkeys and logs. It is git-ignored; never commit it.
+Run: python tools/make_mock.py
+"""
+import json
+import os
+import sys
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(ROOT, "radial_menu"))
+import studio  # noqa: E402
+
+
+def main():
+    a = studio.Api()
+    cfg = a.get_config()
+    lib = a.get_library()
+    used = sorted({it["brush"] for m in cfg["config"]["menus"].values() for it in m["items"] if "brush" in it})
+    names = used + [b["name"] for b in lib["brushes"][:70]]
+    first = next(iter(cfg["config"]["menus"]))
+    mock = {
+        "get_config": cfg, "get_library": lib, "get_thumbs": a.get_thumbs(names, 128),
+        "get_suggestions": a.get_suggestions(), "get_status": a.get_status(), "get_options": a.get_options(),
+        "preview_ring": {mid: a.preview_ring(cfg["config"], mid) for mid in cfg["config"]["menus"]},
+        "preview_ring_hover0": a.preview_ring(cfg["config"], first, hover=0),
+        "preview_animation": a.preview_animation(cfg["config"], first),
+    }
+    out = os.path.join(ROOT, "radial_menu", "studio_ui", "dev", "mock_data.js")
+    with open(out, "w", encoding="utf-8") as f:
+        f.write("// Recorded Studio API responses from a developer's machine. Generated; git-ignored.\n"
+                "window.__RADIAL_MOCK__ = " + json.dumps(mock) + ";\n")
+    print(f"wrote {out}")
+
+
+if __name__ == "__main__":
+    main()
