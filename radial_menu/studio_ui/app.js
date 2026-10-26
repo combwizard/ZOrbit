@@ -441,12 +441,12 @@ const RingLoader = {
 };
 const FrameLoader = {
   cache: new Map(), ver: -1,
-  async get(menuId) {
+  async get(menuId, ringAnim = false) {          // ringAnim: ring.animation even if the menu has its own
     if (this.ver !== S.version) { this.cache.clear(); this.ver = S.version; }
-    const k = menuId;
+    const k = menuId + (ringAnim ? '|ring' : '');
     if (this.cache.has(k)) return this.cache.get(k);
     const ver = S.version;
-    const res = await call('preview_animation', S.cfg, menuId, 30);
+    const res = await call('preview_animation', S.cfg, menuId, 30, ringAnim);
     if (res && res.frames && res.frames.length && ver === S.version) this.cache.set(k, res);
     return res;
   },
@@ -456,13 +456,13 @@ function makePlayer(getImg, restore, onState) {
   const p = { state: 'idle', timer: null, token: 0 };
   const set = s => { p.state = s; onState && onState(s); };
   p.stop = () => { clearTimeout(p.timer); p.token++; if (p.state !== 'idle') { set('idle'); restore(); } };
-  p.play = async menuId => {
+  p.play = async (menuId, ringAnim = false) => {
     if (p.state === 'playing') { p.stop(); return; }
     if (p.state === 'loading') return;
     const tok = ++p.token;
     set('loading');
     let res = null;
-    try { res = await FrameLoader.get(menuId); } catch (e) { /* toast below */ }
+    try { res = await FrameLoader.get(menuId, ringAnim); } catch (e) { /* toast below */ }
     if (tok !== p.token) return;
     if (!res || !res.frames || !res.frames.length) {
       set('idle'); toast((res && res.problems && res.problems[0]) || 'Could not render the animation.', { tone: 'warn' }); return;
@@ -1362,9 +1362,21 @@ function buildMenuProps() {
       icon('k_menu', 12), (S.cfg.menus[r.menuId].title || r.menuId) + ' / ' + (r.index + 1))))
     : h('div', { class: 'fhint' }, m.hotkey ? 'Opened from ZBrush by its hotkey.' : 'Nothing opens this menu yet. Add a Submenu item in another menu that points to it.'));
 
-  box.append(sectionTitle('Preview'), h('div', { class: 'btn-row' },
-    h('button', { class: 'btn', type: 'button', onclick: () => R.playAnim && R.playAnim() }, icon('play', 13), 'Preview animation'),
-    h('span', { class: 'fhint' }, 'Plays the open animation set in Appearance.')));
+  const anims = (S.opts && S.opts.animations) || Object.keys(ANIM_INFO);
+  const animTitle = a => a[0].toUpperCase() + a.slice(1);
+  const ringAnim = () => ring().animation || S.defaults.animation;
+  const animHint = h('div', { class: 'fhint' });
+  const paintAnimHint = () => setText(animHint, m.animation
+    ? (ANIM_INFO[m.animation] || '') + ' Only this menu opens this way; the others use ' + animTitle(ringAnim()) + ' from Settings.'
+    : 'Uses the open animation set in Settings (' + animTitle(ringAnim()) + '). Pick one to give this menu its own.');
+  const animSel = h('select', { class: 'inp sel', 'aria-label': 'Open animation for this menu', onchange: () => {
+    if (animSel.value) m.animation = animSel.value; else delete m.animation;
+    paintAnimHint(); commit(); setTimeout(() => R.playAnim && R.playAnim(), 0);
+  } }, h('option', { value: '', selected: !m.animation }, 'Same as Settings (' + animTitle(ringAnim()) + ')'),
+    anims.map(a => h('option', { value: a, selected: m.animation === a }, animTitle(a))));
+  paintAnimHint();
+  box.append(sectionTitle('Open animation'), h('div', { class: 'field' }, animSel, animHint), h('div', { class: 'btn-row' },
+    h('button', { class: 'btn', type: 'button', onclick: () => R.playAnim && R.playAnim() }, icon('play', 13), 'Preview animation')));
   box.append(sectionTitle('Manage'), h('div', { class: 'btn-row' },
     h('button', { class: 'btn', type: 'button', onclick: () => dupMenu(id) }, icon('copy', 13), 'Duplicate'),
     h('button', { class: 'btn danger-o', type: 'button', onclick: () => deleteMenu(id) }, icon('trash', 13), 'Delete menu')));
@@ -1652,12 +1664,16 @@ function buildSettingsScreen(root) {
       abtn.disabled = st === 'loading';
     });
     settingsPlayer.stop(); abtn.replaceChildren(icon('play', 12), 'Replay');
-    abtn.onclick = () => { if (usableIdx(S.menuId).length) settingsPlayer.play(S.menuId); else toast('The current menu has no usable items to animate.', { tone: 'warn' }); };
+    abtn.onclick = () => { if (usableIdx(S.menuId).length) settingsPlayer.play(S.menuId, true); else toast('The current menu has no usable items to animate.', { tone: 'warn' }); };
     restoreStatic();
     const anims = (S.opts && S.opts.animations) || Object.keys(ANIM_INFO);
     const cur = ring().animation || S.defaults.animation;
+    const own = Object.entries(S.cfg.menus).filter(([, m]) => m.animation).map(([id, m]) => m.title || id);
     page.append(card('Open animation', 'Pick one to see it play', h('div', { class: 'split anim-split' }, astage,
-      choiceCards(anims.map(a => [a, a[0].toUpperCase() + a.slice(1), ANIM_INFO[a] || '']), cur, v => { settingsPlayer.stop(); setRing('animation', v); setTimeout(() => abtn.onclick(), 0); }, 'anim-cards'))));
+      choiceCards(anims.map(a => [a, a[0].toUpperCase() + a.slice(1), ANIM_INFO[a] || '']), cur, v => { settingsPlayer.stop(); setRing('animation', v); setTimeout(() => abtn.onclick(), 0); }, 'anim-cards')),
+      h('div', { class: 'fhint' }, own.length
+        ? 'Used by every menu except ' + own.map(t => '\u201c' + t + '\u201d').join(', ') + ', which ' + (own.length === 1 ? 'has its own' : 'have their own') + ' (set on the Menus screen).'
+        : 'Used by every menu. A menu can have its own instead: pick it on the Menus screen.')));
 
     /* --- labels */
     const labelOpts = (S.opts && S.opts.labels) || ['name', 'none'];
@@ -1889,6 +1905,7 @@ function describeChanges() {
     const lines = [];
     if ((a.title || '') !== (b.title || '')) lines.push('Renamed from ' + q(b.title || id));
     if ((a.hotkey || '') !== (b.hotkey || '')) lines.push('Hotkey: ' + (b.hotkey || 'none') + ' \u2192 ' + (a.hotkey || 'none'));
+    if ((a.animation || '') !== (b.animation || '')) lines.push('Open animation: ' + (b.animation || 'same as Settings') + ' \u2192 ' + (a.animation || 'same as Settings'));
     if ((a.swallow !== false) !== (b.swallow !== false)) lines.push('Swallow hotkey: ' + (b.swallow !== false ? 'on' : 'off') + ' \u2192 ' + (a.swallow !== false ? 'on' : 'off'));
     const bi = b.items || [], ai = a.items || [];
     const key = it => JSON.stringify(it);

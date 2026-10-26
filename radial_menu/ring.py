@@ -160,7 +160,8 @@ class Ring:
         self.on_done = on_done
         self._log = log
         self.mode = "hold" if held else "click"
-        self.anim = MODES.get(ring_cfg.get("animation", "smooth"), MODES["smooth"])
+        self.anim_name = getattr(menu, "animation", "") or ring_cfg.get("animation", "smooth")
+        self.anim = MODES.get(self.anim_name, MODES["smooth"])
         self.curve = cubic_bezier(*self.anim["curve"])
         self.hover = None
         self.done = False
@@ -220,7 +221,7 @@ class Ring:
         W.SetWindowPos(self.hwnd, W.HWND_TOPMOST, 0, 0, 0, 0,
                        W.SWP_NOMOVE | W.SWP_NOSIZE | W.SWP_NOACTIVATE | W.SWP_SHOWWINDOW)
         W.SetTimer(self.hwnd, TIMER_TICK, 10, None)
-        self._log(f"ring '{self.menu.id}' shown at ({x},{y}) mode={self.mode} anim={self.cfg.get('animation')} "
+        self._log(f"ring '{self.menu.id}' shown at ({x},{y}) mode={self.mode} anim={self.anim_name} "
                   f"scale={scale:.2f}")
 
     def key_released(self) -> None:

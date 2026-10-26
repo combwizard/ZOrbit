@@ -9,6 +9,8 @@ All notable changes to this project are listed here. The format follows
 ### Added
 - Studio asks before closing with unsaved changes, and lists them by area (menus, items, appearance,
   bridge) with Save and close, Close without saving, and Keep editing.
+- Each menu and submenu can have its own open animation (`"animation"` on the menu, or Open animation in its
+  menu settings in Studio). Menus without one use the animation from Settings.
 - Settings has an "On this page" column that jumps to each section and highlights the one you are reading.
 - The joke Licence screen can be hidden: Settings > Studio, or the link at the bottom of that screen.
 

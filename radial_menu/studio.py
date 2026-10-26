@@ -139,16 +139,21 @@ class Api:
         im = Ring.preview(loaded.menus[menu_id], loaded.ring, app.icon_for, hover=hover, scale=float(scale))
         return {"image": _png_data_url(im), "size": im.size[0], "problems": problems}
 
-    def preview_animation(self, cfg, menu_id, fps=30):
-        """Open-animation frames as PNG data URLs (played back by the Studio), plus the frame interval."""
+    def preview_animation(self, cfg, menu_id, fps=30, ring_anim=False):
+        """Open-animation frames as PNG data URLs (played back by the Studio), plus the frame interval.
+        ring_anim: play ring.animation even if the menu has its own (the Settings screen)."""
         loaded, problems = self._load_dict(cfg)
         if loaded is None or menu_id not in loaded.menus:
             return {"frames": [], "interval_ms": 33, "problems": problems}
+        import dataclasses
         import radiald
         from ring import Ring
         app = radiald.App(CONFIG_FILE)
         app.cfg = loaded
-        frames = Ring.preview_frames(loaded.menus[menu_id], loaded.ring, app.icon_for, fps=int(fps))
+        menu = loaded.menus[menu_id]
+        if ring_anim:
+            menu = dataclasses.replace(menu, animation="")
+        frames = Ring.preview_frames(menu, loaded.ring, app.icon_for, fps=int(fps))
         return {"frames": [_png_data_url(f) for f in frames], "interval_ms": round(1000 / int(fps)),
                 "problems": problems}
 

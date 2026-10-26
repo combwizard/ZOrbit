@@ -65,6 +65,7 @@ A menu is a named list of items shown as one ring. Menus live in one file, `%APP
 - A menu **without a hotkey** is a submenu: it opens when you pick an item of type `menu` in another ring.
 - Rings work best with 4 to 12 items. They are spread evenly around the circle.
 - At least one menu needs a hotkey, otherwise nothing can open the ring.
+- A menu can have its own open animation (`"animation": "spiral"`, or pick one in the menu settings in Studio). Without one it uses `ring.animation`. See [Open animations](#open-animations).
 
 Starter menus ship with Radial Menu: **Brushes** (Q), with submenus **More Brushes**, **Tools** (masking, symmetry, PolyFrame, LazyMouse and other switches) and **SubDivide** (a row of stroke subdivide sizes). They use only brushes that come with ZBrush.
 
@@ -210,6 +211,16 @@ Anything you leave out keeps its default. Values outside the allowed range are r
 ## Open animations
 
 Set `ring.animation` (or pick one in Studio, which plays a preview). Closing is always instant, so a pick never waits for an animation.
+
+Any menu or submenu can use a different one: give it its own `animation`, or pick one under **Open animation** in its menu settings in Studio. Menus without one use `ring.animation`.
+
+```json
+"more": {
+  "title": "More Brushes",
+  "animation": "spiral",
+  "items": [ ... ]
+}
+```
 
 | Mode | What you see |
 |---|---|

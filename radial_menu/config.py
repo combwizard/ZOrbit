@@ -21,6 +21,7 @@ Schema (all keys optional except menus):
       "title": "Brushes",
       "hotkey": "Q",                   # optional; menus without one are submenus only
       "swallow": true,                 # hide the hotkey from ZBrush (default true)
+      "animation": "spiral",           # optional; this menu's open animation instead of ring.animation
       "items": [ <item>, ... ]         # drawn clockwise from the top
     }
   }
@@ -84,6 +85,7 @@ class Menu:
     items: list
     hotkey: Hotkey | None = None
     swallow: bool = True
+    animation: str = ""       # one of ANIMATIONS, or "" for ring.animation
 
 
 @dataclass
@@ -241,8 +243,12 @@ def load(path: str) -> Config:
                 hk = None
             else:
                 used_keys[(hk.vk, hk.ctrl, hk.alt, hk.shift)] = mid
+        anim = m.get("animation") or ""
+        if anim and anim not in ANIMATIONS:
+            errors.append(f"menu {mid}: animation {anim!r} unknown; using ring.animation")
+            anim = ""
         cfg.menus[mid] = Menu(id=mid, title=str(m.get("title") or mid), items=items, hotkey=hk,
-                              swallow=bool(m.get("swallow", True)))
+                              swallow=bool(m.get("swallow", True)), animation=anim)
     if not any(m.hotkey for m in cfg.menus.values()):
         errors.append("no menu has a hotkey, so nothing can open the ring")
     return cfg
