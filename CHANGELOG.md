@@ -4,7 +4,7 @@ All notable changes to this project are listed here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.4.0] - 2026-10-27
 
 ### Added
 - Support for ZBrush 2022 to 2025. They have no Python API, so they get a ZScript plugin with the same
@@ -62,5 +62,6 @@ First public release.
   only brushes included with ZBrush.
 - Documentation: README, user guide, third-party notices and contributing guide.
 
+[0.4.0]: https://github.com/combwizard/zbrush-radial-menu/releases/tag/v0.4.0
 [0.3.0]: https://github.com/combwizard/zbrush-radial-menu/releases/tag/v0.3.0
 [0.2.0]: https://github.com/combwizard/zbrush-radial-menu/releases/tag/v0.2.0
