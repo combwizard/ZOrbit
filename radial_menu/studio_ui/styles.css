@@ -579,3 +579,8 @@ body.dragging .irow:hover { background: transparent; }
 .lic-wink { display: inline-block; font-weight: 800; font-size: 18px; color: #4dc8e9; transform: rotate(90deg); }
 .lic-big { font-size: 17px; font-weight: 800; margin-top: 14px !important; }
 @keyframes licin { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.lic-hide { text-align: center; margin-top: 26px; }
+.linkish { background: none; border: 0; padding: 4px 6px; color: var(--sub); font-size: 12px; text-decoration: underline;
+  text-underline-offset: 3px; text-decoration-color: rgba(255, 255, 255, .18); cursor: pointer; }
+.linkish:hover { color: var(--text); text-decoration-color: var(--accent); }
+.rail-btn[hidden] { display: none; }

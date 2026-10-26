@@ -141,6 +141,7 @@ const S = {
   lib: { cat: 'All', q: '', size: 112 },
   dock: { cat: 'All', q: '' },
   status: null,
+  prefs: { show_licence: true },
 };
 const R = {};               // region renderers registered by the visible screen
 
@@ -1654,10 +1655,14 @@ function buildSettingsScreen(root) {
     };
     page.append(card('ZBrush bridge', 'How a pick reaches ZBrush',
       choiceCards(['auto', 'message', 'key'].map(m => [m, BRIDGE_INFO[m][0], BRIDGE_INFO[m][1]]), bmode, v => { bridge().mode = v; commit(); paintKey(); }, 'bridge-cards'),
-      keyWrap,
-      h('details', { class: 'more' }, h('summary', null, icon('info', 13), 'Advanced'),
-        field('Python for the ZBrush bridge', textInput(S.cfg.python || '', v => { if (v.trim()) S.cfg.python = v.trim(); else delete S.cfg.python; commit(); }, { mono: true, placeholder: 'Empty = detect automatically (path to pythonw.exe)', label: 'Python path' }), 'Only change this if the bridge cannot start the app.'))));
+      keyWrap));
     paintKey();
+
+    /* --- studio (preferences of this window, saved immediately, not part of the menus file) */
+    page.append(card('Studio', 'Preferences for this window. Saved straight away.',
+      h('div', { class: 'field row' }, h('div', { class: 'grow' }, h('span', { class: 'flabel' }, 'Show the Licence button'),
+        h('div', { class: 'fhint' }, 'The Licence screen is a joke: Radial Menu is free software and needs no licence. Turn this off to hide its button.')),
+        toggleSwitch(licenceVisible(), v => { setPref('show_licence', v); toast(v ? 'The Licence button is back. It missed you.' : 'Licence button hidden.', { ms: 2800 }); }, 'Show the Licence button'))));
     R.preview();
   };
   R.settings = build;
@@ -1814,13 +1819,29 @@ function buildLicenceScreen(root) {
       h('p', { class: 'lic-big' }, 'You are licensed. Forever.'),
       h('div', { class: 'btn-row' },
         link('Read the GPL v3', 'https://www.gnu.org/licenses/gpl-3.0.html'),
-        link('Source code on GitHub', 'https://github.com/combwizard/zbrush-radial-menu'))));
+        link('Source code on GitHub', 'https://github.com/combwizard/zbrush-radial-menu'))),
+    h('div', { class: 'lic-hide' }, h('button', { class: 'linkish', type: 'button', onclick: () => {
+      setPref('show_licence', false);
+      toast('Fine. It is gone. Settings > Studio brings it back, if you ever miss it.', { ms: 4500 });
+      showScreen('settings');
+    } }, 'Hide this nonsense, it isn\u2019t funny\u2026')));
   root.append(h('div', { class: 'settings-scroll' }, page));
+}
+
+function licenceVisible() { return S.prefs.show_licence !== false; }
+function applyPrefs() {
+  const btn = document.querySelector('.rail-btn[data-screen="licence"]');
+  if (btn) btn.hidden = !licenceVisible();
+}
+async function setPref(key, value) {
+  S.prefs[key] = value;
+  applyPrefs();
+  try { const p = await call('set_pref', key, value); if (p) S.prefs = Object.assign(S.prefs, p); } catch (e) { /* kept for this session */ }
 }
 
 const SCREENS = { menus: buildMenusScreen, library: buildLibraryScreen, settings: buildSettingsScreen, status: buildStatusScreen, licence: buildLicenceScreen };
 function showScreen(name) {
-  if (!SCREENS[name]) name = 'menus';
+  if (!SCREENS[name] || (name === 'licence' && !licenceVisible())) name = 'menus';
   if (openPopover) openPopover();
   if (comboClose) comboClose();
   for (const k of Object.keys(R)) delete R[k];
@@ -1877,6 +1898,8 @@ async function boot() {
   $('#pathHint').textContent = S.path;
   $('#pathHint').title = S.path;
   updateDirty(); renderProblems();
+  try { S.prefs = Object.assign(S.prefs, await call('get_prefs')); } catch (e) { /* defaults */ }
+  applyPrefs();
   loadLibrary(); loadSuggestions();
   showScreen(params.get('screen') || 'menus');
   if (params.has('hover')) { /* debug aid */ }
@@ -1894,7 +1917,7 @@ function init() {
     if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === 's') { e.preventDefault(); save(); }
     else if ((e.ctrlKey || e.metaKey) && !e.altKey && !ed && e.key.toLowerCase() === 'z') { e.preventDefault(); e.shiftKey ? redo() : undo(); }
     else if ((e.ctrlKey || e.metaKey) && !e.altKey && !ed && e.key.toLowerCase() === 'y') { e.preventDefault(); redo(); }
-    else if (e.altKey && !e.ctrlKey && !e.shiftKey && /^[1-5]$/.test(e.key)) { e.preventDefault(); showScreen(['menus', 'library', 'settings', 'status', 'licence'][+e.key - 1]); }
+    else if (e.altKey && !e.ctrlKey && !e.shiftKey && /^[1-5]$/.test(e.key)) { e.preventDefault(); const scr = ['menus', 'library', 'settings', 'status', 'licence'][+e.key - 1]; if (scr !== 'licence' || licenceVisible()) showScreen(scr); }
   });
   window.addEventListener('beforeunload', e => { if (dirtyNow()) { e.preventDefault(); e.returnValue = ''; } });
   const showErr = msg => {

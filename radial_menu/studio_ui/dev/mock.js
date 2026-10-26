@@ -87,6 +87,8 @@
     },
     start_app: function () { return sleep(300).then(function () { return { ok: true, message: 'Started (mock: nothing was launched).' }; }); },
     open_folder: function (which) { console.log('[mock] open_folder', which); return Promise.resolve(true); },
+    get_prefs: function () { return Promise.resolve(JSON.parse(localStorage.getItem('rm_prefs') || '{"show_licence": true}')); },
+    set_pref: function (k, v) { var p = JSON.parse(localStorage.getItem('rm_prefs') || '{"show_licence": true}'); p[k] = v; try { localStorage.setItem('rm_prefs', JSON.stringify(p)); } catch (e) {} return Promise.resolve(p); },
     win_minimize: function () { return Promise.resolve(); },
     win_close: function () { return Promise.resolve(); },
   };

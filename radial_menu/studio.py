@@ -239,6 +239,34 @@ class Api:
                          stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         return {"ok": True, "message": "Started."}
 
+    # --- Studio preferences (not part of the menus; saved straight away) --------------------------
+    _PREFS_DEFAULTS = {"show_licence": True}
+
+    def _prefs_path(self):
+        return os.path.join(paths.CONFIG_DIR, "studio.json")
+
+    def get_prefs(self):
+        prefs = dict(self._PREFS_DEFAULTS)
+        try:
+            with open(self._prefs_path(), encoding="utf-8") as f:
+                stored = json.load(f)
+            prefs.update({k: v for k, v in stored.items() if k in self._PREFS_DEFAULTS})
+        except (OSError, ValueError):
+            pass
+        return prefs
+
+    def set_pref(self, key, value):
+        if key not in self._PREFS_DEFAULTS or type(value) is not type(self._PREFS_DEFAULTS[key]):
+            return self.get_prefs()
+        prefs = self.get_prefs()
+        prefs[key] = value
+        os.makedirs(paths.CONFIG_DIR, exist_ok=True)
+        tmp = self._prefs_path() + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(prefs, f, indent=2)
+        os.replace(tmp, self._prefs_path())
+        return prefs
+
     def open_url(self, url):
         """Opens one of the project's own links in the default browser (nothing else is allowed)."""
         allowed = ("https://github.com/combwizard/zbrush-radial-menu", "https://www.gnu.org/licenses/gpl-3.0.html")

@@ -114,7 +114,7 @@ More is in the [user guide](docs/user-guide.md#troubleshooting).
 
 **Just kidding.** There is no licence key, no account, no trial and no expiry date. Radial Menu for ZBrush is licensed under the **GNU General Public License v3.0** (see [LICENSE](LICENSE)): free to use on as many machines as you like, to study, change and share. It stays free: if you distribute a modified version, you must also publish its source under the same licence. You are licensed. Forever.
 
-(The Studio has the same Licence screen. Its buttons work exactly as well as this table does.)
+(The Studio has the same Licence screen. Its buttons work exactly as well as this table does. Not amused? Hide it with the link at the bottom of that page, or in Settings > Studio.)
 
 Third-party components and their licences are listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Contributions are welcome; see [CONTRIBUTING.md](CONTRIBUTING.md).
 
