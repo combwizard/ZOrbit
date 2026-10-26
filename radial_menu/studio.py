@@ -34,6 +34,7 @@ STUDIO_MUTEX = "Local\\RadialMenuStudio"
 TITLE = "Radial Menu Studio"
 VERSION = paths.VERSION
 APP_ID = "RadialMenu.Studio"           # taskbar identity, so the Studio groups under its own icon
+STUDIO_FILE = os.path.join(paths.CONFIG_DIR, "studio.json")   # Studio preferences and window placement
 
 kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
 user32 = ctypes.WinDLL("user32", use_last_error=True)
@@ -252,30 +253,18 @@ class Api:
     # --- Studio preferences (not part of the menus; saved straight away) --------------------------
     _PREFS_DEFAULTS = {"show_licence": True}
 
-    def _prefs_path(self):
-        return os.path.join(paths.CONFIG_DIR, "studio.json")
-
     def get_prefs(self):
         prefs = dict(self._PREFS_DEFAULTS)
-        try:
-            with open(self._prefs_path(), encoding="utf-8") as f:
-                stored = json.load(f)
-            prefs.update({k: v for k, v in stored.items() if k in self._PREFS_DEFAULTS})
-        except (OSError, ValueError):
-            pass
+        prefs.update({k: v for k, v in _read_studio_file().items() if k in self._PREFS_DEFAULTS})
         return prefs
 
     def set_pref(self, key, value):
         if key not in self._PREFS_DEFAULTS or type(value) is not type(self._PREFS_DEFAULTS[key]):
             return self.get_prefs()
-        prefs = self.get_prefs()
-        prefs[key] = value
-        os.makedirs(paths.CONFIG_DIR, exist_ok=True)
-        tmp = self._prefs_path() + ".tmp"
-        with open(tmp, "w", encoding="utf-8") as f:
-            json.dump(prefs, f, indent=2)
-        os.replace(tmp, self._prefs_path())
-        return prefs
+        data = _read_studio_file()             # keeps the other keys (window placement)
+        data[key] = value
+        _write_studio_file(data)
+        return self.get_prefs()
 
     def open_url(self, url):
         """Opens one of the project's own links in the default browser (nothing else is allowed)."""
@@ -334,6 +323,23 @@ class Api:
         return True
 
 
+def _read_studio_file() -> dict:
+    try:
+        with open(STUDIO_FILE, encoding="utf-8") as f:
+            data = json.load(f)
+        return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def _write_studio_file(data: dict):
+    os.makedirs(paths.CONFIG_DIR, exist_ok=True)
+    tmp = STUDIO_FILE + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2)
+    os.replace(tmp, STUDIO_FILE)
+
+
 def _main_window(title=TITLE, pid=None):
     """The largest visible top-level window with this exact title (optionally in process pid).
     pywebview also creates a tiny helper window with the same title, so FindWindow alone picks wrongly."""
@@ -370,9 +376,11 @@ def _on_closing(api):
     close is cancelled and the page is asked to show its dialog. That request must run on another thread:
     calling into the page from inside this handler would deadlock the UI thread."""
     if api._allow_close or not api._dirty:
+        _remember_window(api._hwnd())
         return None
     now = time.time()
     if not api._ask_acked and now - api._ask_sent > 4.0:
+        _remember_window(api._hwnd())
         return None                    # the page did not answer the last request: never trap the user
     api._ask_sent, api._ask_acked = now, False
 
@@ -389,6 +397,52 @@ def _on_closing(api):
             api.win_close()
     threading.Thread(target=ask, daemon=True).start()
     return False
+
+
+def _remember_window(hwnd):
+    """Saves the window's normal (restored) rectangle and whether it is maximised, for the next launch.
+    Taken from _limit_maximise_to_work_area's tracker: GetWindowPlacement reports the size WinForms would
+    restore to, which is one caption taller than the window really was."""
+    try:
+        st = _subclass.get(hwnd, (None, None, None))[2]
+        if not st or not st["normal"]:
+            return
+        left, top, right, bottom = st["normal"]
+        data = _read_studio_file()
+        data["window"] = {"x": left, "y": top, "width": right - left, "height": bottom - top,
+                          "maximized": st["zoomed"]}
+        _write_studio_file(data)
+    except Exception:
+        pass
+
+
+def _saved_window(min_w, min_h):
+    """Last session's window as (x, y, width, height, maximized) in pixels, or None. Shrunk to fit its
+    screen, and centred on the nearest screen when that monitor is gone or the header is out of reach."""
+    s = _read_studio_file().get("window")
+    try:
+        x, y, wd, ht = (int(s[k]) for k in ("x", "y", "width", "height"))
+        maxed = bool(s.get("maximized"))
+    except (TypeError, KeyError, ValueError, AttributeError):
+        return None
+
+    class MONITORINFO(ctypes.Structure):
+        _fields_ = [("cbSize", w.DWORD), ("rcMonitor", w.RECT), ("rcWork", w.RECT), ("dwFlags", w.DWORD)]
+    user32.MonitorFromRect.restype = w.HMONITOR
+    user32.MonitorFromRect.argtypes = [ctypes.POINTER(w.RECT), w.DWORD]
+    mi = MONITORINFO()
+    mi.cbSize = ctypes.sizeof(MONITORINFO)
+    mon = user32.MonitorFromRect(ctypes.byref(w.RECT(x, y, x + wd, y + ht)), 2)   # MONITOR_DEFAULTTONEAREST
+    if not user32.GetMonitorInfoW(mon, ctypes.byref(mi)):
+        return None
+    wa = mi.rcWork
+    wd = min(max(wd, min_w), wa.right - wa.left)
+    ht = min(max(ht, min_h), wa.bottom - wa.top)
+    header_visible = min(x + wd, wa.right) - max(x, wa.left) >= 200 and wa.top <= y <= wa.bottom - 48
+    if not header_visible:
+        x = wa.left + (wa.right - wa.left - wd) // 2
+        y = wa.top + (wa.bottom - wa.top - ht) // 2
+    return x, y, wd, ht, maxed
 
 
 def _work_area(hwnd) -> w.RECT:
@@ -470,13 +524,14 @@ def _limit_maximise_to_work_area(hwnd):
                 pass
         return r
     cb = _WNDPROC(proc)
-    _subclass[hwnd] = (cb, original)
+    _subclass[hwnd] = (cb, original, st)
     user32.SetWindowLongPtrW(hwnd, GWLP_WNDPROC, ctypes.cast(cb, ctypes.c_void_p))
 
 
-def _custom_frame(title=TITLE):
+def _custom_frame(title=TITLE, placement=None):
     """Removes the Windows title bar but keeps the resizable frame (native resize and Aero Snap), and
     themes the remaining 1 px border and corners. The page draws its own header (see index.html).
+    placement: _saved_window()'s result, applied exactly (create_window only gets it to within a pixel).
     Plain Win32 only: touching window.native (a .NET Form) from pywebview's worker thread deadlocks."""
     try:
         hwnd = None
@@ -500,6 +555,11 @@ def _custom_frame(title=TITLE):
             v = ctypes.c_int(val)
             dwm.DwmSetWindowAttribute(hwnd, attr, ctypes.byref(v), 4)
         user32.SetWindowPos(hwnd, None, 0, 0, 0, 0, 0x0001 | 0x0002 | 0x0004 | 0x0010 | 0x0020)  # FRAMECHANGED
+        if placement:
+            x, y, wd, ht, maxed = placement
+            user32.SetWindowPos(hwnd, None, x, y, wd, ht, 0x0004 | 0x0010)             # NOZORDER NOACTIVATE
+            if maxed:
+                user32.ShowWindow(hwnd, 3)                                         # SW_MAXIMIZE
     except Exception:
         pass
 
@@ -536,14 +596,27 @@ def main():
         ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(APP_ID)
     except Exception:
         pass
+    # pywebview makes the process system-DPI aware when it starts and scales sizes by that DPI. Doing it
+    # first means the saved window pixels and the monitor checks use the same coordinates as the window.
+    user32.SetProcessDPIAware()
+    scale = user32.GetDpiForSystem() / 96
+    min_size = (980, 640)
+    placement = _saved_window(round(min_size[0] * scale), round(min_size[1] * scale))
+    if placement:
+        x, y, wd, ht, _maxed = placement
+        geometry = {"x": round(x / scale), "y": round(y / scale), "width": round(wd / scale),
+                    "height": round(ht / scale)}
+    else:
+        geometry = {"width": 1320, "height": 860}
     api = Api()
-    window = webview.create_window(TITLE, url=UI_INDEX, js_api=api, width=1320, height=860,
-                                   min_size=(980, 640), background_color="#1b1c20", text_select=False)
+    window = webview.create_window(TITLE, url=UI_INDEX, js_api=api, **geometry,
+                                   min_size=min_size, background_color="#1b1c20", text_select=False)
     api._window = window
     window.events.closing += lambda: _on_closing(api)
     _enable_drag_regions()
     icon = paths.ICON if os.path.isfile(paths.ICON) else None
-    webview.start(_custom_frame, debug="--debug" in sys.argv, icon=icon)   # _custom_frame: worker thread
+    webview.start(lambda: _custom_frame(placement=placement), debug="--debug" in sys.argv,
+                  icon=icon)                                                  # _custom_frame: worker thread
     CloseHandle(mutex)
     return 0
 

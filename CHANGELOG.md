@@ -11,6 +11,8 @@ All notable changes to this project are listed here. The format follows
   bridge) with Save and close, Close without saving, and Keep editing.
 - Each menu and submenu can have its own open animation (`"animation"` on the menu, or Open animation in its
   menu settings in Studio). Menus without one use the animation from Settings.
+- Studio remembers its window size, position and maximised state between sessions. If that screen is gone,
+  the window opens centred on the nearest one.
 - Settings has an "On this page" column that jumps to each section and highlights the one you are reading.
 - The joke Licence screen can be hidden: Settings > Studio, or the link at the bottom of that screen.
 
