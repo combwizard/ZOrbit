@@ -597,3 +597,12 @@ body.dragging .irow:hover { background: transparent; }
 .card.flash { animation: cardflash .9s ease-out; }
 @keyframes cardflash { 0% { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(248, 107, 51, .18); } 100% { border-color: var(--line); box-shadow: none; } }
 @media (max-width: 1180px) { .settings-layout { grid-template-columns: minmax(0, 940px); } .toc { display: none; } }
+
+/* Close guard: pending changes */
+.changes p { margin: 0; }
+.changes-list { max-height: 46vh; overflow: auto; display: flex; flex-direction: column; gap: 12px; margin-top: 4px;
+  padding: 12px 14px; background: rgba(255, 255, 255, .03); border: 1px solid var(--line); border-radius: 8px; }
+.chg-group .micro { color: var(--accent); margin-bottom: 6px; }
+.chg-group ul { margin: 0; padding-left: 18px; }
+.chg-group li { color: var(--text); font-size: 13px; line-height: 1.6; }
+.modal:has(.changes) { width: min(560px, calc(100vw - 32px)); }

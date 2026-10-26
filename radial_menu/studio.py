@@ -16,6 +16,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -76,6 +77,10 @@ def _title_path(p: str) -> str:
 class Api:
     def __init__(self):
         self._window = None    # underscore: pywebview must not expose (and crawl) it to JS
+        self._dirty = False            # the page has unsaved changes (reported by set_dirty)
+        self._allow_close = False      # set by close_now(): the next close goes through
+        self._ask_sent = 0.0           # when we last asked the page to show the close dialog
+        self._ask_acked = True         # whether the page answered that request
 
     # --- config ----------------------------------------------------------------------------------
     def _load_dict(self, cfg: dict):
@@ -307,6 +312,16 @@ class Api:
         h = self._hwnd()
         return bool(h and user32.IsZoomed(h))
 
+    def set_dirty(self, dirty):
+        """The page reports whether it has unsaved changes (only when that flips)."""
+        self._dirty = bool(dirty)
+        return True
+
+    def close_now(self):
+        """Close for real (after the page's own Save / Discard decision)."""
+        self._allow_close = True
+        return self.win_close()
+
     def win_close(self):
         h = self._hwnd()
         if h:
@@ -342,6 +357,33 @@ def _main_window(title=TITLE, pid=None):
         return True
     user32.EnumWindows(EnumProc(visit), 0)
     return best if best_area > 200 * 200 else None
+
+
+def _on_closing(api):
+    """pywebview 'closing' handler (runs synchronously on the UI thread; returning False cancels).
+    Every way of closing (our button, Alt+F4, taskbar, WM_CLOSE) arrives here. With unsaved changes the
+    close is cancelled and the page is asked to show its dialog. That request must run on another thread:
+    calling into the page from inside this handler would deadlock the UI thread."""
+    if api._allow_close or not api._dirty:
+        return None
+    now = time.time()
+    if not api._ask_acked and now - api._ask_sent > 4.0:
+        return None                    # the page did not answer the last request: never trap the user
+    api._ask_sent, api._ask_acked = now, False
+
+    def ask():
+        try:
+            ok = api._window.evaluate_js(
+                "window.__studioRequestClose ? window.__studioRequestClose() : false")
+        except Exception:
+            ok = False
+        if ok:
+            api._ask_acked = True
+        else:                          # no dialog available: close rather than trap the user
+            api._allow_close = True
+            api.win_close()
+    threading.Thread(target=ask, daemon=True).start()
+    return False
 
 
 def _work_area(hwnd) -> w.RECT:
@@ -493,6 +535,7 @@ def main():
     window = webview.create_window(TITLE, url=UI_INDEX, js_api=api, width=1320, height=860,
                                    min_size=(980, 640), background_color="#1b1c20", text_select=False)
     api._window = window
+    window.events.closing += lambda: _on_closing(api)
     _enable_drag_regions()
     icon = paths.ICON if os.path.isfile(paths.ICON) else None
     webview.start(_custom_frame, debug="--debug" in sys.argv, icon=icon)   # _custom_frame: worker thread

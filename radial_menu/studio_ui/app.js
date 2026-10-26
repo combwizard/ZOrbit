@@ -286,6 +286,7 @@ function toast(msg, o = {}) {
 }
 
 function modal({ title, body, actions }) {
+  if (typeof openPopover === 'function') openPopover();      // a dialog always closes any open dropdown first
   return new Promise(resolve => {
     const prev = document.activeElement;
     const box = h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-label': title },
@@ -1775,6 +1776,7 @@ function buildStatusScreen(root) {
 const dirtyNow = () => !!S.cfg && JSON.stringify(S.cfg) !== S.savedStr;
 function updateDirty() {
   const d = dirtyNow();
+  if (d !== S.dirtySent) { S.dirtySent = d; call('set_dirty', d).catch(() => {}); }
   $('#dirty').hidden = !d;
   $('#revertBtn').disabled = !d;
   $('#saveBtn').classList.toggle('pending', d);
@@ -1869,6 +1871,92 @@ function buildLicenceScreen(root) {
     } }, 'Hide this nonsense, it isn\u2019t funny\u2026')));
   root.append(h('div', { class: 'settings-scroll' }, page));
 }
+
+/* ================================================================== close guard */
+// Lists what differs between the saved config and the current one, grouped by area.
+function describeChanges() {
+  let before = {};
+  try { before = JSON.parse(S.savedStr || '{}') || {}; } catch (e) { before = {}; }
+  const after = S.cfg || {};
+  const groups = [];
+  const q = s => '\u201c' + s + '\u201d';
+  const itemName = it => it.label || it.brush || it.press || it.toggle || it.set || (it.menu ? 'Submenu ' + it.menu : (it.steps ? 'Steps' : 'item'));
+  const bm = before.menus || {}, am = after.menus || {};
+  for (const id of Object.keys(am)) {
+    const a = am[id] || {}, b = bm[id];
+    const title = a.title || id;
+    if (!b) { groups.push({ area: 'Menu ' + q(title), lines: ['New menu with ' + (a.items || []).length + ' item' + ((a.items || []).length === 1 ? '' : 's')] }); continue; }
+    const lines = [];
+    if ((a.title || '') !== (b.title || '')) lines.push('Renamed from ' + q(b.title || id));
+    if ((a.hotkey || '') !== (b.hotkey || '')) lines.push('Hotkey: ' + (b.hotkey || 'none') + ' \u2192 ' + (a.hotkey || 'none'));
+    if ((a.swallow !== false) !== (b.swallow !== false)) lines.push('Swallow hotkey: ' + (b.swallow !== false ? 'on' : 'off') + ' \u2192 ' + (a.swallow !== false ? 'on' : 'off'));
+    const bi = b.items || [], ai = a.items || [];
+    const key = it => JSON.stringify(it);
+    const pool = new Map();                       // multiset of unchanged items
+    for (const it of bi) pool.set(key(it), (pool.get(key(it)) || 0) + 1);
+    const added = [], kept = [];
+    for (const it of ai) { const k = key(it); if (pool.get(k)) { pool.set(k, pool.get(k) - 1); kept.push(k); } else added.push(it); }
+    const removed = bi.filter(it => { const k = key(it); if (pool.get(k)) { pool.set(k, pool.get(k) - 1); return true; } return false; });
+    const changed = [];
+    for (const r of removed.slice()) {           // same name on both sides = an edited item
+      const i = added.findIndex(x => itemName(x) === itemName(r));
+      if (i >= 0) { changed.push(added[i]); added.splice(i, 1); removed.splice(removed.indexOf(r), 1); }
+    }
+    for (const it of added) lines.push('Added ' + q(itemName(it)));
+    for (const it of removed) lines.push('Removed ' + q(itemName(it)));
+    for (const it of changed) lines.push('Changed ' + q(itemName(it)));
+    // reordered: compare the items present on both sides, one-for-one, in their old and new order
+    const left = new Map();
+    for (const k of kept) left.set(k, (left.get(k) || 0) + 1);
+    const keptBefore = bi.map(key).filter(k => (left.get(k) || 0) > 0 && left.set(k, left.get(k) - 1));
+    if (JSON.stringify(keptBefore) !== JSON.stringify(kept)) lines.push('Items reordered');
+    if (lines.length) groups.push({ area: 'Menu ' + q(title), lines });
+  }
+  for (const id of Object.keys(bm)) if (!am[id]) groups.push({ area: 'Menu ' + q(bm[id].title || id), lines: ['Deleted'] });
+  const ringLines = [];
+  const br = before.ring || {}, ar = after.ring || {};
+  const NAMES = { radius: 'Ring radius', slot: 'Slot size', dead_zone: 'Dead zone', tap_ms: 'Tap time', timeout_s: 'Auto-close', animation: 'Open animation', labels: 'Labels' };
+  for (const k of new Set([...Object.keys(br), ...Object.keys(ar)])) {
+    if (k === 'colors') continue;
+    if (JSON.stringify(br[k]) !== JSON.stringify(ar[k])) ringLines.push((NAMES[k] || k) + ': ' + (br[k] ?? 'default') + ' \u2192 ' + (ar[k] ?? 'default'));
+  }
+  const bc = br.colors || {}, ac = ar.colors || {};
+  for (const k of new Set([...Object.keys(bc), ...Object.keys(ac)])) {
+    if (bc[k] !== ac[k]) ringLines.push('Colour ' + k + ': ' + (bc[k] || 'default') + ' \u2192 ' + (ac[k] || 'default'));
+  }
+  if (ringLines.length) groups.push({ area: 'Appearance & behaviour', lines: ringLines });
+  const bb = before.bridge || {}, ab = after.bridge || {};
+  const bridgeLines = [];
+  if ((bb.mode || 'auto') !== (ab.mode || 'auto')) bridgeLines.push('Mode: ' + (bb.mode || 'auto') + ' \u2192 ' + (ab.mode || 'auto'));
+  if ((bb.key || '') !== (ab.key || '')) bridgeLines.push('Bridge key: ' + (bb.key || 'none') + ' \u2192 ' + (ab.key || 'none'));
+  if (bridgeLines.length) groups.push({ area: 'ZBrush bridge', lines: bridgeLines });
+  const known = new Set(['menus', 'ring', 'bridge']);
+  const other = [...new Set([...Object.keys(before), ...Object.keys(after)])].filter(k => !known.has(k) && JSON.stringify(before[k]) !== JSON.stringify(after[k]));
+  if (other.length) groups.push({ area: 'Other', lines: other.map(k => 'Changed ' + k) });
+  return groups;
+}
+
+async function openCloseDialog() {
+  if (S.closeDialogOpen) return;
+  if (!dirtyNow()) { call('close_now').catch(() => {}); return; }
+  S.closeDialogOpen = true;
+  const groups = describeChanges();
+  const count = groups.reduce((n, g) => n + g.lines.length, 0);
+  const body = h('div', { class: 'changes' },
+    h('p', null, count ? `You have ${count} unsaved change${count === 1 ? '' : 's'}. Closing without saving loses ${count === 1 ? 'it' : 'them'}.` : 'You have unsaved changes. Closing without saving loses them.'),
+    h('div', { class: 'changes-list' }, groups.map(g => h('div', { class: 'chg-group' },
+      h('div', { class: 'micro' }, g.area),
+      h('ul', null, g.lines.map(l => h('li', null, l)))))));
+  const v = await modal({ title: 'Unsaved changes', body, actions: [
+    { text: 'Keep editing', value: 'keep' },
+    { text: 'Close without saving', value: 'discard', kind: 'danger-ghost' },
+    { text: 'Save and close', value: 'save', kind: 'primary' }] });
+  S.closeDialogOpen = false;
+  if (v === 'save') { await save(); if (!dirtyNow()) call('close_now').catch(() => {}); }
+  else if (v === 'discard') call('close_now').catch(() => {});
+}
+// Called by studio.py when the window is about to close and the page has unsaved changes.
+window.__studioRequestClose = () => { openCloseDialog(); return true; };
 
 function licenceVisible() { return S.prefs.show_licence !== false; }
 function applyPrefs() {
