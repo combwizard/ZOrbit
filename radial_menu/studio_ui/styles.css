@@ -584,3 +584,16 @@ body.dragging .irow:hover { background: transparent; }
   text-underline-offset: 3px; text-decoration-color: rgba(255, 255, 255, .18); cursor: pointer; }
 .linkish:hover { color: var(--text); text-decoration-color: var(--accent); }
 .rail-btn[hidden] { display: none; }
+
+/* Settings: "On this page" contents column */
+.settings-layout { display: grid; grid-template-columns: 196px minmax(0, 940px); justify-content: center; column-gap: 8px; }
+.settings-layout > .settings { margin: 0; }
+.toc { position: sticky; top: 0; align-self: start; padding: 34px 0 24px 20px; display: flex; flex-direction: column; gap: 2px; }
+.toc-head { margin: 0 0 10px 12px; }
+.toc-item { text-align: left; background: none; border: 0; border-left: 2px solid var(--line); color: var(--sub);
+  font-size: 13px; padding: 7px 12px; border-radius: 0 6px 6px 0; cursor: pointer; transition: color .12s, background .12s, border-color .12s; }
+.toc-item:hover { color: var(--text); background: rgba(255, 255, 255, .03); }
+.toc-item.on { color: var(--accent); border-left-color: var(--accent); background: rgba(248, 107, 51, .08); font-weight: 600; }
+.card.flash { animation: cardflash .9s ease-out; }
+@keyframes cardflash { 0% { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(248, 107, 51, .18); } 100% { border-color: var(--line); box-shadow: none; } }
+@media (max-width: 1180px) { .settings-layout { grid-template-columns: minmax(0, 940px); } .toc { display: none; } }

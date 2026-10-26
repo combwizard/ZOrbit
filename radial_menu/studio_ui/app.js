@@ -1570,8 +1570,49 @@ function card(title, sub, ...kids) { return h('section', { class: 'card' }, h('h
 function buildSettingsScreen(root) {
   root.replaceChildren();
   const page = h('div', { class: 'settings' });
-  const scroll = h('div', { class: 'settings-scroll' }, page);
+  const toc = h('nav', { class: 'toc', 'aria-label': 'Settings sections' });
+  const scroll = h('div', { class: 'settings-scroll' }, h('div', { class: 'settings-layout' }, toc, page));
   root.append(scroll);
+
+  // "On this page": built from the cards' titles after every build; highlights the section being read.
+  let tocItems = [];
+  let pinned = null;          // entry the user clicked; wins until they scroll by hand
+  const sectionTop = el => el.getBoundingClientRect().top - scroll.getBoundingClientRect().top + scroll.scrollTop;
+  const markActive = () => {
+    if (!tocItems.length) return;
+    const atEnd = scroll.scrollTop + scroll.clientHeight >= scroll.scrollHeight - 4;
+    let active = tocItems[0];
+    for (const it of tocItems) if (sectionTop(it.card) <= scroll.scrollTop + 90) active = it;
+    if (atEnd) active = tocItems[tocItems.length - 1];
+    if (pinned && tocItems.includes(pinned)) active = pinned;
+    for (const it of tocItems) {
+      const on = it === active;
+      it.btn.classList.toggle('on', on);
+      if (on) it.btn.setAttribute('aria-current', 'location'); else it.btn.removeAttribute('aria-current');
+    }
+  };
+  const buildToc = () => {
+    const cards = [...page.querySelectorAll(':scope > .card')];
+    tocItems = cards.map((card, i) => {
+      const t = card.querySelector('.card-title');
+      const name = t ? [...t.childNodes].filter(n => n.nodeType === 3).map(n => n.textContent).join('').trim() : 'Section ' + (i + 1);
+      card.id = 'set-' + name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+      const btn = h('button', { class: 'toc-item', type: 'button', onclick: () => {
+        pinned = item; markActive();
+        scroll.scrollTo({ top: Math.max(0, sectionTop(card) - 20), behavior: 'smooth' });
+        card.classList.remove('flash'); void card.offsetWidth; card.classList.add('flash');
+      } }, name);
+      const item = { card, btn };
+      return item;
+    });
+    toc.replaceChildren(h('div', { class: 'micro toc-head' }, 'On this page'), ...tocItems.map(it => it.btn));
+    markActive();
+  };
+  let tocRaf = 0;
+  const unpin = () => { if (pinned) { pinned = null; markActive(); } };
+  for (const ev of ['wheel', 'keydown', 'pointerdown', 'touchstart']) scroll.addEventListener(ev, unpin, { passive: true });
+  scroll.addEventListener('scroll', () => { if (!tocRaf) tocRaf = requestAnimationFrame(() => { tocRaf = 0; markActive(); }); }, { passive: true });
+
   const build = () => {
     page.replaceChildren();
     page.append(h('div', { class: 'page-head' }, h('h1', null, 'Appearance & Behaviour'), h('p', null, 'How the ring looks, how it opens, and how the app talks to ZBrush. Changes show in the previews straight away and are saved with the Save button.')));
@@ -1665,8 +1706,9 @@ function buildSettingsScreen(root) {
         toggleSwitch(licenceVisible(), v => { setPref('show_licence', v); toast(v ? 'The Licence button is back. It missed you.' : 'Licence button hidden.', { ms: 2800 }); }, 'Show the Licence button'))));
     R.preview();
   };
-  R.settings = build;
+  R.settings = () => { build(); buildToc(); };
   build();
+  buildToc();
 }
 
 /* ================================================================== STATUS screen */
