@@ -48,10 +48,27 @@ Source layout:
 |---|---|
 | `radial_menu\` | The app: hotkeys, ring drawing, config loading, brush thumbnails, Studio backend |
 | `radial_menu\studio_ui\` | Studio's interface (HTML, CSS, JavaScript) |
-| `bridge\` | The plugin that runs inside ZBrush |
+| `bridge\` | The plugin that runs inside ZBrush 2026+ (Python) |
+| `bridge\zscript\` | The plugin for ZBrush 2022-2025 (ZScript source and its compiled `.zsc`) |
 | `packaging\` | Build script for the installer |
 | `tools\` | Developer scripts |
 | `docs\` | User guide and images |
+
+### The ZScript bridge (ZBrush 2022-2025)
+
+Those versions have no Python API, so they get `bridge\zscript\RadialMenuBridge.txt` instead. ZBrush only
+loads compiled plugins, and only ZBrush can compile them, so the compiled `RadialMenuBridge.zsc` is committed
+next to the source. After changing the source:
+
+1. Open the oldest supported ZBrush (2022), choose **ZScript > Load** and pick `RadialMenuBridge.txt`. ZBrush
+   writes `RadialMenuBridge.zsc` next to it. Compiling in the oldest version is meant to keep it loadable in
+   the newer ones; check it in the newest one you have too.
+2. Commit the source and the `.zsc` together.
+3. In Studio, **Settings > Older ZBrush > Update** puts the new build into each installed ZBrush.
+
+The build bundles both files, and Studio copies the `.zsc` plus a `RadialMenuData\bridge.cfg` into
+`<ZBrush>\ZStartup\ZPlugs64`. The file formats are described at the top of the source and in
+`radial_menu\zscript_bridge.py`.
 
 ### Working on Studio's interface in a browser
 

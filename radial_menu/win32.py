@@ -6,6 +6,7 @@ truncated to 32 bits.
 """
 import ctypes
 import ctypes.wintypes as w
+import os
 
 user32 = ctypes.WinDLL("user32", use_last_error=True)
 gdi32 = ctypes.WinDLL("gdi32", use_last_error=True)
@@ -139,6 +140,7 @@ CreateToolhelp32Snapshot = _sig(kernel32, "CreateToolhelp32Snapshot", w.HANDLE, 
 Process32FirstW = _sig(kernel32, "Process32FirstW", w.BOOL, w.HANDLE, ctypes.POINTER(PROCESSENTRY32W))
 Process32NextW = _sig(kernel32, "Process32NextW", w.BOOL, w.HANDLE, ctypes.POINTER(PROCESSENTRY32W))
 GetCurrentThreadId = _sig(kernel32, "GetCurrentThreadId", w.DWORD)
+GetProcessTimes = _sig(kernel32, "GetProcessTimes", w.BOOL, w.HANDLE, *[ctypes.POINTER(w.FILETIME)] * 4)
 
 if shcore is not None:
     GetDpiForMonitor = _sig(shcore, "GetDpiForMonitor", ctypes.c_long, w.HMONITOR, ctypes.c_int,
@@ -248,6 +250,53 @@ def running_exe_names() -> set[str]:
     finally:
         CloseHandle(snap)
     return names
+
+
+def process_created(pid: int) -> float | None:
+    """When a process was created, as a Unix timestamp."""
+    h = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
+    if not h:
+        return None
+    try:
+        ft = [w.FILETIME() for _ in range(4)]
+        if not GetProcessTimes(h, *[ctypes.byref(f) for f in ft]):
+            return None
+        return (ft[0].dwHighDateTime << 32 | ft[0].dwLowDateTime) / 1e7 - 11644473600
+    finally:
+        CloseHandle(h)
+
+
+def parent_pid(pid: int) -> int | None:
+    snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0)
+    if not snap or snap == INVALID_HANDLE_VALUE:
+        return None
+    try:
+        pe = PROCESSENTRY32W()
+        pe.dwSize = ctypes.sizeof(PROCESSENTRY32W)
+        ok = Process32FirstW(snap, ctypes.byref(pe))
+        while ok:
+            if pe.th32ProcessID == pid:
+                return pe.th32ParentProcessID
+            ok = Process32NextW(snap, ctypes.byref(pe))
+    finally:
+        CloseHandle(snap)
+    return None
+
+
+def launch_chain(depth: int = 2) -> str:
+    """'cmd.exe (pid 1, 0.12 s earlier) <- ZBrush.exe (...)': who started this process, and how long before
+    it. For logs: a slow start through ZScript's ShellExecute shows up here."""
+    me = os.getpid()
+    t0 = process_created(me)
+    out, pid = [], me
+    for _ in range(depth):
+        pid = parent_pid(pid)
+        if not pid:
+            break
+        created = process_created(pid)
+        name = os.path.basename(process_image(pid)) or "?"
+        out.append(f"{name} (pid {pid}, {t0 - created:.2f} s earlier)" if t0 and created else f"{name} (pid {pid})")
+    return " <- ".join(out) or "?"
 
 
 def monitor_for_point(x: int, y: int) -> tuple[w.RECT, float]:

@@ -7,12 +7,15 @@ import threading
 from pathlib import Path
 
 try:
+    from . import installs as _installs
     from . import zbp as _zbp
 except ImportError:  # run as a plain module / script
+    import installs as _installs
     import zbp as _zbp
 
 _DIR_RE = re.compile(r"^(?:Maxon )?ZBrush (\d{4})_", re.I)
 _index: dict[str, Path] | None = None
+_install_index: dict[str, dict[str, Path]] = {}
 _index_lock = threading.Lock()
 _write_lock = threading.Lock()
 
@@ -45,6 +48,13 @@ def zbrush_dirs() -> dict:
                 p = _read_path(d / fn)
                 if p is not None:
                     res[key] = p
+    if res["install"] is None:                  # ZBrush 2022-2025 write no installpath.txt
+        try:
+            found = _installs.find_installs()
+        except Exception:
+            found = []
+        if found:
+            res["install"] = Path(found[-1]["path"])
     return res
 
 
@@ -78,9 +88,17 @@ def brush_sources() -> list[tuple[str, Path, bool]]:
     if ua:
         src.append(("user ZStartup/BrushPresets", ua / "ZStartup" / "BrushPresets", True))
     if ins:
-        src.append(("install ZData/BrushPresets", ins / "ZData" / "BrushPresets", True))
-        src.append(("install Lightbox/Brushes", ins / "Lightbox" / "Brushes", True))
+        src += install_brush_sources(ins)
     return src
+
+
+def install_brush_sources(ins) -> list[tuple[str, Path, bool]]:
+    """ZBrush 2022-2025 keep the user's brushes in the installation's ZStartup and Lightbox's in ZBrushes."""
+    ins = Path(ins)
+    return [("install ZStartup/BrushPresets", ins / "ZStartup" / "BrushPresets", True),
+            ("install ZData/BrushPresets", ins / "ZData" / "BrushPresets", True),
+            ("install Lightbox/Brushes", ins / "Lightbox" / "Brushes", True),
+            ("install ZBrushes", ins / "ZBrushes", True)]
 
 
 def brush_index(refresh: bool = False) -> dict[str, Path]:
@@ -94,10 +112,23 @@ def brush_index(refresh: bool = False) -> dict[str, Path]:
         return _index
 
 
-def find_brush(name) -> Path | None:
+def install_index(ins) -> dict[str, Path]:
+    """Brushes of one ZBrush installation only (an older ZBrush may not load a newer version's .zbp)."""
+    key = os.path.normcase(str(ins))
+    with _index_lock:
+        if key not in _install_index:
+            idx: dict[str, Path] = {}
+            for _, folder, rec in install_brush_sources(ins):
+                _scan(folder, rec, idx)
+            _install_index[key] = idx
+        return _install_index[key]
+
+
+def find_brush(name, install=None) -> Path | None:
+    """The .zbp for a brush name. install: search only that ZBrush installation's folders."""
     try:
         key = str(name).replace(" ", "").lower()
-        idx = brush_index()
+        idx = install_index(install) if install else brush_index()
         p = idx.get(key)
         if p is not None:
             return p

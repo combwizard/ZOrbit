@@ -31,6 +31,7 @@ import zbrush.commands as zbc
 DATA_DIR = os.path.join(os.environ.get("LOCALAPPDATA") or os.path.expanduser("~"), "RadialMenu")
 LAUNCH_FILE = os.path.join(os.environ.get("APPDATA") or os.path.expanduser("~"), "RadialMenu", "launch.json")
 REQUEST_FILE = os.path.join(DATA_DIR, "request.json")
+REQUEST_TXT = os.path.join(DATA_DIR, "request.txt")       # the same pick for the ZScript bridge (ZBrush 2022-2025)
 LISTENER_FILE = os.path.join(DATA_DIR, "listener.json")
 LOG_FILE = os.path.join(DATA_DIR, "bridge.log")
 PALETTE = "Zplugin:Radial Menu"
@@ -137,6 +138,10 @@ def apply_request(sender: str = "") -> None:
         with open(REQUEST_FILE, encoding="utf-8") as f:
             req = json.load(f)
         os.remove(REQUEST_FILE)
+        try:
+            os.remove(REQUEST_TXT)
+        except OSError:
+            pass
     except FileNotFoundError:
         log(f"apply ({sender or 'button'}): no pending request")
         return

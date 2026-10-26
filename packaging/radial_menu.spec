@@ -58,6 +58,13 @@ for dirpath, dirnames, filenames in os.walk(UI):
         datas.append((os.path.join(dirpath, name), rel))
 datas.append((os.path.join(SRC, "default_menus.json"), "."))
 datas.append((ICON, "."))                          # bundle root: paths.ICON = RESOURCE_DIR\icon.ico
+# ZScript bridge for ZBrush 2022-2025 (paths.ZSCRIPT_DIR): the .zsc is compiled in ZBrush and committed.
+ZSCRIPT = os.path.join(ROOT, "bridge", "zscript")
+for name in ("RadialMenuBridge.zsc", "RadialMenuBridge.txt"):
+    if os.path.isfile(os.path.join(ZSCRIPT, name)):
+        datas.append((os.path.join(ZSCRIPT, name), "zscript"))
+    else:
+        print(f"WARNING: {name} missing: the Studio will have no ZScript bridge to install")
 
 # --- pywebview (WinForms + Edge WebView2 backend) and pythonnet ---------------------------------------------
 # pyinstaller-hooks-contrib ships hook-webview.py (js files, webview\lib DLLs) and hook-clr_loader / hook-pythonnet;
@@ -78,7 +85,8 @@ hiddenimports = [h for h in hiddenimports if not h.startswith(("webview.platform
                                                                  "webview.platforms.cef", "webview.platforms.mshtml"))]
 
 # The app modules import each other as top-level modules; some are imported inside functions.
-for mod in ("config", "win32", "ring", "radiald", "studio", "brushes", "zbp", "paths", "tray"):
+for mod in ("config", "win32", "ring", "radiald", "studio", "brushes", "zbp", "paths", "tray", "installs",
+            "zscript_bridge"):
     if os.path.isfile(os.path.join(SRC, mod + ".py")):
         hiddenimports.append(mod)
 

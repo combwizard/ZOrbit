@@ -269,6 +269,18 @@ Rules for the bridge key: use a bare F-key if you can (`Alt` combinations are al
 
 Picks that arrive while you are in the middle of a stroke (mouse button down) wait until you lift. Right after a pick the app also makes a zero-distance mouse move, which wakes ZBrush's cursor and pen tracking.
 
+### ZBrush 2022 to 2025
+
+These versions have no Python API, so they get a ZScript plugin with the same palette. Studio installs it: **Settings > Older ZBrush** lists the 2022 to 2025 versions it found, with **Install**, **Update** and **Remove** for each, and **Add a ZBrush folder** for one it missed. The plugin goes into that ZBrush's `ZStartup\ZPlugs64` (the only place these versions load plugins from), together with a `RadialMenuData` folder. A ZBrush under Program Files asks for administrator rights.
+
+Differences from ZBrush 2026 and newer:
+
+- There is no listener, so **every pick uses the bridge key**, whatever the mode. Bind and store it in each of these versions (the steps above); each version keeps its own hotkeys.
+- Brushes load from that version's own `.zbp` files, because an older ZBrush cannot always read a newer version's brushes.
+- Status shows where picks arrive, whether one is waiting, and the last pick. The plugin also writes that last pick to `zscript_bridge.log`, which Studio's Status screen shows.
+
+When this version of Radial Menu has a newer plugin than one you installed, **Settings** shows a badge and that row says **Update available**. After **Update**, restart that ZBrush.
+
 ### The Zplugin > Radial Menu palette
 
 | Button | What it does |
@@ -290,7 +302,12 @@ Picks that arrive while you are in the middle of a stroke (mouse button down) wa
 | `%LOCALAPPDATA%\RadialMenu\app_stderr.log` | Output when the app crashes on startup. |
 | `%LOCALAPPDATA%\RadialMenu\listener.json` | The verified listener window (written by the plugin). |
 | `%LOCALAPPDATA%\RadialMenu\request.json` | The pick in transit. Normally gone in a moment. |
+| `%LOCALAPPDATA%\RadialMenu\request.txt` | The same pick for the ZBrush 2022 to 2025 plugin. |
+| `%LOCALAPPDATA%\RadialMenu\zscript_bridge.log` | ZBrush 2022 to 2025: what the last pick did. |
+| `%LOCALAPPDATA%\RadialMenu\zscript_launch.log` | ZBrush 2022 to 2025: how the plugin last started the app or Studio. |
+| `%LOCALAPPDATA%\RadialMenu\studio.log` | How Studio started: which program launched it and how long each step took. |
 | `%LOCALAPPDATA%\RadialMenu\thumbs\` | Cached brush thumbnails. Safe to delete. |
+| `<ZBrush>\ZStartup\ZPlugs64\RadialMenuBridge.zsc` | ZBrush 2022 to 2025: the plugin. Its `RadialMenuData` folder says where picks arrive and how to start the app. |
 
 When you report a bug, paste the last lines of `radiald.log` and `bridge.log`. They contain brush names and menu ids, but have a quick look before you post them.
 
@@ -306,6 +323,9 @@ When you report a bug, paste the last lines of `radiald.log` and `bridge.log`. T
 
 **The ring opens, but picks do nothing.**
 Check the listener on the Status screen. If it is not verified, use the fallback: bind the bridge key (see above) and leave the mode on `auto`. Then read `bridge.log`; it names each action and says whether it worked. Common causes: a `press`, `set` or `toggle` path that does not exist in your ZBrush (logged as "no such interface item"), or a `brush` with no `.zbp` file (logged as "NOT loaded in ZBrush and no .zbp file known").
+
+**ZBrush 2022 to 2025: the ring opens, but picks do nothing.**
+Picks there only arrive through the bridge key. Check that it is bound to **Zplugin > Radial Menu > Apply** in that ZBrush and that you clicked **Preferences > Hotkeys > Store**; a binding that was not stored is gone after a restart. If the palette is missing, install the plugin again in **Studio > Settings > Older ZBrush** and restart that ZBrush. `zscript_bridge.log` shows what the last pick did.
 
 **A slot shows letters instead of a picture.**
 There is no thumbnail for it. For brushes, that means no `.zbp` was found. For other items it is the normal placeholder; set an `icon` to change it.

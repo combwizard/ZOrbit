@@ -15,6 +15,9 @@ FROZEN = bool(getattr(sys, "frozen", False))
 PKG_DIR = os.path.dirname(os.path.abspath(__file__))
 RESOURCE_DIR = getattr(sys, "_MEIPASS", PKG_DIR) if FROZEN else PKG_DIR
 UI_DIR = os.path.join(RESOURCE_DIR, "studio_ui")
+# The ZScript bridge for ZBrush 2022-2025 (compiled .zsc plus its source), copied into each ZBrush by the Studio.
+ZSCRIPT_DIR = (os.path.join(RESOURCE_DIR, "zscript") if FROZEN
+               else os.path.join(os.path.dirname(PKG_DIR), "bridge", "zscript"))
 DEFAULT_MENUS = os.path.join(RESOURCE_DIR, "default_menus.json")
 ICON = os.path.join(RESOURCE_DIR, "icon.ico") if FROZEN else os.path.join(os.path.dirname(PKG_DIR), "assets", "icon.ico")
 

@@ -87,6 +87,15 @@
     },
     start_app: function () { return sleep(300).then(function () { return { ok: true, message: 'Started (mock: nothing was launched).' }; }); },
     open_folder: function (which) { console.log('[mock] open_folder', which); return Promise.resolve(true); },
+    get_zscript_bridge: function () {
+      var z = JSON.parse(localStorage.getItem('rm_zscript') || '{}');
+      return sleep(120).then(function () { return { bundled: true, installs: [
+        { name: 'ZBrush 2022', year: 2022, path: 'C:\\Programs\\ZBrush 2022', python: false, installed: !!z.a, current: !!z.a, zplugs: 'C:\\Programs\\ZBrush 2022\\ZStartup\\ZPlugs64' },
+        { name: 'ZBrush 2024', year: 2024, path: 'C:\\Program Files\\Maxon ZBrush 2024', python: false, installed: true, current: false, zplugs: 'C:\\Program Files\\Maxon ZBrush 2024\\ZStartup\\ZPlugs64' }] }; });
+    },
+    install_zscript_bridge: function () { try { localStorage.setItem('rm_zscript', '{"a":1}'); } catch (e) {} return sleep(300).then(function () { return { ok: true, message: 'Installed (mock). Restart ZBrush so it loads the plugin.' }; }); },
+    remove_zscript_bridge: function () { try { localStorage.removeItem('rm_zscript'); } catch (e) {} return sleep(200).then(function () { return { ok: true, message: 'Removed (mock).' }; }); },
+    add_zbrush_folder: function () { return Promise.resolve({ ok: false, cancelled: true }); },
     get_prefs: function () { return Promise.resolve(JSON.parse(localStorage.getItem('rm_prefs') || '{"show_licence": true}')); },
     set_pref: function (k, v) { var p = JSON.parse(localStorage.getItem('rm_prefs') || '{"show_licence": true}'); p[k] = v; try { localStorage.setItem('rm_prefs', JSON.stringify(p)); } catch (e) {} return Promise.resolve(p); },
     set_dirty: function () { return Promise.resolve(true); },

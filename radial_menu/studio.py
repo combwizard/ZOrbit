@@ -24,7 +24,9 @@ sys.path.insert(0, HERE)
 
 import config as C          # noqa: E402
 import brushes              # noqa: E402
+import installs             # noqa: E402
 import paths                # noqa: E402
+import zscript_bridge       # noqa: E402
 
 DATA_DIR = paths.DATA_DIR
 CONFIG_FILE = paths.ensure_config()
@@ -167,8 +169,9 @@ class Api:
     def get_library(self):
         """All brushes ZBrush can load, first location wins (same rule the app uses), with categories."""
         seen, items = set(), []
-        labels = {"user ZStartup/BrushPresets": "My Brushes", "install ZData/BrushPresets": "ZBrush",
-                  "install Lightbox/Brushes": "Lightbox"}
+        labels = {"user ZStartup/BrushPresets": "My Brushes", "install ZStartup/BrushPresets": "My Brushes",
+                  "install ZData/BrushPresets": "ZBrush", "install Lightbox/Brushes": "Lightbox",
+                  "install ZBrushes": "Lightbox"}
         for label, folder, _rec in brushes.brush_sources():
             if not folder.is_dir():
                 continue
@@ -232,6 +235,15 @@ class Api:
         except (OSError, ValueError, KeyError):
             pass
         picks = [l for l in _tail(os.path.join(DATA_DIR, "bridge.log"), 200) if " #" in l]
+        zs_log = os.path.join(DATA_DIR, "zscript_bridge.log")       # ZBrush 2022-2025: only the last pick
+        try:
+            if not picks or os.path.getmtime(zs_log) > os.path.getmtime(os.path.join(DATA_DIR, "bridge.log")):
+                zs = _tail(zs_log, 1)
+                if zs:
+                    when = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(os.path.getmtime(zs_log)))
+                    picks.append(f"{when} {zs[0]} (ZScript bridge)")
+        except OSError:
+            pass
         app_log = _tail(os.path.join(DATA_DIR, "radiald.log"), 12)
         from_win = subprocess.run(["tasklist", "/FI", "IMAGENAME eq ZBrush.exe", "/NH"], capture_output=True,
                                   text=True, creationflags=0x08000000).stdout
@@ -249,6 +261,63 @@ class Api:
                          env=paths.clean_env(), creationflags=0x00000008 | 0x00000200, close_fds=True,
                          stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         return {"ok": True, "message": "Started."}
+
+    # --- ZScript bridge for ZBrush 2022-2025 -----------------------------------------------------
+    def _legacy_installs(self):
+        """ZBrush installations without the Python API: found ones plus folders the user added."""
+        found = installs.find_installs()
+        seen = {os.path.normcase(e["path"]) for e in found}
+        for p in _read_studio_file().get("zbrush_folders", []):
+            e = installs.entry(p) if isinstance(p, str) else None
+            if e and os.path.normcase(e["path"]) not in seen:
+                seen.add(os.path.normcase(e["path"]))
+                found.append(e)
+        return [e for e in found if not e["python"]]
+
+    def get_zscript_bridge(self):
+        rows = [dict(e, **zscript_bridge.status(e["path"])) for e in self._legacy_installs()]
+        return {"installs": rows, "bundled": bool(zscript_bridge.bundled())}
+
+    def _known_legacy(self, path):
+        for e in self._legacy_installs():
+            if os.path.normcase(e["path"]) == os.path.normcase(str(path)):
+                return e
+        return None
+
+    def install_zscript_bridge(self, path):
+        """Copies the plugin into that ZBrush (asks for administrator rights when the folder needs them)."""
+        if self._known_legacy(path) is None:
+            return {"ok": False, "message": "That folder is not a ZBrush 2022-2025 installation."}
+        return zscript_bridge.install(path)
+
+    def remove_zscript_bridge(self, path):
+        if self._known_legacy(path) is None:
+            return {"ok": False, "message": "That folder is not a ZBrush 2022-2025 installation."}
+        return zscript_bridge.remove(path)
+
+    def add_zbrush_folder(self):
+        """Folder picker for a ZBrush that was not found automatically; remembered in studio.json."""
+        import webview
+        picked = self._window.create_file_dialog(webview.FileDialog.FOLDER)
+        if not picked:
+            return {"ok": False, "cancelled": True}
+        folder = picked[0] if isinstance(picked, (list, tuple)) else picked
+        for cand in (folder, os.path.dirname(folder), os.path.dirname(os.path.dirname(folder))):
+            e = installs.entry(cand)                 # also accepts ZStartup or ZPlugs64 picked by mistake
+            if e:
+                break
+        if not e:
+            return {"ok": False, "message": "No ZBrush.exe in that folder."}
+        if e["python"]:
+            return {"ok": False, "message": f"{e['name']} has the Python API: it uses the regular bridge, "
+                                           "which the installer already set up."}
+        data = _read_studio_file()
+        folders = [p for p in data.get("zbrush_folders", []) if isinstance(p, str)]
+        if os.path.normcase(e["path"]) not in {os.path.normcase(p) for p in folders}:
+            folders.append(e["path"])
+        data["zbrush_folders"] = folders
+        _write_studio_file(data)
+        return {"ok": True, "message": f"Added {e['name']}."}
 
     # --- Studio preferences (not part of the menus; saved straight away) --------------------------
     _PREFS_DEFAULTS = {"show_licence": True}
@@ -321,6 +390,31 @@ class Api:
         if h:
             user32.PostMessageW(h, 0x0010, 0, 0)                                    # WM_CLOSE
         return True
+
+
+_STARTUP_LOG = os.path.join(DATA_DIR, "studio.log")
+
+
+_T0 = None
+
+
+def _startup(msg):
+    """One line in studio.log: seconds since this process was created, then msg. Shows where a slow start
+    spends its time (for example a launch through ZScript's ShellExecute in ZBrush 2022-2025)."""
+    global _T0
+    try:
+        if _T0 is None:
+            import win32
+            _T0 = win32.process_created(os.getpid()) or time.time()
+            msg += f"; started by {win32.launch_chain()}; cwd {os.getcwd()}"
+        if os.path.exists(_STARTUP_LOG) and os.path.getsize(_STARTUP_LOG) > 200_000:
+            os.replace(_STARTUP_LOG, _STARTUP_LOG + ".old")
+        with open(_STARTUP_LOG, "a", encoding="utf-8") as f:
+            now = time.time()
+            f.write(f"{time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(now))}.{int(now * 1000) % 1000:03d} "
+                    f"+{now - _T0:6.2f} s  {msg}\n")
+    except Exception:
+        pass
 
 
 def _read_studio_file() -> dict:
@@ -584,9 +678,12 @@ def _enable_drag_regions():
 
 
 def main():
+    _startup(f"Studio {VERSION} main()")
     import webview
+    _startup("pywebview imported")
     mutex = CreateMutexW(None, False, STUDIO_MUTEX)
     if ctypes.get_last_error() == 183:                     # already open: bring it forward
+        _startup("already open: bringing it forward")
         hwnd = _main_window(TITLE)
         if hwnd:
             user32.ShowWindow(hwnd, 9)
@@ -613,6 +710,8 @@ def main():
                                    min_size=min_size, background_color="#1b1c20", text_select=False)
     api._window = window
     window.events.closing += lambda: _on_closing(api)
+    window.events.shown += lambda: _startup("window shown")
+    window.events.loaded += lambda: _startup("page loaded")
     _enable_drag_regions()
     icon = paths.ICON if os.path.isfile(paths.ICON) else None
     webview.start(lambda: _custom_frame(placement=placement), debug="--debug" in sys.argv,

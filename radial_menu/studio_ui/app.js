@@ -1578,6 +1578,22 @@ function choiceCards(items, current, onPick, cls = '') {
   });
   return wrap;
 }
+/* Badge on the Settings rail button and the "Older ZBrush" contents entry while an installed ZScript plugin
+   is older than this build (found at startup and whenever that card refreshes). */
+const zsOutdated = r => (r && r.installs ? r.installs.filter(z => z.installed && !z.current).length : 0);
+function setZsBadge(n) {
+  const rb = document.querySelector('.rail-btn[data-screen="settings"]');
+  if (rb) {
+    rb.classList.toggle('has-badge', n > 0);
+    rb.title = 'Appearance & Behaviour (Alt+3)' + (n ? ' – ' + (n === 1 ? 'a ZBrush plugin needs' : n + ' ZBrush plugins need') + ' updating' : '');
+  }
+  const tb = document.querySelector('.toc-item[data-card="set-older-zbrush"]');
+  if (tb) { tb.classList.toggle('has-badge', n > 0); tb.title = n ? 'Update available' : ''; }
+}
+async function refreshZsBadge() {
+  try { setZsBadge(zsOutdated(await call('get_zscript_bridge'))); } catch (e) { /* no badge */ }
+}
+
 function card(title, sub, ...kids) { return h('section', { class: 'card' }, h('h2', { class: 'card-title' }, title, sub ? h('em', null, sub) : null), ...kids); }
 
 function buildSettingsScreen(root) {
@@ -1610,7 +1626,7 @@ function buildSettingsScreen(root) {
       const t = card.querySelector('.card-title');
       const name = t ? [...t.childNodes].filter(n => n.nodeType === 3).map(n => n.textContent).join('').trim() : 'Section ' + (i + 1);
       card.id = 'set-' + name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-      const btn = h('button', { class: 'toc-item', type: 'button', onclick: () => {
+      const btn = h('button', { class: 'toc-item', type: 'button', dataset: { card: card.id }, onclick: () => {
         pinned = item; markActive();
         scroll.scrollTo({ top: Math.max(0, sectionTop(card) - 20), behavior: 'smooth' });
         card.classList.remove('flash'); void card.offsetWidth; card.classList.add('flash');
@@ -1715,6 +1731,42 @@ function buildSettingsScreen(root) {
       choiceCards(['auto', 'message', 'key'].map(m => [m, BRIDGE_INFO[m][0], BRIDGE_INFO[m][1]]), bmode, v => { bridge().mode = v; commit(); paintKey(); }, 'bridge-cards'),
       keyWrap));
     paintKey();
+
+    /* --- ZScript bridge for ZBrush 2022-2025 (acts straight away, not part of the menus) */
+    const zbox = h('div', { class: 'zrows' }, h('div', { class: 'fhint' }, 'Looking for ZBrush...'));
+    const zpaint = async () => {
+      let r;
+      try { r = await call('get_zscript_bridge'); } catch (e) { zbox.replaceChildren(h('div', { class: 'fhint bad' }, 'Could not look for ZBrush: ' + e.message)); return; }
+      setZsBadge(zsOutdated(r));
+      const act = (name, path, btn) => async () => {
+        btn.disabled = true;
+        try { const res = await call(name, path); toast(res.message || (res.ok ? 'Done.' : 'That did not work.'), { tone: res.ok ? 'ok' : 'warn', ms: 5000 }); }
+        catch (e) { toast('That did not work: ' + e.message, { tone: 'warn' }); }
+        zpaint();
+      };
+      const rows = r.installs.map(z => {
+        const [stext, scls] = !z.installed ? ['Not installed', 'tag dim'] : (z.current ? ['Installed', 'tag cyan'] : ['Update available', 'tag amber']);
+        const main = h('button', { class: 'btn small' + (z.installed && z.current ? '' : ' primary'), type: 'button', disabled: !r.bundled }, z.installed ? (z.current ? 'Reinstall' : 'Update') : 'Install');
+        main.onclick = act('install_zscript_bridge', z.path, main);
+        const rm = z.installed ? h('button', { class: 'btn small danger-ghost', type: 'button' }, icon('trash', 12), 'Remove') : null;
+        if (rm) rm.onclick = act('remove_zscript_bridge', z.path, rm);
+        return h('div', { class: 'zrow' }, h('div', { class: 'grow' }, h('div', { class: 'zname' }, z.name, h('span', { class: scls }, stext)), h('div', { class: 'zpath mono', title: z.zplugs }, z.path)),
+          h('div', { class: 'btn-row' }, main, rm));
+      });
+      if (!rows.length) rows.push(h('div', { class: 'fhint' }, 'No ZBrush 2022 to 2025 found. If yours is somewhere unusual, add its folder.'));
+      if (!r.bundled) rows.push(h('div', { class: 'fhint warn' }, 'This build has no compiled ZScript plugin (RadialMenuBridge.zsc), so there is nothing to install yet.'));
+      zbox.replaceChildren(...rows);
+    };
+    const addBtn = h('button', { class: 'btn small', type: 'button' }, icon('folder', 12), 'Add a ZBrush folder...');
+    addBtn.onclick = async () => {
+      try { const r = await call('add_zbrush_folder'); if (!r.cancelled) toast(r.message, { tone: r.ok ? 'ok' : 'warn', ms: 5000 }); } catch (e) { toast('Could not add the folder: ' + e.message, { tone: 'warn' }); }
+      zpaint();
+    };
+    const zkey = (S.cfg.bridge && S.cfg.bridge.key) || 'F9';
+    page.append(card('Older ZBrush', 'ZBrush 2022 to 2025. Acts straight away.',
+      h('div', { class: 'fhint' }, 'These versions have no Python API, so they get a ZScript plugin with the same Zplugin > Radial Menu palette. It has no listener, so every pick there uses the bridge key, whatever the mode above. After installing, restart ZBrush, Ctrl+Alt+click Zplugin > Radial Menu > Apply, press ', h('b', null, zkey), ' and choose Preferences > Hotkeys > Store. A ZBrush under Program Files asks for administrator rights to install.'),
+      zbox, h('div', { class: 'btn-row' }, addBtn)));
+    zpaint();
 
     /* --- studio (preferences of this window, saved immediately, not part of the menus file) */
     page.append(card('Studio', 'Preferences for this window. Saved straight away.',
@@ -2049,6 +2101,7 @@ async function boot() {
   applyPrefs();
   loadLibrary(); loadSuggestions();
   showScreen(params.get('screen') || 'menus');
+  refreshZsBadge();
   if (params.has('hover')) { /* debug aid */ }
   document.documentElement.classList.add('ready');
 }

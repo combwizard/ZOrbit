@@ -8,6 +8,8 @@ How it works:
     inside ZBrush, either by a window message to the bridge's listener (no keystroke) or by a bare bridge
     key bound natively in ZBrush (held modifiers released first). Then a zero-distance mouse move wakes
     the pen/cursor tracking.
+  * The same pick also goes to request.txt for the ZScript bridge of ZBrush 2022-2025 (no Python API, so no
+    listener: those always get the bridge key, and brushes load from their own installation's .zbp files).
 
 Started through main.py (RadialMenu.exe), normally by the ZBrush bridge when ZBrush launches; it exits when
 the last ZBrush process has gone. Only one instance runs at a time.
@@ -26,8 +28,10 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 
 import config as C          # noqa: E402
+import installs             # noqa: E402
 import paths                # noqa: E402
 import win32 as W           # noqa: E402
+import zscript_bridge       # noqa: E402
 
 try:
     import brushes          # noqa: E402
@@ -93,6 +97,7 @@ class App:
         self.hook = None
         self.ctrl = None
         self._pid_exe = {}
+        self._pid_install = {}          # pid -> installs.install_of() of the ZBrush.exe behind it
         self._icons = {}
         self._seq = 0
         self._ack = None                # (seq, deadline) of a message-mode pick awaiting pickup
@@ -163,6 +168,21 @@ class App:
                 self._pid_exe.clear()
             self._pid_exe[pid] = exe
         return exe == self.target_exe
+
+    def target_install(self) -> dict | None:
+        """The ZBrush installation of the foreground window (if that is ZBrush)."""
+        fg = W.GetForegroundWindow()
+        if not fg or not self.target_in_front():
+            return None
+        pid = W.window_pid(fg)
+        if pid not in self._pid_install:
+            if len(self._pid_install) > 32:
+                self._pid_install.clear()
+            try:
+                self._pid_install[pid] = installs.install_of(W.process_image(pid))
+            except Exception:
+                self._pid_install[pid] = None
+        return self._pid_install[pid]
 
     # --- keyboard hook ---------------------------------------------------------------------------
     def _hook_proc(self, ncode, wparam, lparam):
@@ -340,25 +360,32 @@ class App:
         self.send(item)
 
     # --- hand-off to ZBrush ----------------------------------------------------------------------
-    def _actions(self, item):
+    def _actions(self, item, legacy=None):
+        """legacy: the ZBrush 2022-2025 installation in front, whose own .zbp files must be used."""
         acts = item.data["steps"] if item.kind == "steps" else [item.data]
         out = []
         for a in acts:
             a = dict(a)
             if "brush" in a and brushes is not None:
-                p = brushes.find_brush(a["brush"])
+                p = brushes.find_brush(a["brush"], legacy["path"] if legacy else None)
                 a["file"] = str(p).replace("\\", "/") if p else None
             out.append(a)
         return out
 
-    def _write_request(self, item) -> int:
+    def _write_request(self, item, legacy=None) -> int:
         self._seq += 1
-        req = {"id": self._seq, "time": time.time(), "label": item.label, "actions": self._actions(item)}
+        actions = self._actions(item, legacy)
+        req = {"id": self._seq, "time": time.time(), "label": item.label, "actions": actions}
         os.makedirs(DATA_DIR, exist_ok=True)
         tmp = REQUEST_FILE + ".tmp"
         with open(tmp, "w", encoding="utf-8") as f:
             json.dump(req, f)
         os.replace(tmp, REQUEST_FILE)              # atomic: the bridge never sees half a request
+        try:
+            for p in zscript_bridge.write_request(self._seq, item.label, actions):
+                log(f"pick #{self._seq}: request.txt: {p}")
+        except OSError as e:
+            log(f"pick #{self._seq}: could not write request.txt: {e!r}")
         return self._seq
 
     def _listener(self):
@@ -373,8 +400,16 @@ class App:
         return None
 
     def send(self, item):
-        seq = self._write_request(item)
+        ins = self.target_install()
+        legacy = ins if ins is not None and not ins["python"] else None
+        seq = self._write_request(item, legacy)
         mode = self.cfg.bridge_mode
+        if legacy is not None:
+            # A listener can only be a ZBrush 2026+ (perhaps running as well), never the one in front.
+            log(f"pick #{seq} '{item.label}': {legacy['name']} in front, so the ZScript bridge (bridge key)")
+            self.press_bridge_key(seq)
+            W.nudge_mouse()
+            return
         listener = self._listener() if mode in ("auto", "message") else None
         if listener is not None:
             ok = W.PostMessageW(listener, WM_APP_PICK, seq, 0)
@@ -445,12 +480,14 @@ class App:
         os.makedirs(DATA_DIR, exist_ok=True)
         _trim_log()
         mutex = W.CreateMutexW(None, False, MUTEX_NAME)
+        created = W.process_created(os.getpid())
+        started = f"{time.time() - created:.2f} s after its process was created" if created else "?"
         if ctypes.get_last_error() == W.ERROR_ALREADY_EXISTS:
-            log("another instance is already running; exiting")
+            log(f"another instance is already running; exiting ({started}; started by {W.launch_chain()})")
             return 0
         W.make_dpi_aware()
         log(f"Radial Menu starting (pid {os.getpid()}, python {sys.version.split()[0]}, "
-            f"thumbnails={'on' if brushes else 'off'})")
+            f"thumbnails={'on' if brushes else 'off'}; {started}; started by {W.launch_chain()})")
         self.load_config(force=True)
         if self.cfg is None:
             return 1

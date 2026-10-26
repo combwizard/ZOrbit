@@ -1,0 +1,285 @@
+// Radial Menu bridge for ZBrush 2022-2025 (ZScript): the counterpart of radial_menu_bridge.py, for versions
+// without ZBrush's Python API. Compile it in ZBrush (ZScript > Load, pick this file) to RadialMenuBridge.zsc;
+// Radial Menu Studio copies that into <ZBrush>\ZStartup\ZPlugs64 together with RadialMenuData\bridge.cfg.
+//
+// Palette Zplugin > Radial Menu:
+//   Apply      carries out the pending pick (request.txt in the folder named by bridge.cfg), then deletes it.
+//              The app presses the bridge key after every pick; bind it natively: Ctrl+Alt+click Apply,
+//              press F9, then Preferences > Hotkeys > Store. There is no listener window in ZScript.
+//   Studio     opens Radial Menu Studio.
+//   Start App  starts the Radial Menu app (it also starts when ZBrush loads this plugin).
+//   Status     shows where picks arrive, whether one is pending, and the last pick.
+//
+// bridge.cfg, one value per line: RADIALMENU 1 / folder with a trailing backslash / app command line /
+// Studio command line / 1 to start the app on load. RadialMenuData also holds app.lnk and studio.lnk.
+// request.txt: RADIALMENU 1 / id / label / then per action its kind and arguments:
+//   brush <name> <.zbp file or ->   press <path>   set <path> <value>   toggle <path>
+// Both are written by the app with 8.3 paths where needed, since ZScript strings stop at 255 characters.
+// String literals here use forward slashes: a backslash starts an escape such as \n.
+
+[IConfig, 2022]
+
+[VarDef, rmOk, 0]              // bridge.cfg was read
+[VarDef, rmDir, ""]
+[VarDef, rmApp, ""]
+[VarDef, rmStudio, ""]
+[VarDef, rmAuto, ""]
+[VarDef, rmP, ""]              // file for RM_Open; also an interface path
+[VarDef, rmSize, 0]            // bytes in the open file (memory block RMMem)
+[VarDef, rmOff, 0]             // read position in it
+[VarDef, rmLine, ""]           // the line RM_ReadLine just read
+[VarDef, rmN, 0]
+[VarDef, rmLen, 0]
+[VarDef, rmC, 0]              // scratch for RM_Chop only
+[VarDef, rmK, 0]               // first character of the action kind (b p s t)
+[VarDef, rmReq, ""]
+[VarDef, rmId, ""]
+[VarDef, rmLabel, ""]
+[VarDef, rmKind, ""]
+[VarDef, rmA, ""]              // first argument of an action
+[VarDef, rmB, ""]              // second argument (brush file, set value)
+[VarDef, rmCount, 0]
+[VarDef, rmRes, ""]            // result of the last action
+[VarDef, rmLast, "none yet"]   // summary of the last pick
+
+// --- reading files line by line ------------------------------------------------------------------
+[RoutineDef, RM_Close,
+	[If, [MemGetSize, RMMem], [MemDelete, RMMem]]
+	[VarSet, rmSize, 0]
+	[VarSet, rmOff, 0]
+]
+
+[RoutineDef, RM_Open,
+	[RoutineCall, RM_Close]
+	[If, [FileExists, #rmP],
+		[VarSet, rmSize, [MemCreateFromFile, RMMem, #rmP]]
+	]
+	[If, rmSize < 0, [VarSet, rmSize, 0]]
+]
+
+// Drops one trailing CR or LF from rmLine. No Loop here: RM_ReadLine runs inside RM_Apply's loop.
+[RoutineDef, RM_Chop,
+	[VarSet, rmLen, [StrLength, #rmLine]]
+	[If, rmLen > 0,
+		[VarSet, rmC, [StrToAsc, #rmLine, rmLen - 1]]
+		[If, (rmC == 10) || (rmC == 13),
+			[If, rmLen == 1,
+				[VarSet, rmLine, ""],
+				[VarSet, rmLine, [StrExtract, #rmLine, 0, rmLen - 2]]
+			]
+		]
+	]
+]
+
+// Next line into rmLine without its line end; "" at the end of the file.
+[RoutineDef, RM_ReadLine,
+	[VarSet, rmLine, ""]
+	[If, rmOff < rmSize,
+		[VarSet, rmN, [MemReadString, RMMem, rmLine, rmOff, 1]]
+		[If, rmN < 1, [VarSet, rmOff, rmSize], [VarAdd, rmOff, rmN]]
+		[RoutineCall, RM_Chop]
+		[RoutineCall, RM_Chop]
+	]
+]
+
+[RoutineDef, RM_ReadCfg,
+	[VarSet, rmOk, 0]
+	[VarSet, rmP, [FileNameResolvePath, "ZSTARTUP_ZPLUGS64/RadialMenuData/bridge.cfg"]]
+	[RoutineCall, RM_Open]
+	[RoutineCall, RM_ReadLine]
+	[If, [StrFind, "RADIALMENU", #rmLine] == 0,
+		[RoutineCall, RM_ReadLine]
+		[VarSet, rmDir, #rmLine]
+		[RoutineCall, RM_ReadLine]
+		[VarSet, rmApp, #rmLine]
+		[RoutineCall, RM_ReadLine]
+		[VarSet, rmStudio, #rmLine]
+		[RoutineCall, RM_ReadLine]
+		[VarSet, rmAuto, #rmLine]
+		[VarSet, rmOk, 1]
+	]
+	[RoutineCall, RM_Close]
+]
+
+// --- actions (rmA, rmB in; rmRes out) ------------------------------------------------------------
+[RoutineDef, RM_Brush,
+	[VarSet, rmP, [StrMerge, "Brush:", #rmA]]
+	[If, [IExists, #rmP],
+		[IPress, #rmP]
+		[VarSet, rmRes, [StrMerge, "brush ", #rmA, ": selected"]],
+		[If, [FileExists, #rmB],
+			[FileNameSetNext, #rmB]
+			[IPress, "Brush:Load Brush"]
+			[If, [IExists, #rmP], [IPress, #rmP]]
+			[VarSet, rmRes, [StrMerge, "brush ", #rmA, ": loaded from file"]],
+			[VarSet, rmRes, [StrMerge, "brush ", #rmA, ": NOT loaded and no .zbp file known"]]
+		]
+	]
+]
+
+[RoutineDef, RM_Press,
+	[If, [IExists, #rmA],
+		[IPress, #rmA]
+		[VarSet, rmRes, [StrMerge, "press ", #rmA, ": ok"]],
+		[VarSet, rmRes, [StrMerge, "press ", #rmA, ": no such interface item"]]
+	]
+]
+
+[RoutineDef, RM_Set,
+	[If, [IExists, #rmA],
+		[ISet, #rmA, [Val, #rmB]]
+		[VarSet, rmRes, [StrMerge, "set ", #rmA, " = ", #rmB, ": ok"]],
+		[VarSet, rmRes, [StrMerge, "set ", #rmA, ": no such interface item"]]
+	]
+]
+
+[RoutineDef, RM_Toggle,
+	[If, [IExists, #rmA],
+		[IToggle, #rmA]
+		[VarSet, rmRes, [StrMerge, "toggle ", #rmA, ": ok"]],
+		[VarSet, rmRes, [StrMerge, "toggle ", #rmA, ": no such interface item"]]
+	]
+]
+
+// --- the pick ------------------------------------------------------------------------------------
+// Overwrites the file rmLogName in the exchange folder with the line rmLogText.
+[VarDef, rmLogName, ""]
+[VarDef, rmLogText, ""]
+[RoutineDef, RM_WriteLog,
+	[VarSet, rmLen, [StrLength, #rmLogText]]
+	[If, [MemGetSize, RMLog], [MemDelete, RMLog]]
+	[If, [MemCreate, RMLog, rmLen + 1, 0] > 0,
+		[MemWriteString, RMLog, #rmLogText, 0, 0]
+		[MemWrite, RMLog, 10, 2, rmLen]
+		[MemSaveToFile, RMLog, [StrMerge, #rmDir, #rmLogName], 1]
+		[MemDelete, RMLog]
+	]
+]
+
+// zscript_bridge.log: the last pick (the Studio shows it).
+[RoutineDef, RM_Log,
+	[VarSet, rmLogName, "zscript_bridge.log"]
+	[VarSet, rmLogText, #rmLast]
+	[RoutineCall, RM_WriteLog]
+]
+
+// Starts rmB (app.lnk or studio.lnk in RadialMenuData) through ZBrush's own ZFileUtils64.dll, which opens it
+// like Explorer does. ZScript's ShellExecute goes through cmd.exe, which on Windows 11 first opens a Windows
+// Terminal window and takes seconds; it is only the fallback, with the command line rmA from bridge.cfg.
+// zscript_launch.log records which way was taken.
+[VarDef, rmDll, ""]
+[RoutineDef, RM_Launch,
+	[VarSet, rmDll, [FileNameResolvePath, "ZSTARTUP_ZPLUGS64/MacroData/ZFileUtils64.dll"]]
+	[VarSet, rmP, [FileNameResolvePath, [StrMerge, "ZSTARTUP_ZPLUGS64/RadialMenuData/", #rmB]]]
+	[VarSet, rmLogName, "zscript_launch.log"]
+	[VarSet, rmN, 0]
+	[If, [FileExists, #rmDll],
+		[If, [FileExists, #rmP], [VarSet, rmN, 1]]
+	]
+	[If, rmN,
+		[VarSet, rmLogText, [StrMerge, "ZFileUtils: ", #rmP]]
+		[RoutineCall, RM_WriteLog]
+		[FileExecute, #rmDll, "LaunchAppWithFile", #rmP],
+		[VarSet, rmLogText, [StrMerge, "ShellExecute: ", #rmA]]
+		[RoutineCall, RM_WriteLog]
+		[ShellExecute, #rmA]
+	]
+]
+
+[RoutineDef, RM_Apply,
+	[RoutineCall, RM_ReadCfg]
+	[If, rmOk,
+		[VarSet, rmReq, [StrMerge, #rmDir, "request.txt"]]
+		[VarSet, rmP, #rmReq]
+		[RoutineCall, RM_Open]
+		[If, rmSize > 0,
+			[FileDelete, #rmReq]
+			[FileDelete, [StrMerge, #rmDir, "request.json"]]
+			[RoutineCall, RM_ReadLine]
+			[If, [StrFind, "RADIALMENU", #rmLine] == 0,
+				[RoutineCall, RM_ReadLine]
+				[VarSet, rmId, #rmLine]
+				[RoutineCall, RM_ReadLine]
+				[VarSet, rmLabel, #rmLine]
+				[VarSet, rmCount, 0]
+				[VarSet, rmRes, "nothing to do"]
+				[Loop, 100,
+					[If, rmOff >= rmSize, [LoopExit]]
+					[RoutineCall, RM_ReadLine]
+					[VarSet, rmKind, #rmLine]
+					[VarSet, rmK, [StrToAsc, #rmKind]]
+					[RoutineCall, RM_ReadLine]
+					[VarSet, rmA, #rmLine]
+					[VarSet, rmB, ""]
+					[If, (rmK == 98) || (rmK == 115),
+						[RoutineCall, RM_ReadLine]
+						[VarSet, rmB, #rmLine]
+					]
+					[If, rmK == 98, [RoutineCall, RM_Brush]]
+					[If, rmK == 112, [RoutineCall, RM_Press]]
+					[If, rmK == 115, [RoutineCall, RM_Set]]
+					[If, rmK == 116, [RoutineCall, RM_Toggle]]
+					[VarAdd, rmCount, 1]
+				]
+				[VarSet, rmLast, [StrMerge, "#", #rmId, " '", #rmLabel, "': ", #rmRes]],
+				[VarSet, rmLast, "unreadable request.txt (deleted)"]
+			],
+			[VarSet, rmLast, "Apply pressed, no pending pick"]
+		]
+		[RoutineCall, RM_Close]
+		[RoutineCall, RM_Log],
+		[Note, "Radial Menu: RadialMenuData/bridge.cfg is missing. Install the bridge again in Radial Menu Studio (Settings).", , 3]
+	]
+]
+
+[RoutineDef, RM_StartApp,
+	[RoutineCall, RM_ReadCfg]
+	[If, rmOk,
+		[VarSet, rmA, #rmApp]
+		[VarSet, rmB, "app.lnk"]
+		[RoutineCall, RM_Launch]
+	]
+]
+
+[RoutineDef, RM_Studio,
+	[RoutineCall, RM_ReadCfg]
+	[If, rmOk,
+		[VarSet, rmA, #rmStudio]
+		[VarSet, rmB, "studio.lnk"]
+		[RoutineCall, RM_Launch]
+	]
+]
+
+[RoutineDef, RM_Status,
+	[RoutineCall, RM_ReadCfg]
+	[If, rmOk,
+		[VarSet, rmP, [StrMerge, #rmDir, "request.txt"]]
+		[If, [FileExists, #rmP], [VarSet, rmB, "yes"], [VarSet, rmB, "no"]]
+		[MessageOK, [StrMerge, "Picks arrive in: ", #rmDir, "\nPending pick: ", #rmB, "\nLast pick: ", #rmLast], "Radial Menu"],
+		[MessageOK, "RadialMenuData/bridge.cfg is missing or unreadable. Install the bridge again in Radial Menu Studio (Settings).", "Radial Menu"]
+	]
+]
+
+// --- palette -------------------------------------------------------------------------------------
+[ISubPalette, "Zplugin:Radial Menu"]
+[IButton, "Zplugin:Radial Menu:Studio", "Opens Radial Menu Studio: edit menus, browse brushes, settings.",
+	[RoutineCall, RM_Studio]
+]
+[IButton, "Zplugin:Radial Menu:Apply", "Carries out the Radial Menu pick. Bind F9 to it natively.",
+	[RoutineCall, RM_Apply]
+]
+[IButton, "Zplugin:Radial Menu:Start App", "Starts the Radial Menu app if it is not running.",
+	[RoutineCall, RM_StartApp]
+]
+[IButton, "Zplugin:Radial Menu:Status", "Shows the Radial Menu bridge state.",
+	[RoutineCall, RM_Status]
+]
+
+// Start the app with ZBrush, as the Python bridge does. ZBrush runs this whole file again for every button
+// press and variables start over each time, so the memory block RMStarted (kept until ZBrush quits) makes
+// this happen once per session.
+[If, [MemGetSize, RMStarted] == 0,
+	[MemCreate, RMStarted, 4, 0]
+	[RoutineCall, RM_ReadCfg]
+	[If, rmOk && ([StrFind, "1", #rmAuto] == 0), [RoutineCall, RM_StartApp]]
+]

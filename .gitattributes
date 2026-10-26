@@ -1,0 +1,2 @@
+# Compiled ZScript plugin (bridge/zscript): never convert line endings.
+*.zsc binary

@@ -4,6 +4,22 @@ All notable changes to this project are listed here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+- Support for ZBrush 2022 to 2025. They have no Python API, so they get a ZScript plugin with the same
+  Zplugin > Radial Menu palette. It has no listener, so picks there always go through the bridge key.
+- Studio's Settings has an Older ZBrush section that lists the 2022 to 2025 versions it finds, with Install,
+  Update and Remove for each and a way to add a ZBrush folder it missed. It asks for administrator rights only
+  for a ZBrush under Program Files. A badge on Settings shows when an installed plugin needs updating.
+- In ZBrush 2022 to 2025 brushes load from that version's own files, and the brush library also works on a
+  computer that only has one of those versions.
+- `studio.log`, and the app's start lines in `radiald.log`, record which program started them and how long
+  starting took.
+
+### Changed
+- The ZBrush 2026 plugin also clears the copy of each pick meant for the ZScript plugin (`request.txt`).
+
 ## [0.3.0] - 2026-10-26
 
 ### Added

@@ -26,7 +26,7 @@ Press **Q** over ZBrush and a ring of your favourite brushes and buttons appears
 ## Requirements
 
 - Windows 10 or 11
-- ZBrush 2026 or newer (Radial Menu talks to ZBrush through its Python API)
+- ZBrush 2022 or newer. ZBrush 2026 and newer load the Python plugin that the installer sets up. ZBrush 2022 to 2025 have no Python API, so they get a ZScript plugin, which you install from Studio (see [ZBrush 2022 to 2025](#zbrush-2022-to-2025)).
 - The Microsoft Edge WebView2 runtime, which Studio uses for its window. It is part of Windows 11 and of up-to-date Windows 10.
 
 ## Install
@@ -37,6 +37,17 @@ Press **Q** over ZBrush and a ring of your favourite brushes and buttons appears
 4. Open a canvas, hover over it and press **Q**.
 
 The first run puts a starter set of menus in `%APPDATA%\RadialMenu\radial.json`. They use only brushes that come with ZBrush.
+
+### ZBrush 2022 to 2025
+
+These versions load plugins only from their own `ZStartup\ZPlugs64` folder, so Studio puts the plugin there:
+
+1. Open **Radial Menu Studio** and go to **Settings > Older ZBrush**. It lists the 2022 to 2025 versions it found. If yours is missing, use **Add a ZBrush folder**.
+2. Click **Install**. A ZBrush under Program Files asks for administrator rights once.
+3. Restart that ZBrush.
+4. Bind the bridge key: Ctrl+Alt+click **Zplugin > Radial Menu > Apply**, press **F9**, then **Preferences > Hotkeys > Store**. Each ZBrush version keeps its own hotkeys, so do this once per version, and don't skip **Store**.
+
+The plugin has no listener window, so every pick in these versions goes through the bridge key. When a new Radial Menu has a newer plugin, **Settings** shows a badge and the row says **Update available**.
 
 ### Windows says "Windows protected your PC"
 
@@ -56,6 +67,8 @@ The [user guide](docs/user-guide.md) covers every setting and item type.
 ## Uninstall
 
 Open **Windows Settings > Apps > Installed apps**, find **Radial Menu for ZBrush** and choose **Uninstall**. Restart ZBrush afterwards so it lets go of the plugin.
+
+The uninstaller cannot reach the plugin inside a ZBrush 2022 to 2025. Remove it first with **Studio > Settings > Older ZBrush > Remove**, or afterwards by deleting `RadialMenuBridge.zsc` and the `RadialMenuData` folder from that ZBrush's `ZStartup\ZPlugs64`.
 
 Your menus and logs are not part of the program. They live in `%APPDATA%\RadialMenu` and `%LOCALAPPDATA%\RadialMenu`; delete those folders if you want no trace.
 
@@ -81,6 +94,8 @@ Radial Menu has two halves.
 
 When you pick a slot, the app writes the request to a small file and posts a Windows message to a hidden listener window the bridge keeps inside ZBrush. The bridge reads the file and does the work on ZBrush's main thread. If the listener is not available, the app can press a fallback key (F9) that you bind to **Zplugin > Radial Menu > Apply**.
 
+ZBrush 2022 to 2025 have no Python API, so for them the bridge is a ZScript plugin (`bridge\zscript\`) with the same palette. ZScript cannot host a listener window, so the app always presses the bridge key there. The app also writes each pick in a plain line-by-line form that ZScript can read, and loads brushes from that ZBrush version's own files.
+
 The app exits when ZBrush does.
 
 ## Troubleshooting
@@ -94,8 +109,11 @@ Open **Zplugin > Radial Menu > Status** and check that the listener says "verifi
 **Use the fallback key.**
 In ZBrush, Ctrl+Alt+click **Zplugin > Radial Menu > Apply**, press **F9**, then store it in **Preferences > Hotkeys > Store**. With the bridge mode on `auto` (the default), Radial Menu presses F9 when the listener does not answer.
 
+**ZBrush 2022 to 2025: the ring opens, but picks do nothing.**
+Picks there only arrive through the bridge key. Check that F9 is bound to **Zplugin > Radial Menu > Apply** and that you clicked **Preferences > Hotkeys > Store**; a binding that was not stored is gone after a restart. `zscript_bridge.log` shows what the last pick did.
+
 **Logs.**
-`%LOCALAPPDATA%\RadialMenu` holds `radiald.log` (the app), `bridge.log` (ZBrush side) and `app_stderr.log` (crashes at startup). Studio's **Status** screen shows the tail of the app log and has a button that opens the folder.
+`%LOCALAPPDATA%\RadialMenu` holds `radiald.log` (the app), `bridge.log` (ZBrush side), `zscript_bridge.log` (ZBrush 2022 to 2025: the last pick), `studio.log` (how Studio started) and `app_stderr.log` (crashes at startup). Studio's **Status** screen shows the tail of the app log and has a button that opens the folder.
 
 **Windows protected your PC.**
 See [above](#windows-says-windows-protected-your-pc).
