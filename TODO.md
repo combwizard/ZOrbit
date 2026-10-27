@@ -2,8 +2,8 @@
 
 ## Next
 
-- [ ] Compile `ZOrbitBridge.txt` in ZBrush 2022 and commit `ZOrbitBridge.zsc` (the rename removed the old `.zsc`)
-- [ ] Retake docs/images screenshots (Studio wordmark and palette now say ZOrbit)
+- [x] Compile `ZOrbitBridge.txt` in ZBrush 2022 and commit `ZOrbitBridge.zsc` (the rename removed the old `.zsc`)
+- [x] Retake docs/images screenshots (Studio wordmark and palette now say ZOrbit)
 - [ ] Support ZBrush 2022–2025 (ZScript bridge in `bridge/zscript/`, Studio: Settings > Older ZBrush)
   - [x] Compile `ZOrbitBridge.txt` in ZBrush 2022 (commit the `.zsc` with the source)
   - [x] 2022: palette loads, Studio install, F9 Apply selects a loaded brush
