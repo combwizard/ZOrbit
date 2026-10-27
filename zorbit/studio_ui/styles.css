@@ -787,3 +787,27 @@ body.dragging .irow:hover { background: transparent; }
 .chg-group ul { margin: 0; padding-left: 18px; }
 .chg-group li { color: var(--text); font-size: 13px; line-height: 1.6; }
 .modal:has(.changes) { width: min(560px, calc(100vw - 32px)); }
+
+/* ------------------------------------------------------------ brush browser popout (popout.html) */
+.pop { background: var(--bg1); }
+.pop > .loading { flex: 1; display: grid; place-items: center; color: var(--sub); font-size: 12.5px; }
+.pop-head { flex: none; height: 40px; display: flex; align-items: center; gap: 8px; padding: 0 0 0 14px; background: var(--bg2); border-bottom: 1px solid var(--line);
+  app-region: drag; -webkit-app-region: drag; user-select: none; }
+.pop-head button, .pop-head input { app-region: no-drag; -webkit-app-region: no-drag; }
+.pop-logo { display: inline-flex; color: var(--accent); filter: drop-shadow(0 0 5px rgba(248, 107, 51, .35)); }
+.pop-title { font-size: 13.5px; font-weight: 800; letter-spacing: .01em; }
+.pop-head .pin-btn { width: 30px; height: 30px; }
+.pop-head .pin-btn[aria-pressed="true"] { color: var(--accent); background: var(--accent-wash); }
+.pop-head .pin-btn[aria-pressed="true"] .ico svg { fill: currentColor; fill-opacity: .35; }
+.pop-head .winctl { margin-left: 4px; }
+.pop-body { flex: 1; min-height: 0; }
+.pop .browser.full { grid-template-columns: 190px minmax(0, 1fr); }
+.pop .lib-side { padding: 10px 6px; }
+.pop .b-tools { flex-wrap: wrap; gap: 8px 12px; padding: 10px 14px 6px; }
+.pop .searchbox { flex: 1 1 176px; }
+.pop .searchbox input:focus { box-shadow: none; }         /* the search box draws its own focus ring */
+.pop .b-sub { padding: 0 14px 8px; }
+.pop .b-scroll { padding: 12px 14px 16px; }
+.pop .bgrid { gap: 8px; }
+.pop .bcard { cursor: pointer; }
+.pop .add-strip { padding: 8px 14px; }

@@ -3,6 +3,9 @@
   ZOrbit.exe                     background app: hotkeys, ring, hand-off to ZBrush, tray icon
   ZOrbit.exe --exit-with-zbrush  same, quitting when ZBrush closes (how the ZBrush bridge starts it)
   ZOrbit.exe --studio            ZOrbit Studio: menu editor, brush library, settings
+  ZOrbit.exe --popout [--managed] [--show] [--tag KEY] [--zbrush-hwnd N]
+                                     the brush browser popout (the app starts and drives it; --managed: quits
+                                     with the app, --show: open at once, --tag: filtered to a tag)
   ZOrbit.exe --check             validate the menus file and print it
   ZOrbit.exe --zscript-copy|--zscript-remove <stage> <dest>
                                      internal: the Studio runs this as administrator to put the ZScript
@@ -27,6 +30,9 @@ def main() -> int:
     if "--studio" in args:
         import studio
         return studio.main()
+    if "--popout" in args:
+        import popout
+        return popout.main(args)
     import radiald
     return radiald.main(args)
 

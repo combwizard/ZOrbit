@@ -14,6 +14,8 @@
    Tags (state in localStorage rm_tags, seeded with the two starters and a few tagged brushes): ?tags=empty (no tags, nothing tagged),
    ?tagsmany (30 tags with long names), ?tagfail (every tag change is refused), ?tagexists (create and rename always clash with
    the first tag). The first two keep their state in memory only, so a reload starts clean.
+   The popout page (popout.html?mock): ?nopick (a pick is refused as "ZOrbit is not running"), ?tag=blocking (opens filtered, as --tag does);
+   the pin is kept in localStorage rm_pop_pinned, and the popout_* calls only log.
    ?kinds adds a Tag item ({"tag": "blocking"}) and a Browser item ({"browser": ""}) to the end of the Tools menu, so the two newer
    kinds can be seen (the recorded config has none). The default stays the faithful recording. */
 (function () {
@@ -439,6 +441,24 @@
     get_app_info: function () { return Promise.resolve({ version: '0.7.1' }); },
     check_update: function () { var p = JSON.parse(localStorage.getItem('rm_prefs') || '{}'); if (p.check_updates === false) return Promise.resolve({ newer: false, current: '0.7.1', latest: null, url: 'https://github.com/combwizard/zorbit/releases' }); return sleep(300).then(function () { if (q.has('unreach')) return { newer: false, current: '0.7.1', latest: null, url: 'https://github.com/combwizard/zorbit/releases' }; return q.has('update') ? { newer: true, current: '0.7.1', latest: '0.7.1', url: 'https://github.com/combwizard/zorbit/releases' } : { newer: false, current: '0.7.1', latest: '0.7.1', url: 'https://github.com/combwizard/zorbit/releases' }; }); },
     open_url: function (url) { console.log('[mock] open_url', url); return Promise.resolve(true); },
+    // The brush browser popout (popout.html?mock). A pick only logs; ?nopick answers like a popout whose app is gone.
+    popout_pick: function (name) {
+      console.log('[mock] popout_pick', name);
+      return sleep(60).then(function () { return q.has('nopick') ? { ok: false, error: 'ZOrbit is not running' } : { ok: true }; });
+    },
+    popout_hide: function () { console.log('[mock] popout_hide'); return Promise.resolve(true); },
+    popout_set_pinned: function (flag) {
+      console.log('[mock] popout_set_pinned', flag);
+      try { localStorage.setItem('rm_pop_pinned', flag ? '1' : ''); } catch (e) {}
+      return Promise.resolve(true);
+    },
+    popout_set_size: function (px) { console.log('[mock] popout_set_size', px); return Promise.resolve(true); },
+    popout_get_state: function () {
+      var pinned = false;
+      try { pinned = !!localStorage.getItem('rm_pop_pinned'); } catch (e) {}
+      return Promise.resolve({ pinned: pinned, size: 96, tag: q.get('tag') || null, tags_path: '' });
+    },
+    popout_log: function (msg) { console.log('[mock] popout_log', msg); return Promise.resolve(true); },
   };
   window.pywebview = { api: api };
   setTimeout(function () { window.dispatchEvent(new Event('pywebviewready')); }, 0);

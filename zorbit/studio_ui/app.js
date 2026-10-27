@@ -1,7 +1,9 @@
 /* ZOrbit Studio front-end.
    Plain JS, no dependencies. The config object (S.cfg) is the single source of truth; every backend call
    receives the whole thing. Sections: helpers, state + config logic, backend loaders (ring / frames / thumbs),
-   UI primitives (toast, modal, popover, drag and drop, combobox, hotkey recorder), then the four screens. */
+   UI primitives (toast, modal, popover, drag and drop, combobox, hotkey recorder), then the four screens.
+   The same file drives the brush browser popout (popout.html sets window.__ZORBIT_MODE__ = 'popout'): makeBrowser takes a
+   `host` that says what a pick does, and buildPopout wraps it in the popout's header. */
 (() => {
 'use strict';
 
@@ -148,6 +150,7 @@ const FALLBACK_DEFAULTS = { radius: 145, slot: 72, dead_zone: 38, tap_ms: 250, t
 const FALLBACK_RANGES = { radius: [60, 400], slot: [32, 160], dead_zone: [10, 120], tap_ms: [0, 1000], timeout_s: [2, 120] };
 
 const params = new URLSearchParams(location.search);
+const POPOUT = window.__ZORBIT_MODE__ === 'popout';       // the brush browser popout (popout.html), not the Studio
 const S = {
   cfg: null, savedStr: '', path: '', defaults: FALLBACK_DEFAULTS, opts: null,
   problems: [], problemsOpen: false, problemMenus: new Set(), problemItems: new Map(), problemTips: new Map(),
@@ -160,6 +163,7 @@ const S = {
   tags: [], tagMap: new Map(), itemTags: {}, tagMtime: null, tagsErr: '', tagsLoaded: false, tagsPath: '', palette: null,   // see "tags" below
   lib: { cat: 'All', q: '', size: 112 },
   dock: { cat: 'All', q: '' },
+  pop: { cat: 'All', q: '', size: 96 }, popPinned: false,   // the popout's browser state, and whether it stays open
   status: null,
   prefs: { show_licence: true },
   ready: false, fatal: false,                 // ready after the first screen is up; fatal when the recovery screen is showing
@@ -2113,7 +2117,7 @@ function openTagManager() {
     });
     const remove = async () => {
       const uses = tagRingUses(tag.key);
-      const text = (tag.count ? 'It is on ' + plural(tag.count, 'brush') + (uses ? ', used by ' + plural(uses, 'ring item') : '') : 'It is not on any brush' + (uses ? ', but ' + plural(uses, 'ring item') + (uses === 1 ? ' uses' : ' use') + ' it' : '')) + '. Brushes keep working.';
+      const text = (tag.count ? 'It is on ' + plural(tag.count, 'brush') + (uses ? ', used by ' + plural(uses, 'ring item') : '') : 'It is not on any brush' + (uses ? ', but ' + plural(uses, 'ring item') + (uses === 1 ? ' uses' : ' use') + ' it' : '')) + '. Brushes keep working.' + (POPOUT ? ' Ring slots that use it stay empty until you pick another tag.' : '');
       const ok = await modal({ title: 'Delete tag "' + tag.label + '"?', body: h('p', null, text),
         actions: [{ text: 'Cancel', value: false, focus: true }, { text: 'Delete tag', value: true, kind: 'danger' }] });
       if (ok) await tagCall('delete_tag', tag.key);
@@ -2175,12 +2179,11 @@ function catTree() {
   S._tree = Array.from(groups.values()); S._treeLib = S.library;
   return S._tree;
 }
-function catMatch(b, cat) {
+function catMatch(b, cat, host) {
   if (cat === 'All') return true;
-  if (cat === '@used') return usageMap().has(nameKey(b.name));
+  if (cat === '@used') return !!(host.badge && host.badge(b.name));
   return b.category === cat || b.category.startsWith(cat + '/');
 }
-function usedCount() { const u = usageMap(); let n = 0; for (const b of S.library) if (u.has(nameKey(b.name))) n++; return n; }
 const resFor = px => (px > 160 ? 256 : 128);     // above 160 CSS px a 128 px thumbnail starts to look soft
 
 /* Adds a brush to the menu being edited. A brush the menu already has is not added silently. */
@@ -2207,6 +2210,38 @@ function addBrushesToCurrent(names) {
   const skipped = names.length - fresh.length;
   undoToast(`Added ${plural(fresh.length, 'brush')} to "${title}"` + (skipped ? ` (${skipped} already there)` : ''));
 }
+
+/* What a brush browser does with a pick, and what it knows about menus. The Studio's browser adds brushes to the menu being edited
+   and marks the ones a menu already has; the popout's selects the brush in ZBrush and knows nothing of menus.
+     dnd             cards can be dragged onto the Studio's drop zones
+     primaryIcon     the icon of the pick button on a card and of the strip's button
+     primaryLabel()  the strip button's text ("Add to Brushes", "Select in ZBrush")
+     canPrimary(n)   whether n selected brushes can be picked together
+     primary(name)   the pick: a double-click, Enter, the strip button or a card's button
+     primaryMany(names)  the same for a selection of several (a single name goes to primary)
+     cardTitle(), cardLabel(name), enterHint   the card button's tooltip, a card's spoken label and the Enter hint in it
+     hint()          nodes for the line under the search box
+     badge           null (no "In my menus" folder, no badges) or badge(name) -> { n, titles } | null
+     onSize(px)      optional: the thumbnail size changed */
+const STUDIO_HOST = {
+  dnd: true,
+  primaryIcon: 'plus',
+  primaryLabel() { const m = curMenu(); return m ? 'Add to ' + (m.title || S.menuId) : 'No menu to add to'; },
+  canPrimary() { return !!curMenu(); },
+  primary: name => addBrushToCurrent(name),
+  primaryMany(names) { if (names.length === 1) addBrushToCurrent(names[0]); else if (names.length) addBrushesToCurrent(names); },
+  cardTitle() { const m = curMenu(); return 'Add to ' + ((m && m.title) || 'current menu'); },
+  cardLabel: name => 'Add ' + name + ' to the current menu',
+  enterHint: 'Press Enter to add to the current menu.',
+  hint() {
+    const m = curMenu(), n = m ? (m.title || S.menuId) : '';
+    return ['Click a brush to select it, then Add to ', h('b', null, n || 'a menu'), '; or drag it onto a menu, the ring or the item list. Double-click or Enter adds it too. Ctrl-click or Shift-click selects several; right-click tags.'];
+  },
+  badge(name) {
+    const u = usageMap().get(nameKey(name));
+    return u ? { n: u.length, titles: Array.from(new Set(u.map(x => (S.cfg.menus[x.menuId] || {}).title || x.menuId))) } : null;
+  },
+};
 
 /* ---------- finding brushes: rescan button and the empty states */
 function paintRescanBtn(b) {
@@ -2241,7 +2276,7 @@ function libEmptyState() {
   return el;
 }
 
-function makeBrowser({ compact, st }) {
+function makeBrowser({ compact, st, host = STUDIO_HOST }) {
   const root = h('div', { class: 'browser ' + (compact ? 'compact' : 'full') });
   const search = h('input', { class: 'inp', type: 'text', placeholder: 'Search brushes...', value: st.q, 'aria-label': 'Search brushes', spellcheck: 'false', autocomplete: 'off' });
   const clearBtn = h('button', { class: 'ibtn', type: 'button', title: 'Clear search', 'aria-label': 'Clear search', hidden: !st.q, onclick: () => { clearQuery(); renderGrid(); search.focus(); } }, icon('x', 13));
@@ -2263,33 +2298,33 @@ function makeBrowser({ compact, st }) {
   if (st.cat.includes('/')) st.open.add(st.cat.split('/')[0]);   // a folder chosen from outside (a link) starts unfolded
 
   const searchBox = h('label', { class: 'searchbox' }, icon('search', 14), search, clearBtn);
-  const onSearch = debounce(() => { st.q = search.value; clearBtn.hidden = !st.q; renderGrid(); }, 120);
+  const onSearch = debounce(() => { st.q = search.value; clearBtn.hidden = !st.q; renderGrid(); if (host.firstMatch) highlightFirst(); }, 120);
   search.addEventListener('input', onSearch);
   search.addEventListener('keydown', e => { if (e.key === 'Escape' && search.value) { e.stopPropagation(); clearBtn.click(); } });
+  let autoHl = false;                    // the selection is only the highlight put on the first match (the popout), so Esc leaves it alone
   function clearQuery() { onSearch.cancel(); search.value = ''; st.q = ''; clearBtn.hidden = true; }
 
   /* The selected brushes and their action strip. A click selects one brush, Ctrl-click adds or removes one, Shift-click selects a
      range of the brushes on show. The strip tags them or adds them to the menu being edited. */
   const hint = h('div', { class: 'b-hint' });
-  const addNames = names => { if (names.length === 1) addBrushToCurrent(names[0]); else if (names.length) addBrushesToCurrent(names); };
-  const addBtn = h('button', { class: 'btn primary small as-add', type: 'button', onclick: () => addNames(Array.from(sel)) });
+  const addBtn = h('button', { class: 'btn primary small as-add', type: 'button', onclick: () => host.primaryMany(Array.from(sel)) });
   const tagBtn = h('button', { class: 'btn small as-tag', type: 'button', title: 'Tag the selected brushes', 'aria-label': 'Tag the selected brushes', onclick: () => tagPicker(tagBtn, Array.from(sel)) },
     icon('tag', 13), compact ? null : 'Tag...');
   const stripThumb = h('span', { class: 'as-thumb' }), stripName = h('b'), stripCat = h('small');
   const strip = h('div', { class: 'add-strip', hidden: true, role: 'region', 'aria-label': 'Selected brushes' },
     stripThumb, h('div', { class: 'as-name' }, stripName, stripCat), tagBtn, addBtn, iconBtn('x', 'Clear selection', () => setSel(null)));
-  const targetName = () => { const m = curMenu(); return m ? (m.title || S.menuId) : ''; };
   function paintTarget() {
-    const n = targetName(), label = n ? 'Add to ' + n : 'No menu to add to';
-    hint.replaceChildren('Click a brush to select it, then Add to ', h('b', null, n || 'a menu'), '; or drag it onto a menu, the ring or the item list. Double-click or Enter adds it too. Ctrl-click or Shift-click selects several; right-click tags.');
+    const label = host.primaryLabel();
+    hint.replaceChildren(...host.hint());
     if (addBtn.dataset.label !== label) {
       addBtn.dataset.label = label; addBtn.title = label;
-      addBtn.replaceChildren(icon('plus', 13), h('span', { class: 'as-add-txt' }, label));
+      addBtn.replaceChildren(icon(host.primaryIcon, 13), h('span', { class: 'as-add-txt' }, label));
     }
-    addBtn.disabled = !n;
+    addBtn.disabled = !host.canPrimary(sel.size);
   }
   /* Repaints the cards and the strip from `sel`; `focusName` is the card to give focus. */
   function paintSel(focusName = null) {
+    autoHl = false;
     $$('.bcard', grid).forEach(c => {
       const on = sel.has(c.dataset.name);
       c.classList.toggle('sel', on); c.setAttribute('aria-pressed', on ? 'true' : 'false');
@@ -2301,8 +2336,9 @@ function makeBrowser({ compact, st }) {
       if (b) { stripThumb.replaceChildren(thumb(b.name, { size: 34 })); setText(stripName, b.name); setText(stripCat, b.category); }
     } else if (sel.size > 1) {
       stripThumb.replaceChildren(h('span', { class: 'as-multi' }, String(sel.size)));
-      setText(stripName, sel.size + ' selected'); setText(stripCat, 'Ctrl-click or Shift-click to change');
+      setText(stripName, sel.size + ' selected'); setText(stripCat, host.canPrimary(sel.size) ? 'Ctrl-click or Shift-click to change' : 'ZBrush takes one brush at a time');
     }
+    addBtn.disabled = !host.canPrimary(sel.size);
   }
   function setSel(name, focusCard = false) {
     const b = name ? S.libByName.get(nameKey(name)) : null;
@@ -2311,7 +2347,7 @@ function makeBrowser({ compact, st }) {
     paintSel(focusCard && b ? b.name : null);
   }
   root.addEventListener('keydown', e => {
-    if (e.key === 'Escape' && sel.size && !S.problemsOpen && !e.defaultPrevented) { e.preventDefault(); setSel(null); }
+    if (e.key === 'Escape' && sel.size && !autoHl && !S.problemsOpen && !e.defaultPrevented) { e.preventDefault(); setSel(null); }
   });
   scroll.addEventListener('click', e => { if (sel.size && !e.target.closest('.bcard, button, a, input')) setSel(null); });
   scroll.addEventListener('keydown', e => {       // Ctrl+A in the grid selects every brush on show
@@ -2330,6 +2366,7 @@ function makeBrowser({ compact, st }) {
     const paint = () => size.style.setProperty('--pct', ((st.size - 84) / (220 - 84)) * 100 + '%');
     size.addEventListener('input', () => {
       st.size = +size.value; grid.style.setProperty('--card', st.size + 'px'); paint();
+      if (host.onSize) host.onSize(st.size);
       const r = resFor(st.size);
       if (r !== curRes) { curRes = r; $$('.bcard .thumb', grid).forEach(t => rethumb(t, r)); }
     });
@@ -2349,7 +2386,7 @@ function makeBrowser({ compact, st }) {
   const filtered = () => {
     pruneTagSel();
     const q = st.q.trim().toLowerCase(), terms = q ? q.split(/\s+/) : [];
-    return S.libSorted.filter(b => catMatch(b, st.cat) && (!terms.length || terms.every(t => b.name.toLowerCase().includes(t))) && tagMatch(b));
+    return S.libSorted.filter(b => catMatch(b, st.cat, host) && (!terms.length || terms.every(t => b.name.toLowerCase().includes(t))) && tagMatch(b));
   };
   function toggleTag(key) {
     if (key === '@untagged') { st.untagged = !st.untagged; if (st.untagged) st.tags.clear(); }
@@ -2383,17 +2420,17 @@ function makeBrowser({ compact, st }) {
     }
     if (fk !== null) { const t = $$('[data-tk]', host).find(x => x.dataset.tk === fk); if (t) t.focus(); }
   }
+  const usedCount = () => { let n = 0; if (host.badge) for (const b of S.library) if (host.badge(b.name)) n++; return n; }; // the "In my menus" folder
   function paintBadge(card) {
-    const u = usageMap().get(nameKey(card.dataset.name));
+    const u = host.badge ? host.badge(card.dataset.name) : null;
     card.classList.toggle('used', !!u);
     let bd = $('.bbadge', card);
     if (!u) { if (bd) bd.remove(); return; }
-    const names = Array.from(new Set(u.map(x => (S.cfg.menus[x.menuId] || {}).title || x.menuId)));
     if (!bd) { bd = h('span', { class: 'bbadge' }); $('.bthumb', card).append(bd); }
-    bd.textContent = u.length > 1 ? String(u.length) : '';
-    bd.classList.toggle('one', u.length < 2);
-    bd.title = 'Used in: ' + names.join(', ');
-    if (u.length < 2) bd.replaceChildren(icon('check', 10));
+    bd.textContent = u.n > 1 ? String(u.n) : '';
+    bd.classList.toggle('one', u.n < 2);
+    bd.title = 'Used in: ' + u.titles.join(', ');
+    if (u.n < 2) bd.replaceChildren(icon('check', 10));
   }
   /* Up to three dots (the first tag first) bottom-left of the thumbnail, and --tag, the first tag's colour, for the card's stripe. */
   function paintTags(card) {
@@ -2402,7 +2439,7 @@ function makeBrowser({ compact, st }) {
     let dots = $('.tagdots', box);
     const tagText = ks.length ? 'Tags: ' + ks.map(t => t.label).join(', ') : '';
     card.title = name + (b ? '\n' + b.category : '') + (tagText ? '\n' + tagText : '');
-    card.setAttribute('aria-label', name + '.' + (tagText ? ' ' + tagText + '.' : '') + ' Press Enter to add to the current menu.');
+    card.setAttribute('aria-label', name + '.' + (tagText ? ' ' + tagText + '.' : '') + ' ' + host.enterHint);
     card.classList.toggle('tagged', ks.length > 0);
     if (!ks.length) { card.style.removeProperty('--tag'); if (dots) dots.remove(); return; }
     card.style.setProperty('--tag', ks[0].color);
@@ -2413,7 +2450,7 @@ function makeBrowser({ compact, st }) {
     const on = sel.has(b.name);
     const card = h('div', { class: 'bcard' + (on ? ' sel' : ''), tabindex: '0', role: 'button', 'aria-pressed': on ? 'true' : 'false', dataset: { name: b.name } },
       h('div', { class: 'bthumb' }, thumb(b.name, { size: 0, lazy, cls: 'fill', res: curRes }),
-        h('button', { class: 'badd', type: 'button', title: 'Add to ' + ((curMenu() && curMenu().title) || 'current menu'), 'aria-label': 'Add ' + b.name + ' to the current menu', onclick: e => { e.stopPropagation(); addBrushToCurrent(b.name); } }, icon('plus', 14))),
+        h('button', { class: 'badd', type: 'button', title: host.cardTitle(), 'aria-label': host.cardLabel(b.name), onclick: e => { e.stopPropagation(); host.primary(b.name); } }, icon(host.primaryIcon, 14))),
       h('div', { class: 'bname' }, b.name));
     card.addEventListener('click', e => {
       if (e.shiftKey && anchor && S.libByName.has(nameKey(anchor))) {      // a range over the brushes on show, from the last plain click
@@ -2432,7 +2469,7 @@ function makeBrowser({ compact, st }) {
       }
       setSel(b.name, true);
     });
-    card.addEventListener('dblclick', e => { if (!e.ctrlKey && !e.shiftKey && !e.metaKey) addBrushToCurrent(b.name); });
+    card.addEventListener('dblclick', e => { if (!e.ctrlKey && !e.shiftKey && !e.metaKey) host.primary(b.name); });
     card.addEventListener('contextmenu', e => {                              // tag this brush, or the whole selection when it is in it
       e.preventDefault();
       tagPicker(card, sel.size > 1 && sel.has(b.name) ? Array.from(sel) : [b.name], { x: e.clientX, y: e.clientY });
@@ -2441,13 +2478,13 @@ function makeBrowser({ compact, st }) {
       if (e.target !== card) return;
       if (e.key === 'Enter') {
         e.preventDefault();
-        if (sel.size > 1 && sel.has(b.name)) addNames(Array.from(sel)); else { setSel(b.name); addBrushToCurrent(b.name); }
+        if (sel.size > 1 && sel.has(b.name)) host.primaryMany(Array.from(sel)); else { setSel(b.name); host.primary(b.name); }
       } else if (e.key === ' ') {
         e.preventDefault();
         if (e.ctrlKey || e.metaKey) { if (sel.has(b.name)) sel.delete(b.name); else sel.add(b.name); anchor = b.name; paintSel(); } else setSel(b.name);
       }
     });
-    DnD.source(card, () => ({ type: 'brush', name: b.name }), () => h('span', { class: 'ghost-chip' }, thumb(b.name, { size: 26 }), b.name));
+    if (host.dnd) DnD.source(card, () => ({ type: 'brush', name: b.name }), () => h('span', { class: 'ghost-chip' }, thumb(b.name, { size: 26 }), b.name));
     paintBadge(card);
     paintTags(card);
     return card;
@@ -2508,7 +2545,7 @@ function makeBrowser({ compact, st }) {
   function renderCats() {
     const tree = catTree();
     if (compact) {
-      const opts = [['All', `All brushes (${S.library.length})`], ['@used', `In my menus (${usedCount()})`]];
+      const opts = [['All', `All brushes (${S.library.length})`], host.badge ? ['@used', `In my menus (${usedCount()})`] : null].filter(Boolean);
       tree.forEach(g => { opts.push([g.id, `${g.id} (${g.count})`]); g.kids.forEach(k => opts.push([k.id, `   ${g.id} / ${k.label} (${k.count})`])); });
       catSel.replaceChildren(...opts.map(([v, t]) => h('option', { value: v, selected: v === st.cat }, t)));
       return;
@@ -2530,7 +2567,7 @@ function makeBrowser({ compact, st }) {
         h('span', { class: 'cat-name' }, label), h('span', { class: 'cat-n mono' }, String(n)));
       return r;
     };
-    const rows = [h('div', { class: 'micro side-title' }, 'Folders'), row('All', 'All', S.library.length), row('@used', 'In my menus', usedCount())];
+    const rows = [h('div', { class: 'micro side-title' }, 'Folders'), row('All', 'All', S.library.length), host.badge ? row('@used', 'In my menus', usedCount()) : null].filter(Boolean);
     tree.forEach(g => {
       const hasKids = g.kids.length > 0;
       rows.push(row(g.id, g.id, g.count, { group: true, hasKids }));
@@ -2545,10 +2582,48 @@ function makeBrowser({ compact, st }) {
   }
   function renderAll() { if (S.libState === 'ready') renderCats(); renderTags(); renderGrid(); }
 
+  /* --- keyboard help for the popout: a highlight that follows the arrow keys and Enter picks */
+  function highlightFirst() {
+    const first = filtered()[0];
+    if (!first) { if (sel.size) setSel(null); return; }
+    setSel(first.name);
+    autoHl = true;
+  }
+  /* Moves the highlight one card (dx) or one row (dy). The row length is however many cards sit at the first card's height. */
+  function move(dx, dy) {
+    const cards = $$('.bcard[data-name]', grid);
+    if (!cards.length) return false;
+    const top0 = cards[0].offsetTop;
+    let cols = 0;
+    while (cols < cards.length && cards[cols].offsetTop === top0) cols++;
+    const at = anchor ? cards.findIndex(c => c.dataset.name === anchor) : -1;
+    const to = at < 0 ? 0 : clamp(at + dx + dy * cols, 0, cards.length - 1);
+    const onCard = document.activeElement && document.activeElement.classList.contains('bcard');
+    setSel(cards[to].dataset.name, onCard);
+    cards[to].scrollIntoView({ block: 'nearest' });
+    return true;
+  }
+  function pickSelected() {
+    const names = Array.from(sel);
+    if (!names.length) return false;
+    if (names.length === 1) host.primary(names[0]); else host.primaryMany(names);
+    return true;
+  }
+  /* A fresh look: no search, no folder, only the given tag (or none), the first match highlighted. */
+  function setFilter(tag) {
+    clearQuery(); st.untagged = false; st.cat = 'All'; st.tags = new Set(tag ? [tag] : []);
+    renderAll(); highlightFirst(); scroll.scrollTop = 0;
+  }
+
   renderAll(); paintTarget();
   const api = {
     el: root, scroller: () => scroll,
     refresh() { renderAll(); paintTarget(); },
+    focusSearch(select = true) { search.focus(); if (select) search.select(); },
+    typeChar(ch) { search.value += ch; search.dispatchEvent(new Event('input', { bubbles: true })); },
+    inSearch: el => !!el && el.closest && !!el.closest('.searchbox'),
+    searchValue: () => search.value,
+    highlightFirst, move, pickSelected, setFilter,
     updateBadges() { $$('.bcard[data-name]', grid).forEach(paintBadge); paintTarget(); if (S.libState === 'ready') { renderCats(); if (st.cat === '@used') renderGrid(); } },
     /* After a tag change: dots, chips, and the grid itself when the tag filter now shows other brushes. */
     updateTags() {
@@ -3681,6 +3756,7 @@ function setPathHint(path) {
 }
 
 function init() {
+  if (POPOUT) { initPopout(); return; }
   const cp = $('#copyPath');
   if (cp) {
     cp.append(icon('copy', 13));
@@ -3730,8 +3806,124 @@ function init() {
   boot();
 }
 
+/* ================================================================== POPOUT (popout.html) */
+/* The brush browser popout: a small window that opens over ZBrush (zorbit/popout.py). Picking a brush selects it in ZBrush through the
+   app. The Python side calls __popoutShow({tag}) each time the window is shown and __popoutFocus() once it has the foreground. */
+let popBrowser = null, popWant, popPicking = false;
+const popHide = () => { call('popout_hide').catch(() => {}); };
+const POP_HOST = {
+  dnd: false,
+  firstMatch: true,                                  // after a search, the first match is highlighted
+  primaryIcon: 'k_brush',
+  primaryLabel: () => 'Select in ZBrush',
+  canPrimary: n => n === 1,
+  async primary(name) {
+    if (popPicking) return;
+    popPicking = true;
+    let r;
+    try { r = await call('popout_pick', name); } catch (e) { r = { ok: false, error: 'Could not reach ZOrbit: ' + ((e && e.message) || e) }; }
+    popPicking = false;
+    if (r && r.ok) { if (S.popPinned) toast('Selected ' + name, { tone: 'ok', ms: 1400 }); }
+    else toast((r && r.error) || 'ZOrbit is not running', { tone: 'warn', ms: 3800 });
+  },
+  primaryMany() { toast('ZBrush takes one brush at a time. Select a single brush.', { tone: 'warn', ms: 2600 }); },
+  cardTitle: () => 'Select in ZBrush',
+  cardLabel: name => 'Select ' + name + ' in ZBrush',
+  enterHint: 'Press Enter to select it in ZBrush.',
+  hint: () => ['Double-click or Enter selects a brush in ZBrush. Type to search, arrows to move, Esc to close. Right-click tags.'],
+  badge: null,                                       // no "In my menus" folder, no badges: the popout knows nothing of menus
+  onSize: debounce(px => { call('popout_set_size', px).catch(() => {}); }, 400),
+};
+
+function buildPopout(root) {
+  const pin = h('button', { class: 'ibtn pin-btn', type: 'button', onclick: () => setPinned(!S.popPinned) }, icon('pin', 15));
+  const paintPin = () => {
+    const t = S.popPinned ? 'Pinned: stays open and on top. Click to unpin.' : 'Pin: stay open and on top';
+    pin.setAttribute('aria-pressed', S.popPinned ? 'true' : 'false'); pin.title = t; pin.setAttribute('aria-label', t);
+  };
+  async function setPinned(on) {
+    S.popPinned = on; paintPin();
+    try { await call('popout_set_pinned', on); }
+    catch (e) { S.popPinned = !on; paintPin(); toast('Could not change the pin.', { tone: 'warn' }); }
+  }
+  paintPin();
+  const head = h('header', { class: 'pop-head' },
+    h('span', { class: 'pop-logo', 'aria-hidden': 'true' }, icon('logo', 18)), h('h1', { class: 'pop-title' }, 'Brushes'),
+    h('div', { class: 'spacer' }), pin,
+    h('div', { class: 'winctl' }, h('button', { class: 'winbtn close', type: 'button', title: 'Close (Esc)', 'aria-label': 'Close', onclick: popHide }, icon('x', 14))));
+  popBrowser = makeBrowser({ compact: false, st: S.pop, host: POP_HOST });
+  root.replaceChildren(head, h('div', { class: 'pop-body' }, popBrowser.el));
+  R.libRefresh = () => { popBrowser.refresh(); popBrowser.highlightFirst(); };
+}
+
+/* Called by popout.py each time the window is shown. Starts from a clean slate: no search, no folder, the given tag only, the first match
+   highlighted. A tag the page has not heard of (made in the Studio a moment ago) is looked for once more with a forced reload. */
+window.__popoutShow = o => {
+  const tag = (o && o.tag) || null;
+  if (!popBrowser) { popWant = { tag }; return false; }
+  popBrowser.setFilter(tag);
+  popBrowser.focusSearch();
+  const stale = !!tag && !S.tagMap.has(tag);
+  loadTags(stale).then(() => { if (stale && S.tagMap.has(tag)) popBrowser.setFilter(tag); });
+  return true;
+};
+window.__popoutFocus = () => { if (popBrowser) popBrowser.focusSearch(false); return document.hasFocus(); };
+
+async function bootPopout() {
+  S.cfg = { menus: {} };                             // the tag manager reads the ring items; the popout has none
+  let state = null;
+  try { state = await call('popout_get_state'); } catch (e) { state = null; }
+  if (state) {
+    S.popPinned = !!state.pinned;
+    if (+state.size >= 84) S.pop.size = clamp(+state.size, 84, 220);
+    if (state.tag) S.pop.tags = new Set([String(state.tag)]);
+  }
+  buildPopout($('#app'));
+  loadLibrary(); loadTags();
+  S.ready = true;
+  document.documentElement.classList.add('ready');
+  if (popWant) { const w = popWant; popWant = undefined; window.__popoutShow(w); }
+}
+
+function initPopout() {
+  window.addEventListener('keydown', e => {
+    if (!popBrowser || e.isComposing) return;
+    if ($('#overlay-root').firstElementChild || $('.popover')) return;       // a dialog or a popover has the keys
+    if (e.key === 'Escape') {                                                // the search box and the selection take theirs first (they stop or prevent it)
+      if (e.defaultPrevented) return;
+      e.preventDefault(); popHide();
+      return;
+    }
+    if (e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey) return;
+    const t = e.target, typing = !!(t && t.closest && t.closest('input, textarea, select, [contenteditable]')), inSearch = popBrowser.inSearch(t);
+    if (e.key.startsWith('Arrow')) {
+      if (typing && !inSearch) return;
+      const dx = e.key === 'ArrowLeft' ? -1 : e.key === 'ArrowRight' ? 1 : 0, dy = e.key === 'ArrowUp' ? -1 : e.key === 'ArrowDown' ? 1 : 0;
+      if (inSearch && dx && popBrowser.searchValue()) return;               // the caret moves inside a query
+      e.preventDefault(); popBrowser.move(dx, dy);
+    } else if (e.key === 'Enter') {
+      if (typing && !inSearch) return;
+      if (t && t.closest && t.closest('button, a, .bcard, [role="option"]')) return;   // the focused control has its own Enter
+      e.preventDefault(); popBrowser.pickSelected();
+    } else if (e.key.length === 1 && e.key !== ' ' && !typing) {
+      e.preventDefault();                                                    // the key goes into the search box ourselves:
+      popBrowser.focusSearch(false); popBrowser.typeChar(e.key);             // a focus change can swallow the first keypress
+    }
+  });
+  window.addEventListener('contextmenu', e => {                              // the web view's own menu is a window of another
+    if (!(e.target && e.target.closest && e.target.closest('.bcard'))) e.preventDefault();   // process and would read as leaving
+  });
+  window.addEventListener('focus', debounce(() => { if (S.ready) loadTags(); }, 300));      // tags.json may have changed (the Studio)
+  const log = msg => { console.error(msg); try { call('popout_log', String(msg).slice(0, 500)).catch(() => {}); } catch (e) { /* no backend */ } };
+  window.addEventListener('error', e => log('Uncaught: ' + e.message + ' (' + (e.filename || '').split('/').pop() + ':' + e.lineno + ')'));
+  window.addEventListener('unhandledrejection', e => log('Unhandled rejection: ' + (e.reason && e.reason.message || e.reason)));
+  window.__studio = { S, R, h };
+  bootPopout();
+}
+
 function whenReady(fn) {
-  const ok = () => window.pywebview && window.pywebview.api && typeof window.pywebview.api.get_config === 'function';
+  const probe = POPOUT ? 'popout_get_state' : 'get_config';
+  const ok = () => window.pywebview && window.pywebview.api && typeof window.pywebview.api[probe] === 'function';
   if (ok()) { fn(); return; }
   let done = false;
   const go = () => { if (done || !ok()) return; done = true; fn(); };

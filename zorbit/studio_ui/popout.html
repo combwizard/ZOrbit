@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ZOrbit Browser</title>
+<link rel="stylesheet" href="styles.css">
+<script>window.__ZORBIT_MODE__ = 'popout';</script>
+</head>
+<body class="popout">
+<div class="app pop" id="app">
+  <div class="loading" role="status">Loading...</div>
+</div>
+<div id="toasts" role="status" aria-live="polite" aria-atomic="false"></div>
+<div id="overlay-root"></div>
+
+<script>
+(function () {
+  // Browser-only development: ?mock loads recorded backend responses and a fake window.pywebview.api (see index.html).
+  // Inside pywebview there is no ?mock, so dev/ is never touched. window.js is the Studio's window chrome and is not needed here.
+  var mock = /[?&]mock(=|&|$)/.test(location.search);
+  if (mock) document.write('<script src="dev/mock_data.js"><\/script><script src="dev/mock.js"><\/script>');
+  document.write('<script src="app.js"><\/script>');
+})();
+</script>
+</body>
+</html>
