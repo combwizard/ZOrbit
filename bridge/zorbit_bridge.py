@@ -1,15 +1,15 @@
-"""Radial Menu bridge: the ZBrush 2026+ side of Radial Menu for ZBrush.
+"""ZOrbit bridge: the ZBrush 2026+ side of ZOrbit.
 
 Loaded by ZBrush at startup from a folder listed in the user environment variable ZBRUSH_PLUGIN_PATH (the
 installer adds this folder), or once by hand: ZScript > Python Scripting > Load.
 
 What it does:
-  * Palette Zplugin > Radial Menu with:
-      Apply      carries out the pending pick (%LOCALAPPDATA%\\RadialMenu\\request.json). The app triggers it
+  * Palette Zplugin > ZOrbit with:
+      Apply      carries out the pending pick (%LOCALAPPDATA%\\ZOrbit\\request.json). The app triggers it
                  either through the listener below or by pressing the bridge key; for the key route bind it
                  natively: Ctrl+Alt+click Apply, press F9, then Preferences > Hotkeys > Store. (No Python
                  hotkey on purpose: native bindings proved more reliable.)
-      Start App  starts the Radial Menu app if it is not running (it also starts automatically here).
+      Start App  starts the ZOrbit app if it is not running (it also starts automatically here).
       Status     shows listener, app and last-request state.
   * A hidden message-only window on ZBrush's main thread. The app posts WM_APP+1 to it after a pick, so no
     keystroke is needed. Its handle is published in listener.json only after a timer message has proved
@@ -28,14 +28,14 @@ import types
 import zbrush.commands as zbc
 
 # --- locations -----------------------------------------------------------------------------------
-DATA_DIR = os.path.join(os.environ.get("LOCALAPPDATA") or os.path.expanduser("~"), "RadialMenu")
-LAUNCH_FILE = os.path.join(os.environ.get("APPDATA") or os.path.expanduser("~"), "RadialMenu", "launch.json")
+DATA_DIR = os.path.join(os.environ.get("LOCALAPPDATA") or os.path.expanduser("~"), "ZOrbit")
+LAUNCH_FILE = os.path.join(os.environ.get("APPDATA") or os.path.expanduser("~"), "ZOrbit", "launch.json")
 REQUEST_FILE = os.path.join(DATA_DIR, "request.json")
 REQUEST_TXT = os.path.join(DATA_DIR, "request.txt")       # the same pick for the ZScript bridge (ZBrush 2022-2025)
 LISTENER_FILE = os.path.join(DATA_DIR, "listener.json")
 LOG_FILE = os.path.join(DATA_DIR, "bridge.log")
 BRIDGE_DIR = os.path.dirname(os.path.abspath(__file__))
-PALETTE = "Zplugin:Radial Menu"
+PALETTE = "Zplugin:ZOrbit"
 
 WM_APP_PICK = 0x8000 + 1
 WM_TIMER = 0x113
@@ -45,7 +45,7 @@ VK_LBUTTON = 0x01
 
 def log(msg: str) -> None:
     line = f"{time.strftime('%Y-%m-%d %H:%M:%S')} {msg}"
-    print(f"Radial Menu: {msg}")
+    print(f"ZOrbit: {msg}")
     try:
         os.makedirs(DATA_DIR, exist_ok=True)
         if os.path.exists(LOG_FILE) and os.path.getsize(LOG_FILE) > 500_000:
@@ -57,7 +57,7 @@ def log(msg: str) -> None:
 
 
 # State that must survive a reload of this file (ZBrush's Python VM is shared and persistent).
-S = sys.modules.setdefault("_radial_menu_bridge_state", types.ModuleType("_radial_menu_bridge_state"))
+S = sys.modules.setdefault("_zorbit_bridge_state", types.ModuleType("_zorbit_bridge_state"))
 if not hasattr(S, "keepalive"):
     S.keepalive, S.hwnd, S.seq, S.verified, S.last = [], None, 0, False, "none yet"
 
@@ -212,7 +212,7 @@ def start_listener() -> None:
     proc = WNDPROC(_wndproc)
     S.keepalive.append(proc)                              # never freed: Windows may still hold it
     hinst = GetModuleHandleW(None)
-    cls = f"RadialMenuBridge{S.seq}"
+    cls = f"ZOrbitBridge{S.seq}"
     wc = WNDCLASSEXW()
     wc.cbSize = ctypes.sizeof(WNDCLASSEXW)
     wc.lpfnWndProc = proc
@@ -221,7 +221,7 @@ def start_listener() -> None:
     if not RegisterClassExW(ctypes.byref(wc)):
         log(f"listener: RegisterClassExW failed ({ctypes.get_last_error()}); bridge key only")
         return
-    hwnd = CreateWindowExW(0, cls, "Radial Menu bridge", 0, 0, 0, 0, 0, HWND_MESSAGE, None, hinst, None)
+    hwnd = CreateWindowExW(0, cls, "ZOrbit bridge", 0, 0, 0, 0, 0, HWND_MESSAGE, None, hinst, None)
     if not hwnd:
         log(f"listener: CreateWindowExW failed ({ctypes.get_last_error()}); bridge key only")
         return
@@ -231,7 +231,7 @@ def start_listener() -> None:
 
 # --- the app -------------------------------------------------------------------------------------
 def _launch(kind: str):
-    """Command line for 'app' or 'studio' from %APPDATA%/RadialMenu/launch.json, which the installer writes
+    """Command line for 'app' or 'studio' from %APPDATA%/ZOrbit/launch.json, which the installer writes
     and the app refreshes every time it starts."""
     try:
         with open(LAUNCH_FILE, encoding="utf-8") as f:
@@ -259,12 +259,12 @@ def _spawn(cmd, errlog_name=None):
 
 
 def _not_installed():
-    zbc.message_ok("Radial Menu: the app was not found.\n\nRun the Radial Menu installer again, or start "
-                   "\"Radial Menu Studio\" from the Start menu once.", "Radial Menu")
+    zbc.message_ok("ZOrbit: the app was not found.\n\nRun the ZOrbit installer again, or start "
+                   "\"ZOrbit Studio\" from the Start menu once.", "ZOrbit")
 
 
 def app_running() -> bool:
-    h = OpenMutexW(0x00100000, False, "Local\\RadialMenuForZBrush")   # SYNCHRONIZE
+    h = OpenMutexW(0x00100000, False, "Local\\ZOrbit")   # SYNCHRONIZE
     if h:
         CloseHandle(h)
         return True
@@ -287,7 +287,7 @@ def start_app(sender: str = "") -> None:
 
 
 def open_studio(sender: str = "") -> None:
-    """Opens Radial Menu Studio, the companion app (menu editor, brush library, settings)."""
+    """Opens ZOrbit Studio, the companion app (menu editor, brush library, settings)."""
     cmd = _launch("studio")
     if not cmd:
         _not_installed()
@@ -303,16 +303,16 @@ def status(sender: str = "") -> None:
         f"App running: {'yes' if app_running() else 'no'}\n"
         f"Pending request: {pending}\n"
         f"Last pick: {S.last}\n"
-        f"Logs: {DATA_DIR}", "Radial Menu")
+        f"Logs: {DATA_DIR}", "ZOrbit")
 
 
 def install() -> None:
     if not zbc.exists(PALETTE):
         zbc.add_subpalette(PALETTE, 0)
-    for name, info, fn in (("Studio", "Opens Radial Menu Studio: edit menus, browse brushes, settings.", open_studio),
-                           ("Apply", "Carries out the Radial Menu pick. Bind F9 to it natively.", apply_request),
-                           ("Start App", "Starts the Radial Menu app if it is not running.", start_app),
-                           ("Status", "Shows the Radial Menu bridge state.", status)):
+    for name, info, fn in (("Studio", "Opens ZOrbit Studio: edit menus, browse brushes, settings.", open_studio),
+                           ("Apply", "Carries out the ZOrbit pick. Bind F9 to it natively.", apply_request),
+                           ("Start App", "Starts the ZOrbit app if it is not running.", start_app),
+                           ("Status", "Shows the ZOrbit bridge state.", status)):
         path = f"{PALETTE}:{name}"
         if zbc.exists(path):
             zbc.delete_interface_item(path)

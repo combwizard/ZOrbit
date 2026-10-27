@@ -1,19 +1,19 @@
-// Radial Menu bridge for ZBrush 2022-2025 (ZScript): the counterpart of radial_menu_bridge.py, for versions
-// without ZBrush's Python API. Compile it in ZBrush (ZScript > Load, pick this file) to RadialMenuBridge.zsc;
-// Radial Menu Studio copies that into <ZBrush>\ZStartup\ZPlugs64 together with RadialMenuData\bridge.cfg.
+// ZOrbit bridge for ZBrush 2022-2025 (ZScript): the counterpart of zorbit_bridge.py, for versions
+// without ZBrush's Python API. Compile it in ZBrush (ZScript > Load, pick this file) to ZOrbitBridge.zsc;
+// ZOrbit Studio copies that into <ZBrush>\ZStartup\ZPlugs64 together with ZOrbitData\bridge.cfg.
 //
-// Palette Zplugin > Radial Menu:
+// Palette Zplugin > ZOrbit:
 //   Apply      carries out the pending pick (request.txt in the folder named by bridge.cfg), then deletes it.
 //              The app presses the bridge key after every pick (there is no listener window in ZScript). When
 //              ZBrush loads the plugin it gives Apply F9 unless Apply already has a hotkey, so the default needs
 //              no setup. Another key is bound natively: Ctrl+Alt+click Apply, press it, Preferences > Hotkeys > Store.
-//   Studio     opens Radial Menu Studio.
-//   Start App  starts the Radial Menu app (it also starts when ZBrush loads this plugin).
+//   Studio     opens ZOrbit Studio.
+//   Start App  starts the ZOrbit app (it also starts when ZBrush loads this plugin).
 //   Status     shows where picks arrive, whether one is pending, and the last pick.
 //
-// bridge.cfg, one value per line: RADIALMENU 1 / folder with a trailing backslash / app command line /
-// Studio command line / 1 to start the app on load. RadialMenuData also holds app.lnk and studio.lnk.
-// request.txt: RADIALMENU 1 / id / label / then per action its kind and arguments:
+// bridge.cfg, one value per line: ZORBIT 1 / folder with a trailing backslash / app command line /
+// Studio command line / 1 to start the app on load. ZOrbitData also holds app.lnk and studio.lnk.
+// request.txt: ZORBIT 1 / id / label / then per action its kind and arguments:
 //   brush <name> <.zbp file or ->   press <path>   set <path> <value>   toggle <path>
 // Both are written by the app with 8.3 paths where needed, since ZScript strings stop at 255 characters.
 // String literals here use forward slashes: a backslash starts an escape such as \n.
@@ -85,10 +85,10 @@
 
 [RoutineDef, RM_ReadCfg,
 	[VarSet, rmOk, 0]
-	[VarSet, rmP, [FileNameResolvePath, "ZSTARTUP_ZPLUGS64/RadialMenuData/bridge.cfg"]]
+	[VarSet, rmP, [FileNameResolvePath, "ZSTARTUP_ZPLUGS64/ZOrbitData/bridge.cfg"]]
 	[RoutineCall, RM_Open]
 	[RoutineCall, RM_ReadLine]
-	[If, [StrFind, "RADIALMENU", #rmLine] == 0,
+	[If, [StrFind, "ZORBIT", #rmLine] == 0,
 		[RoutineCall, RM_ReadLine]
 		[VarSet, rmDir, #rmLine]
 		[RoutineCall, RM_ReadLine]
@@ -166,14 +166,14 @@
 	[RoutineCall, RM_WriteLog]
 ]
 
-// Starts rmB (app.lnk or studio.lnk in RadialMenuData) through ZBrush's own ZFileUtils64.dll, which opens it
+// Starts rmB (app.lnk or studio.lnk in ZOrbitData) through ZBrush's own ZFileUtils64.dll, which opens it
 // like Explorer does. ZScript's ShellExecute goes through cmd.exe, which on Windows 11 first opens a Windows
 // Terminal window and takes seconds; it is only the fallback, with the command line rmA from bridge.cfg.
 // zscript_launch.log records which way was taken.
 [VarDef, rmDll, ""]
 [RoutineDef, RM_Launch,
 	[VarSet, rmDll, [FileNameResolvePath, "ZSTARTUP_ZPLUGS64/MacroData/ZFileUtils64.dll"]]
-	[VarSet, rmP, [FileNameResolvePath, [StrMerge, "ZSTARTUP_ZPLUGS64/RadialMenuData/", #rmB]]]
+	[VarSet, rmP, [FileNameResolvePath, [StrMerge, "ZSTARTUP_ZPLUGS64/ZOrbitData/", #rmB]]]
 	[VarSet, rmLogName, "zscript_launch.log"]
 	[VarSet, rmN, 0]
 	[If, [FileExists, #rmDll],
@@ -199,7 +199,7 @@
 			[FileDelete, #rmReq]
 			[FileDelete, [StrMerge, #rmDir, "request.json"]]
 			[RoutineCall, RM_ReadLine]
-			[If, [StrFind, "RADIALMENU", #rmLine] == 0,
+			[If, [StrFind, "ZORBIT", #rmLine] == 0,
 				[RoutineCall, RM_ReadLine]
 				[VarSet, rmId, #rmLine]
 				[RoutineCall, RM_ReadLine]
@@ -231,7 +231,7 @@
 		]
 		[RoutineCall, RM_Close]
 		[RoutineCall, RM_Log],
-		[Note, "Radial Menu: RadialMenuData/bridge.cfg is missing. Install the bridge again in Radial Menu Studio (Settings).", , 3]
+		[Note, "ZOrbit: ZOrbitData/bridge.cfg is missing. Install the bridge again in ZOrbit Studio (Settings).", , 3]
 	]
 ]
 
@@ -257,11 +257,11 @@
 // the ones ZBrush keeps in ZStartup/Hotkeys: 88 is F9 there, and Shift, Ctrl and Alt add 256, 512 and 1024.
 // A hotkey in the IButton definition itself did not take in 2022. zscript_hotkey.log records what happened.
 [RoutineDef, RM_Hotkey,
-	[VarSet, rmN, [IGetHotkey, "Zplugin:Radial Menu:Apply"]]
-	[If, rmN == 0, [ISetHotkey, "Zplugin:Radial Menu:Apply", 88]]
+	[VarSet, rmN, [IGetHotkey, "Zplugin:ZOrbit:Apply"]]
+	[If, rmN == 0, [ISetHotkey, "Zplugin:ZOrbit:Apply", 88]]
 	[If, rmOk,
 		[VarSet, rmLogName, "zscript_hotkey.log"]
-		[VarSet, rmLogText, [StrMerge, "Apply hotkey at load: ", rmN, ", now: ", [IGetHotkey, "Zplugin:Radial Menu:Apply"]]]
+		[VarSet, rmLogText, [StrMerge, "Apply hotkey at load: ", rmN, ", now: ", [IGetHotkey, "Zplugin:ZOrbit:Apply"]]]
 		[RoutineCall, RM_WriteLog]
 	]
 ]
@@ -271,23 +271,23 @@
 	[If, rmOk,
 		[VarSet, rmP, [StrMerge, #rmDir, "request.txt"]]
 		[If, [FileExists, #rmP], [VarSet, rmB, "yes"], [VarSet, rmB, "no"]]
-		[MessageOK, [StrMerge, "Picks arrive in: ", #rmDir, "\nPending pick: ", #rmB, "\nLast pick: ", #rmLast], "Radial Menu"],
-		[MessageOK, "RadialMenuData/bridge.cfg is missing or unreadable. Install the bridge again in Radial Menu Studio (Settings).", "Radial Menu"]
+		[MessageOK, [StrMerge, "Picks arrive in: ", #rmDir, "\nPending pick: ", #rmB, "\nLast pick: ", #rmLast], "ZOrbit"],
+		[MessageOK, "ZOrbitData/bridge.cfg is missing or unreadable. Install the bridge again in ZOrbit Studio (Settings).", "ZOrbit"]
 	]
 ]
 
 // --- palette -------------------------------------------------------------------------------------
-[ISubPalette, "Zplugin:Radial Menu"]
-[IButton, "Zplugin:Radial Menu:Studio", "Opens Radial Menu Studio: edit menus, browse brushes, settings.",
+[ISubPalette, "Zplugin:ZOrbit"]
+[IButton, "Zplugin:ZOrbit:Studio", "Opens ZOrbit Studio: edit menus, browse brushes, settings.",
 	[RoutineCall, RM_Studio]
 ]
-[IButton, "Zplugin:Radial Menu:Apply", "Carries out the Radial Menu pick. The app presses the bridge key for it (F9 unless changed).",
+[IButton, "Zplugin:ZOrbit:Apply", "Carries out the ZOrbit pick. The app presses the bridge key for it (F9 unless changed).",
 	[RoutineCall, RM_Apply]
 ]
-[IButton, "Zplugin:Radial Menu:Start App", "Starts the Radial Menu app if it is not running.",
+[IButton, "Zplugin:ZOrbit:Start App", "Starts the ZOrbit app if it is not running.",
 	[RoutineCall, RM_StartApp]
 ]
-[IButton, "Zplugin:Radial Menu:Status", "Shows the Radial Menu bridge state.",
+[IButton, "Zplugin:ZOrbit:Status", "Shows the ZOrbit bridge state.",
 	[RoutineCall, RM_Status]
 ]
 

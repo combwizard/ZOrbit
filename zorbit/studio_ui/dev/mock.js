@@ -66,7 +66,7 @@
     msgs.push('bridge message failed: listener window did not answer, using the bridge key');
     msgs.push("pick #7 'Orb': message failed, fell back to the bridge key");
     var now = Date.now(), y = now - 26 * 3600e3, out = [];
-    out.push(stamp(y) + ' Radial Menu started (mock)', stamp(y + 4000) + " pick #1 'hPolish': brush hPolish: selected", stamp(y + 9000) + ' ring load failed: menu tools: no usable items');
+    out.push(stamp(y) + ' ZOrbit started (mock)', stamp(y + 4000) + " pick #1 'hPolish': brush hPolish: selected", stamp(y + 9000) + ' ring load failed: menu tools: no usable items');
     for (var i = 0; i < 36; i++) out.push(stamp(now - (37 - i) * 6000) + ' ' + msgs[i % msgs.length]);
     out.push(stamp(now) + ' mock refresh #' + ticks);
     return out;
@@ -92,7 +92,7 @@
         }
         if (q.has('blocked') && !allow_unusable) {
           return { saved: false, blocked: true, problems: ['menu brushes: no usable items', 'no menu has a hotkey, so nothing can open the ring'],
-            message: 'Saving this would leave no ring that can open, so the radial menu would stop working.' };
+            message: 'Saving this would leave no ring that can open, so ZOrbit would stop working.' };
         }
         saved = clone(cfg); mtime += 1000000;
         return { saved: true, problems: validate(cfg), time: Date.now() / 1000, mtime_ns: mtime };
@@ -160,7 +160,7 @@
       if (q.has('startfail')) return sleep(1500).then(function () {
         var t = Date.now();
         return { ok: false, running: false, reason: 'failed', message: 'The app did not start. The log below says why.',
-          log: [stamp(t) + ' Radial Menu starting', stamp(t + 120) + " error: could not register hotkey 'Q' (already taken by another program)", stamp(t + 130) + ' Radial Menu failed to start; exiting'] };
+          log: [stamp(t) + ' ZOrbit starting', stamp(t + 120) + " error: could not register hotkey 'Q' (already taken by another program)", stamp(t + 130) + ' ZOrbit failed to start; exiting'] };
       });
       return sleep(1000).then(function () { appStarted = true; return { ok: true, running: true, message: 'Started (mock: nothing was launched).' }; });
     },
@@ -202,7 +202,7 @@
     win_toggle_maximize: function () { return Promise.resolve(false); },
     win_is_maximized: function () { return Promise.resolve(false); },
     get_app_info: function () { return Promise.resolve({ version: '0.7.0' }); },
-    check_update: function () { var p = JSON.parse(localStorage.getItem('rm_prefs') || '{}'); if (p.check_updates === false) return Promise.resolve({ newer: false, current: '0.7.0', latest: null, url: 'https://github.com/combwizard/zbrush-radial-menu/releases' }); return sleep(300).then(function () { if (q.has('unreach')) return { newer: false, current: '0.7.0', latest: null, url: 'https://github.com/combwizard/zbrush-radial-menu/releases' }; return q.has('update') ? { newer: true, current: '0.7.0', latest: '0.7.0', url: 'https://github.com/combwizard/zbrush-radial-menu/releases' } : { newer: false, current: '0.7.0', latest: '0.7.0', url: 'https://github.com/combwizard/zbrush-radial-menu/releases' }; }); },
+    check_update: function () { var p = JSON.parse(localStorage.getItem('rm_prefs') || '{}'); if (p.check_updates === false) return Promise.resolve({ newer: false, current: '0.7.0', latest: null, url: 'https://github.com/combwizard/zorbit/releases' }); return sleep(300).then(function () { if (q.has('unreach')) return { newer: false, current: '0.7.0', latest: null, url: 'https://github.com/combwizard/zorbit/releases' }; return q.has('update') ? { newer: true, current: '0.7.0', latest: '0.7.0', url: 'https://github.com/combwizard/zorbit/releases' } : { newer: false, current: '0.7.0', latest: '0.7.0', url: 'https://github.com/combwizard/zorbit/releases' }; }); },
     open_url: function (url) { console.log('[mock] open_url', url); return Promise.resolve(true); },
   };
   window.pywebview = { api: api };

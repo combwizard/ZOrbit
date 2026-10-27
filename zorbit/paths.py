@@ -1,15 +1,17 @@
 """Where things live, both in a source checkout and in the installed (PyInstaller) build.
 
-  %APPDATA%\\RadialMenu\\radial.json      the user's menus and settings (created from default_menus.json)
-  %APPDATA%\\RadialMenu\\launch.json      how to start the app and the Studio (read by the ZBrush bridge)
-  %LOCALAPPDATA%\\RadialMenu\\            logs, thumbnail cache, request/listener exchange with ZBrush
+  %APPDATA%\\ZOrbit\\radial.json      the user's menus and settings (created from default_menus.json)
+  %APPDATA%\\ZOrbit\\launch.json      how to start the app and the Studio (read by the ZBrush bridge)
+  %LOCALAPPDATA%\\ZOrbit\\            logs, thumbnail cache, request/listener exchange with ZBrush
+
+ZOrbit used to be called Radial Menu and kept these in RadialMenu folders; ensure_config() copies them over.
 """
 import json
 import os
 import shutil
 import sys
 
-APP_NAME = "Radial Menu"
+APP_NAME = "ZOrbit"
 VERSION = "0.7.0"
 FROZEN = bool(getattr(sys, "frozen", False))
 PKG_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -21,14 +23,35 @@ ZSCRIPT_DIR = (os.path.join(RESOURCE_DIR, "zscript") if FROZEN
 DEFAULT_MENUS = os.path.join(RESOURCE_DIR, "default_menus.json")
 ICON = os.path.join(RESOURCE_DIR, "icon.ico") if FROZEN else os.path.join(os.path.dirname(PKG_DIR), "assets", "icon.ico")
 
-DATA_DIR = os.path.join(os.environ.get("LOCALAPPDATA") or os.path.expanduser("~"), "RadialMenu")
-CONFIG_DIR = os.path.join(os.environ.get("APPDATA") or os.path.expanduser("~"), "RadialMenu")
+DATA_DIR = os.path.join(os.environ.get("LOCALAPPDATA") or os.path.expanduser("~"), "ZOrbit")
+CONFIG_DIR = os.path.join(os.environ.get("APPDATA") or os.path.expanduser("~"), "ZOrbit")
 CONFIG_FILE = os.path.join(CONFIG_DIR, "radial.json")
 LAUNCH_FILE = os.path.join(CONFIG_DIR, "launch.json")
 
+# What carries over from a Radial Menu install. launch.json is left out (rewritten on every start), and so are
+# logs and the thumbnail cache.
+_LEGACY = ((os.path.join(os.path.dirname(CONFIG_DIR), "RadialMenu"), CONFIG_DIR,
+            ("radial.json", "radial.json.bak", "studio.json")),
+           (os.path.join(os.path.dirname(DATA_DIR), "RadialMenu"), DATA_DIR, ("usage.json",)))
+
+
+def _migrate_legacy() -> None:
+    """Copies the user's files from the Radial Menu folders. The old folders are left as they were."""
+    for old, new, names in _LEGACY:
+        for name in names:
+            src, dst = os.path.join(old, name), os.path.join(new, name)
+            if os.path.isfile(src) and not os.path.exists(dst):
+                try:
+                    os.makedirs(new, exist_ok=True)
+                    shutil.copy2(src, dst)
+                except OSError:
+                    pass
+
 
 def ensure_config() -> str:
-    """The user's config path; created from the shipped defaults on first run."""
+    """The user's config path; on first run copied from a Radial Menu install, else from the shipped defaults."""
+    if not os.path.exists(CONFIG_FILE):
+        _migrate_legacy()
     if not os.path.exists(CONFIG_FILE):
         os.makedirs(CONFIG_DIR, exist_ok=True)
         shutil.copyfile(DEFAULT_MENUS, CONFIG_FILE)

@@ -1,15 +1,15 @@
 <#
 .SYNOPSIS
-  Builds Radial Menu for ZBrush: PyInstaller onedir app, portable zip and (if Inno Setup is present) the installer.
+  Builds ZOrbit: PyInstaller onedir app, portable zip and (if Inno Setup is present) the installer.
 
 .DESCRIPTION
   Creates/uses .venv (Python 3.12), installs requirements-dev.txt, makes assets\icon.ico if missing, runs
-  PyInstaller with packaging\radial_menu.spec, zips the result and compiles packaging\installer.iss with ISCC.
+  PyInstaller with packaging\zorbit.spec, zips the result and compiles packaging\installer.iss with ISCC.
 
   Output:
-    dist\RadialMenu\RadialMenu.exe
-    dist\RadialMenu-<version>-portable.zip
-    packaging\Output\RadialMenuSetup-<version>.exe
+    dist\ZOrbit\ZOrbit.exe
+    dist\ZOrbit-<version>-portable.zip
+    packaging\Output\ZOrbitSetup-<version>.exe
 
 .PARAMETER SkipInstaller
   Build the app and the portable zip only.
@@ -29,11 +29,11 @@ function Invoke-Native {
     if ($LASTEXITCODE -ne 0) { throw "$Exe failed with exit code $LASTEXITCODE" }
 }
 
-# --- version (single source of truth: radial_menu\paths.py) ---------------------------------------------------
-$m = Select-String -Path (Join-Path $Root 'radial_menu\paths.py') -Pattern '^VERSION\s*=\s*"([^"]+)"'
-if (-not $m) { throw 'Could not read VERSION from radial_menu\paths.py' }
+# --- version (single source of truth: zorbit\paths.py) ---------------------------------------------------
+$m = Select-String -Path (Join-Path $Root 'zorbit\paths.py') -Pattern '^VERSION\s*=\s*"([^"]+)"'
+if (-not $m) { throw 'Could not read VERSION from zorbit\paths.py' }
 $Version = $m.Matches[0].Groups[1].Value
-Write-Host "== Radial Menu for ZBrush $Version ==" -ForegroundColor Cyan
+Write-Host "== ZOrbit $Version ==" -ForegroundColor Cyan
 
 # --- venv -----------------------------------------------------------------------------------------------------
 $VenvPy = Join-Path $Root '.venv\Scripts\python.exe'
@@ -67,24 +67,24 @@ if (-not (Test-Path (Join-Path $Root 'assets\icon.ico'))) {
 }
 
 # --- PyInstaller ----------------------------------------------------------------------------------------------
-$AppDir = Join-Path $Root 'dist\RadialMenu'
+$AppDir = Join-Path $Root 'dist\ZOrbit'
 if (Test-Path $AppDir) { Remove-Item $AppDir -Recurse -Force }
 Write-Host 'Running PyInstaller...'
-Invoke-Native $VenvPy @('-m', 'PyInstaller', (Join-Path $Root 'packaging\radial_menu.spec'), '--noconfirm', '--clean',
+Invoke-Native $VenvPy @('-m', 'PyInstaller', (Join-Path $Root 'packaging\zorbit.spec'), '--noconfirm', '--clean',
                         '--distpath', (Join-Path $Root 'dist'), '--workpath', (Join-Path $Root 'build\pyinstaller'))
-$Exe = Join-Path $AppDir 'RadialMenu.exe'
+$Exe = Join-Path $AppDir 'ZOrbit.exe'
 if (-not (Test-Path $Exe)) { throw "PyInstaller did not produce $Exe" }
 
 # --- portable zip ---------------------------------------------------------------------------------------------
-# Contains RadialMenu\ (the app) and bridge\ (the ZBrush plugin) so a portable user can point ZBRUSH_PLUGIN_PATH at it.
+# Contains ZOrbit\ (the app) and bridge\ (the ZBrush plugin) so a portable user can point ZBRUSH_PLUGIN_PATH at it.
 $Stage = Join-Path $Root 'build\portable'
 if (Test-Path $Stage) { Remove-Item $Stage -Recurse -Force }
 New-Item -ItemType Directory -Path $Stage | Out-Null
-Copy-Item $AppDir (Join-Path $Stage 'RadialMenu') -Recurse
+Copy-Item $AppDir (Join-Path $Stage 'ZOrbit') -Recurse
 New-Item -ItemType Directory -Path (Join-Path $Stage 'bridge') | Out-Null
-Copy-Item (Join-Path $Root 'bridge\radial_menu_bridge.py') (Join-Path $Stage 'bridge')
+Copy-Item (Join-Path $Root 'bridge\zorbit_bridge.py') (Join-Path $Stage 'bridge')
 Copy-Item (Join-Path $Root 'LICENSE') $Stage
-$Zip = Join-Path $Root "dist\RadialMenu-$Version-portable.zip"
+$Zip = Join-Path $Root "dist\ZOrbit-$Version-portable.zip"
 if (Test-Path $Zip) { Remove-Item $Zip -Force }
 Compress-Archive -Path (Join-Path $Stage '*') -DestinationPath $Zip -CompressionLevel Optimal
 Write-Host "Portable zip: $Zip"
@@ -109,6 +109,6 @@ if (-not $iscc) {
 }
 Write-Host "Compiling installer with $iscc ..."
 Invoke-Native $iscc @("/DAppVersion=$Version", '/Q', (Join-Path $Root 'packaging\installer.iss'))
-$Setup = Join-Path $Root "packaging\Output\RadialMenuSetup-$Version.exe"
+$Setup = Join-Path $Root "packaging\Output\ZOrbitSetup-$Version.exe"
 if (-not (Test-Path $Setup)) { throw "Installer not found at $Setup" }
 Write-Host "Installer: $Setup"

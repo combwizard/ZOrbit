@@ -11,7 +11,7 @@ packaging/Output/
 *.spec.bak
 
 # Recorded responses from a developer's own machine (personal paths, hotkeys, logs): never commit.
-radial_menu/studio_ui/dev/mock_data.js
+zorbit/studio_ui/dev/mock_data.js
 
 # Editors / OS
 .vscode/

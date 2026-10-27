@@ -4,6 +4,22 @@ All notable changes to this project are listed here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+- The project is now called ZOrbit (it was Radial Menu for ZBrush). The app, Studio, installer, `ZOrbit.exe`
+  and the ZBrush palette (**Zplugin > ZOrbit**) are renamed. The GitHub repository is now
+  `combwizard/zorbit`; links to the old name redirect.
+- The installer upgrades an existing Radial Menu install. It moves it to `%LOCALAPPDATA%\Programs\ZOrbit` and
+  removes the old folder, its Start menu shortcut and its ZBrush plugin path entry.
+- Menus and settings are copied from `%APPDATA%\RadialMenu` to `%APPDATA%\ZOrbit` on first start, and learned
+  auto slots (`usage.json`) from `%LOCALAPPDATA%\RadialMenu`. The old folders are left in place. You can
+  delete them.
+- ZBrush 2026: the palette moved, so an F9 you bound by hand to Zplugin > Radial Menu > Apply has to be bound
+  again on Zplugin > ZOrbit > Apply: Ctrl+Alt+click it, press F9, then Preferences > Hotkeys > Store.
+- ZBrush 2022 to 2025: Studio shows the old plugin as "Update available". Update replaces it with the ZOrbit
+  plugin, and Remove removes both. The ZOrbit plugin binds F9 itself when Apply has no hotkey.
+
 ## [0.7.0] - 2026-10-27
 
 ### Added
@@ -198,10 +214,11 @@ First public release.
   only brushes included with ZBrush.
 - Documentation: README, user guide, third-party notices and contributing guide.
 
-[0.7.0]: https://github.com/combwizard/zbrush-radial-menu/releases/tag/v0.7.0
-[0.6.0]: https://github.com/combwizard/zbrush-radial-menu/releases/tag/v0.6.0
-[0.5.1]: https://github.com/combwizard/zbrush-radial-menu/releases/tag/v0.5.1
-[0.5.0]: https://github.com/combwizard/zbrush-radial-menu/releases/tag/v0.5.0
-[0.4.0]: https://github.com/combwizard/zbrush-radial-menu/releases/tag/v0.4.0
-[0.3.0]: https://github.com/combwizard/zbrush-radial-menu/releases/tag/v0.3.0
-[0.2.0]: https://github.com/combwizard/zbrush-radial-menu/releases/tag/v0.2.0
+[Unreleased]: https://github.com/combwizard/zorbit/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/combwizard/zorbit/releases/tag/v0.7.0
+[0.6.0]: https://github.com/combwizard/zorbit/releases/tag/v0.6.0
+[0.5.1]: https://github.com/combwizard/zorbit/releases/tag/v0.5.1
+[0.5.0]: https://github.com/combwizard/zorbit/releases/tag/v0.5.0
+[0.4.0]: https://github.com/combwizard/zorbit/releases/tag/v0.4.0
+[0.3.0]: https://github.com/combwizard/zorbit/releases/tag/v0.3.0
+[0.2.0]: https://github.com/combwizard/zorbit/releases/tag/v0.2.0

@@ -2,23 +2,25 @@
 
 ## Next
 
+- [ ] Compile `ZOrbitBridge.txt` in ZBrush 2022 and commit `ZOrbitBridge.zsc` (the rename removed the old `.zsc`)
+- [ ] Retake docs/images screenshots (Studio wordmark and palette now say ZOrbit)
 - [ ] Support ZBrush 2022–2025 (ZScript bridge in `bridge/zscript/`, Studio: Settings > Older ZBrush)
-  - [x] Compile `RadialMenuBridge.txt` in ZBrush 2022 (commit the `.zsc` with the source)
+  - [x] Compile `ZOrbitBridge.txt` in ZBrush 2022 (commit the `.zsc` with the source)
   - [x] 2022: palette loads, Studio install, F9 Apply selects a loaded brush
   - [ ] 2022: load a brush that isn't loaded yet, press/set/toggle, steps, Status, Studio button
-  - [ ] Let the plugin bind its own Apply hotkey (F9 is stored as code 88: `[ZPLUGIN:RADIAL MENU:APPLY,88]`)
+  - [ ] Let the plugin bind its own Apply hotkey (F9 is stored as code 88: `[ZPLUGIN:ZORBIT:APPLY,88]`)
     - [x] Docs and Studio say F9 needs no setup
     - [x] Tried the hotkey argument of `IButton` (`, , , 88`): Apply got no hotkey in 2022
     - [x] Now `[ISetHotkey, …Apply, 88]` at load when `[IGetHotkey]` is 0; `zscript_hotkey.log` shows the result
-    - [x] Recompile `RadialMenuBridge.zsc` in ZBrush 2022 (commit it)
+    - [x] Recompile `ZOrbitBridge.zsc` in ZBrush 2022 (commit it)
     - [x] With no stored binding, F9 applies picks in 2022. But the log says "at load: 0, now: 0": `IGetHotkey`
           reads 0 even after `ISetHotkey` worked, so the "already has a hotkey" guard may never hold
     - [ ] Check that a key the user binds and stores still wins over F9 (bind Alt+F9 or F10 and Store, restart).
           If it doesn't, drop the guard and say in the docs that a custom key needs F9 set there too, or
           read the stored key from `StartupHotkeys.txt` instead
     - [ ] Check 2023 and 2025 with the new `.zsc`
-    - [ ] Restore 2022's own binding afterwards if wanted (`StartupHotkeys.txt.bak-radialmenu`)
-  - [x] Launching: through `ZFileUtils64.dll` (MacroData) and `RadialMenuData\*.lnk`; `ShellExecute` goes via
+    - [ ] Restore 2022's own binding afterwards if wanted (`StartupHotkeys.txt.bak-zorbit`)
+  - [x] Launching: through `ZFileUtils64.dll` (MacroData) and `ZOrbitData\*.lnk`; `ShellExecute` goes via
         cmd.exe and Windows Terminal (~7 s) and is only the fallback. Auto-start runs once per session.
   - [ ] Unverified ZScript details: `[Val]` on a set value
   - [ ] Test the UAC path with a ZBrush under Program Files
@@ -28,7 +30,7 @@
         `IGetHotkey` guard question above too
     - [ ] First check in 2022 that `ZBrush.exe <script>` runs it in the open ZBrush, not a second instance
     - [ ] "Bridge didn't respond" warning only when the fallback also leaves request.txt behind
-  - [ ] Uninstalling Radial Menu leaves the plugin in each ZBrush (it can't elevate): say so, or offer removal
+  - [ ] Uninstalling ZOrbit leaves the plugin in each ZBrush (it can't elevate): say so, or offer removal
   - [x] Docs: README requirements and troubleshooting, user guide section, CHANGELOG
 
 ## Later

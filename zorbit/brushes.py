@@ -144,7 +144,7 @@ def find_brush(name, install=None) -> Path | None:
 
 def _cache_dir() -> Path:
     base = os.environ.get("LOCALAPPDATA") or str(Path.home() / "AppData" / "Local")
-    return Path(base) / "RadialMenu" / "thumbs"
+    return Path(base) / "ZOrbit" / "thumbs"
 
 
 def thumbnail(name_or_path, size: int = 96):

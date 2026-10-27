@@ -1,4 +1,4 @@
-"""Records real Studio API responses from THIS machine into radial_menu/studio_ui/dev/mock_data.js, so the
+"""Records real Studio API responses from THIS machine into zorbit/studio_ui/dev/mock_data.js, so the
 Studio UI can be developed in a plain browser: open studio_ui/index.html?mock in Edge.
 
 The output contains your own paths, hotkeys and logs. It is git-ignored; never commit it.
@@ -9,7 +9,7 @@ import os
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, os.path.join(ROOT, "radial_menu"))
+sys.path.insert(0, os.path.join(ROOT, "zorbit"))
 import studio  # noqa: E402
 
 
@@ -27,7 +27,7 @@ def main():
         "preview_ring_hover0": a.preview_ring(cfg["config"], first, hover=0),
         "preview_animation": a.preview_animation(cfg["config"], first),
     }
-    out = os.path.join(ROOT, "radial_menu", "studio_ui", "dev", "mock_data.js")
+    out = os.path.join(ROOT, "zorbit", "studio_ui", "dev", "mock_data.js")
     with open(out, "w", encoding="utf-8") as f:
         f.write("// Recorded Studio API responses from a developer's machine. Generated; git-ignored.\n"
                 "window.__RADIAL_MOCK__ = " + json.dumps(mock) + ";\n")

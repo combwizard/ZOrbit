@@ -1,11 +1,11 @@
-"""Notification-area (system tray) icon for the Radial Menu app, ctypes only.
+"""Notification-area (system tray) icon for the ZOrbit app, ctypes only.
 
 Shell_NotifyIcon callbacks need a normal top-level window: the app's control window is message-only, so it
 cannot receive them (nor the broadcast "TaskbarCreated" message). Tray therefore owns a hidden, never-shown
 WS_POPUP tool window, created on the calling thread. That thread must pump messages (the app's GetMessage
 loop does), and create()/destroy() must be called from it.
 
-    tray = Tray("Radial Menu for ZBrush 1.0", icon_path, on_command)
+    tray = Tray("ZOrbit 1.0", icon_path, on_command)
     tray.create()
     ...
     tray.destroy()
@@ -97,11 +97,11 @@ TPM_RIGHTBUTTON, TPM_NONOTIFY, TPM_RETURNCMD = 0x2, 0x80, 0x100
 ERROR_CLASS_ALREADY_EXISTS = 1410
 TIMER_RETRY = 1
 
-CLASS_NAME = "RadialMenuTray"
+CLASS_NAME = "ZOrbitTray"
 ICON_ID = 1
 CMD_STUDIO, CMD_RELOAD, CMD_LOGS, CMD_QUIT = 1, 2, 3, 4
 MENU_ITEMS = [(CMD_STUDIO, "Open Studio", "studio"), (CMD_RELOAD, "Reload menus", "reload"),
-              (CMD_LOGS, "Open logs folder", "logs"), None, (CMD_QUIT, "Quit Radial Menu", "quit")]
+              (CMD_LOGS, "Open logs folder", "logs"), None, (CMD_QUIT, "Quit ZOrbit", "quit")]
 _CMD_NAMES = {i[0]: i[2] for i in MENU_ITEMS if i}
 
 

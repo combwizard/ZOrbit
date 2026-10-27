@@ -5,11 +5,11 @@ Thanks for helping. This is a small project, so the process is light.
 ## Issues
 
 Bug reports and ideas are welcome on the
-[issue tracker](https://github.com/combwizard/zbrush-radial-menu/issues). For a bug, please include:
+[issue tracker](https://github.com/combwizard/zorbit/issues). For a bug, please include:
 
 - your Windows and ZBrush versions;
 - what you did, what you expected and what happened;
-- the last lines of `%LOCALAPPDATA%\RadialMenu\radiald.log` and `bridge.log`. Look them over first and remove
+- the last lines of `%LOCALAPPDATA%\ZOrbit\radiald.log` and `bridge.log`. Look them over first and remove
   anything you would rather not share.
 
 ## Pull requests
@@ -25,8 +25,8 @@ Bug reports and ideas are welcome on the
 You need Windows, Python 3.12 and ZBrush 2026 or newer.
 
 ```powershell
-git clone https://github.com/combwizard/zbrush-radial-menu
-cd zbrush-radial-menu
+git clone https://github.com/combwizard/zorbit
+cd zorbit
 pip install -r requirements-dev.txt
 .\tools\dev-install.ps1      # registers this checkout's bridge folder and a Start menu shortcut
 ```
@@ -37,17 +37,17 @@ next time ZBrush starts the app. Run `.\tools\dev-install.ps1 -Uninstall` to rem
 Useful commands:
 
 ```powershell
-python radial_menu\main.py --check     # validate your menus file and print it
-python radial_menu\main.py --studio    # open Studio
-python radial_menu\main.py             # run the app by hand (it keeps running until you stop it)
+python zorbit\main.py --check     # validate your menus file and print it
+python zorbit\main.py --studio    # open Studio
+python zorbit\main.py             # run the app by hand (it keeps running until you stop it)
 ```
 
 Source layout:
 
 | Folder | Contents |
 |---|---|
-| `radial_menu\` | The app: hotkeys, ring drawing, config loading, brush thumbnails, Studio backend |
-| `radial_menu\studio_ui\` | Studio's interface (HTML, CSS, JavaScript) |
+| `zorbit\` | The app: hotkeys, ring drawing, config loading, brush thumbnails, Studio backend |
+| `zorbit\studio_ui\` | Studio's interface (HTML, CSS, JavaScript) |
 | `bridge\` | The plugin that runs inside ZBrush 2026+ (Python) |
 | `bridge\zscript\` | The plugin for ZBrush 2022-2025 (ZScript source and its compiled `.zsc`) |
 | `packaging\` | Build script for the installer |
@@ -56,26 +56,26 @@ Source layout:
 
 ### The ZScript bridge (ZBrush 2022-2025)
 
-Those versions have no Python API, so they get `bridge\zscript\RadialMenuBridge.txt` instead. ZBrush only
-loads compiled plugins, and only ZBrush can compile them, so the compiled `RadialMenuBridge.zsc` is committed
+Those versions have no Python API, so they get `bridge\zscript\ZOrbitBridge.txt` instead. ZBrush only
+loads compiled plugins, and only ZBrush can compile them, so the compiled `ZOrbitBridge.zsc` is committed
 next to the source. After changing the source:
 
-1. Open the oldest supported ZBrush (2022), choose **ZScript > Load** and pick `RadialMenuBridge.txt`. ZBrush
-   writes `RadialMenuBridge.zsc` next to it. Compiling in the oldest version is meant to keep it loadable in
+1. Open the oldest supported ZBrush (2022), choose **ZScript > Load** and pick `ZOrbitBridge.txt`. ZBrush
+   writes `ZOrbitBridge.zsc` next to it. Compiling in the oldest version is meant to keep it loadable in
    the newer ones; check it in the newest one you have too.
 2. Commit the source and the `.zsc` together.
 3. In Studio, **Settings > Older ZBrush > Update** puts the new build into each installed ZBrush.
 
-The build bundles both files, and Studio copies the `.zsc` plus a `RadialMenuData\bridge.cfg` into
+The build bundles both files, and Studio copies the `.zsc` plus a `ZOrbitData\bridge.cfg` into
 `<ZBrush>\ZStartup\ZPlugs64`. The file formats are described at the top of the source and in
-`radial_menu\zscript_bridge.py`.
+`zorbit\zscript_bridge.py`.
 
 ### Working on Studio's interface in a browser
 
-Run `python tools\make_mock.py`, then open `radial_menu\studio_ui\index.html?mock` in a browser. This
+Run `python tools\make_mock.py`, then open `zorbit\studio_ui\index.html?mock` in a browser. This
 lets you iterate on the UI without starting Studio.
 
-**Privacy: never commit `radial_menu\studio_ui\dev\mock_data.js`.** The script records responses from your own
+**Privacy: never commit `zorbit\studio_ui\dev\mock_data.js`.** The script records responses from your own
 machine, including your folder paths, hotkeys and logs. It is listed in `.gitignore`; keep it that way, and
 check `git status` before you commit.
 

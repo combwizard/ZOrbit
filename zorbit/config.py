@@ -6,7 +6,7 @@ Schema (all keys optional except menus):
   "bridge": {"mode": "auto", "key": "F9"},
       # mode "message": post to the listener window inside ZBrush (no keystroke)
       # mode "key":     press the bridge key, which must be bound natively in ZBrush to
-      #                 Zplugin > Radial Menu > Apply (Ctrl+Alt+click it, press the key, Preferences >
+      #                 Zplugin > ZOrbit > Apply (Ctrl+Alt+click it, press the key, Preferences >
       #                 Hotkeys > Store)
       # mode "auto":    message if the listener is alive, else key; and key as a fallback if a message
       #                 was not picked up within 0.5 s

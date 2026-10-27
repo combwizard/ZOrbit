@@ -1,14 +1,14 @@
-"""Radial Menu for ZBrush: single entry point (also the PyInstaller entry).
+"""ZOrbit: single entry point (also the PyInstaller entry).
 
-  RadialMenu.exe                     background app: hotkeys, ring, hand-off to ZBrush, tray icon
-  RadialMenu.exe --exit-with-zbrush  same, quitting when ZBrush closes (how the ZBrush bridge starts it)
-  RadialMenu.exe --studio            Radial Menu Studio: menu editor, brush library, settings
-  RadialMenu.exe --check             validate the menus file and print it
-  RadialMenu.exe --zscript-copy|--zscript-remove <stage> <dest>
+  ZOrbit.exe                     background app: hotkeys, ring, hand-off to ZBrush, tray icon
+  ZOrbit.exe --exit-with-zbrush  same, quitting when ZBrush closes (how the ZBrush bridge starts it)
+  ZOrbit.exe --studio            ZOrbit Studio: menu editor, brush library, settings
+  ZOrbit.exe --check             validate the menus file and print it
+  ZOrbit.exe --zscript-copy|--zscript-remove <stage> <dest>
                                      internal: the Studio runs this as administrator to put the ZScript
                                      bridge into (or take it out of) a ZBrush 2022-2025 under Program Files
 
-From source: python radial_menu/main.py [same arguments]
+From source: python zorbit/main.py [same arguments]
 """
 import os
 import sys

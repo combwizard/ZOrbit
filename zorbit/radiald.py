@@ -1,10 +1,10 @@
-"""Radial Menu app for ZBrush: owns the menu hotkeys and the overlay, hands picks to the ZBrush bridge.
+"""ZOrbit app: owns the menu hotkeys and the overlay, hands picks to the ZBrush bridge.
 
 How it works:
   * The menu hotkey never goes through ZBrush. A low-level keyboard hook sees it, checks that ZBrush is the
     foreground app, opens the ring and swallows the key so ZBrush never acts on it.
   * The ring is a non-activating layered window, destroyed after every pick.
-  * A pick is written atomically to %LOCALAPPDATA%\\RadialMenu\\request.json and handed to the bridge
+  * A pick is written atomically to %LOCALAPPDATA%\\ZOrbit\\request.json and handed to the bridge
     inside ZBrush, either by a window message to the bridge's listener (no keystroke) or by a bare bridge
     key bound natively in ZBrush (held modifiers released first). Then a zero-distance mouse move wakes
     the pen/cursor tracking.
@@ -12,7 +12,7 @@ How it works:
     listener: those always get the bridge key, and brushes load from their own installation's .zbp files).
   * Brush picks are counted in usage.json; a menu's auto slots are filled from those counts as it opens.
 
-Started through main.py (RadialMenu.exe), normally by the ZBrush bridge when ZBrush launches; it exits when
+Started through main.py (ZOrbit.exe), normally by the ZBrush bridge when ZBrush launches; it exits when
 the last ZBrush process has gone. Only one instance runs at a time.
 """
 import argparse
@@ -45,7 +45,7 @@ DATA_DIR = paths.DATA_DIR
 LOG_FILE = os.path.join(DATA_DIR, "radiald.log")
 REQUEST_FILE = os.path.join(DATA_DIR, "request.json")
 LISTENER_FILE = os.path.join(DATA_DIR, "listener.json")
-MUTEX_NAME = "Local\\RadialMenuForZBrush"
+MUTEX_NAME = "Local\\ZOrbit"
 
 WM_APP_PICK = W.WM_APP + 1            # to the bridge listener inside ZBrush
 WM_APP_OPEN = W.WM_APP + 10           # hook -> control window: open menu (wparam = menu slot)
@@ -288,10 +288,10 @@ class App:
         wc.cbSize = ctypes.sizeof(W.WNDCLASSEXW)
         wc.lpfnWndProc = proc
         wc.hInstance = W.GetModuleHandleW(None)
-        wc.lpszClassName = "RadialMenuControl"
+        wc.lpszClassName = "ZOrbitControl"
         if not W.RegisterClassExW(ctypes.byref(wc)):
             raise ctypes.WinError(ctypes.get_last_error())
-        self.ctrl = W.CreateWindowExW(0, "RadialMenuControl", "Radial Menu control", 0, 0, 0, 0, 0,
+        self.ctrl = W.CreateWindowExW(0, "ZOrbitControl", "ZOrbit control", 0, 0, 0, 0, 0,
                                       W.HWND_MESSAGE, None, wc.hInstance, None)
         if not self.ctrl:
             raise ctypes.WinError(ctypes.get_last_error())
@@ -302,7 +302,7 @@ class App:
             return
         try:
             from tray import Tray
-            tray = Tray(f"Radial Menu for ZBrush {paths.VERSION}", paths.ICON, self._tray_command, log)
+            tray = Tray(f"ZOrbit {paths.VERSION}", paths.ICON, self._tray_command, log)
             self.tray = tray
             ok = tray.create()
             log(f"tray icon {'added' if ok else 'not added yet (will retry)'}")
@@ -540,7 +540,7 @@ class App:
             log(f"another instance is already running; exiting ({started}; started by {W.launch_chain()})")
             return 0
         W.make_dpi_aware()
-        log(f"Radial Menu starting (pid {os.getpid()}, python {sys.version.split()[0]}, "
+        log(f"ZOrbit starting (pid {os.getpid()}, python {sys.version.split()[0]}, "
             f"thumbnails={'on' if brushes else 'off'}; {started}; started by {W.launch_chain()})")
         self.load_config(force=True)
         if self.cfg is None:
@@ -561,7 +561,7 @@ class App:
         if self.hook:
             W.UnhookWindowsHookEx(self.hook)
         W.CloseHandle(mutex)
-        log("Radial Menu stopped")
+        log("ZOrbit stopped")
         return 0
 
 
@@ -584,7 +584,7 @@ def check(cfg_path) -> int:
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("--config", default=None, help="menus file (default: %%APPDATA%%\\RadialMenu\\radial.json)")
+    ap.add_argument("--config", default=None, help="menus file (default: %%APPDATA%%\\ZOrbit\\radial.json)")
     ap.add_argument("--exit-with-zbrush", action="store_true", help="quit when ZBrush.exe has exited")
     ap.add_argument("--target-exe", default="ZBrush.exe", help=argparse.SUPPRESS)
     ap.add_argument("--accept-injected", action="store_true", help=argparse.SUPPRESS)

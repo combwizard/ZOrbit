@@ -1,9 +1,9 @@
-"""Radial Menu Studio: the companion app (menu editor, brush library, settings, status).
+"""ZOrbit Studio: the companion app (menu editor, brush library, settings, status).
 
 A pywebview window (Windows' built-in Edge WebView2) showing studio_ui/index.html. The page calls the Api
 methods below as `await window.pywebview.api.<name>(...)`; every method returns plain JSON-able data.
 
-Started as `RadialMenu.exe --studio` (or `main.py --studio`). One instance at a time; a second launch brings
+Started as `ZOrbit.exe --studio` (or `main.py --studio`). One instance at a time; a second launch brings
 the first to the front.
 """
 import base64
@@ -31,14 +31,14 @@ import zscript_bridge       # noqa: E402
 DATA_DIR = paths.DATA_DIR
 CONFIG_FILE = paths.ensure_config()
 UI_INDEX = os.path.join(paths.UI_DIR, "index.html")
-APP_MUTEX = "Local\\RadialMenuForZBrush"
-STUDIO_MUTEX = "Local\\RadialMenuStudio"
-TITLE = "Radial Menu Studio"
+APP_MUTEX = "Local\\ZOrbit"
+STUDIO_MUTEX = "Local\\ZOrbitStudio"
+TITLE = "ZOrbit Studio"
 VERSION = paths.VERSION
-APP_ID = "RadialMenu.Studio"           # taskbar identity, so the Studio groups under its own icon
+APP_ID = "ZOrbit.Studio"           # taskbar identity, so the Studio groups under its own icon
 STUDIO_FILE = os.path.join(paths.CONFIG_DIR, "studio.json")   # Studio preferences and window placement
-RELEASES_API = "https://api.github.com/repos/combwizard/zbrush-radial-menu/releases/latest"
-RELEASES_URL = "https://github.com/combwizard/zbrush-radial-menu/releases"
+RELEASES_API = "https://api.github.com/repos/combwizard/zorbit/releases/latest"
+RELEASES_URL = "https://github.com/combwizard/zorbit/releases"
 
 kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
 user32 = ctypes.WinDLL("user32", use_last_error=True)
@@ -570,7 +570,7 @@ class Api:
         try:
             import urllib.request
             req = urllib.request.Request(RELEASES_API, headers={
-                "Accept": "application/vnd.github+json", "User-Agent": f"RadialMenuStudio/{VERSION}"})
+                "Accept": "application/vnd.github+json", "User-Agent": f"ZOrbitStudio/{VERSION}"})
             with urllib.request.urlopen(req, timeout=8) as r:
                 data = json.load(r)
         except Exception as e:
@@ -588,7 +588,7 @@ class Api:
 
     def open_url(self, url):
         """Opens one of the project's own links in the default browser (nothing else is allowed)."""
-        allowed = ("https://github.com/combwizard/zbrush-radial-menu", "https://www.gnu.org/licenses/gpl-3.0.html")
+        allowed = ("https://github.com/combwizard/zorbit", "https://www.gnu.org/licenses/gpl-3.0.html")
         ok = isinstance(url, str) and any(url == a or url.startswith(a + c) for a in allowed for c in "/?#")
         if ok:
             os.startfile(url)

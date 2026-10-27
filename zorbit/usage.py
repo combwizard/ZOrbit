@@ -10,7 +10,7 @@ The ring should not reshuffle under the user's hand, so:
   * an empty slot fills straight away.
 Fading scales every score by the same factor, so the order only changes when a pick comes in.
 
-%LOCALAPPDATA%\\RadialMenu\\usage.json (written by the app only):
+%LOCALAPPDATA%\\ZOrbit\\usage.json (written by the app only):
 {"brushes": {"claybuildup": {"name": "ClayBuildup", "score": 3.2, "t": 1761550000.0}},   # score as of t
  "menus": {"<menu id>": {"slots": ["ClayBuildup", null], "pending": ["Pinch"]}}}
 """

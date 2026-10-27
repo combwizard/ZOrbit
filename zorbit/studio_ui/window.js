@@ -23,7 +23,7 @@
       if (info && chip && !chip.classList.contains('has-update')) chip.textContent = 'v' + info.version;
     });
     if (chip) chip.addEventListener('click', function () {
-      call('open_url', chip.dataset.url || 'https://github.com/combwizard/zbrush-radial-menu/releases');
+      call('open_url', chip.dataset.url || 'https://github.com/combwizard/zorbit/releases');
     });
     checkUpdate();
     call('win_is_maximized').then(setMax);

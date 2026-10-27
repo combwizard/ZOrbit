@@ -1,8 +1,8 @@
 # -*- mode: python ; coding: utf-8 -*-
-"""PyInstaller spec for Radial Menu for ZBrush (onedir, windowed).
+"""PyInstaller spec for ZOrbit (onedir, windowed).
 
-Build:  pyinstaller packaging/radial_menu.spec --noconfirm --distpath dist --workpath build
-Result: dist/RadialMenu/RadialMenu.exe
+Build:  pyinstaller packaging/zorbit.spec --noconfirm --distpath dist --workpath build
+Result: dist/ZOrbit/ZOrbit.exe
 
 SPECPATH (provided by PyInstaller) is the directory holding this file, i.e. <repo>/packaging.
 """
@@ -15,12 +15,12 @@ from PyInstaller.utils.win32.versioninfo import (
 )
 
 ROOT = os.path.abspath(os.path.join(SPECPATH, ".."))
-SRC = os.path.join(ROOT, "radial_menu")
+SRC = os.path.join(ROOT, "zorbit")
 ICON = os.path.join(ROOT, "assets", "icon.ico")
 BUILD_DIR = os.path.join(ROOT, "build")
 os.makedirs(BUILD_DIR, exist_ok=True)
 
-# --- version: single source of truth is radial_menu\paths.py -------------------------------------------------
+# --- version: single source of truth is zorbit\paths.py -------------------------------------------------
 with open(os.path.join(SRC, "paths.py"), encoding="utf-8") as f:
     VERSION = re.search(r'^VERSION\s*=\s*"([^"]+)"', f.read(), re.M).group(1)
 _nums = [int(n) for n in re.findall(r"\d+", VERSION)[:4]]
@@ -33,12 +33,12 @@ version_info = VSVersionInfo(
     kids=[
         StringFileInfo([StringTable("040904B0", [
             StringStruct("CompanyName", "combwizard"),
-            StringStruct("FileDescription", "Radial Menu for ZBrush"),
+            StringStruct("FileDescription", "ZOrbit"),
             StringStruct("FileVersion", VERSION),
-            StringStruct("InternalName", "RadialMenu"),
+            StringStruct("InternalName", "ZOrbit"),
             StringStruct("LegalCopyright", "GPL-3.0"),
-            StringStruct("OriginalFilename", "RadialMenu.exe"),
-            StringStruct("ProductName", "Radial Menu for ZBrush"),
+            StringStruct("OriginalFilename", "ZOrbit.exe"),
+            StringStruct("ProductName", "ZOrbit"),
             StringStruct("ProductVersion", VERSION),
         ])]),
         VarFileInfo([VarStruct("Translation", [0x0409, 1200])]),
@@ -60,7 +60,7 @@ datas.append((os.path.join(SRC, "default_menus.json"), "."))
 datas.append((ICON, "."))                          # bundle root: paths.ICON = RESOURCE_DIR\icon.ico
 # ZScript bridge for ZBrush 2022-2025 (paths.ZSCRIPT_DIR): the .zsc is compiled in ZBrush and committed.
 ZSCRIPT = os.path.join(ROOT, "bridge", "zscript")
-for name in ("RadialMenuBridge.zsc", "RadialMenuBridge.txt"):
+for name in ("ZOrbitBridge.zsc", "ZOrbitBridge.txt"):
     if os.path.isfile(os.path.join(ZSCRIPT, name)):
         datas.append((os.path.join(ZSCRIPT, name), "zscript"))
     else:
@@ -113,7 +113,7 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,                         # onedir
-    name="RadialMenu",
+    name="ZOrbit",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -129,5 +129,5 @@ coll = COLLECT(
     a.datas,
     strip=False,
     upx=False,
-    name="RadialMenu",
+    name="ZOrbit",
 )

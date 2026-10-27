@@ -1,4 +1,4 @@
-"""ctypes declarations for the Win32 calls the radial menu app needs.
+"""ctypes declarations for the Win32 calls the ZOrbit app needs.
 
 Own WinDLL instances (not ctypes.windll), so argtypes set here never leak into other code in the process.
 All signatures are declared explicitly: on 64-bit Windows an undeclared LPARAM/HWND is silently

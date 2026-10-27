@@ -1,14 +1,14 @@
 <#
 .SYNOPSIS
-  Developer install: run Radial Menu for ZBrush straight from this checkout (or remove it with -Uninstall).
+  Developer install: run ZOrbit straight from this checkout (or remove it with -Uninstall).
   End users should use the installer from the GitHub Releases page instead.
 
 .DESCRIPTION
   - Adds this checkout's bridge folder to the USER environment variable ZBRUSH_PLUGIN_PATH, keeping every entry
     already there (other tools put their own folders in the same variable). No admin rights needed.
-  - Writes %APPDATA%\RadialMenu\launch.json (by running the app's --check once), which tells the ZBrush
+  - Writes %APPDATA%\ZOrbit\launch.json (by running the app's --check once), which tells the ZBrush
     bridge how to start the app and the Studio from source.
-  - Creates a Start menu shortcut "Radial Menu Studio (dev)".
+  - Creates a Start menu shortcut "ZOrbit Studio (dev)".
   - Checks that the Python has the runtime dependencies (requirements.txt).
   ZBrush reads ZBRUSH_PLUGIN_PATH only when it starts, so restart ZBrush afterwards.
   Run with -WhatIf to see what would happen.
@@ -22,9 +22,9 @@ param(
 $ErrorActionPreference = 'Stop'
 $Root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $BridgeDir = Join-Path $Root 'bridge'
-$Main = Join-Path $Root 'radial_menu\main.py'
+$Main = Join-Path $Root 'zorbit\main.py'
 $Icon = Join-Path $Root 'assets\icon.ico'
-$Shortcut = Join-Path ([Environment]::GetFolderPath('Programs')) 'Radial Menu Studio (dev).lnk'
+$Shortcut = Join-Path ([Environment]::GetFolderPath('Programs')) 'ZOrbit Studio (dev).lnk'
 
 $current = [Environment]::GetEnvironmentVariable('ZBRUSH_PLUGIN_PATH', 'User')
 $entries = @(if ($current) { $current -split ';' | ForEach-Object { $_.Trim() } | Where-Object { $_ } })
@@ -52,7 +52,7 @@ if (-not $ours -and $PSCmdlet.ShouldProcess('ZBRUSH_PLUGIN_PATH (user)', "append
     [Environment]::SetEnvironmentVariable('ZBRUSH_PLUGIN_PATH', $new, 'User')
     Write-Host "Registered. ZBRUSH_PLUGIN_PATH (user) is now: $new"
 }
-if ($PSCmdlet.ShouldProcess("$env:APPDATA\RadialMenu\launch.json", 'write (via --check)')) {
+if ($PSCmdlet.ShouldProcess("$env:APPDATA\ZOrbit\launch.json", 'write (via --check)')) {
     & $Python -I $Main --check | Out-Null
     Write-Host "launch.json written for this checkout."
 }
@@ -62,8 +62,8 @@ if ($PSCmdlet.ShouldProcess($Shortcut, 'create Start menu shortcut')) {
     $lnk.Arguments = "-I `"$Main`" --studio"
     $lnk.WorkingDirectory = $Root
     $lnk.IconLocation = $Icon
-    $lnk.Description = 'Radial Menu Studio (running from source)'
+    $lnk.Description = 'ZOrbit Studio (running from source)'
     $lnk.Save()
     Write-Host "Shortcut: $Shortcut"
 }
-Write-Host "`nRestart ZBrush once. Then press Q over ZBrush. Logs: $env:LOCALAPPDATA\RadialMenu"
+Write-Host "`nRestart ZBrush once. Then press Q over ZBrush. Logs: $env:LOCALAPPDATA\ZOrbit"

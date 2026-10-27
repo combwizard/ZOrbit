@@ -1,4 +1,4 @@
-/* Radial Menu Studio front-end.
+/* ZOrbit Studio front-end.
    Plain JS, no dependencies. The config object (S.cfg) is the single source of truth; every backend call
    receives the whole thing. Sections: helpers, state + config logic, backend loaders (ring / frames / thumbs),
    UI primitives (toast, modal, popover, drag and drop, combobox, hotkey recorder), then the four screens. */
@@ -129,8 +129,8 @@ const COLOR_INFO = {
 };
 const BRIDGE_INFO = {
   auto: ['Auto', 'Recommended. Uses the listener inside ZBrush when it is alive and falls back to the bridge key otherwise (or if a message is not picked up within half a second).'],
-  message: ['Message', 'Posts a message to a small listener window inside ZBrush. No keystroke is sent, so nothing can collide with your own shortcuts. Needs the Radial Menu plugin loaded in ZBrush.'],
-  key: ['Key', 'Presses the bridge key. Bind that key in ZBrush to Zplugin > Radial Menu > Apply (Ctrl+Alt+click the button, press the key, then Preferences > Hotkeys > Store).'],
+  message: ['Message', 'Posts a message to a small listener window inside ZBrush. No keystroke is sent, so nothing can collide with your own shortcuts. Needs the ZOrbit plugin loaded in ZBrush.'],
+  key: ['Key', 'Presses the bridge key. Bind that key in ZBrush to Zplugin > ZOrbit > Apply (Ctrl+Alt+click the button, press the key, then Preferences > Hotkeys > Store).'],
 };
 const FALLBACK_DEFAULTS = { radius: 145, slot: 72, dead_zone: 38, tap_ms: 250, timeout_s: 20, animation: 'smooth', labels: 'name', flick: true, hover_submenus: true,
   colors: { bg: '#222327', accent: '#f86b33', highlight: '#4dc8e9', text: '#f0f0f0', lines: '#f86b33' } };
@@ -1356,7 +1356,7 @@ function renderItemList(box, menuId, compact) {
 }
 
 /* ---------- the ring stage (live preview with overlay) */
-// Widest angle (degrees) one slot answers to. A copy of MAX_SECTOR in radial_menu/ring.py (Ring._index_at): keep the two in step.
+// Widest angle (degrees) one slot answers to. A copy of MAX_SECTOR in zorbit/ring.py (Ring._index_at): keep the two in step.
 const MAX_SECTOR = 90;
 function buildStage() {
   const img = h('img', { class: 'ring-img pending', alt: 'Ring preview', draggable: false });     // hidden until the first image has decoded, so no broken-image icon
@@ -2289,7 +2289,7 @@ function buildSettingsScreen(root) {
       keyWrap.classList.toggle('dim', mode === 'message');
       keyWrap.replaceChildren(field('Bridge key', hotkeyField({ what: 'Bridge key', value: (S.cfg.bridge && S.cfg.bridge.key) || '', mods: { ctrl: false, alt: true, shift: false }, placeholder: 'Not set (F9 is the usual choice)',
         onChange: v => { if (v) bridge().key = v; else delete bridge().key; commit(); paintZNote(); } }),
-        mode === 'message' ? 'Not used in Message mode, but kept in case you switch back.' : 'Must be bound in ZBrush to Zplugin > Radial Menu > Apply. Ctrl and Shift are rejected because ZBrush reads them as mask and smooth. A bare F-key is best.'));
+        mode === 'message' ? 'Not used in Message mode, but kept in case you switch back.' : 'Must be bound in ZBrush to Zplugin > ZOrbit > Apply. Ctrl and Shift are rejected because ZBrush reads them as mask and smooth. A bare F-key is best.'));
     };
     page.append(card('ZBrush bridge', 'How a pick reaches ZBrush',
       choiceCards(['auto', 'message', 'key'].map(m => [m, BRIDGE_INFO[m][0], BRIDGE_INFO[m][1]]), bmode, v => { bridge().mode = v; commit(); paintKey(); }, 'bridge-cards', 'How a pick reaches ZBrush'),
@@ -2300,15 +2300,15 @@ function buildSettingsScreen(root) {
     const zbox = h('div', { class: 'zrows' }, h('div', { class: 'fhint' }, 'Looking for ZBrush...'));
     let zCount = null;          // installs found by the last look; null until the first answer
     const znote = h('div', { class: 'fhint', hidden: true });
-    // The plugin's Apply button brings F9 as its own hotkey (RadialMenuBridge.txt); any other key is bound by hand.
+    // The plugin's Apply button brings F9 as its own hotkey (ZOrbitBridge.txt); any other key is bound by hand.
     // Derived from the key chosen above every time, and compared as a whole chord: "Alt+F9" is not "F9".
     paintZNote = () => {
       const zkey = ((S.cfg.bridge && S.cfg.bridge.key) || 'F9').trim();
       const bind = zkey.toLowerCase() === 'f9'
         ? ['After installing, restart ZBrush. Apply comes with ', h('b', null, 'F9'), ' as its hotkey, so there is nothing to bind.']
-        : ['After installing, restart ZBrush, Ctrl+Alt+click Zplugin > Radial Menu > Apply, press ', h('b', null, zkey), ' and choose Preferences > Hotkeys > Store. (Only F9 works without this step.)'];
+        : ['After installing, restart ZBrush, Ctrl+Alt+click Zplugin > ZOrbit > Apply, press', h('b', null, zkey), ' and choose Preferences > Hotkeys > Store. (Only F9 works without this step.)'];
       znote.hidden = !zCount;
-      znote.replaceChildren('These versions have no Python API, so they get a ZScript plugin with the same Zplugin > Radial Menu palette. It has no listener, so every pick there uses the bridge key, whatever the mode above. ', ...bind, ' A ZBrush under Program Files asks for administrator rights to install.');
+      znote.replaceChildren('These versions have no Python API, so they get a ZScript plugin with the same Zplugin > ZOrbit palette. It has no listener, so every pick there uses the bridge key, whatever the mode above. ', ...bind, ' A ZBrush under Program Files asks for administrator rights to install.');
     };
     let zgen = 0;                                              // a slower earlier listing must not replace a newer one
     const zpaint = async () => {
@@ -2347,7 +2347,7 @@ function buildSettingsScreen(root) {
         main.onclick = act('install_zscript_bridge', z.path, main, rowBtns, 'Installing... approve the prompt');
         if (rm) rm.onclick = async () => {
           const ok = await modal({ title: `Remove the plugin from ${z.name}?`,
-            body: [h('p', null, 'This deletes the Radial Menu plugin files from this ZBrush install:'), h('p', { class: 'modal-path mono' }, z.path)],
+            body: [h('p', null, 'This deletes the ZOrbit plugin files from this ZBrush install:'), h('p', { class: 'modal-path mono' }, z.path)],
             actions: [{ text: 'Cancel', value: false, focus: true }, { text: 'Remove', value: true, kind: 'danger' }] });
           if (ok) act('remove_zscript_bridge', z.path, rm, rowBtns, 'Removing...')();
         };
@@ -2356,7 +2356,7 @@ function buildSettingsScreen(root) {
       });
       zCount = rows.length;
       if (!rows.length) rows.push(h('div', { class: 'fhint' }, 'No ZBrush 2022 to 2025 was found. Add a ZBrush folder if you have one.'));
-      else if (!r.bundled) rows.push(h('div', { class: 'fhint warn' }, 'This build has no compiled ZScript plugin (RadialMenuBridge.zsc), so there is nothing to install yet.'));
+      else if (!r.bundled) rows.push(h('div', { class: 'fhint warn' }, 'This build has no compiled ZScript plugin (ZOrbitBridge.zsc), so there is nothing to install yet.'));
       zbox.replaceChildren(...rows);
       paintZNote();
     };
@@ -2394,7 +2394,7 @@ function buildSettingsScreen(root) {
     if (window.RadialUpdate && window.RadialUpdate.last) paintUpdate(window.RadialUpdate.last);
     page.append(card('Studio', 'Preferences for this window. Saved straight away.',
       h('div', { class: 'field row' }, h('div', { class: 'grow' }, h('span', { class: 'flabel' }, 'Show the Licence button'),
-        h('div', { class: 'fhint' }, 'The Licence screen is a joke: Radial Menu is free software and needs no licence. Turn this off to hide its button.')),
+        h('div', { class: 'fhint' }, 'The Licence screen is a joke: ZOrbit is free software and needs no licence. Turn this off to hide its button.')),
         toggleSwitch(licenceVisible(), async v => { const ok = await setPref('show_licence', v); if (ok) toast(v ? 'The Licence button is back. It missed you.' : 'Licence button hidden.', { ms: 2800 }); return ok; }, 'Show the Licence button')),
       h('div', { class: 'field row' }, h('div', { class: 'grow' }, h('span', { class: 'flabel' }, 'Check for updates'),
         h('div', { class: 'fhint' }, 'When Studio opens, it asks GitHub for the newest release and shows it next to the version at the top. Nothing about you or your menus is sent.'), updNote),
@@ -2474,7 +2474,7 @@ function buildStatusScreen(root) {
     startBtn.replaceChildren(...(appStarting ? [h('span', { class: 'spin' }), 'Starting...'] : [icon('play', 12), running ? 'Running' : 'Start app']));
     startBtn.classList.toggle('running', appStarting);
     startBtn.title = appStarting ? 'Starting the app...' : running ? 'The app is already running' : noZ ? 'ZBrush must be running first'
-      : (st && st.zbrush_check_ok === false ? 'Could not check for ZBrush. Try anyway.' : 'Start the radial menu app');
+      : (st && st.zbrush_check_ok === false ? 'Could not check for ZBrush. Try anyway.' : 'Start the ZOrbit app');
     if (appStarting) startBtn.setAttribute('aria-busy', 'true'); else startBtn.removeAttribute('aria-busy');
   };
   async function startApp() {
@@ -2500,7 +2500,7 @@ function buildStatusScreen(root) {
     const ok = await copyText(curLines.join('\n'));
     toast(ok ? `Copied ${curLines.length} line${curLines.length === 1 ? '' : 's'}` : 'Could not copy the log.', { tone: ok ? 'ok' : 'warn', ms: 2200 });
   };
-  page.append(h('div', { class: 'page-head' }, h('h1', null, 'Status'), h('p', null, 'Whether ZBrush and the radial menu app are running, and whether the bridge between them is healthy.')),
+  page.append(h('div', { class: 'page-head' }, h('h1', null, 'Status'), h('p', null, 'Whether ZBrush and the ZOrbit app are running, and whether the bridge between them is healthy.')),
     grid,
     card('App log', 'Last lines of radiald.log', logBox,
       h('div', { class: 'btn-row between' }, h('div', { class: 'btn-row' },
@@ -2524,14 +2524,14 @@ function buildStatusScreen(root) {
     const ltone = keyOnly ? 'neutral' : (!l ? 'off' : (l.alive && l.verified ? 'ok' : 'warn'));
     const ltext = keyOnly ? 'Not needed (key bridge)' : (!l ? 'Not found' : (!l.alive ? 'Stale' : (l.verified ? 'Connected' : 'Found, unverified')));
     const lsub = keyOnly ? 'Picks arrive through the bridge key'
-      : (!l ? 'The ZBrush plugin has not announced a listener window. Load the Radial Menu plugin in ZBrush.' : (!l.alive ? 'The listener window no longer exists. Restart ZBrush or reload the plugin.' : (l.verified ? 'Picks are delivered by message.' : 'The window exists, but no message has been confirmed yet.')));
+      : (!l ? 'The ZBrush plugin has not announced a listener window. Load the ZOrbit plugin in ZBrush.' : (!l.alive ? 'The listener window no longer exists. Restart ZBrush or reload the plugin.' : (l.verified ? 'Picks are delivered by message.' : 'The window exists, but no message has been confirmed yet.')));
     const unsure = st.zbrush_check_ok === false;                       // the process look-up itself failed: do not claim ZBrush is off
     const hadFocus = document.activeElement === startBtn;
     paintStart(st);
     grid.replaceChildren(
       unsure ? stat('ZBrush', false, 'Could not check', 'Studio could not tell whether ZBrush is running.', 'neutral')
         : stat('ZBrush', st.zbrush_running, st.zbrush_running ? 'Running' : 'Not running', st.zbrush_running ? null : 'The app starts together with ZBrush.'),
-      stat('Radial menu app', st.app_running, st.app_running ? 'Running' : 'Not running',
+      stat('ZOrbit app',st.app_running, st.app_running ? 'Running' : 'Not running',
         st.app_running ? 'Listening for your hotkeys.' : (st.zbrush_running || unsure ? 'Press Start app to launch it.' : 'Open ZBrush first; the app starts with it.'), null, startBtn),
       stat('Bridge listener', ltone === 'ok', ltext, lsub, ltone),
       h('div', { class: 'scard last' }, h('div', { class: 'micro' }, 'Last pick'), h('div', { class: 'sval mono small' }, st.last_pick || 'Nothing picked yet'), h('div', { class: 'ssub' }, 'The most recent item sent to ZBrush.')));
@@ -2856,7 +2856,7 @@ function buildLicenceScreen(root) {
   const fine = (k, v) => h('div', { class: 'lic-row' }, h('span', { class: 'micro' }, k), h('span', { class: 'lic-val' }, v));
 
   page.append(
-    h('div', { class: 'page-head' }, h('h1', null, 'Licence'), h('p', null, 'Manage your Radial Menu for ZBrush licence and activations.')),
+    h('div', { class: 'page-head' }, h('h1', null, 'Licence'), h('p', null, 'Manage your ZOrbit licence and activations.')),
     card('Licence status', null,
       h('div', { class: 'lic-status' },
         h('span', { class: 'lic-badge' }, h('i', { class: 'sdot' }), 'Activated'),
@@ -2871,11 +2871,11 @@ function buildLicenceScreen(root) {
     h('section', { class: 'card lic-reveal' },
       h('div', { class: 'lic-reveal-head' }, h('span', { class: 'lic-wink', 'aria-hidden': 'true' }, ';)'), h('h2', null, 'Just kidding.')),
       h('p', null, 'There is no licence key, no account, no trial and no expiry date. Nothing above checks anything.'),
-      h('p', null, 'Radial Menu for ZBrush is free software under the GNU General Public License, version 3. Use it on as many machines as you like, share it with anyone, read the code and change it. If you share a changed version, it stays free too.'),
+      h('p', null, 'ZOrbit is free software under the GNU General Public License, version 3. Use it on as many machines as you like, share it with anyone, read the code and change it. If you share a changed version, it stays free too.'),
       h('p', { class: 'lic-big' }, 'You are licensed. Forever.'),
       h('div', { class: 'btn-row' },
         link('Read the GPL v3', 'https://www.gnu.org/licenses/gpl-3.0.html'),
-        link('Source code on GitHub', 'https://github.com/combwizard/zbrush-radial-menu'))),
+        link('Source code on GitHub', 'https://github.com/combwizard/zorbit'))),
     h('div', { class: 'lic-hide' }, h('button', { class: 'linkish', type: 'button', onclick: () => {
       setPref('show_licence', false);
       toast('Fine. It is gone. Settings > Studio brings it back, if you ever miss it.', { ms: 4500 });

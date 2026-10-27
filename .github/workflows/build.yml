@@ -25,11 +25,11 @@ jobs:
         id: ver
         shell: pwsh
         run: |
-          $m = Select-String -Path radial_menu\paths.py -Pattern '^VERSION\s*=\s*"([^"]+)"'
+          $m = Select-String -Path zorbit\paths.py -Pattern '^VERSION\s*=\s*"([^"]+)"'
           $v = $m.Matches[0].Groups[1].Value
           "version=$v" >> $env:GITHUB_OUTPUT
           if ($env:GITHUB_REF_TYPE -eq 'tag' -and $env:GITHUB_REF_NAME -ne "v$v") {
-            throw "Tag $env:GITHUB_REF_NAME does not match VERSION $v in radial_menu\paths.py"
+            throw "Tag $env:GITHUB_REF_NAME does not match VERSION $v in zorbit\paths.py"
           }
 
       - name: Install Inno Setup
@@ -47,21 +47,21 @@ jobs:
       - name: Smoke test the built exe
         shell: pwsh
         run: |
-          $p = Start-Process dist\RadialMenu\RadialMenu.exe -ArgumentList '--check' -Wait -PassThru `
+          $p = Start-Process dist\ZOrbit\ZOrbit.exe -ArgumentList '--check' -Wait -PassThru `
                  -RedirectStandardOutput check.out -RedirectStandardError check.err
           Get-Content check.out, check.err
-          if ($p.ExitCode -ne 0) { throw "RadialMenu.exe --check exited with $($p.ExitCode)" }
+          if ($p.ExitCode -ne 0) { throw "ZOrbit.exe --check exited with $($p.ExitCode)" }
 
       - uses: actions/upload-artifact@v4
         with:
-          name: RadialMenuSetup-${{ steps.ver.outputs.version }}
-          path: packaging/Output/RadialMenuSetup-${{ steps.ver.outputs.version }}.exe
+          name: ZOrbitSetup-${{ steps.ver.outputs.version }}
+          path: packaging/Output/ZOrbitSetup-${{ steps.ver.outputs.version }}.exe
           if-no-files-found: error
 
       - uses: actions/upload-artifact@v4
         with:
-          name: RadialMenu-${{ steps.ver.outputs.version }}-portable
-          path: dist/RadialMenu-${{ steps.ver.outputs.version }}-portable.zip
+          name: ZOrbit-${{ steps.ver.outputs.version }}-portable
+          path: dist/ZOrbit-${{ steps.ver.outputs.version }}-portable.zip
           if-no-files-found: error
 
       - name: Release notes from CHANGELOG.md
@@ -86,7 +86,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           $v = "${{ steps.ver.outputs.version }}"
-          $assets = "packaging\Output\RadialMenuSetup-$v.exe", "dist\RadialMenu-$v-portable.zip"
+          $assets = "packaging\Output\ZOrbitSetup-$v.exe", "dist\ZOrbit-$v-portable.zip"
           gh release view "$env:GITHUB_REF_NAME" --repo "$env:GITHUB_REPOSITORY" *> $null
           if ($LASTEXITCODE -eq 0) {
             # The tag was pushed again (for example after a history rewrite): refresh files and notes.
@@ -95,7 +95,7 @@ jobs:
           } else {
             gh release create "$env:GITHUB_REF_NAME" @assets `
               --repo "$env:GITHUB_REPOSITORY" `
-              --title "Radial Menu for ZBrush $v" `
+              --title "ZOrbit $v" `
               --notes-file release-notes.md
           }
           if ($LASTEXITCODE -ne 0) { throw "gh release failed with exit code $LASTEXITCODE" }

@@ -1,13 +1,16 @@
-; Inno Setup 6 script for Radial Menu for ZBrush.
+; Inno Setup 6 script for ZOrbit, a radial brush menu for ZBrush.
 ; Build: ISCC.exe /DAppVersion=0.7.0 packaging\installer.iss   (packaging\build.ps1 does this after PyInstaller)
-; Expects dist\RadialMenu\ (PyInstaller onedir output) relative to the repository root.
+; Expects dist\ZOrbit\ (PyInstaller onedir output) relative to the repository root.
 
 #ifndef AppVersion
   #define AppVersion "0.0.0-dev"
 #endif
-#define AppName "Radial Menu for ZBrush"
-#define AppExe "RadialMenu.exe"
-#define AppURL "https://github.com/combwizard/zbrush-radial-menu"
+#define AppName "ZOrbit"
+#define AppExe "ZOrbit.exe"
+#define AppURL "https://github.com/combwizard/zorbit"
+; Before the rename (0.7.0 and earlier) the app was Radial Menu for ZBrush, with the same AppId.
+#define LegacyExe "RadialMenu.exe"
+#define LegacyName "Radial Menu"
 
 [Setup]
 ; Fixed GUID: identifies the app for upgrades and uninstall. Never change it.
@@ -21,7 +24,9 @@ AppSupportURL={#AppURL}/issues
 AppUpdatesURL={#AppURL}/releases
 VersionInfoDescription={#AppName} Setup
 VersionInfoProductName={#AppName}
-DefaultDirName={localappdata}\Programs\Radial Menu
+DefaultDirName={localappdata}\Programs\ZOrbit
+; An upgrade from Radial Menu moves to the new folder; CleanUpLegacy removes the old one.
+UsePreviousAppDir=no
 DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
 ArchitecturesAllowed=x64compatible
@@ -31,35 +36,42 @@ SetupIconFile=..\assets\icon.ico
 UninstallDisplayIcon={app}\{#AppExe}
 UninstallDisplayName={#AppName}
 OutputDir=Output
-OutputBaseFilename=RadialMenuSetup-{#AppVersion}
+OutputBaseFilename=ZOrbitSetup-{#AppVersion}
 Compression=lzma2/max
 SolidCompression=yes
 WizardStyle=modern
 ChangesEnvironment=yes
 CloseApplications=yes
-CloseApplicationsFilter={#AppExe}
+CloseApplicationsFilter={#AppExe},{#LegacyExe}
 RestartApplications=no
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Messages]
-FinishedLabel=Setup has finished installing [name] on your computer.%n%nRestart ZBrush once so it loads the Radial Menu plugin.
-FinishedLabelNoIcons=Setup has finished installing [name] on your computer.%n%nRestart ZBrush once so it loads the Radial Menu plugin.
+FinishedLabel=Setup has finished installing [name] on your computer.%n%nRestart ZBrush once so it loads the ZOrbit plugin.
+FinishedLabelNoIcons=Setup has finished installing [name] on your computer.%n%nRestart ZBrush once so it loads the ZOrbit plugin.
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 
 [Files]
-Source: "..\dist\RadialMenu\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
-Source: "..\bridge\radial_menu_bridge.py"; DestDir: "{app}\bridge"; Flags: ignoreversion
+Source: "..\dist\ZOrbit\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\bridge\zorbit_bridge.py"; DestDir: "{app}\bridge"; Flags: ignoreversion
+
+[InstallDelete]
+; Left by Radial Menu when it was installed in this same folder, or its shortcuts.
+Type: files; Name: "{app}\{#LegacyExe}"
+Type: files; Name: "{app}\bridge\radial_menu_bridge.py"
+Type: files; Name: "{autoprograms}\{#LegacyName} Studio.lnk"
+Type: files; Name: "{autodesktop}\{#LegacyName} Studio.lnk"
 
 [Icons]
-Name: "{autoprograms}\Radial Menu Studio"; Filename: "{app}\{#AppExe}"; Parameters: "--studio"; WorkingDir: "{app}"; AppUserModelID: "RadialMenu.Studio"; Comment: "Edit radial menus for ZBrush"
-Name: "{autodesktop}\Radial Menu Studio"; Filename: "{app}\{#AppExe}"; Parameters: "--studio"; WorkingDir: "{app}"; AppUserModelID: "RadialMenu.Studio"; Tasks: desktopicon
+Name: "{autoprograms}\ZOrbit Studio"; Filename: "{app}\{#AppExe}"; Parameters: "--studio"; WorkingDir: "{app}"; AppUserModelID: "ZOrbit.Studio"; Comment: "Edit radial menus for ZBrush"
+Name: "{autodesktop}\ZOrbit Studio"; Filename: "{app}\{#AppExe}"; Parameters: "--studio"; WorkingDir: "{app}"; AppUserModelID: "ZOrbit.Studio"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\{#AppExe}"; Parameters: "--studio"; Description: "Open Radial Menu Studio"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\{#AppExe}"; Parameters: "--studio"; Description: "Open ZOrbit Studio"; Flags: nowait postinstall skipifsilent
 
 [Code]
 const
@@ -69,6 +81,10 @@ const
   RRF_RT_ANY = $0000FFFF;
   RRF_NOEXPAND = $10000000;
   REG_EXPAND_SZ_TYPE = 2;
+  UninstallKey = 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{6F1B7C52-3D4A-4E8B-9A57-2C0E81D4B9A3}_is1';
+
+var
+  LegacyDir: String;                        { a Radial Menu install this setup replaces, or '' }
 
 function RegGetValueW(hKey: Cardinal; lpSubKey, lpValue: String; dwFlags: Cardinal;
   var pdwType: Cardinal; pvData: Cardinal; var pcbData: Cardinal): Integer;
@@ -191,16 +207,16 @@ begin
     WriteEnvValue(Base + ';' + Dir, Expand);
 end;
 
-{ Removes only our entry; deletes the variable if nothing is left. }
-procedure UnregisterBridge;
+{ Removes only that entry; deletes the variable if nothing is left. }
+procedure UnregisterBridgeDir(const Dir: String);
 var
   Current, NewValue: String;
 begin
   if not RegQueryStringValue(HKEY_CURRENT_USER, EnvKey, EnvValue, Current) then
     Exit;
-  if not ListHasEntry(Current, AppBridgeDir) then
+  if not ListHasEntry(Current, Dir) then
     Exit;
-  NewValue := ListWithoutEntry(Current, AppBridgeDir);
+  NewValue := ListWithoutEntry(Current, Dir);
   if NewValue = '' then
     RegDeleteValue(HKEY_CURRENT_USER, EnvKey, EnvValue)
   else
@@ -232,7 +248,7 @@ end;
 
 function LaunchFilePath: String;
 begin
-  Result := ExpandConstant('{userappdata}\RadialMenu\launch.json');
+  Result := ExpandConstant('{userappdata}\ZOrbit\launch.json');
 end;
 
 { Tells the ZBrush bridge how to start this installation (the app also refreshes this file on every start). }
@@ -265,13 +281,49 @@ procedure StopApp;
 var
   ResultCode: Integer;
 begin
-  Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /IM {#AppExe}', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /IM {#AppExe} /IM {#LegacyExe}', '', SW_HIDE, ewWaitUntilTerminated,
+    ResultCode);
+end;
+
+{ ---- upgrade from Radial Menu ----------------------------------------------------------------------- }
+
+{ Where Radial Menu is installed, from the uninstall entry this setup is about to take over (same AppId). }
+function FindLegacyDir: String;
+begin
+  Result := '';
+  if not RegQueryStringValue(HKEY_CURRENT_USER, UninstallKey, 'Inno Setup: App Path', Result) then
+    Result := ExpandConstant('{localappdata}\Programs\{#LegacyName}');
+  Result := RemoveBackslashUnlessRoot(Result);
+  if not FileExists(Result + '\{#LegacyExe}') then
+    Result := '';
+end;
+
+{ Removes what Radial Menu installed in its own folder (only the files it put there) and its ZBrush plugin path
+  entry, plus its launch.json. The user's menus stay in its data folders; the app copies them on first start. }
+procedure CleanUpLegacy;
+var
+  OldLaunch: String;
+  Text: AnsiString;
+begin
+  OldLaunch := ExpandConstant('{userappdata}\RadialMenu\launch.json');
+  if LoadStringFromFile(OldLaunch, Text) and (Pos(Lowercase('{#LegacyExe}'), Lowercase(String(Text))) > 0) then
+    DeleteFile(OldLaunch);
+  if (LegacyDir = '') or (NormEntry(LegacyDir) = NormEntry(ExpandConstant('{app}'))) then
+    Exit;                                   { same folder: [InstallDelete] took care of it }
+  UnregisterBridgeDir(LegacyDir + '\bridge');
+  DelTree(LegacyDir + '\_internal', True, True, True);
+  DelTree(LegacyDir + '\bridge', True, True, True);
+  DeleteFile(LegacyDir + '\{#LegacyExe}');
+  DeleteFile(LegacyDir + '\unins000.exe');
+  DeleteFile(LegacyDir + '\unins000.dat');
+  RemoveDir(LegacyDir);                     { only if nothing else is left in it }
 end;
 
 { ---- setup events ----------------------------------------------------------------------------------- }
 
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 begin
+  LegacyDir := FindLegacyDir;               { before the install rewrites the uninstall entry }
   StopApp;                                  { so an upgrade can replace the running exe and its DLLs }
   Result := '';
 end;
@@ -280,6 +332,7 @@ procedure CurStepChanged(CurStep: TSetupStep);
 begin
   if CurStep = ssPostInstall then
   begin
+    CleanUpLegacy;
     RegisterBridge;
     WriteLaunchFile;
   end;
@@ -293,7 +346,7 @@ begin
     StopApp
   else if CurUninstallStep = usPostUninstall then
   begin
-    UnregisterBridge;
+    UnregisterBridgeDir(AppBridgeDir);
     RemoveLaunchFileIfOurs;
   end;
 end;

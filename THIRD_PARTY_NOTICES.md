@@ -1,6 +1,6 @@
 # Third-party notices
 
-Radial Menu for ZBrush is licensed under the GNU General Public License v3.0 (see `LICENSE`). The installer
+ZOrbit is licensed under the GNU General Public License v3.0 (see `LICENSE`). The installer
 bundles the components below, each under its own licence. Versions are the ones the project was built and
 tested with. Each project's full licence text is available from its own repository or package, linked here.
 

@@ -32,7 +32,7 @@ import win32 as W
 
 SS = 3                      # supersampling for sprites (drawn large, reduced once)
 TIMER_TICK = 1
-CLASS_NAME = "RadialMenuRing"
+CLASS_NAME = "ZOrbitRing"
 HOVER_MS = 120
 MAX_SECTOR = 90.0           # widest angle (degrees) a single slot answers to
 _instances = {}
@@ -220,7 +220,7 @@ class Ring:
         self._prepare()
         self.t0 = time.time()
         ex = W.WS_EX_NOACTIVATE | W.WS_EX_TOPMOST | W.WS_EX_TOOLWINDOW | W.WS_EX_LAYERED
-        self.hwnd = W.CreateWindowExW(ex, CLASS_NAME, "Radial Menu", W.WS_POPUP, wx, wy, self.size, self.size,
+        self.hwnd = W.CreateWindowExW(ex, CLASS_NAME, "ZOrbit", W.WS_POPUP, wx, wy, self.size, self.size,
                                       None, None, W.GetModuleHandleW(None), None)
         if not self.hwnd:
             raise ctypes.WinError(ctypes.get_last_error())

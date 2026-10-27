@@ -1,4 +1,4 @@
-"""Draws the Radial Menu icon and writes assets/icon.ico (16-256 px) and assets/icon-256.png.
+"""Draws the ZOrbit icon and writes assets/icon.ico (16-256 px) and assets/icon-256.png.
 
 Run: python assets/make_icon.py   (needs Pillow)
 """

@@ -1,17 +1,20 @@
 """The ZScript bridge for ZBrush 2022-2025, which have no Python API: request format and installation.
 
 Files:
-  <ZBrush>\\ZStartup\\ZPlugs64\\RadialMenuBridge.zsc        compiled in ZBrush from bridge/zscript/RadialMenuBridge.txt
-  <ZBrush>\\ZStartup\\ZPlugs64\\RadialMenuData\\bridge.cfg   written here: where picks arrive, how to start the app
-  <ZBrush>\\ZStartup\\ZPlugs64\\RadialMenuData\\*.lnk        shortcuts that start the app and the Studio (see SHORTCUTS)
-  %LOCALAPPDATA%\\RadialMenu\\request.txt                  every pick, next to request.json (written by the app)
+  <ZBrush>\\ZStartup\\ZPlugs64\\ZOrbitBridge.zsc        compiled in ZBrush from bridge/zscript/ZOrbitBridge.txt
+  <ZBrush>\\ZStartup\\ZPlugs64\\ZOrbitData\\bridge.cfg   written here: where picks arrive, how to start the app
+  <ZBrush>\\ZStartup\\ZPlugs64\\ZOrbitData\\*.lnk        shortcuts that start the app and the Studio (see SHORTCUTS)
+  %LOCALAPPDATA%\\ZOrbit\\request.txt                  every pick, next to request.json (written by the app)
+
+Before the rename the plugin was RadialMenuBridge.zsc with a RadialMenuData folder. Those count as an installed
+plugin that needs an update; installing replaces them and removing removes them too.
 
 ZScript cannot read environment variables or JSON, and its strings stop at 255 characters. So both files hold
 one value per line, and paths are absolute, in their 8.3 short form when the long form is not plain ASCII.
 
 ZBrush 2022-2025 load plugins only from ZStartup\\ZPlugs64 inside the installation, usually under Program
 Files. install()/remove() try a plain copy first and fall back to this program run as administrator
-(one UAC prompt): RadialMenu.exe --zscript-copy|--zscript-remove <staging folder> <ZPlugs64>. The elevated run
+(one UAC prompt): ZOrbit.exe --zscript-copy|--zscript-remove <staging folder> <ZPlugs64>. The elevated run
 trusts nothing in the staging folder (the user can write there): it checks that <ZPlugs64> is a ZBrush plugin
 folder, builds the plugin files itself from this build's own sources and uses the staging folder only to report
 an error.
@@ -30,11 +33,13 @@ import time
 
 import paths
 
-PLUGIN = "RadialMenuBridge.zsc"
-SOURCE = "RadialMenuBridge.txt"
-DATA = "RadialMenuData"
+PLUGIN = "ZOrbitBridge.zsc"
+SOURCE = "ZOrbitBridge.txt"
+DATA = "ZOrbitData"
+LEGACY_PLUGIN = "RadialMenuBridge.zsc"  # the same plugin from before the rename
+LEGACY_DATA = "RadialMenuData"
 CFG = "bridge.cfg"
-MAGIC = "RADIALMENU 1"
+MAGIC = "ZORBIT 1"
 MAX_LINE = 255                          # longest string ZScript reads in one go
 REQUEST_TXT = os.path.join(paths.DATA_DIR, "request.txt")
 STAGE_DIR = os.path.join(paths.DATA_DIR, "zscript_stage")
@@ -138,12 +143,14 @@ def zplugs(install_path) -> str:
 
 
 def status(install_path) -> dict:
-    """installed: the plugin is in this ZBrush. current: it, its bridge.cfg and its shortcuts match this build."""
+    """installed: the plugin (or the one from before the rename) is in this ZBrush. current: it, its bridge.cfg
+    and its shortcuts match this build, and the old one is gone."""
     dest = zplugs(install_path)
     plug, cfg = os.path.join(dest, PLUGIN), os.path.join(dest, DATA, CFG)
-    installed = os.path.isfile(plug)
+    legacy = os.path.isfile(os.path.join(dest, LEGACY_PLUGIN))
+    installed = os.path.isfile(plug) or legacy
     current = False
-    if installed and bundled():
+    if installed and not legacy and bundled():
         try:
             with open(cfg, encoding="mbcs", errors="replace") as f:
                 cfg_ok = f.read().splitlines() == cfg_lines()
@@ -200,17 +207,20 @@ def copy_staged(stage, dest) -> None:
     shutil.copyfile(os.path.join(stage, PLUGIN), os.path.join(dest, PLUGIN))
     for name in (CFG, *SHORTCUTS):
         shutil.copyfile(os.path.join(stage, DATA, name), os.path.join(dest, DATA, name))
+    remove_from(dest, legacy_only=True)
 
 
-def remove_from(dest) -> None:
-    """Deletes only what build_plugin_files() puts there."""
-    for p in (os.path.join(dest, PLUGIN), *(os.path.join(dest, DATA, n) for n in (CFG, *SHORTCUTS))):
-        if os.path.exists(p):
-            os.remove(p)
-    try:
-        os.rmdir(os.path.join(dest, DATA))
-    except OSError:
-        pass                            # not empty (or gone): leave it
+def remove_from(dest, legacy_only=False) -> None:
+    """Deletes only what build_plugin_files() puts there, and the same files from before the rename."""
+    names = [(LEGACY_PLUGIN, LEGACY_DATA)] + ([] if legacy_only else [(PLUGIN, DATA)])
+    for plugin, data in names:
+        for p in (os.path.join(dest, plugin), *(os.path.join(dest, data, n) for n in (CFG, *SHORTCUTS))):
+            if os.path.exists(p):
+                os.remove(p)
+        try:
+            os.rmdir(os.path.join(dest, data))
+        except OSError:
+            pass                        # not empty (or gone): leave it
 
 
 class _SHELLEXECUTEINFOW(ctypes.Structure):
@@ -273,7 +283,7 @@ def install(install_path) -> dict:
 
 def _install(install_path) -> dict:
     if not bundled():
-        return {"ok": False, "message": "This build has no compiled ZScript bridge (RadialMenuBridge.zsc)."}
+        return {"ok": False, "message": "This build has no compiled ZScript bridge (ZOrbitBridge.zsc)."}
     dest = zplugs(install_path)
     try:
         stage = _stage()
@@ -342,11 +352,12 @@ def elevated_main(args) -> int:
             raise ValueError(problem)
         dest = os.path.normpath(args[2])
         if args[0] == "--zscript-copy":
-            # The stage sits in the user's data folder (<LOCALAPPDATA>\RadialMenu\zscript_stage), so its parent
+            # The stage sits in the user's data folder (<LOCALAPPDATA>\ZOrbit\zscript_stage), so its parent
             # is where picks must arrive even when UAC ran this as another account.
             st = os.path.normpath(stage)
             user_data = os.path.dirname(st) if os.path.basename(st).lower() == "zscript_stage" and os.path.isdir(st) else None
             build_plugin_files(dest, user_data)
+            remove_from(dest, legacy_only=True)
         else:
             remove_from(dest)
         return 0

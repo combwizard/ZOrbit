@@ -1,9 +1,9 @@
-# Radial Menu for ZBrush: user guide
+# ZOrbit: user guide
 
-This guide covers everything Radial Menu can do. For installing, see the [README](../README.md).
+This guide covers everything ZOrbit can do. For installing, see the [README](../README.md).
 
 - [The basics](#the-basics)
-- [Radial Menu Studio](#radial-menu-studio)
+- [ZOrbit Studio](#zorbit-studio)
 - [Menus](#menus)
 - [Item types](#item-types)
 - [Hotkeys](#hotkeys)
@@ -16,7 +16,7 @@ This guide covers everything Radial Menu can do. For installing, see the [README
 
 ## The basics
 
-Radial Menu is two things that work together:
+ZOrbit is two things that work together:
 
 - a small **app** that watches for your hotkeys and draws the ring, and
 - a **plugin inside ZBrush** (the bridge) that carries out what you picked.
@@ -29,9 +29,9 @@ With ZBrush in front, press **Q**. The ring opens centred on your cursor. Pick a
 
 Slots are laid out clockwise starting at the top. A slot with a small arrow badge opens another ring. The menu's title and a short hint sit in the middle.
 
-## Radial Menu Studio
+## ZOrbit Studio
 
-Studio is where you edit everything. Open it from the Start menu (**Radial Menu Studio**) or from ZBrush with **Zplugin > Radial Menu > Studio**. Only one Studio window opens at a time; starting it again brings the open one forward. Studio reopens on the screen you left, and each screen keeps its scroll position while Studio is open.
+Studio is where you edit everything. Open it from the Start menu (**ZOrbit Studio**) or from ZBrush with **Zplugin > ZOrbit > Studio**. Only one Studio window opens at a time; starting it again brings the open one forward. Studio reopens on the screen you left, and each screen keeps its scroll position while Studio is open.
 
 | Screen | Shortcut | What it does |
 |---|---|---|
@@ -69,7 +69,7 @@ On the Menus screen you can:
 
 ## Menus
 
-A menu is a named list of items shown as one ring. Menus live in one file, `%APPDATA%\RadialMenu\radial.json`. Each has an id (its key in the file), a title, a list of items, and optionally a hotkey.
+A menu is a named list of items shown as one ring. Menus live in one file, `%APPDATA%\ZOrbit\radial.json`. Each has an id (its key in the file), a title, a list of items, and optionally a hotkey.
 
 - A menu **with a hotkey** can be opened from ZBrush.
 - A menu **without a hotkey** is a submenu: it opens when you pick an item of type `menu` in another ring.
@@ -77,7 +77,7 @@ A menu is a named list of items shown as one ring. Menus live in one file, `%APP
 - At least one menu needs a hotkey, otherwise nothing can open the ring.
 - A menu can have its own open animation (`"animation": "spiral"`, or pick one in the menu settings in Studio). Without one it uses `ring.animation`. See [Open animations](#open-animations).
 
-Starter menus ship with Radial Menu: **Brushes** (Q), with submenus **More Brushes**, **Tools** (masking, symmetry, PolyFrame, LazyMouse and other switches) and **SubDivide** (a row of stroke subdivide sizes). They use only brushes that come with ZBrush.
+Starter menus ship with ZOrbit: **Brushes** (Q), with submenus **More Brushes**, **Tools** (masking, symmetry, PolyFrame, LazyMouse and other switches) and **SubDivide** (a row of stroke subdivide sizes). They use only brushes that come with ZBrush.
 
 ## Item types
 
@@ -99,7 +99,7 @@ Every item does exactly one thing. Besides the action, an item can have a `label
 {"brush": "Inflat", "label": "Inflate"}
 ```
 
-The name is the brush's name in ZBrush (the file name without `.zbp`). Spaces and capitals do not matter when Radial Menu looks the file up. The slot's icon is the brush's own thumbnail. If ZBrush already has the brush loaded, it is simply selected. If not, Radial Menu looks for a `.zbp` in your ZBrush brush folders and loads it. If it finds none, the pick is logged as "not loaded in ZBrush and no .zbp file known".
+The name is the brush's name in ZBrush (the file name without `.zbp`). Spaces and capitals do not matter when ZOrbit looks the file up. The slot's icon is the brush's own thumbnail. If ZBrush already has the brush loaded, it is simply selected. If not, ZOrbit looks for a `.zbp` in your ZBrush brush folders and loads it. If it finds none, the pick is logged as "not loaded in ZBrush and no .zbp file known".
 
 ### Press
 
@@ -277,11 +277,11 @@ When you pick a slot, the app has to tell ZBrush. It writes the request to a fil
 | `message` | Posts a window message to a hidden listener inside ZBrush. No keystroke is sent, so nothing can collide with your own shortcuts. If the listener is not available, the pick is dropped and logged. |
 | `key` | Presses the bridge key every time. |
 
-The **message** route needs nothing from you. It works once the plugin has loaded and its listener is verified (see **Zplugin > Radial Menu > Status**).
+The **message** route needs nothing from you. It works once the plugin has loaded and its listener is verified (see **Zplugin > ZOrbit > Status**).
 
 The **bridge key** is the fallback. To set it up:
 
-1. In ZBrush, Ctrl+Alt+click **Zplugin > Radial Menu > Apply**.
+1. In ZBrush, Ctrl+Alt+click **Zplugin > ZOrbit > Apply**.
 2. Press the key you want, such as **F9**.
 3. Open **Preferences > Hotkeys** and click **Store**.
 
@@ -291,7 +291,7 @@ Picks that arrive while you are in the middle of a stroke (mouse button down) wa
 
 ### ZBrush 2022 to 2025
 
-These versions have no Python API, so they get a ZScript plugin with the same palette. Studio installs it: **Settings > Older ZBrush** lists the 2022 to 2025 versions it found, with **Install**, **Update** and **Remove** for each, and **Add a ZBrush folder** for one it missed (a folder you added can be forgotten again with the x next to it). The plugin goes into that ZBrush's `ZStartup\ZPlugs64` (the only place these versions load plugins from), together with a `RadialMenuData` folder. A ZBrush under Program Files asks for administrator rights: the row says "approve the prompt" while Windows waits for you, for up to five minutes. The elevated step checks that the destination is a ZBrush plugin folder and builds the plugin files from the installation's own copies, so nothing from a user-writable folder is copied with administrator rights.
+These versions have no Python API, so they get a ZScript plugin with the same palette. Studio installs it: **Settings > Older ZBrush** lists the 2022 to 2025 versions it found, with **Install**, **Update** and **Remove** for each, and **Add a ZBrush folder** for one it missed (a folder you added can be forgotten again with the x next to it). The plugin goes into that ZBrush's `ZStartup\ZPlugs64` (the only place these versions load plugins from), together with a `ZOrbitData` folder. A ZBrush under Program Files asks for administrator rights: the row says "approve the prompt" while Windows waits for you, for up to five minutes. The elevated step checks that the destination is a ZBrush plugin folder and builds the plugin files from the installation's own copies, so nothing from a user-writable folder is copied with administrator rights.
 
 Differences from ZBrush 2026 and newer:
 
@@ -299,13 +299,13 @@ Differences from ZBrush 2026 and newer:
 - Brushes load from that version's own `.zbp` files, because an older ZBrush cannot always read a newer version's brushes.
 - Status shows where picks arrive, whether one is waiting, and the last pick. The plugin also writes that last pick to `zscript_bridge.log`, which Studio's Status screen shows.
 
-When this version of Radial Menu has a newer plugin than one you installed, **Settings** shows a badge and that row says **Update available**. After **Update**, restart that ZBrush.
+When this version of ZOrbit has a newer plugin than one you installed, **Settings** shows a badge and that row says **Update available**. After **Update**, restart that ZBrush.
 
-### The Zplugin > Radial Menu palette
+### The Zplugin > ZOrbit palette
 
 | Button | What it does |
 |---|---|
-| Studio | Opens Radial Menu Studio. |
+| Studio | Opens ZOrbit Studio. |
 | Apply | Carries out the pending pick. Bound to the bridge key for the fallback route. In ZBrush 2022 to 2025 it comes with F9 already bound. |
 | Start App | Starts the app if it is not running. Normally unnecessary. |
 | Status | Shows whether the listener is verified, whether the app is running, and the last pick. |
@@ -314,23 +314,23 @@ When this version of Radial Menu has a newer plugin than one you installed, **Se
 
 | Path | What |
 |---|---|
-| `%APPDATA%\RadialMenu\radial.json` | Your menus and settings. Created from the starter menus on first run. |
-| `%APPDATA%\RadialMenu\radial.json.bak` | The version before your last save in Studio (only replaced when the file was readable and changed). |
-| `%APPDATA%\RadialMenu\radial.json.broken` | The file Studio could not read, kept when you chose **Start from defaults** on the recovery screen. |
-| `%APPDATA%\RadialMenu\launch.json` | Tells the plugin how to start the app and Studio. Rewritten on each start. |
-| `%LOCALAPPDATA%\RadialMenu\radiald.log` | The app: config loads, hotkeys, rings, hand-offs. Trimmed automatically. |
-| `%LOCALAPPDATA%\RadialMenu\bridge.log` | The plugin inside ZBrush: what each pick actually did. |
-| `%LOCALAPPDATA%\RadialMenu\app_stderr.log` | Output when the app crashes on startup. |
-| `%LOCALAPPDATA%\RadialMenu\listener.json` | The verified listener window (written by the plugin). |
-| `%LOCALAPPDATA%\RadialMenu\request.json` | The pick in transit. Normally gone in a moment. |
-| `%LOCALAPPDATA%\RadialMenu\request.txt` | The same pick for the ZBrush 2022 to 2025 plugin. |
-| `%LOCALAPPDATA%\RadialMenu\zscript_bridge.log` | ZBrush 2022 to 2025: what the last pick did. |
-| `%LOCALAPPDATA%\RadialMenu\zscript_launch.log` | ZBrush 2022 to 2025: how the plugin last started the app or Studio. |
-| `%LOCALAPPDATA%\RadialMenu\zscript_hotkey.log` | ZBrush 2022 to 2025: the hotkey Apply had when the plugin loaded, and the one it has after (88 is F9). |
-| `%APPDATA%\RadialMenu\studio.json` | Studio's own preferences (Licence button, update check) and window placement. |
-| `%LOCALAPPDATA%\RadialMenu\studio.log` | How Studio started: which program launched it and how long each step took. A failed update check is noted here. |
-| `%LOCALAPPDATA%\RadialMenu\thumbs\` | Cached brush thumbnails. Safe to delete. |
-| `<ZBrush>\ZStartup\ZPlugs64\RadialMenuBridge.zsc` | ZBrush 2022 to 2025: the plugin. Its `RadialMenuData` folder says where picks arrive and how to start the app. |
+| `%APPDATA%\ZOrbit\radial.json` | Your menus and settings. Created from the starter menus on first run. |
+| `%APPDATA%\ZOrbit\radial.json.bak` | The version before your last save in Studio (only replaced when the file was readable and changed). |
+| `%APPDATA%\ZOrbit\radial.json.broken` | The file Studio could not read, kept when you chose **Start from defaults** on the recovery screen. |
+| `%APPDATA%\ZOrbit\launch.json` | Tells the plugin how to start the app and Studio. Rewritten on each start. |
+| `%LOCALAPPDATA%\ZOrbit\radiald.log` | The app: config loads, hotkeys, rings, hand-offs. Trimmed automatically. |
+| `%LOCALAPPDATA%\ZOrbit\bridge.log` | The plugin inside ZBrush: what each pick actually did. |
+| `%LOCALAPPDATA%\ZOrbit\app_stderr.log` | Output when the app crashes on startup. |
+| `%LOCALAPPDATA%\ZOrbit\listener.json` | The verified listener window (written by the plugin). |
+| `%LOCALAPPDATA%\ZOrbit\request.json` | The pick in transit. Normally gone in a moment. |
+| `%LOCALAPPDATA%\ZOrbit\request.txt` | The same pick for the ZBrush 2022 to 2025 plugin. |
+| `%LOCALAPPDATA%\ZOrbit\zscript_bridge.log` | ZBrush 2022 to 2025: what the last pick did. |
+| `%LOCALAPPDATA%\ZOrbit\zscript_launch.log` | ZBrush 2022 to 2025: how the plugin last started the app or Studio. |
+| `%LOCALAPPDATA%\ZOrbit\zscript_hotkey.log` | ZBrush 2022 to 2025: the hotkey Apply had when the plugin loaded, and the one it has after (88 is F9). |
+| `%APPDATA%\ZOrbit\studio.json` | Studio's own preferences (Licence button, update check) and window placement. |
+| `%LOCALAPPDATA%\ZOrbit\studio.log` | How Studio started: which program launched it and how long each step took. A failed update check is noted here. |
+| `%LOCALAPPDATA%\ZOrbit\thumbs\` | Cached brush thumbnails. Safe to delete. |
+| `<ZBrush>\ZStartup\ZPlugs64\ZOrbitBridge.zsc` | ZBrush 2022 to 2025: the plugin. Its `ZOrbitData` folder says where picks arrive and how to start the app. |
 
 When you report a bug, paste the last lines of `radiald.log` and `bridge.log`. They contain brush names and menu ids, but have a quick look before you post them.
 
@@ -339,7 +339,7 @@ When you report a bug, paste the last lines of `radiald.log` and `bridge.log`. T
 **Pressing the hotkey does nothing.**
 
 1. Is ZBrush the front window? The hotkey is ignored everywhere else.
-2. In ZBrush, open **Zplugin > Radial Menu > Status**. If the palette is missing, ZBrush did not load the plugin. Restart ZBrush and check that your user environment variable `ZBRUSH_PLUGIN_PATH` contains the plugin folder. As a one-off you can also load `radial_menu_bridge.py` with **ZScript > Python Scripting > Load**.
+2. In ZBrush, open **Zplugin > ZOrbit > Status**. If the palette is missing, ZBrush did not load the plugin. Restart ZBrush and check that your user environment variable `ZBRUSH_PLUGIN_PATH` contains the plugin folder. As a one-off you can also load `zorbit_bridge.py` with **ZScript > Python Scripting > Load**.
 3. If the status says the app is not running, press **Start App**, then read `app_stderr.log` and `radiald.log`.
 4. In Studio, check for the **problems** pill. A menu with no usable items, a duplicate hotkey or a hotkey the app cannot read all stop a ring from opening.
 5. Another program may grab the same key before it reaches the app. Try a different hotkey.
@@ -348,7 +348,10 @@ When you report a bug, paste the last lines of `radiald.log` and `bridge.log`. T
 Check the listener on the Status screen. If it is not verified, use the fallback: bind the bridge key (see above) and leave the mode on `auto`. Then read `bridge.log`; it names each action and says whether it worked. Common causes: a `press`, `set` or `toggle` path that does not exist in your ZBrush (logged as "no such interface item"), or a `brush` with no `.zbp` file (logged as "NOT loaded in ZBrush and no .zbp file known").
 
 **ZBrush 2022 to 2025: the ring opens, but picks do nothing.**
-Picks there only arrive through the bridge key. Hover **Zplugin > Radial Menu > Apply** in that ZBrush: its hotkey should match the bridge key. The plugin brings F9 itself, but only once it is up to date, so update it if **Settings > Older ZBrush** says **Update available**. For any other key, check that it is bound to **Apply** and that you clicked **Preferences > Hotkeys > Store**; a binding that was not stored is gone after a restart. If the palette is missing, install the plugin again in **Studio > Settings > Older ZBrush** and restart that ZBrush. `zscript_bridge.log` shows what the last pick did.
+Picks there only arrive through the bridge key. Hover **Zplugin > ZOrbit > Apply** in that ZBrush: its hotkey should match the bridge key. The plugin brings F9 itself, but only once it is up to date, so update it if **Settings > Older ZBrush** says **Update available**. For any other key, check that it is bound to **Apply** and that you clicked **Preferences > Hotkeys > Store**; a binding that was not stored is gone after a restart. If the palette is missing, install the plugin again in **Studio > Settings > Older ZBrush** and restart that ZBrush. `zscript_bridge.log` shows what the last pick did.
+
+**I upgraded from Radial Menu for ZBrush and F9 stopped working.**
+The palette was renamed, so a hotkey you bound by hand to the old **Apply** does not carry over in ZBrush 2026. Ctrl+Alt+click **Zplugin > ZOrbit > Apply**, press **F9**, then click **Preferences > Hotkeys > Store**. ZBrush 2022 to 2025: update the plugin in **Studio > Settings > Older ZBrush**; it binds F9 itself. Your menus were copied from `%APPDATA%\RadialMenu` to `%APPDATA%\ZOrbit` on the first start, and learned auto slots from `%LOCALAPPDATA%\RadialMenu`. The old folders are left in place; you can delete them.
 
 **A slot shows letters instead of a picture.**
 There is no thumbnail for it. For brushes, that means no `.zbp` was found. For other items it is the normal placeholder; set an `icon` to change it.
@@ -366,4 +369,4 @@ The installer is not code-signed yet. Click **More info**, then **Run anyway**. 
 Studio keeps the last version as `radial.json.bak`. If you edit the file by hand and the app cannot read it, it keeps using the last good version and logs the error. When Studio cannot read it either, it opens on a recovery screen that shows the error with its line and column, and offers **Open folder**, **Restore backup** and **Start from defaults** (the unreadable file is kept as `radial.json.broken`). A byte-order mark left by an editor is accepted. Deleting `radial.json` makes the app create a fresh one from the starter menus.
 
 **Checking a file from a source checkout.**
-`python radial_menu\main.py --check` prints every menu and lists problems without starting anything.
+`python zorbit\main.py --check` prints every menu and lists problems without starting anything.
