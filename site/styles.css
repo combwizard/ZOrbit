@@ -615,16 +615,40 @@ kbd {
 .price-foot { margin-top: 14px; color: var(--sub); font-size: 13px; }
 
 /* ------------------------------------------------------------ reviews */
-.reviews {
-  display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px;
+.wall { display: grid; gap: 16px; }
+.wall-track { display: flex; flex-wrap: wrap; justify-content: center; gap: 16px; }
+.wall.live .wall-row {
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent);
 }
+/* margins instead of gap, so the -50% marquee shift lands exactly on the copy */
+.wall.live .wall-track {
+  flex-wrap: nowrap; justify-content: flex-start; gap: 0; width: max-content;
+  animation: marquee var(--dur, 72s) linear infinite;
+}
+.wall.live .review { margin-right: 16px; }
+.wall-row.rev { --dur: 86s; }
+.wall-row.rev .wall-track { animation-direction: reverse; }
+.wall.live:hover .wall-track, .wall.paused .wall-track { animation-play-state: paused; }
+.wall-foot { display: flex; justify-content: flex-end; margin-top: 14px; }
+.wall-pause[aria-pressed="true"] { color: var(--accent); border-color: rgba(248, 107, 51, .5); }
+
 .review {
   margin: 0; padding: 20px;
   background: var(--bg1); border: 1px solid var(--line); border-radius: var(--radius);
 }
+.wall .review { flex: none; width: 320px; display: flex; flex-direction: column; }
 .review blockquote { margin: 0; }
 .review blockquote p { color: #d6d7db; }
 .review .stars { color: var(--accent); letter-spacing: .08em; margin-bottom: 10px; font-size: 14px; }
+.review .stars .off { color: var(--line2); }
+.review-src {
+  margin-top: auto; padding-top: 16px;
+  font: 600 10px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase;
+  color: var(--sub);
+}
+.review-src.ok { color: var(--cyan); }
 .review-who {
   display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
   margin-bottom: 14px;
@@ -642,6 +666,31 @@ kbd {
   background: var(--bg3); color: var(--sub);
   font: 700 13px var(--mono);
 }
+.review-key {
+  border-radius: 10px; border: 1px solid var(--line2);
+  background: linear-gradient(var(--bg3), var(--bg2));
+  box-shadow: inset 0 -3px 0 rgba(0, 0, 0, .4);
+  color: var(--text); font: 700 14px var(--mono);
+}
+.review-initials {
+  --tint: var(--sub);
+  color: var(--tint); border-color: color-mix(in srgb, var(--tint) 45%, transparent);
+  background: color-mix(in srgb, var(--tint) 14%, var(--bg2));
+  font: 700 14px var(--font); letter-spacing: .02em;
+}
+.review-mono { font-family: var(--mono); }
+.tint-accent { --tint: var(--accent); }
+.tint-cyan { --tint: var(--cyan); }
+.tint-lime { --tint: var(--lime); }
+.tint-amber { --tint: var(--amber); }
+.review-void { border-style: dashed; background: transparent; }
+.review-swirl {
+  border-color: transparent;
+  background: conic-gradient(var(--accent), var(--amber), var(--lime), var(--cyan), var(--accent));
+  -webkit-mask: radial-gradient(circle, transparent 0 11px, #000 12px);
+  mask: radial-gradient(circle, transparent 0 11px, #000 12px);
+}
+.review-brush { background: #0d0d0f; }
 .review-name { font-weight: 700; color: var(--text); font-size: 14px; }
 .review-role { color: var(--sub); font-size: 12.5px; }
 
@@ -839,7 +888,7 @@ kbd {
   .anim-panel { grid-row: 3; }
   .feature, .feature.flip { grid-template-columns: 1fr; gap: 18px; }
   .feature.flip .feature-copy, .feature.flip .feature-media { order: unset; }
-  .reviews { grid-template-columns: 1fr; }
+  .wall .review { width: 280px; }
   .spotlight, .spotlight.flip { grid-template-columns: 1fr; gap: 24px; margin-bottom: 56px; }
   .spotlight .spotlight-media, .spotlight.flip .spotlight-media { order: -1; }
   .spotlight.flip .spotlight-copy { order: 0; }

@@ -249,12 +249,33 @@
     });
   }
 
+  function reviewWall() {
+    var wall = document.getElementById('reviewWall');
+    if (!wall || REDUCE) return;
+    wall.querySelectorAll('.wall-track').forEach(function (track) {
+      Array.prototype.slice.call(track.children).forEach(function (card) {
+        var copy = card.cloneNode(true);
+        copy.setAttribute('aria-hidden', 'true');
+        copy.setAttribute('inert', '');
+        track.appendChild(copy);
+      });
+    });
+    wall.classList.add('live');
+
+    var btn = document.getElementById('wallPause');
+    if (!btn) return;
+    btn.hidden = false;
+    btn.addEventListener('click', function () {
+      btn.setAttribute('aria-pressed', String(wall.classList.toggle('paused')));
+    });
+  }
+
   function reveal() {
-    var nodes = document.querySelectorAll('.section-head, .price-card, .feature, .spotlight, .review, .steps li, .stat, .cta > *');
+    var nodes = document.querySelectorAll('.section-head, .price-card, .feature, .spotlight, .wall, .steps li, .stat, .cta > *');
     nodes.forEach(function (n) {
       n.classList.add('reveal');
       var sibs = n.parentElement ? Array.prototype.indexOf.call(n.parentElement.children, n) : 0;
-      if (n.matches('.stat, .steps li, .review, .cta > *')) n.style.setProperty('--d', Math.min(sibs, 5) * 90 + 'ms');
+      if (n.matches('.stat, .steps li, .cta > *')) n.style.setProperty('--d', Math.min(sibs, 5) * 90 + 'ms');
     });
     if (REDUCE) {
       nodes.forEach(function (n) { n.classList.add('in'); });
@@ -273,6 +294,7 @@
 
   function boot() {
     enhanceDownloads();
+    reviewWall();
     reveal();
     scrollProgress();
     heroSpotlight();
