@@ -3,7 +3,8 @@
   %APPDATA%\\ZOrbit\\radial.json      the user's menus and settings (created from default_menus.json)
   %APPDATA%\\ZOrbit\\tags.json        the user's brush tags
   %APPDATA%\\ZOrbit\\popout.json      window placement of the brush browser popout
-  %APPDATA%\\ZOrbit\\launch.json      how to start the app and the Studio (read by the ZBrush bridge)
+  %APPDATA%\\ZOrbit\\launch.json      how to start the app, the Studio and the brush browser popout
+                                    (read by the ZBrush bridge)
   %LOCALAPPDATA%\\ZOrbit\\            logs, thumbnail cache, request/listener exchange with ZBrush
 
 ZOrbit used to be called Radial Menu and kept these in RadialMenu folders; ensure_config() copies them over.
@@ -63,15 +64,17 @@ def ensure_config() -> str:
 
 
 def launch_commands() -> dict:
-    """Command lines that start the background app and the Studio from this installation."""
+    """Command lines that start the background app, the Studio and the brush browser popout from this
+    installation."""
     if FROZEN:
         exe = sys.executable
-        return {"app": [exe, "--exit-with-zbrush"], "studio": [exe, "--studio"]}
+        return {"app": [exe, "--exit-with-zbrush"], "studio": [exe, "--studio"], "popout": [exe, "--popout"]}
     pyw = os.path.join(os.path.dirname(sys.executable), "pythonw.exe")
     if not os.path.isfile(pyw):
         pyw = sys.executable
     main = os.path.join(PKG_DIR, "main.py")
-    return {"app": [pyw, "-I", main, "--exit-with-zbrush"], "studio": [pyw, "-I", main, "--studio"]}
+    return {"app": [pyw, "-I", main, "--exit-with-zbrush"], "studio": [pyw, "-I", main, "--studio"],
+            "popout": [pyw, "-I", main, "--popout"]}
 
 
 def write_launch_file() -> None:

@@ -13,6 +13,9 @@ How it works:
   * Brush picks are counted in usage.json; a menu's auto slots are filled from those counts as it opens.
   * tags.json (the user's brush tags) is watched with radial.json: tag slots open a fan of the brushes with
     that tag, and a slot is drawn in the colour of its brush's first tag (expand.py does both).
+  * The brush browser is a separate popout process (popout.py), opened by browser.hotkey or a "browser" ring
+    item. The app finds its message-only window and sends it WM_COPYDATA; a brush picked there comes back
+    the same way, to the control window, and goes through the normal hand-off once ZBrush has the focus again.
 
 Started through main.py (ZOrbit.exe), normally by the ZBrush bridge when ZBrush launches; it exits when
 the last ZBrush process has gone. Only one instance runs at a time.
@@ -55,7 +58,12 @@ WM_APP_OPEN = W.WM_APP + 10           # hook -> control window: open menu (wpara
 WM_APP_KEYUP = W.WM_APP + 11          # hook -> control window: the held hotkey went up
 WM_APP_CANCEL = W.WM_APP + 12         # hook -> control window: Esc
 WM_APP_MASK = W.WM_APP + 13           # hook -> control window: inject the Alt menu-mask key
-TIMER_WATCH, TIMER_ACK, TIMER_REHOOK, TIMER_CONFIG = 1, 2, 3, 4
+WM_APP_BROWSER = W.WM_APP + 14        # hook -> control window: the browser hotkey (toggle the popout)
+WM_APP_BROWSER_PICK = W.WM_APP + 15   # control window -> itself: a brush was picked in the popout
+TIMER_WATCH, TIMER_ACK, TIMER_REHOOK, TIMER_CONFIG, TIMER_BROWSER_PICK, TIMER_PREWARM, TIMER_POPOUT_SHOW = range(1, 8)
+COPYDATA_PICK, COPYDATA_SHOW, COPYDATA_QUIT = 1, 10, 12   # WM_COPYDATA ids: popout -> app, app -> popout
+POPOUT_CLASS = "ZOrbitPopoutCtl"      # the popout's message-only control window
+POPOUT_START_S = 15                   # a popout asked to show gets this long to appear before we ask again
 THUMB_PX = 128                        # thumbnail cache size, shared with the Studio
 
 
@@ -118,6 +126,17 @@ class App:
         self.tags = tags.TagStore(tags_path())
         self.expander = None            # expand.Expander of the current config, tags and usage
         self._refs = []                 # ctypes callbacks that must outlive their registration
+        self._browser_vk = None         # the browser hotkey while it is down (its repeats and key-up are ours)
+        self._popout_proc = None        # subprocess.Popen of the popout we last started
+        self._popout_spawning = False   # a thread is starting it right now
+        self._popout_pending = None     # (tag, toggle) to SHOW once a popout started hidden has its window
+        self._popout_started = 0.0      # when we last spawned the popout process
+        self._popout_show = False       # ... and whether that spawn asked it to show itself
+        self._prewarmed = False         # a pre-warm spawn is scheduled or done for this popout
+        self._popout_pid = (0.0, 0)     # (valid until, pid of the popout's control window), for the hook
+        self._popout_zb = None          # (ZBrush hwnd, its install) from when the browser was last opened
+        self._browser_pick = None       # brush Item picked in the popout, waiting for ZBrush to have focus
+        self._browser_pick_deadline = 0.0
 
     # --- config ----------------------------------------------------------------------------------
     def load_config(self, force=False) -> None:
@@ -146,8 +165,10 @@ class App:
             log(f"config: {err}")
         log(f"config loaded: {len(cfg.menus)} menus, hotkeys: "
             + ", ".join(f"{m.hotkey.text}->{m.id}" for m in self.slots)
-            + f"; bridge mode={cfg.bridge_mode} key={cfg.bridge_key.text if cfg.bridge_key else None}")
+            + f"; bridge mode={cfg.bridge_mode} key={cfg.bridge_key.text if cfg.bridge_key else None}"
+            + f"; browser hotkey={cfg.browser_key.text if cfg.browser_key else None}")
         self._prefetch()
+        self._schedule_prewarm()
 
     def _prefetch(self):
         if brushes is None:
@@ -219,6 +240,20 @@ class App:
                 self._pid_install[pid] = None
         return self._pid_install[pid]
 
+    def _popout_in_front(self) -> bool:
+        """The popout is the foreground app, so its hotkey must reach us to close it. The pid of its control
+        window is cached for a second: this runs inside the keyboard hook."""
+        fg = W.GetForegroundWindow()
+        if not fg:
+            return False
+        now = time.time()
+        until, pid = self._popout_pid
+        if now >= until:
+            hwnd = W.find_message_window(POPOUT_CLASS)
+            pid = W.window_pid(hwnd) if hwnd else 0
+            self._popout_pid = (now + 1.0, pid)
+        return bool(pid) and W.window_pid(fg) == pid
+
     # --- keyboard hook ---------------------------------------------------------------------------
     def _hook_proc(self, ncode, wparam, lparam):
         try:
@@ -242,6 +277,10 @@ class App:
                 self.held_vk = None
                 W.PostMessageW(self.ctrl, WM_APP_KEYUP, vk, 0)
             return self.held_swallow       # auto-repeat downs and the final up
+        if self._browser_vk is not None and vk == self._browser_vk:
+            if up:
+                self._browser_vk = None
+            return True                    # the browser key's repeats and key-up: never a ring's key-up
         if down and vk == W.VK_ESCAPE and self.ring is not None:
             W.PostMessageW(self.ctrl, WM_APP_CANCEL, 0, 0)
             return True
@@ -259,6 +298,14 @@ class App:
                 if m.swallow and alt:
                     W.PostMessageW(self.ctrl, WM_APP_MASK, 0, 0)
                 return m.swallow
+        bk = self.browser_key
+        if bk is not None and bk.vk == vk and bk.ctrl == ctrl and bk.alt == alt and bk.shift == shift:
+            if self.target_in_front() or self._popout_in_front():
+                self._browser_vk = vk          # not held_vk: a ring held open on another key keeps its own
+                if alt:
+                    W.PostMessageW(self.ctrl, WM_APP_MASK, 0, 0)
+                W.PostMessageW(self.ctrl, WM_APP_BROWSER, 0, 0)
+                return True
         return False
 
     def install_hook(self):
@@ -288,6 +335,16 @@ class App:
             if msg == WM_APP_MASK:
                 W.send_keys([(W.VK_MENU_MASK, False), (W.VK_MENU_MASK, True)])
                 return 0
+            if msg == WM_APP_BROWSER:
+                if self.ring is not None:
+                    self.ring.cancel("browser")
+                self.open_browser(None, toggle=True)
+                return 0
+            if msg == WM_APP_BROWSER_PICK:
+                self._browser_pick_queued()
+                return 0
+            if msg == W.WM_COPYDATA:
+                return self._on_copydata(wparam, lparam)
             if msg == W.WM_TIMER:
                 if wparam == TIMER_WATCH:
                     self._watch_target()
@@ -297,6 +354,13 @@ class App:
                     self.install_hook()         # Windows silently drops hooks that ever timed out
                 elif wparam == TIMER_CONFIG:
                     self.load_config()          # a new or changed hotkey must work before any ring opens
+                elif wparam == TIMER_BROWSER_PICK:
+                    self._browser_pick_tick()
+                elif wparam == TIMER_PREWARM:
+                    W.KillTimer(self.ctrl, TIMER_PREWARM)
+                    self._prewarm()
+                elif wparam == TIMER_POPOUT_SHOW:
+                    self._popout_show_tick()
                 return 0
         except Exception:
             log("control error:\n" + traceback.format_exc())
@@ -420,9 +484,157 @@ class App:
             log(f"empty {item.kind} slot picked; nothing sent")
             return
         if item.kind == "browser":
-            log("browser item picked; the popout comes in a later batch")
+            self.open_browser(item.data["browser"] or None)
             return
         self.send(item)
+        try:
+            self._record_pick(item)
+        except Exception:
+            log("usage error:\n" + traceback.format_exc())
+
+    # --- brush browser popout --------------------------------------------------------------------
+    @property
+    def browser_key(self):
+        return self.cfg.browser_key if self.cfg else None
+
+    def _spawn_popout(self, show, tag=None, zb_hwnd=0):
+        """Starts the popout process on a worker thread: this runs on the keyboard hook's thread, and a process
+        start that outlasts Windows' low-level hook timeout gets the hook dropped."""
+        cmd = paths.launch_commands()["popout"] + ["--managed"]
+        if show:
+            cmd.append("--show")
+            if tag:
+                cmd += ["--tag", tag]
+            cmd += ["--zbrush-hwnd", str(zb_hwnd)]
+        self._popout_started, self._popout_show, self._popout_spawning = time.time(), show, True
+
+        def start():
+            try:
+                self._popout_proc = subprocess.Popen(
+                    cmd, env=paths.clean_env(),
+                    creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP,
+                    close_fds=True, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                log(f"popout started: {cmd}")
+            except Exception:
+                self._popout_proc = None
+                log(f"could not start the popout {cmd}:\n" + traceback.format_exc())
+            finally:
+                self._popout_spawning = False
+        threading.Thread(target=start, daemon=True).start()
+
+    def open_browser(self, tag=None, toggle=False):
+        """Shows the brush browser (toggle: or hides it if it is up), starting its process if none is running."""
+        fg = W.GetForegroundWindow()
+        if fg and self.target_in_front():          # remembered for the pick: the popout takes the focus away
+            self._popout_zb = (int(fg), self.target_install())
+        zb = self._popout_zb[0] if self._popout_zb else 0
+        hwnd = W.find_message_window(POPOUT_CLASS)
+        if hwnd:
+            payload = json.dumps({"tag": tag or None, "zbrush_hwnd": zb, "toggle": bool(toggle)}).encode("utf-8")
+            r = W.send_copydata(hwnd, COPYDATA_SHOW, payload)
+            log(f"browser: SHOW sent to popout {hwnd} (tag={tag or None}, toggle={bool(toggle)}, zbrush={zb}): "
+                + ("no answer within 0.5 s" if r is None else f"result {r}"))
+            return
+        self._prewarmed = False                    # the popout is gone: the next config load may warm it again
+        if self._spawning():
+            if self._popout_show:
+                log("popout starting; ignoring")    # it shows itself when it is up
+            else:                                  # a pre-warm is still coming up: show it as soon as it is there
+                self._popout_pending = (tag, bool(toggle))
+                W.SetTimer(self.ctrl, TIMER_POPOUT_SHOW, 100, None)
+                log("popout warming up; showing it when it is ready")
+            return
+        self._spawn_popout(True, tag, zb)
+
+    def _spawning(self) -> bool:
+        """A popout we started is still coming up: its process lives and has had less than POPOUT_START_S."""
+        if time.time() - self._popout_started >= POPOUT_START_S:
+            return False
+        p = self._popout_proc
+        return self._popout_spawning or (p is not None and p.poll() is None)
+
+    def _popout_show_tick(self):
+        pend = self._popout_pending
+        if pend is None:
+            W.KillTimer(self.ctrl, TIMER_POPOUT_SHOW)
+            return
+        if W.find_message_window(POPOUT_CLASS):
+            W.KillTimer(self.ctrl, TIMER_POPOUT_SHOW)
+            self._popout_pending = None
+            self.open_browser(pend[0], toggle=False)   # hidden until now, so a toggle would only hide it
+        elif not self._spawning():
+            W.KillTimer(self.ctrl, TIMER_POPOUT_SHOW)
+            self._popout_pending = None
+            log("popout did not come up; the next press starts it again")
+
+    def _wants_browser(self) -> bool:
+        cfg = self.cfg
+        return bool(cfg and (cfg.browser_key or any(it.kind == "browser" for m in cfg.menus.values()
+                                                    for it in m.items)))
+
+    def _schedule_prewarm(self):
+        """Starts the popout hidden a few seconds after launch, so the first press is quick. A one-shot timer:
+        loading the config must not wait for a process start."""
+        if self.ctrl is None or self._prewarmed or not self._wants_browser():
+            return
+        self._prewarmed = True
+        W.SetTimer(self.ctrl, TIMER_PREWARM, 3000, None)
+
+    def _prewarm(self):
+        if W.find_message_window(POPOUT_CLASS) or self._spawning():
+            return
+        log("browser: pre-warming the popout")
+        self._spawn_popout(False)
+
+    def _on_copydata(self, wparam, lparam) -> int:
+        """WM_COPYDATA from the popout: 1 = accepted, 0 = refused. Only a brush name is taken from the payload;
+        the .zbp is looked up by send() as for any other pick."""
+        try:
+            cds = W.COPYDATASTRUCT.from_address(lparam)
+            if cds.dwData != COPYDATA_PICK or not cds.lpData or not 0 < cds.cbData <= 4096:
+                log(f"copydata refused: dwData={cds.dwData} cbData={cds.cbData}")
+                return 0
+            raw = ctypes.string_at(cds.lpData, cds.cbData)     # copied here: the sender's buffer dies on return
+            msg = json.loads(raw.decode("utf-8"))
+        except (ValueError, OSError) as e:                     # includes UnicodeDecodeError, JSONDecodeError
+            log(f"copydata refused: unreadable payload ({e!r})")
+            return 0
+        name = msg.get("name") if isinstance(msg, dict) else None
+        if (not isinstance(msg, dict) or msg.get("v") != 1 or msg.get("op") != "pick"
+                or msg.get("kind") != "brush" or not isinstance(name, str) or not name or len(name) > 120
+                or any(c in name for c in "\\/:") or ".." in name or any(ord(c) < 32 for c in name)):
+            log(f"copydata refused: not a valid pick ({str(msg)[:80]!r})")
+            return 0
+        self._browser_pick = C.Item(label=name, kind="brush", data={"brush": name})
+        W.PostMessageW(self.ctrl, WM_APP_BROWSER_PICK, 0, 0)
+        return 1
+
+    def _browser_pick_queued(self):
+        """The popout hides and refocuses ZBrush before it sends the pick, but activation finishes on its own
+        time and press_bridge_key refuses while ZBrush is not in front: wait for it (at most 0.5 s)."""
+        ins = self._popout_zb[1] if self._popout_zb else None
+        legacy = ins is not None and not ins["python"]      # only the bridge key can reach it: needs the focus
+        self._browser_pick_deadline = time.time() + (2.0 if legacy else 0.5)
+        W.SetTimer(self.ctrl, TIMER_BROWSER_PICK, 30, None)
+
+    def _browser_pick_tick(self):
+        item = self._browser_pick
+        if item is None:
+            W.KillTimer(self.ctrl, TIMER_BROWSER_PICK)
+            return
+        ins = self._popout_zb[1] if self._popout_zb else None
+        legacy = ins is not None and not ins["python"]
+        in_front = self.target_in_front()
+        if not (in_front or (not legacy and self._listener() is not None)
+                or time.time() >= self._browser_pick_deadline):
+            return
+        W.KillTimer(self.ctrl, TIMER_BROWSER_PICK)
+        self._browser_pick = None
+        if legacy and not in_front:
+            log(f"pick from browser '{item.label}' dropped: ZBrush did not get the focus back in 2 s")
+            return
+        log(f"pick from browser '{item.label}'")
+        self.send(item, install=ins)
         try:
             self._record_pick(item)
         except Exception:
@@ -468,8 +680,10 @@ class App:
             pass
         return None
 
-    def send(self, item):
-        ins = self.target_install()
+    def send(self, item, install=None):
+        """install: the ZBrush installation to hand off to, when it is not the one in front right now (a pick
+        from the browser arrives after the focus has moved)."""
+        ins = install if install is not None else self.target_install()
         legacy = ins if ins is not None and not ins["python"] else None
         seq = self._write_request(item, legacy)
         mode = self.cfg.bridge_mode
@@ -561,6 +775,7 @@ class App:
         if self.cfg is None:
             return 1
         self._create_ctrl()
+        self._schedule_prewarm()
         self.install_hook()
         W.SetTimer(self.ctrl, TIMER_WATCH, 3000, None)
         W.SetTimer(self.ctrl, TIMER_REHOOK, 120000, None)
@@ -573,6 +788,9 @@ class App:
                 W.DispatchMessageW(ctypes.byref(msg))
         finally:
             self._destroy_tray()
+        popout = W.find_message_window(POPOUT_CLASS)
+        if popout:
+            W.send_copydata(popout, COPYDATA_QUIT, b"{}")
         if self.hook:
             W.UnhookWindowsHookEx(self.hook)
         W.CloseHandle(mutex)

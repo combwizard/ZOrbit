@@ -71,6 +71,10 @@ class BLENDFUNCTION(ctypes.Structure):
                 ("AlphaFormat", w.BYTE)]
 
 
+class COPYDATASTRUCT(ctypes.Structure):
+    _fields_ = [("dwData", ULONG_PTR), ("cbData", w.DWORD), ("lpData", ctypes.c_void_p)]
+
+
 class MONITORINFO(ctypes.Structure):
     _fields_ = [("cbSize", w.DWORD), ("rcMonitor", w.RECT), ("rcWork", w.RECT), ("dwFlags", w.DWORD)]
 
@@ -110,6 +114,9 @@ GetAsyncKeyState = _sig(user32, "GetAsyncKeyState", ctypes.c_short, ctypes.c_int
 GetCursorPos = _sig(user32, "GetCursorPos", w.BOOL, ctypes.POINTER(w.POINT))
 GetForegroundWindow = _sig(user32, "GetForegroundWindow", w.HWND)
 GetWindowThreadProcessId = _sig(user32, "GetWindowThreadProcessId", w.DWORD, w.HWND, ctypes.POINTER(w.DWORD))
+FindWindowExW = _sig(user32, "FindWindowExW", w.HWND, w.HWND, w.HWND, w.LPCWSTR, w.LPCWSTR)
+SendMessageTimeoutW = _sig(user32, "SendMessageTimeoutW", LRESULT, w.HWND, w.UINT, w.WPARAM, w.LPARAM, w.UINT,
+                           w.UINT, ctypes.POINTER(ULONG_PTR))
 SendInput = _sig(user32, "SendInput", w.UINT, w.UINT, ctypes.POINTER(INPUT), ctypes.c_int)
 GetDC = _sig(user32, "GetDC", w.HDC, w.HWND)
 ReleaseDC = _sig(user32, "ReleaseDC", ctypes.c_int, w.HWND, w.HDC)
@@ -159,6 +166,8 @@ WM_DESTROY, WM_TIMER = 0x2, 0x113
 WM_KEYDOWN, WM_KEYUP, WM_SYSKEYDOWN, WM_SYSKEYUP = 0x100, 0x101, 0x104, 0x105
 WM_LBUTTONDOWN, WM_LBUTTONUP, WM_RBUTTONDOWN, WM_MOUSEACTIVATE = 0x201, 0x202, 0x204, 0x21
 WM_APP = 0x8000
+WM_COPYDATA = 0x004A
+SMTO_BLOCK, SMTO_ABORTIFHUNG = 0x1, 0x2
 MA_NOACTIVATE = 3
 WH_KEYBOARD_LL = 13
 LLKHF_INJECTED = 0x10
@@ -232,6 +241,24 @@ def window_pid(hwnd) -> int:
     pid = w.DWORD()
     GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
     return pid.value
+
+
+def find_message_window(cls: str) -> int:
+    """A message-only window of the given class, as an int hwnd (0 when there is none). FindWindowW cannot see
+    message-only windows; they hang off HWND_MESSAGE."""
+    return int(FindWindowExW(HWND_MESSAGE, None, cls, None) or 0)
+
+
+def send_copydata(hwnd, dw: int, payload: bytes, timeout_ms: int = 500) -> int | None:
+    """WM_COPYDATA with dwData=dw and payload to a window of another process. Returns the window's result,
+    or None when it did not answer within timeout_ms (hung or gone). The call is synchronous but never blocks
+    on a hung window."""
+    buf = ctypes.create_string_buffer(payload, len(payload) or 1)      # alive until the call returns
+    cds = COPYDATASTRUCT(dw, len(payload), ctypes.cast(buf, ctypes.c_void_p))
+    result = ULONG_PTR()
+    ok = SendMessageTimeoutW(hwnd, WM_COPYDATA, 0, ctypes.addressof(cds), SMTO_ABORTIFHUNG,   # not BLOCK: the hook must still run
+                             timeout_ms, ctypes.byref(result))
+    return int(ctypes.c_ssize_t(result.value).value) if ok else None
 
 
 def running_exe_names() -> set[str]:
