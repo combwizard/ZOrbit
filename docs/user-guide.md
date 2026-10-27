@@ -29,7 +29,7 @@ With ZBrush in front, press **Q**. The ring opens centred on your cursor. Pick a
 
 ![The Brushes menu](images/ring.png)
 
-Slots are laid out clockwise starting at the top. A slot with a small arrow badge opens another ring. The menu's title and a short hint sit in the middle.
+Slots are laid out clockwise starting at the top. A slot with a small arrow badge opens another ring. A small fan badge means its items fan out from that slot instead. The menu's title and a short hint sit in the middle.
 
 ## ZOrbit Studio
 

@@ -2,7 +2,7 @@
 
 Look: slots of round icons around a glowing accent centre dot,
 hairline spokes and faint guide rings; hover = accent border, soft ring, glow, 1.12x scale and accent label;
-submenus use the highlight colour and a small badge; an auto slot nothing has filled yet is a faint "+".
+submenus use the highlight colour and a small badge (an arrow, or a fan for one that fans out); an auto slot nothing has filled yet is a faint "+".
 Tag colours: an item that carries a colour (config.Item.color, from its first tag) gets a rim and a slightly
 tinted disc, a soft halo, or both, as ring.tag_colors says; its hover border, spoke and label take the colour
 too. A tag slot is a solid disc in the tag colour with a tag glyph whatever ring.tag_colors says; one with no
@@ -189,6 +189,13 @@ def _glyph_grid(draw, cx, cy, size, fill):
             draw.rounded_rectangle((x0, y0, x0 + q, y0 + q), radius=q * 0.25, fill=fill)
 
 
+def _glyph_fan(draw, ox, oy, radius, fill):
+    """A folding fan: three blades with small gaps, a quarter circle from (ox, oy) opening up and right."""
+    box = (ox - radius, oy - radius, ox + radius, oy + radius)
+    for a0, a1 in ((-90, -68), (-56, -34), (-22, 0)):
+        draw.pieslice(box, a0, a1, fill=fill)
+
+
 def _wndproc(hwnd, msg, wparam, lparam):
     ring = _instances.get(int(hwnd) if hwnd else 0)
     if ring is not None:
@@ -299,9 +306,9 @@ class Ring:
         return im
 
     @classmethod
-    def preview_frames(cls, menu, ring_cfg: dict, icon_for, scale=1.0, fps=30):
-        """Frames of the open animation (Studio animation preview)."""
-        r = cls(menu, ring_cfg, icon_for, lambda *a: None, lambda m: None, held=False)
+    def preview_frames(cls, menu, ring_cfg: dict, icon_for, scale=1.0, fps=30, submenus=None):
+        """Frames of the open animation (Studio animation preview). submenus: as for preview (the badges)."""
+        r = cls(menu, ring_cfg, icon_for, lambda *a: None, lambda m: None, held=False, submenus=submenus)
         r._geometry(scale)
         r._relayout()
         r._prepare()
@@ -489,6 +496,13 @@ class Ring:
         if m.id == self.menu.id or any(self.fans[path[:k]].menu.id == m.id for k in range(1, len(path))):
             return False
         return self._layout(path)[-1] <= self.slot * FAN_SLOT * 0.5
+
+    def _fans_out(self, it):
+        """The slot's submenu is set to fan out (its badge says so; by a screen edge it may still open as a ring)."""
+        if it.kind != "menu" or self.submenus is None:
+            return False
+        m = self._submenu(it.data.get("menu"))
+        return m is not None and getattr(m, "fan", False) and bool(m.items) and m.id != self.menu.id
 
     def _open_fans(self):
         return [self.fans[tuple(self.open[:k])] for k in range(1, len(self.open) + 1)]
@@ -708,6 +722,7 @@ class Ring:
         C = int(D + 2 * m)
         c = C / 2
         sub = it.kind == "menu"
+        fan = sub and self._fans_out(it)
         col = _chrome(it)
         hue = col or (self.c_hi if sub else self.c_accent)
         mode = self.cfg.get("tag_colors", "tint")
@@ -772,14 +787,18 @@ class Ring:
                     l, t_, r_, b_ = gd.textbbox((0, 0), glyph, font=self.f_glyph)
                     gd.text((c - (r_ - l) / 2 - l, c - (b_ - t_) / 2 - t_), glyph, font=self.f_glyph,
                             fill=_rgba(self.c_text, 0.9))
-            if sub:                                # submenu badge, bottom-right
-                bw = 14 * self.scale * s
+            if sub:                                # submenu badge, bottom-right: a fan, or an arrow for a ring
+                u = self.scale * s
+                bw = 14 * u
                 bx, by = c + r * 0.62, c + r * 0.62
-                d.rounded_rectangle((bx - bw / 2, by - bw / 2, bx + bw / 2, by + bw / 2), radius=4 * self.scale * s,
-                                    fill=(0, 0, 0, 217), outline=_rgba(self.c_hi, 1.0), width=max(1, int(self.scale * s)))
-                tri = 3.5 * self.scale * s
-                d.polygon([(bx - tri * 0.7, by - tri), (bx - tri * 0.7, by + tri), (bx + tri, by)],
-                          fill=_rgba(self.c_hi, 1.0))
+                d.rounded_rectangle((bx - bw / 2, by - bw / 2, bx + bw / 2, by + bw / 2), radius=4 * u,
+                                    fill=(0, 0, 0, 217), outline=_rgba(self.c_hi, 1.0), width=max(1, int(u)))
+                if fan:
+                    _glyph_fan(d, bx - 4 * u, by + 4 * u, 8 * u, _rgba(self.c_hi, 1.0))
+                else:
+                    tri = 3.5 * u
+                    d.polygon([(bx - tri * 0.7, by - tri), (bx - tri * 0.7, by + tri), (bx + tri, by)],
+                              fill=_rgba(self.c_hi, 1.0))
             out = im.resize((int(C / s), int(C / s)), Image.LANCZOS)
             if soft and not hover:                 # soft halo in the tag colour, blurred at 1x
                 n = out.size[0]

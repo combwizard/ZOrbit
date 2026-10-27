@@ -285,10 +285,11 @@ class Api(webapi.LibraryApi, webapi.TagApi):
         from ring import Ring
         app = radiald.App(CONFIG_FILE)
         app.cfg = loaded
-        menu = expand.Expander(loaded, app.usage, app.tags.load()).menu(loaded.menus[menu_id])
+        ex = expand.Expander(loaded, app.usage, app.tags.load())
+        menu = ex.menu(loaded.menus[menu_id])
         if ring_anim:
             menu = dataclasses.replace(menu, animation="")
-        frames = Ring.preview_frames(menu, loaded.ring, app.icon_for, fps=int(fps))
+        frames = Ring.preview_frames(menu, loaded.ring, app.icon_for, fps=int(fps), submenus=ex.resolve)
         return {"frames": [_png_data_url(f) for f in frames], "interval_ms": round(1000 / int(fps)),
                 "problems": problems}
 

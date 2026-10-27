@@ -12,7 +12,8 @@ All notable changes to this project are listed here. The format follows
   an arc beyond the submenu's slot, with dashed lines to each one, and the ring you came from stays visible.
   Release over an item, click it or flick past it to pick it. A fan item can be a fan submenu too, up to three
   deep. Moving out of a fan closes it. Near a screen edge, or when a fan would lead back to a menu that is
-  already open, it opens as a normal ring instead. A menu's hotkey still opens a ring.
+  already open, it opens as a normal ring instead. A menu's hotkey still opens a ring. A slot that fans out
+  has a fan badge, and one that opens a ring keeps the arrow.
 - Studio shows an open fan in the ring preview when you hover or select the submenu's slot.
 - Tags for brushes. A tag is a label with a colour, and a brush can carry several; the first is its colour cue.
   Select brushes in the Library (or in the brush list on the Menus screen), press **Tag...** or right-click, and
