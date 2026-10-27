@@ -105,6 +105,7 @@ def _do_brush(a: dict) -> str:
     path = f"Brush:{name}"
     if zbc.exists(path):
         zbc.press(path)
+        S.select_pending = None                           # a later brush of the same pick wins
         return f"brush {name}: selected"
     f = a.get("file")
     if f and os.path.isfile(f):
@@ -113,14 +114,12 @@ def _do_brush(a: dict) -> str:
         now = zbc.exists(path)
         if now:
             zbc.press(path)
-        # ZBrush finishes adding the new brush only after this call returns, so a press now may find no button or
-        # not take: the listener presses it again once ZBrush is done. Without a listener (the Apply button) this
-        # is all we can do.
-        if S.hwnd and IsWindow(S.hwnd):
-            S.select_pending = (path, SELECT_TRIES)
-            SetTimer(S.hwnd, TIMER_SELECT, 40, None)
-            return f"brush {name}: loaded from {f}; selecting it once ZBrush has added it (button there now: {now})"
-        return f"brush {name}: loaded from {f} (button there now: {now})"
+        # ZBrush finishes adding the new brush only after the pick returns, so a press now may find no button or
+        # not take: the listener presses it again once ZBrush is done (apply_request starts that after the last
+        # action). Without a listener (the Apply button only) this is all we can do.
+        S.select_pending = (path, SELECT_TRIES)
+        later = "; selecting it once ZBrush has added it" if S.hwnd and IsWindow(S.hwnd) else ""
+        return f"brush {name}: loaded from {f}{later} (button there now: {now})"
     return f"brush {name}: NOT loaded in ZBrush and no .zbp file known"
 
 
@@ -145,7 +144,6 @@ def _do_action(a: dict) -> str:
 
 def apply_request(sender: str = "") -> None:
     """Button callback and listener entry point: carry out request.json, then delete it."""
-    S.select_pending = None                               # a newer pick wins over a brush still waiting to be selected
     try:
         with open(REQUEST_FILE, encoding="utf-8") as f:
             req = json.load(f)
@@ -164,6 +162,9 @@ def apply_request(sender: str = "") -> None:
         except OSError:
             pass
         return
+    S.select_pending = None                               # a newer pick wins over a brush still waiting to be selected
+    if S.hwnd and IsWindow(S.hwnd):
+        KillTimer(S.hwnd, TIMER_SELECT)
     results = []
     for a in req.get("actions", []):
         try:
@@ -172,6 +173,10 @@ def apply_request(sender: str = "") -> None:
             results.append(f"{a!r}: FAILED {type(e).__name__}: {e}")
     S.last = f"#{req.get('id')} '{req.get('label')}' via {sender or 'button'}: " + "; ".join(results)
     log(S.last)
+    if getattr(S, "select_pending", None) and S.hwnd and IsWindow(S.hwnd):
+        SetTimer(S.hwnd, TIMER_SELECT, 40, None)          # the brush this pick loaded last, once ZBrush shows it
+    else:
+        S.select_pending = None
 
 
 # --- listener window -----------------------------------------------------------------------------
@@ -194,9 +199,16 @@ def _select_pending(hwnd):
     if GetAsyncKeyState(VK_LBUTTON) & 0x8000:
         return                                            # a stroke: wait, without using up a try
     if zbc.exists(path):
+        try:
+            zbc.press(path)
+        except Exception as e:                            # ZBrush busy: the next tick tries again, while tries last
+            S.select_pending = (path, tries - 1) if tries > 1 else None
+            if tries <= 1:
+                KillTimer(hwnd, TIMER_SELECT)
+            log(f"{path}: press failed after loading ({e!r}); {'trying again' if tries > 1 else 'giving up'}")
+            return
         KillTimer(hwnd, TIMER_SELECT)
         S.select_pending = None
-        zbc.press(path)
         log(f"{path}: selected after loading ({SELECT_TRIES - tries + 1} looks)")
     elif tries <= 1:
         KillTimer(hwnd, TIMER_SELECT)
