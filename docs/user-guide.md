@@ -36,7 +36,7 @@ Studio is where you edit everything. Open it from the Start menu (**Radial Menu 
 | Screen | Shortcut | What it does |
 |---|---|---|
 | Menus | Alt+1 | Create and edit menus and their items, with a live ring preview. |
-| Library | Alt+2 | Browse every brush ZBrush can load, with search, folders and thumbnails. |
+| Library | Alt+2 | Browse every brush ZBrush can load, with search, folders and thumbnails. Click a brush and press **Add to <menu>**, or drag it onto a menu, the ring or the item list. **Rescan** picks up brushes saved since Studio opened. |
 | Settings | Alt+3 | Ring size, animation, labels, colours, tap time, auto-close, bridge, and Studio's own preferences. |
 | Status | Alt+4 | Is ZBrush running, is the app running, is the bridge connected; the app log. |
 

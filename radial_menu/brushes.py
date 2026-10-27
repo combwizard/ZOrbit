@@ -1,6 +1,8 @@
 """Locate ZBrush brushes (.zbp) and produce cached icon thumbnails."""
 from __future__ import annotations
 
+import io
+import time
 import os
 import re
 import threading
@@ -180,6 +182,66 @@ def thumbnail(name_or_path, size: int = 96):
         return im
     except Exception:
         return None
+
+
+_PNG_SIG = bytes.fromhex("89504e470d0a1a0a")
+
+
+def thumbnail_png(name_or_path, size: int = 96) -> bytes | None:
+    """PNG bytes of a brush icon. A cached file is returned as it is, without a decode or a re-encode."""
+    try:
+        p = Path(str(name_or_path))
+        if not (p.suffix.lower() == ".zbp" and p.is_file()):
+            p = find_brush(str(name_or_path))
+        if p is None:
+            return None
+        cfile = _cache_dir() / f"{p.stem}_{p.stat().st_mtime_ns}_{size}.png"
+        try:
+            data = cfile.read_bytes()
+            if data.startswith(_PNG_SIG):
+                return data
+        except OSError:
+            pass
+        im = thumbnail(p, size)                 # decodes the icon and writes the cache file
+        if im is None:
+            return None
+        try:
+            data = cfile.read_bytes()
+            if data.startswith(_PNG_SIG):
+                return data
+        except OSError:
+            pass
+        buf = io.BytesIO()                      # the cache write failed: encode once in memory
+        im.save(buf, format="PNG")
+        return buf.getvalue()
+    except Exception:
+        return None
+
+
+def cache_prune(max_files: int = 4000) -> None:
+    """Delete the oldest cached thumbnails when the cache holds more than max_files. Best effort."""
+    try:
+        files, stale = [], time.time() - 3600
+        with os.scandir(_cache_dir()) as it:
+            for e in it:
+                try:
+                    if e.name.lower().endswith(".tmp") and e.is_file() and e.stat().st_mtime < stale:
+                        os.remove(e.path)                 # a write that never finished
+                    elif e.name.lower().endswith(".png") and e.is_file():
+                        files.append((e.stat().st_mtime, e.path))
+                except OSError:
+                    pass
+        extra = len(files) - int(max_files)
+        if extra <= 0:
+            return
+        files.sort()
+        for _, path in files[:extra]:
+            try:
+                os.remove(path)
+            except OSError:
+                pass
+    except Exception:
+        pass
 
 
 def prefetch(names, size: int = 96) -> None:

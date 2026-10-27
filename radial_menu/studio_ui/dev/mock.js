@@ -3,14 +3,16 @@
    Extra URL switches for visual testing: ?problems (sample problems), ?status=down (app/ZBrush off),
    ?lag=300 (artificial latency in ms for preview calls), ?broken (get_config fails to parse: recovery screen),
    ?conflict (the first save without force reports "file changed on disk"), ?blocked (a save without force is
-   refused as "no ring can open" until forced). */
+   refused as "no ring can open" until forced), ?nozbrush (get_library: ZBrush not found, no brushes), ?nolib (ZBrush
+   found but no .zbp files in its folders), ?liberr (get_library reports an error), ?thumbfail (the first two get_thumbs
+   calls are rejected, then they work). */
 (function () {
   var M = window.__RADIAL_MOCK__ || {};
   var q = new URLSearchParams(location.search);
   var lag = +(q.get('lag') || 0);
   var sleep = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
   var clone = function (o) { return JSON.parse(JSON.stringify(o)); };
-  var ticks = 0;
+  var ticks = 0, thumbCalls = 0;
   var saved = clone(M.get_config.config);
   var mtime = 1700000000000000000, conflictDone = false;
   var BROKEN_ERR = "Expecting ',' delimiter: line 12 column 5 (char 301)";
@@ -88,8 +90,21 @@
       return sleep(350 + lag).then(function () { return M.preview_animation; });
     },
     get_options: function () { return sleep(10).then(function () { return clone(M.get_options); }); },
-    get_library: function () { return sleep(250).then(function () { return clone(M.get_library); }); },
-    get_thumbs: function (names) {
+    get_library: function (refresh) {
+      return sleep(refresh ? 700 : 250).then(function () {
+        var lib = clone(M.get_library), n = lib.brushes.length;
+        var sources = [
+          { label: 'ZBrush 2026 brush presets', path: 'C:\\Users\\david\\OneDrive\\Documents\\ZBrush 2026 Assets\\ZStartup\\BrushPresets', exists: true, count: n },
+          { label: 'ZBrush 2022 brush presets', path: 'C:\\Program Files\\Maxon ZBrush 2022\\ZStartup\\BrushPresets', exists: false, count: 0 }];
+        if (q.has('liberr')) return { brushes: [], categories: [], sources: [], zbrush_found: true, error: 'Could not read the brush folders: [WinError 5] Access is denied (mock)' };
+        if (q.has('nozbrush')) return { brushes: [], categories: [], sources: [], zbrush_found: false, error: null };
+        if (q.has('nolib')) { sources[0].count = 0; return { brushes: [], categories: [], sources: sources, zbrush_found: true, error: null }; }
+        return { brushes: lib.brushes, categories: lib.categories, sources: sources, zbrush_found: true, error: null };
+      });
+    },
+    get_thumbs: function (names, size) {
+      console.log('[mock] get_thumbs', (names || []).length, 'names, size', size);
+      if (q.has('thumbfail') && ++thumbCalls <= 2) return sleep(70).then(function () { throw new Error('thumbnail service unavailable (mock)'); });
       return sleep(70).then(function () {
         var out = {};
         (names || []).forEach(function (n) { out[n] = (M.get_thumbs && M.get_thumbs[n]) || null; });

@@ -40,6 +40,15 @@ All notable changes to this project are listed here. The format follows
   the guide says. The brush picker closes after Enter.
 - The inspector's third tab is called Library (it clashed with the default "Brushes" menu), and row tooltips
   list the keyboard shortcuts.
+- Library: a Rescan button picks up brushes saved since Studio opened; when nothing is found the screen says
+  whether ZBrush was found and which folders were searched; clicking a brush selects it and shows an "Add to
+  <menu>" button, with a hint under the search box; adding a brush that the menu already has asks first; the
+  new item scrolls into view and flashes.
+- Library search matches brush names only (searching "zbrush" no longer matches every brush), and a search
+  with no results inside a folder offers to search all folders.
+- Brush thumbnails are sharp at the largest card size, a failed thumbnail batch is retried instead of
+  showing initials for the rest of the session, and thumbnails start loading just before they scroll into
+  view. Folder groups collapse again when you click the open one.
 
 ### Changed
 - The Settings screen is called Settings everywhere (it was "Appearance & Behaviour" on the page itself), and

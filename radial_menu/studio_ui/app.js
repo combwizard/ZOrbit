@@ -68,6 +68,7 @@ const ICONS = {
   stop: '<rect x="6.5" y="6.5" width="11" height="11" rx="1.8" fill="currentColor" stroke="none"/>',
   search: '<circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/>',
   check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
+  refresh: '<path d="M19.500 12a7.500 7.500 0 0 1-13 5.100M4.500 12a7.500 7.500 0 0 1 13-5.100"/><path d="M17.500 3.500v3.400h-3.400M6.500 20.500v-3.400h3.400"/>',
   alert: '<path d="M12 4l9 16H3z"/><path d="M12 10v4M12 17v.4"/>',
   folder: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
   undo: '<path d="M4 12a8 8 0 1 1 3 6.2M4 5v5h5"/>',
@@ -143,6 +144,7 @@ const S = {
   screen: 'menus', menuId: null, itemIdx: null, tab: 'item',
   cameFrom: null,                              // { menuId, itemIdx }: where a submenu was opened from (drives the Back chip)
   library: [], libSorted: [], libByName: new Map(), libState: 'loading', suggestions: [],
+  libSources: [], zbrushFound: true, libError: null, libBusy: false,
   version: 0, hist: [], histI: 0,
   lib: { cat: 'All', q: '', size: 112 },
   dock: { cat: 'All', q: '' },
@@ -391,34 +393,54 @@ function popover(anchor, entries) {
 
 /* ================================================================== thumbnails */
 const Thumbs = {
-  cache: new Map(), waiting: new Map(), queue: new Set(), timer: null,
-  request(name, cb) {
-    if (this.cache.has(name)) { cb(this.cache.get(name)); return; }
-    if (!this.waiting.has(name)) this.waiting.set(name, []);
-    this.waiting.get(name).push(cb);
-    this.queue.add(name);
+  cache: new Map(), waiting: new Map(), queue: new Map(), timer: null, busy: false,
+  key: (name, res) => res + '|' + name,                          // a thumbnail is cached per size
+  request(name, res, cb, el) {
+    const k = this.key(name, res);
+    if (this.cache.has(k)) { cb(this.cache.get(k)); return; }
+    if (!this.waiting.has(k)) this.waiting.set(k, []);
+    this.waiting.get(k).push({ cb, el });
+    this.queue.set(k, { name, res });
     if (!this.timer) this.timer = setTimeout(() => this.flush(), 30);
   },
+  forgetMisses() { for (const [k, v] of Array.from(this.cache)) if (!v) this.cache.delete(k); },
   async flush() {
     this.timer = null;
-    const batch = Array.from(this.queue).slice(0, 40);
-    batch.forEach(n => this.queue.delete(n));
+    if (this.busy) { this.timer = setTimeout(() => this.flush(), 10); return; }   // one call in flight at a time: the slider cannot stack them
+    const batch = [];
+    let res = 0;
+    for (const [k, q] of this.queue) {                            // FIFO, up to 40 names of one size per call
+      if (batch.length >= 40) break;
+      if (res && q.res !== res) continue;
+      this.queue.delete(k);
+      const all = this.waiting.get(k) || [];
+      const live = all.filter(w => !w.el || w.el.isConnected);
+      all.filter(w => !live.includes(w)).forEach(w => w.cb(null, true));   // its card is gone: let it ask again if it comes back
+      if (!live.length) { this.waiting.delete(k); continue; }
+      this.waiting.set(k, live);
+      res = q.res; batch.push({ k, name: q.name });
+    }
     if (this.queue.size) this.timer = setTimeout(() => this.flush(), 10);
     if (!batch.length) return;
-    let res = {};
-    try { res = (await call('get_thumbs', batch, 128)) || {}; } catch (e) { /* leave as null */ }
-    for (const n of batch) {
-      const url = res[n] || null;
-      this.cache.set(n, url);
-      const cbs = this.waiting.get(n) || [];
-      this.waiting.delete(n);
-      cbs.forEach(cb => cb(url));
+    let out = null;
+    this.busy = true;
+    try { out = (await call('get_thumbs', batch.map(b => b.name), res)) || {}; } catch (e) { out = null; }
+    this.busy = false;
+    for (const { k, name } of batch) {
+      const ws = this.waiting.get(k) || [];
+      this.waiting.delete(k);
+      if (out) { const url = out[name] || null; this.cache.set(k, url); ws.forEach(w => w.cb(url)); }
+      else ws.forEach(w => w.cb(null, true));                    // the call failed: cache nothing, so a later request tries again
     }
   },
 };
-const lazyIO = new IntersectionObserver(entries => {
-  for (const e of entries) if (e.isIntersecting) { lazyIO.unobserve(e.target); if (e.target._load) e.target._load(); }
-}, { rootMargin: '320px' });
+/* One observer per scroller, so the 320px pre-load margin is measured from the scroller's own edges. */
+function makeLazyIO(root) {
+  const io = new IntersectionObserver(entries => {
+    for (const e of entries) if (e.isIntersecting) { io.unobserve(e.target); if (e.target._load) e.target._load(); }
+  }, { root, rootMargin: '320px' });
+  return io;
+}
 
 function initials(name) {
   const parts = String(name || '?').replace(/([a-z])([A-Z])/g, '$1 $2').split(/[\s_\-.]+/).filter(Boolean);
@@ -426,20 +448,34 @@ function initials(name) {
   const b = parts.length > 1 ? parts[1][0] : ((parts[0] || '')[1] || '');
   return (a + b).toUpperCase();
 }
-/* Round/square brush thumbnail with shimmer placeholder and an initials fallback. */
-function thumb(name, { size = 28, lazy = false, cls = '' } = {}) {
+/* Round/square brush thumbnail with shimmer placeholder and an initials fallback. `lazy` is an observer from makeLazyIO:
+   the thumbnail is fetched when it nears the scroller's view. `res` is the pixel size asked of the backend (128 or 256). */
+function thumb(name, { size = 28, lazy = null, cls = '', res = 128 } = {}) {
   const el = h('span', { class: 'thumb ' + cls, style: { '--sz': size + 'px' } });
-  const done = url => {
+  el._res = res;
+  const done = (url, failed) => {
     el.classList.remove('loading');
-    if (url) el.replaceChildren(h('img', { src: url, alt: '', draggable: false }));
-    else { el.classList.add('fallback'); el.textContent = initials(name); }
+    if (url) { el.classList.remove('fallback'); el.replaceChildren(h('img', { src: url, alt: '', draggable: false })); }
+    else if (!el.querySelector('img')) { el.classList.add('fallback'); el.textContent = initials(name); }
+    if (failed && el._io) setTimeout(() => {                       // look again in a while, or when it scrolls back into view
+      const root = el._io.root;
+      if (root ? root.contains(el) : el.isConnected) el._io.observe(el);
+    }, 3000);
   };
   if (!name) { done(null); return el; }
-  if (Thumbs.cache.has(name)) { done(Thumbs.cache.get(name)); return el; }
+  const load = () => { const r = el._res; Thumbs.request(name, r, (url, failed) => { if (r === el._res) done(url, failed); }, el); };
+  if (lazy) { el._io = lazy; el._load = load; }                    // kept even when the picture is already cached, so a size change can refetch it
+  const k = Thumbs.key(name, res);
+  if (Thumbs.cache.has(k)) { done(Thumbs.cache.get(k)); return el; }
   el.classList.add('loading');
-  const load = () => Thumbs.request(name, done);
-  if (lazy) { el._load = load; lazyIO.observe(el); } else load();
+  if (lazy) lazy.observe(el); else load();
   return el;
+}
+/* Asks a lazy thumbnail for another size: it keeps its picture until the new one arrives, and only fetches when in view. */
+function rethumb(el, res) {
+  if (el._res === res || !el._io) return;
+  el._res = res;
+  el._io.unobserve(el); el._io.observe(el);
 }
 function itemThumb(it, size = 30) {
   const k = kindOf(it);
@@ -934,7 +970,17 @@ function insertBrush(menuId, name, at = null, silent = false) {
   m.items.splice(i, 0, { brush: name });
   if (sel) S.itemIdx = m.items.indexOf(sel);
   commit({ inspector: true }); if (R.head) R.head();
+  flashRow(menuId, i);
   if (!silent) undoToast(`Added ${name} to "${m.title || menuId}"`);
+}
+/* Scrolls the row to view and flashes it, in whichever item lists are on screen (Menus editor, Library target panel). */
+function flashRow(menuId, i) {
+  for (const r of $$('.irow')) {
+    if (r.dataset.menu !== menuId || +r.dataset.i !== i) continue;
+    r.scrollIntoView({ block: 'nearest' });
+    r.classList.remove('flash'); void r.offsetWidth; r.classList.add('flash');
+    setTimeout(() => r.classList.remove('flash'), 1400);
+  }
 }
 function dupItem(i) {
   const m = curMenu(); if (!m || !m.items[i]) return;
@@ -1484,7 +1530,7 @@ function buildItemInspector() {
       if (!v && touched) { hintEl.classList.add('bad'); hintEl.append('A target is required. '); }
       if (k === 'brush') {
         const tt = $('.tthumb', wrap); if (tt) tt.replaceChildren(thumb(v || null, { size: 30 }));
-        if (v && S.libState === 'ready' && !S.libByName.has(nameKey(v))) { hintEl.classList.add('warn'); hintEl.append('Not found in your brush library. ZBrush needs a .zbp with this name.'); }
+        if (v && S.libState === 'ready' && S.library.length && !S.libByName.has(nameKey(v))) { hintEl.classList.add('warn'); hintEl.append('Not found in your brush library. ZBrush needs a .zbp with this name.'); }
         else if (!v) hintEl.append('Type to search your library.');
       } else if (k === 'menu') {
         const t = S.cfg.menus[v];
@@ -1687,44 +1733,125 @@ function catMatch(b, cat) {
   return b.category === cat || b.category.startsWith(cat + '/');
 }
 function usedCount() { const u = usageMap(); let n = 0; for (const b of S.library) if (u.has(nameKey(b.name))) n++; return n; }
+const resFor = px => (px > 160 ? 256 : 128);     // above 160 CSS px a 128 px thumbnail starts to look soft
+
+/* Adds a brush to the menu being edited. A brush the menu already has is not added silently. */
 function addBrushToCurrent(name) {
-  if (!curMenu()) { toast('Create or select a menu first.', { tone: 'warn' }); return; }
-  insertBrush(S.menuId, name, null);
+  const m = curMenu();
+  if (!m) { toast('Create or select a menu first.', { tone: 'warn' }); return; }
+  const id = S.menuId, title = m.title || id;
+  if ((usageMap().get(nameKey(name)) || []).some(u => u.menuId === id)) {
+    toast(`"${name}" is already in "${title}"`, { tone: 'warn', action: { text: 'Add anyway', fn: () => insertBrush(id, name, null) } });
+    return;
+  }
+  insertBrush(id, name, null);
+}
+
+/* ---------- finding brushes: rescan button and the empty states */
+function paintRescanBtn(b) {
+  b.disabled = S.libBusy;
+  b.setAttribute('aria-busy', S.libBusy ? 'true' : 'false');
+  b.replaceChildren(S.libBusy ? h('span', { class: 'spin' }) : icon('refresh', 13), b.dataset.label);
+}
+function paintRescan() { $$('.rescan-btn').forEach(paintRescanBtn); }
+function rescanBtn(label = 'Rescan') {
+  const b = h('button', { class: 'btn small rescan-btn', type: 'button', title: 'Look for brush files again', dataset: { label }, onclick: rescanLibrary });
+  paintRescanBtn(b);
+  return b;
+}
+async function rescanLibrary() {
+  if (S.libBusy) return;
+  await loadLibrary(true);
+  if (S.libState === 'error') { toast(S.libError || 'Could not read the brush folders.', { tone: 'warn', ms: 4500 }); return; }
+  const n = S.library.length;
+  toast(`Found ${n} brush${n === 1 ? '' : 'es'}`, n ? {} : { tone: 'warn' });
+}
+/* What the grid says when there is no library to show: a read error, no ZBrush, or no .zbp files in the folders searched. */
+function libEmptyState() {
+  let el;
+  if (S.libState === 'error') el = emptyState('alert', 'Could not read the brush library', S.libError || 'The backend could not list your ZBrush brush folders.');
+  else if (!S.zbrushFound) el = emptyState('library', 'No brushes to show', 'ZBrush was not found. Studio reads the brush folders of a ZBrush that has run at least once.');
+  else {
+    el = emptyState('library', 'No brushes found', 'No .zbp files in these folders:');
+    if (S.libSources.length) el.append(h('ul', { class: 'src-list mono' }, S.libSources.map(s => h('li', { class: s.exists ? '' : 'miss' },
+      h('span', { class: 'src-path' }, s.path), h('span', { class: 'src-n' }, ' ' + s.count + (s.count === 1 ? ' file' : ' files')), s.exists ? null : h('em', null, ' (missing)')))));
+  }
+  el.append(rescanBtn(S.libState === 'error' ? 'Retry' : 'Rescan'));
+  return el;
 }
 
 function makeBrowser({ compact, st }) {
   const root = h('div', { class: 'browser ' + (compact ? 'compact' : 'full') });
   const search = h('input', { class: 'inp', type: 'text', placeholder: 'Search brushes...', value: st.q, 'aria-label': 'Search brushes', spellcheck: 'false', autocomplete: 'off' });
-  const clearBtn = h('button', { class: 'ibtn', type: 'button', title: 'Clear search', 'aria-label': 'Clear search', hidden: !st.q, onclick: () => { search.value = ''; st.q = ''; clearBtn.hidden = true; renderGrid(); search.focus(); } }, icon('x', 13));
+  const clearBtn = h('button', { class: 'ibtn', type: 'button', title: 'Clear search', 'aria-label': 'Clear search', hidden: !st.q, onclick: () => { clearQuery(); renderGrid(); search.focus(); } }, icon('x', 13));
   const count = h('span', { class: 'b-count mono' });
   const grid = h('div', { class: 'bgrid' });
   const scroll = h('div', { class: 'b-scroll' }, grid);
-  const side = h('div', { class: 'lib-side' });
-  let token = 0;
+  const side = h('div', { class: 'lib-side', role: 'listbox', 'aria-label': 'Folders' });
+  const lazy = makeLazyIO(scroll);
+  let token = 0, selName = null, curRes = compact ? 128 : resFor(st.size);
   if (!st.open) st.open = new Set();
+  if (st.cat.includes('/')) st.open.add(st.cat.split('/')[0]);   // a folder chosen from outside (a link) starts unfolded
 
   const searchBox = h('label', { class: 'searchbox' }, icon('search', 14), search, clearBtn);
   const onSearch = debounce(() => { st.q = search.value; clearBtn.hidden = !st.q; renderGrid(); }, 120);
   search.addEventListener('input', onSearch);
   search.addEventListener('keydown', e => { if (e.key === 'Escape' && search.value) { e.stopPropagation(); clearBtn.click(); } });
+  function clearQuery() { onSearch.cancel(); search.value = ''; st.q = ''; clearBtn.hidden = true; }
+
+  /* The selected brush and its action strip. Clicking a card selects it; the strip adds it to the menu being edited. */
+  const hint = h('div', { class: 'b-hint' });
+  const addBtn = h('button', { class: 'btn primary small as-add', type: 'button', onclick: () => { if (selName) addBrushToCurrent(selName); } });
+  const stripThumb = h('span', { class: 'as-thumb' }), stripName = h('b'), stripCat = h('small');
+  const strip = h('div', { class: 'add-strip', hidden: true, role: 'region', 'aria-label': 'Selected brush' },
+    stripThumb, h('div', { class: 'as-name' }, stripName, stripCat), addBtn, iconBtn('x', 'Clear selection', () => setSel(null)));
+  const targetName = () => { const m = curMenu(); return m ? (m.title || S.menuId) : ''; };
+  function paintTarget() {
+    const n = targetName(), label = n ? 'Add to ' + n : 'No menu to add to';
+    hint.replaceChildren('Click a brush to select it, then Add to ', h('b', null, n || 'a menu'), '; or drag it onto a menu, the ring or the item list. Double-click or Enter adds it too.');
+    if (addBtn.dataset.label !== label) {
+      addBtn.dataset.label = label; addBtn.title = label;
+      addBtn.replaceChildren(icon('plus', 13), h('span', { class: 'as-add-txt' }, label));
+    }
+    addBtn.disabled = !n;
+  }
+  function setSel(name, focusCard = false) {
+    const b = name ? S.libByName.get(nameKey(name)) : null;
+    selName = b ? b.name : null;
+    $$('.bcard', grid).forEach(c => {
+      const on = !!b && c.dataset.name === b.name;
+      c.classList.toggle('sel', on); c.setAttribute('aria-pressed', on ? 'true' : 'false');
+      if (on && focusCard && document.activeElement !== c) c.focus({ preventScroll: true });
+    });
+    strip.hidden = !b;
+    if (b) { stripThumb.replaceChildren(thumb(b.name, { size: 34 })); setText(stripName, b.name); setText(stripCat, b.category); }
+  }
+  root.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && selName && !S.problemsOpen && !e.defaultPrevented) { e.preventDefault(); setSel(null); }
+  });
+  scroll.addEventListener('click', e => { if (selName && !e.target.closest('.bcard, button, a, input')) setSel(null); });
 
   let tools, catSel = null;
   if (compact) {
     catSel = h('select', { class: 'inp sel', 'aria-label': 'Category', onchange: () => { st.cat = catSel.value; renderGrid(); } });
     tools = h('div', { class: 'b-tools' }, searchBox, catSel);
-    root.append(h('div', { class: 'dock-hint' }, 'Drag a brush onto the ring or the list, or press + to add it to this menu.'), tools, count, scroll);
+    root.append(h('div', { class: 'dock-hint' }, 'Click a brush and press Add, or drag it onto the ring or the list.'), tools, count, scroll, strip);
   } else {
-    const size = h('input', { type: 'range', min: 84, max: 220, step: 4, value: st.size, 'aria-label': 'Thumbnail size', onchange: () => {} });
+    const size = h('input', { type: 'range', min: 84, max: 220, step: 4, value: st.size, 'aria-label': 'Thumbnail size' });
     const paint = () => size.style.setProperty('--pct', ((st.size - 84) / (220 - 84)) * 100 + '%');
-    size.addEventListener('input', () => { st.size = +size.value; grid.style.setProperty('--card', st.size + 'px'); paint(); });
+    size.addEventListener('input', () => {
+      st.size = +size.value; grid.style.setProperty('--card', st.size + 'px'); paint();
+      const r = resFor(st.size);
+      if (r !== curRes) { curRes = r; $$('.bcard .thumb', grid).forEach(t => rethumb(t, r)); }
+    });
     paint(); grid.style.setProperty('--card', st.size + 'px');
-    tools = h('div', { class: 'b-tools' }, searchBox, h('div', { class: 'size-ctl' }, icon('library', 13), size), count);
-    root.append(side, h('div', { class: 'lib-main' }, tools, scroll));
+    tools = h('div', { class: 'b-tools' }, searchBox, h('div', { class: 'size-ctl' }, icon('library', 13), size), rescanBtn());
+    root.append(side, h('div', { class: 'lib-main' }, tools, h('div', { class: 'b-sub' }, hint, count), scroll, strip));
   }
 
   const filtered = () => {
     const q = st.q.trim().toLowerCase(), terms = q ? q.split(/\s+/) : [];
-    return S.libSorted.filter(b => catMatch(b, st.cat) && (!terms.length || terms.every(t => b.name.toLowerCase().includes(t) || b.category.toLowerCase().includes(t))));
+    return S.libSorted.filter(b => catMatch(b, st.cat) && (!terms.length || terms.every(t => b.name.toLowerCase().includes(t))));
   };
 
   function paintBadge(card) {
@@ -1740,17 +1867,24 @@ function makeBrowser({ compact, st }) {
     if (u.length < 2) bd.replaceChildren(icon('check', 10));
   }
   function makeCard(b) {
-    const card = h('div', { class: 'bcard', tabindex: '0', role: 'button', 'aria-label': b.name + '. Press Enter to add to the current menu.', title: b.name + '\n' + b.category, dataset: { name: b.name } },
-      h('div', { class: 'bthumb' }, thumb(b.name, { size: 0, lazy: true, cls: 'fill' }),
+    const on = b.name === selName;
+    const card = h('div', { class: 'bcard' + (on ? ' sel' : ''), tabindex: '0', role: 'button', 'aria-pressed': on ? 'true' : 'false', 'aria-label': b.name + '. Press Enter to add to the current menu.', title: b.name + '\n' + b.category, dataset: { name: b.name } },
+      h('div', { class: 'bthumb' }, thumb(b.name, { size: 0, lazy, cls: 'fill', res: curRes }),
         h('button', { class: 'badd', type: 'button', title: 'Add to ' + ((curMenu() && curMenu().title) || 'current menu'), 'aria-label': 'Add ' + b.name + ' to the current menu', onclick: e => { e.stopPropagation(); addBrushToCurrent(b.name); } }, icon('plus', 14))),
       h('div', { class: 'bname' }, b.name));
+    card.addEventListener('click', () => setSel(b.name, true));
     card.addEventListener('dblclick', () => addBrushToCurrent(b.name));
-    card.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target === card) { e.preventDefault(); addBrushToCurrent(b.name); } });
+    card.addEventListener('keydown', e => {
+      if (e.target !== card) return;
+      if (e.key === 'Enter') { e.preventDefault(); setSel(b.name); addBrushToCurrent(b.name); }
+      else if (e.key === ' ') { e.preventDefault(); setSel(b.name); }
+    });
     DnD.source(card, () => ({ type: 'brush', name: b.name }), () => h('span', { class: 'ghost-chip' }, thumb(b.name, { size: 26 }), b.name));
     paintBadge(card);
     return card;
   }
   function renderGrid() {
+    $$('.thumb', grid).forEach(t => { if (t._io) t._io.unobserve(t); });   // the old cards are about to go: do not keep them in the observer
     const my = ++token;
     grid.replaceChildren();
     if (S.libState === 'loading') {
@@ -1758,17 +1892,27 @@ function makeBrowser({ compact, st }) {
       for (let i = 0; i < 24; i++) grid.append(h('div', { class: 'bcard skel' }, h('div', { class: 'bthumb' }, h('span', { class: 'thumb fill loading' })), h('div', { class: 'bname' }, '\u00a0')));
       return;
     }
+    if (selName && !S.libByName.has(nameKey(selName))) setSel(null);
     if (S.libState === 'error' || !S.library.length) {
       setText(count, '0 brushes');
-      grid.append(emptyState('library', S.libState === 'error' ? 'Could not read the brush library' : 'No brushes found', S.libState === 'error' ? 'The backend could not list your ZBrush brush folders.' : 'No .zbp files were found in your ZBrush brush folders.'));
+      grid.append(h('div', { class: 'grid-empty' }, libEmptyState()));
       return;
     }
     const list = filtered();
     setText(count, list.length + (list.length === 1 ? ' brush' : ' brushes') + (st.cat !== 'All' || st.q ? ' of ' + S.library.length : ''));
     if (!list.length) {
-      const b = h('div', { class: 'grid-empty' }, emptyState('search', st.q ? `No brushes match "${st.q}"` : 'Nothing in this category', st.q ? 'Check the spelling or search all categories.' : (st.cat === '@used' ? 'Brushes you put into a menu show up here.' : ''),
-        st.q || st.cat !== 'All' ? { text: st.q ? 'Clear search' : 'Show all brushes', fn: () => { if (st.q) { search.value = ''; st.q = ''; clearBtn.hidden = true; } else st.cat = 'All'; renderAll(); } } : null));
-      grid.append(b); return;
+      let e;
+      if (st.q) {
+        const where = st.cat === '@used' ? 'In my menus' : st.cat.split('/').join(' / ');
+        e = emptyState('search', `No brushes match "${st.q}"`, st.cat !== 'All' ? `Only "${where}" was searched.` : 'Check the spelling.');
+        e.append(h('div', { class: 'btn-row' },
+          h('button', { class: 'btn small', type: 'button', onclick: () => { clearQuery(); renderAll(); } }, 'Clear search'),
+          st.cat !== 'All' ? h('button', { class: 'btn small primary', type: 'button', onclick: () => { st.cat = 'All'; renderAll(); } }, 'Search all folders') : null));
+      } else {
+        e = emptyState('search', 'Nothing in this category', st.cat === '@used' ? 'Brushes you put into a menu show up here.' : '', { text: 'Show all brushes', fn: () => { st.cat = 'All'; renderAll(); } });
+      }
+      grid.append(h('div', { class: 'grid-empty' }, e));
+      return;
     }
     let i = 0;
     const chunk = () => {
@@ -1788,25 +1932,43 @@ function makeBrowser({ compact, st }) {
       catSel.replaceChildren(...opts.map(([v, t]) => h('option', { value: v, selected: v === st.cat }, t)));
       return;
     }
-    const row = (id, label, n, o = {}) => h('button', { class: 'cat' + (st.cat === id ? ' on' : '') + (o.kid ? ' kid' : '') + (o.group ? ' group' : ''), type: 'button', role: 'option', 'aria-selected': st.cat === id ? 'true' : 'false', title: label,
-      onclick: () => { st.cat = id; if (o.group && o.hasKids) { if (st.open.has(id) && st.cat === id) { /* keep open */ } st.open.add(id); } renderAll(); } },
-      o.hasKids ? h('span', { class: 'cat-chev' + (st.open.has(id) ? ' open' : ''), onclick: e => { e.stopPropagation(); st.open.has(id) ? st.open.delete(id) : st.open.add(id); renderCats(); } }, icon('chevR', 12)) : h('span', { class: 'cat-chev none' }),
-      h('span', { class: 'cat-name' }, label), h('span', { class: 'cat-n mono' }, String(n)));
+    const act = document.activeElement, fr = act && side.contains(act) ? act.closest('.cat') : null;
+    const fid = fr ? fr.dataset.id : null, onChev = !!fr && act.classList.contains('cat-chev');
+    const row = (id, label, n, o = {}) => {
+      const toggle = () => { st.open.has(id) ? st.open.delete(id) : st.open.add(id); renderCats(); };
+      const activate = () => {
+        if (o.hasKids && st.cat === id) { toggle(); return; }                // a click on the selected folder folds or unfolds it
+        st.cat = id;
+        if (o.hasKids) st.open.add(id);
+        renderAll();
+      };
+      const r = h('div', { class: 'cat' + (st.cat === id ? ' on' : '') + (o.kid ? ' kid' : '') + (o.group ? ' group' : ''), role: 'option', tabindex: '0', 'aria-selected': st.cat === id ? 'true' : 'false', title: label, dataset: { id },
+        onclick: activate, onkeydown: e => { if (e.target === r && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); activate(); } } },
+        o.hasKids ? h('button', { class: 'cat-chev' + (st.open.has(id) ? ' open' : ''), type: 'button', 'aria-label': (st.open.has(id) ? 'Collapse ' : 'Expand ') + label, 'aria-expanded': st.open.has(id) ? 'true' : 'false',
+          onclick: e => { e.stopPropagation(); toggle(); } }, icon('chevR', 12)) : h('span', { class: 'cat-chev none' }),
+        h('span', { class: 'cat-name' }, label), h('span', { class: 'cat-n mono' }, String(n)));
+      return r;
+    };
     const rows = [h('div', { class: 'micro side-title' }, 'Folders'), row('All', 'All', S.library.length), row('@used', 'In my menus', usedCount())];
     tree.forEach(g => {
       const hasKids = g.kids.length > 0;
       rows.push(row(g.id, g.id, g.count, { group: true, hasKids }));
-      if (hasKids && (st.open.has(g.id) || st.cat.startsWith(g.id + '/'))) g.kids.forEach(k => rows.push(row(k.id, k.label, k.count, { kid: true })));
+      if (hasKids && st.open.has(g.id)) g.kids.forEach(k => rows.push(row(k.id, k.label, k.count, { kid: true })));
     });
     side.replaceChildren(...rows);
+    if (fid !== null) {
+      const nr = $$('.cat', side).find(r => r.dataset.id === fid);
+      const t = nr && ((onChev && $('button.cat-chev', nr)) || nr);
+      if (t) t.focus();
+    }
   }
   function renderAll() { if (S.libState === 'ready') renderCats(); renderGrid(); }
 
-  renderAll();
+  renderAll(); paintTarget();
   return {
     el: root, scroller: () => scroll,
-    refresh: renderAll,
-    updateBadges() { $$('.bcard[data-name]', grid).forEach(paintBadge); if (S.libState === 'ready') { renderCats(); if (st.cat === '@used') renderGrid(); } },
+    refresh() { renderAll(); paintTarget(); },
+    updateBadges() { $$('.bcard[data-name]', grid).forEach(paintBadge); paintTarget(); if (S.libState === 'ready') { renderCats(); if (st.cat === '@used') renderGrid(); } },
   };
 }
 
@@ -2416,7 +2578,7 @@ function buildLicenceScreen(root) {
   const quips = ['Already activated. Forever. You can stop typing.', 'Still activated. It was activated before you got here.',
     'Activation status: extremely activated.', 'The key is not checked. Nothing is checked. Go sculpt.'];
   let q = 0;
-  const input = h('input', { class: 'input mono', type: 'text', placeholder: 'XXXX-XXXX-XXXX-XXXX-XXXX', spellcheck: 'false', 'aria-label': 'Licence key' });
+  const input = h('input', { class: 'inp mono', type: 'text', placeholder: 'XXXX-XXXX-XXXX-XXXX-XXXX', spellcheck: 'false', 'aria-label': 'Licence key' });
   const activate = h('button', { class: 'btn primary', type: 'button', onclick: () => { toast(quips[q++ % quips.length], { tone: 'ok', ms: 3500 }); input.value = ''; } }, icon('check', 13), 'Activate');
   input.addEventListener('keydown', e => { if (e.key === 'Enter') activate.click(); });
   const deactivate = h('button', { class: 'btn danger-ghost', type: 'button', onclick: () => toast('Nice try. You cannot un-free free software.', { tone: 'warn', ms: 3500 }) }, 'Deactivate this machine');
@@ -2580,17 +2742,24 @@ function showScreen(name, { fresh = false } = {}) {
 }
 
 /* ================================================================== boot */
-async function loadLibrary() {
-  S.libState = 'loading';
-  try {
-    const lib = await call('get_library');
-    S.library = (lib && lib.brushes) || [];
-    S.libSorted = S.library.slice().sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base', numeric: true }));
-    S.libByName = new Map(S.library.map(b => [nameKey(b.name), b]));
-    S.libState = 'ready';
-  } catch (e) { S.libState = 'error'; }
+async function loadLibrary(refresh = false) {
+  if (!refresh) S.libState = 'loading';                          // a rescan keeps showing the current brushes until the new list arrives
+  S.libBusy = true; paintRescan();
+  let lib = null;
+  try { lib = await call('get_library', !!refresh); } catch (e) { lib = { error: String((e && e.message) || e) }; }
+  lib = lib || {};
+  S.library = Array.isArray(lib.brushes) ? lib.brushes : [];
+  S.libSources = Array.isArray(lib.sources) ? lib.sources : [];
+  S.zbrushFound = lib.zbrush_found !== false;
+  S.libError = lib.error ? String(lib.error) : null;
+  S.libSorted = S.library.slice().sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base', numeric: true }));
+  S.libByName = new Map(S.library.map(b => [nameKey(b.name), b]));
+  S.libState = S.libError ? 'error' : 'ready';
+  S.libBusy = false;
+  if (refresh) Thumbs.forgetMisses();
   if (R.libRefresh) R.libRefresh();
   if (S.screen === 'menus' && R.right) { const keep = S.tab; R.right(); S.tab = keep; }
+  paintRescan();
 }
 async function loadSuggestions() {
   try { S.suggestions = (await call('get_suggestions')) || []; } catch (e) { S.suggestions = []; }
