@@ -1,13 +1,17 @@
-"""ZOrbit brush browser popout: a small always-on-top window over ZBrush that lists the brush library, filtered by
-tag, and selects the brush you pick in ZBrush through the background app.
+"""ZOrbit brush browser popout: a window with the brush library, filtered by tag, that selects the brush you
+pick in ZBrush through the background app. A normal app window: it has a taskbar button, snaps and maximises
+like any other, and stays open until the user closes it. Nothing hides it but the close button and Alt+F4.
 
 A pywebview window (Windows' built-in Edge WebView2) showing studio_ui/popout.html, in its own process so the
 hotkey can open it in a fraction of a second: the app starts it hidden a few seconds after launch ("pre-warm")
-and from then on only asks it to show or hide.
+and from then on only asks it to show. It does not need ZBrush or the app: the Studio, the tray menu and a
+Start menu shortcut open it too, and it stays up when the app quits.
 
   ZOrbit.exe --popout [--managed] [--show] [--tag KEY] [--zbrush-hwnd N]
 
-  --managed       started by the app: exits by itself once the app is gone
+  --managed       started by the app: exits by itself once the app is gone, unless its window is up. A managed
+                  popout whose window the user closes only hides it (the app can show it again at once); one that
+                  is not managed, or has lost its app, quits when its window is closed
   --show          show the window as soon as the page is up
   --tag KEY       ... filtered to this tag
   --zbrush-hwnd   the ZBrush window to hand the focus back to
@@ -15,12 +19,15 @@ and from then on only asks it to show or hide.
 Talks to the app with WM_COPYDATA (ids in radiald.py):
   popout -> ZOrbitControl     1   a pick: {"v": 1, "op": "pick", "kind": "brush", "name": ...}   result 1 taken, 0 refused
   app -> ZOrbitPopoutCtl     10   SHOW {"tag": key|null, "zbrush_hwnd": N, "toggle": bool}
-  app -> ZOrbitPopoutCtl     12   QUIT
+  app -> ZOrbitPopoutCtl     12   QUIT (ignored while the window is up)
 
+SHOW: a hidden window appears (afresh: no search, this tag only); one that is visible comes to the front; one that
+is already in front hands the keyboard back to ZBrush when asked to toggle (the hotkey), but never closes. A pick
+and Esc hand the keyboard back to ZBrush too. Keep on top (popout.json "on_top", on by default) is the pin button in the header.
 One instance at a time (Local\\ZOrbitPopout); a second launch passes its arguments on and exits.
-The window is a tool window without a taskbar button. Unless pinned it hides when another window takes the
-focus. Everything done to the window from other threads is plain Win32 or evaluate_js: touching window.native
-(a .NET Form) off the UI thread deadlocks. Never imports studio.py (that pulls in the installer code).
+Everything done to the window from other threads is plain Win32 or evaluate_js: touching window.native
+(a .NET Form) off the UI thread deadlocks, and so does hiding or showing the window, or calling into the page,
+from inside a js_api call. Never imports studio.py (that pulls in the installer code).
 """
 import ctypes
 import ctypes.wintypes as w
@@ -52,8 +59,6 @@ START_SIZE = (780, 560)            # logical pixels, until the user has resized 
 MIN_SIZE = (560, 380)
 POLL_S = 3.0                       # --managed: how often to look for the app, and
 POLL_MISSES = 2                    # ... how many misses in a row mean it has quit
-SHOW_GRACE_S = 0.4                 # after a show, losing the focus for a moment is not a reason to hide
-WM_ACTIVATE, WA_INACTIVE = 0x0006, 0
 WM_APP_STOP = W.WM_APP + 1         # control window: leave the message loop
 
 user32 = ctypes.WinDLL("user32", use_last_error=True)
@@ -67,12 +72,10 @@ user32.GetClassNameW.argtypes = [w.HWND, w.LPWSTR, ctypes.c_int]
 user32.GetWindowThreadProcessId.argtypes = [w.HWND, ctypes.POINTER(w.DWORD)]
 user32.GetWindowThreadProcessId.restype = w.DWORD
 user32.AttachThreadInput.argtypes = [w.DWORD, w.DWORD, w.BOOL]
-user32.GetWindowLongPtrW.restype = ctypes.c_void_p
-user32.GetWindowLongPtrW.argtypes = [w.HWND, ctypes.c_int]
-user32.SetWindowLongPtrW.restype = ctypes.c_void_p
-user32.SetWindowLongPtrW.argtypes = [w.HWND, ctypes.c_int, ctypes.c_void_p]
-user32.CallWindowProcW.restype = ctypes.c_ssize_t
-user32.CallWindowProcW.argtypes = [ctypes.c_void_p, w.HWND, w.UINT, w.WPARAM, w.LPARAM]
+user32.IsIconic.argtypes = [w.HWND]
+user32.IsZoomed.argtypes = [w.HWND]
+user32.ShowWindow.argtypes = [w.HWND, ctypes.c_int]
+SW_MAXIMIZE, SW_RESTORE = 3, 9
 kernel32.GetCurrentThreadId.restype = w.DWORD
 kernel32.CreateMutexW.restype, kernel32.CreateMutexW.argtypes = w.HANDLE, [ctypes.c_void_p, w.BOOL, w.LPCWSTR]
 kernel32.CloseHandle.argtypes = [w.HANDLE]
@@ -101,7 +104,7 @@ def _log(msg):
         pass
 
 
-_state_lock = threading.RLock()       # window rectangle, pin and thumbnail size all read-modify-write popout.json
+_state_lock = threading.RLock()       # window rectangle, keep on top and thumbnail size all read-modify-write popout.json
 
 
 def _read_state() -> dict:
@@ -145,6 +148,36 @@ def _show_payload(tag, zbrush, toggle=False) -> bytes:
     return json.dumps({"tag": tag or None, "zbrush_hwnd": int(zbrush or 0), "toggle": bool(toggle)}).encode("utf-8")
 
 
+TARGET_EXE = os.environ.get("ZORBIT_POPOUT_TARGET_EXE") or "zbrush.exe"   # the variable is for tests
+
+
+def _is_target(hwnd) -> bool:
+    """hwnd is a live window of ZBrush (the app the picks are for)."""
+    try:
+        return bool(hwnd) and bool(W.IsWindow(hwnd)) and \
+            os.path.basename(W.process_image(W.window_pid(hwnd))).lower() == TARGET_EXE
+    except Exception:
+        return False
+
+
+def _find_target() -> int:
+    """The largest visible top-level ZBrush window, or 0."""
+    best, area = 0, 0
+    EnumProc = ctypes.WINFUNCTYPE(w.BOOL, w.HWND, w.LPARAM)
+
+    def visit(h, _):
+        nonlocal best, area
+        if user32.IsWindowVisible(h) and _is_target(h):
+            r = w.RECT()
+            user32.GetWindowRect(h, ctypes.byref(r))
+            a = (r.right - r.left) * (r.bottom - r.top)
+            if a > area:
+                best, area = int(h), a
+        return True
+    user32.EnumWindows(EnumProc(visit), 0)
+    return best
+
+
 class PopoutApi(webapi.LibraryApi, webapi.TagApi):
     """What the page calls. get_library, get_thumbs and the tag methods come from the mixins."""
 
@@ -152,22 +185,30 @@ class PopoutApi(webapi.LibraryApi, webapi.TagApi):
         self._pop = pop          # underscore: pywebview must not expose (and crawl) it to JS
 
     def popout_get_state(self):
-        """What the page needs before it draws: the pin, the thumbnail size, the tag it was started with."""
+        """What the page needs before it draws: keep on top, the thumbnail size, the tag it was started with."""
         st = _read_state()
         size = st.get("size")
-        return {"pinned": self._pop.pinned, "size": size if isinstance(size, int) else None, "tag": self._pop.start_tag,
+        return {"on_top": self._pop.on_top, "size": size if isinstance(size, int) else None, "tag": self._pop.start_tag,
                 "tags_path": radiald.tags_path()}
 
     def popout_pick(self, name):
-        """Selects a brush in ZBrush: hides the window (stays up when pinned), then asks the app. {"ok": bool, "error"}."""
+        """Selects a brush in ZBrush: hands the focus back to ZBrush, then asks the app. The window stays open.
+        {"ok": bool, "error"}."""
         return self._pop.pick(str(name or ""))
 
     def popout_hide(self):
-        self._pop.hide(restore=True, why="page")
+        """The close button. Answered at once: the window is closed on another thread, because hiding it from
+        inside this call would wait for the UI thread."""
+        threading.Thread(target=self._pop.close, kwargs={"why": "close button"}, daemon=True).start()
         return True
 
-    def popout_set_pinned(self, flag):
-        self._pop.set_pinned(bool(flag))
+    def popout_release_focus(self):
+        """Esc with nothing left to clear: the keyboard goes back to ZBrush. The window stays open."""
+        self._pop.release_focus()
+        return True
+
+    def popout_set_on_top(self, flag):
+        self._pop.set_on_top(bool(flag))
         return True
 
     def popout_set_size(self, px):
@@ -185,19 +226,27 @@ class PopoutApi(webapi.LibraryApi, webapi.TagApi):
 
 
 class Popout:
-    """The window and everything that happens to it: show, hide, pick, the control window the app talks to."""
+    """The window and everything that happens to it: show, close, pick, the control window the app talks to."""
 
     def __init__(self, opts):
         self.opts = opts
         self.start_tag = opts["tag"]
-        self.pinned = bool(_read_state().get("pinned"))
+        st = _read_state()
+        if isinstance(st.get("on_top"), bool):
+            self.on_top = st["on_top"]
+        elif "pinned" in st:                  # the setting's earlier name; read once, then on_top is what is saved
+            self.on_top = bool(st["pinned"])
+        else:
+            self.on_top = True
+        self.managed = opts["managed"]       # the app owns us; false once it is gone, or when it never was
         self.window = None
         self.hwnd = 0
         self.ctl = 0
         self.ready = False                   # page loaded and frame set: only then can the window be shown
         self.quitting = False
         self.prev_fg = 0                     # the window to hand the focus back to
-        self.shown_at = 0.0
+        self._placed = False                 # the window has had its first position
+        self._was_max = False                # it was maximised when it was last hidden
         self._pending = None                 # (tag, zbrush hwnd) to show once ready
         self._lock = threading.RLock()       # show, hide and pick run one at a time
         self._loaded = threading.Event()
@@ -256,7 +305,7 @@ class Popout:
         """SHOW and QUIT from the app. Answered at once (the sender waits); the work happens on another thread."""
         cds = W.COPYDATASTRUCT.from_address(lparam)
         if cds.dwData == radiald.COPYDATA_QUIT:
-            self._work.put((self.quit, ("the app asked",)))
+            self._work.put((self.app_gone, ("the app asked",)))
             return 1
         if cds.dwData != radiald.COPYDATA_SHOW or not cds.lpData or not 0 < cds.cbData <= 4096:
             return 0
@@ -289,9 +338,7 @@ class Popout:
     def on_hwnd(self, hwnd):
         """From custom_frame, on the worker thread, before the frame is changed."""
         self.hwnd = int(hwnd)
-        style = winframe.user32.GetWindowLongW(hwnd, -16)                      # GWL_STYLE: custom_frame only ever adds
-        winframe.user32.SetWindowLongW(hwnd, -16, style & ~0x00010000)         # styles, so the maximise box goes here
-        self._watch_activation(self.hwnd)
+        winframe.limit_maximise_to_work_area(hwnd)           # maximise stops at the taskbar; tracks the normal rectangle
 
     def on_loaded(self):
         _log("page loaded")
@@ -300,8 +347,8 @@ class Popout:
     def worker(self):
         """webview.start's function: frame first, then wait for the page, then take whatever was asked meanwhile."""
         try:
-            winframe.custom_frame(TITLE, placement=None, pid=os.getpid(), topmost=True, toolwindow=True,
-                                  maximizable=False, include_hidden=True, on_hwnd=self.on_hwnd)
+            winframe.custom_frame(TITLE, placement=None, pid=os.getpid(), topmost=self.on_top, toolwindow=False,
+                                  maximizable=True, include_hidden=True, on_hwnd=self.on_hwnd)
             if not self.hwnd:
                 _log("the popout window was not found; giving up")
                 self.quit("no window")
@@ -315,7 +362,7 @@ class Popout:
             _log(f"ready; pending show: {pend}")
             if pend:
                 self.request_show(pend[0], pend[1], False)
-            if self.opts["managed"]:
+            if self.managed:
                 threading.Thread(target=self._watch_app, daemon=True, name="popout-managed").start()
         except Exception as e:
             _log(f"worker failed: {e!r}")
@@ -323,7 +370,7 @@ class Popout:
     def _watch_app(self):
         """--managed: the app owns us; when its control window has been gone for two looks in a row it has quit."""
         misses = 0
-        while not self.quitting:
+        while not self.quitting and self.managed:
             time.sleep(POLL_S)
             if W.find_message_window(APP_CLASS):
                 misses = 0
@@ -331,8 +378,18 @@ class Popout:
             misses += 1
             _log(f"the app's control window ({APP_CLASS}) is missing ({misses}/{POLL_MISSES})")
             if misses >= POLL_MISSES:
-                self.quit("the app is gone")
+                self.app_gone("the app is gone")
                 return
+
+    def app_gone(self, why):
+        """The app quit (or told us to). A hidden window has no reason to stay; one that is up does not depend
+        on the app, so it stays, no longer managed: closing it then ends the process."""
+        with self._lock:
+            if self.visible() and not self.quitting:
+                _log("app gone; staying open (the window is up)")
+                self.managed = False
+                return
+        self.quit(why)
 
     def visible(self) -> bool:
         return bool(self.hwnd and user32.IsWindowVisible(self.hwnd))
@@ -345,66 +402,114 @@ class Popout:
         r = w.RECT()
         return r if user32.GetWindowRect(self.hwnd, ctypes.byref(r)) else None
 
-    def _save_rect(self):
-        r = self._rect()
-        if r and r.right - r.left > 100 and r.bottom - r.top > 100:
-            _update_state(window={"x": r.left, "y": r.top, "width": r.right - r.left, "height": r.bottom - r.top,
-                                  "maximized": False})
+    def _save_placement(self):
+        """popout.json "window": the normal (restored) rectangle from the tracker and whether it is maximised,
+        in the shape studio.json keeps its own."""
+        rec = winframe.placement_record(self.hwnd)
+        if not rec:
+            r = self._rect()
+            if not r:
+                return
+            rec = {"x": r.left, "y": r.top, "width": r.right - r.left, "height": r.bottom - r.top, "maximized": False}
+        if rec["width"] > 100 and rec["height"] > 100:
+            _update_state(window=rec)
 
     def _place(self, zb):
-        """(x, y, w, h) for a window that is about to appear: where it was last time, else centred on the screen ZBrush is on."""
+        """(x, y, w, h, maximised) for a window that is about to appear for the first time: where it was last time,
+        else centred on the screen ZBrush is on."""
         r = self._rect()
         scale = user32.GetDpiForSystem() / 96 if hasattr(user32, "GetDpiForSystem") else 1.0
         minw, minh = round(MIN_SIZE[0] * scale), round(MIN_SIZE[1] * scale)
         saved = winframe.saved_window(_read_state().get("window"), minw, minh)
         if saved:
-            return saved[:4]
+            return saved
         wd, ht = (r.right - r.left, r.bottom - r.top) if r else (round(START_SIZE[0] * scale), round(START_SIZE[1] * scale))
         wa = winframe.work_area(zb or self.prev_fg or W.GetForegroundWindow() or 0)
-        return wa.left + (wa.right - wa.left - wd) // 2, wa.top + (wa.bottom - wa.top - ht) // 2, wd, ht
+        return wa.left + (wa.right - wa.left - wd) // 2, wa.top + (wa.bottom - wa.top - ht) // 2, wd, ht, False
+
+    def _z_order(self):
+        return winframe.HWND_TOPMOST if self.on_top else winframe.HWND_NOTOPMOST
 
     def request_show(self, tag, zb, toggle):
-        """The app asks for the window (SHOW), or the first launch does (--show)."""
+        """The app asks for the window (SHOW), or the first launch does (--show). Never closes it: a window that is
+        hidden appears, one that is up comes to the front, and one that is already in front hands the keyboard
+        back to ZBrush when asked to toggle (the hotkey)."""
         with self._lock:
-            if not self.ready:                         # still starting: it shows itself when it is up; a second press cancels
-                self._pending = None if (toggle and self._pending) else (tag, zb)
+            if not self.ready:                         # still starting: it shows itself when it is up
+                self._pending = (tag, zb)
                 _log(f"SHOW while starting: pending {self._pending}")
                 return
-            if toggle and self.visible():
-                _log("SHOW toggle: hiding")
-                self.hide(restore=True, why="toggle")
+            if not self.visible():
+                self.show(tag, zb)
+            elif self._holds_foreground():
+                self._remember_target(zb)
+                if toggle:
+                    _log("SHOW toggle: in front; the keyboard goes back to ZBrush")
+                    self.release_focus()
+                else:
+                    self.show(tag, zb, reset=False)    # already in front: the search box gets the cursor
+            else:
+                self.show(tag, zb, reset=False)
+
+    def _remember_target(self, zb=0):
+        """The window the focus goes back to: the ZBrush window the app named, else ZBrush in front, else the one
+        remembered, else any ZBrush window. Opened from the Studio, the tray or the Start menu, the window in front
+        is not ZBrush, and handing a pick to it would lose the pick."""
+        fg = W.GetForegroundWindow()
+        for cand in (zb, int(fg) if fg else 0, self.prev_fg):
+            if _is_target(cand):
+                self.prev_fg = int(cand)
                 return
-            self.show(tag, zb)
+        self.prev_fg = _find_target()
+
+    def _back_to_target(self) -> bool:
+        """Gives ZBrush the foreground (looked up again if the remembered window is gone) and wakes the pen."""
+        if not _is_target(self.prev_fg):
+            self.prev_fg = _find_target()
+        if not self.prev_fg:
+            return False
+        user32.SetForegroundWindow(self.prev_fg)
+        W.nudge_mouse()                                # a zero move: the pen and cursor tracking wake up in ZBrush
+        return True
 
     def show(self, tag=None, zb=0, reset=True):
-        """Shows the window over everything, takes the focus and puts the cursor in the search box. reset: also
-        tell the page to start afresh (empty search, this tag only)."""
+        """Shows the window, takes the focus and puts the cursor in the search box. reset: also tell the page to
+        start afresh (empty search, this tag only). Without it the page is left as it is, except that a tag
+        given is applied."""
         with self._lock:
             if not self.hwnd or self.quitting:
                 return
             was_visible = self.visible()
-            fg = W.GetForegroundWindow()
-            if zb and W.IsWindow(zb):
-                self.prev_fg = zb
-            elif fg and W.window_pid(fg) != os.getpid():
-                self.prev_fg = int(fg)
-            if reset:
+            self._remember_target(zb)
+            if reset or tag:
                 try:
                     self.window.evaluate_js("window.__popoutShow && __popoutShow(" + json.dumps({"tag": tag or None}) + ")")
                 except Exception as e:
                     _log(f"__popoutShow failed: {e!r}")
-            self.shown_at = time.monotonic()
             if was_visible:
-                W.SetWindowPos(self.hwnd, W.HWND_TOPMOST, 0, 0, 0, 0, W.SWP_NOMOVE | W.SWP_NOSIZE | W.SWP_SHOWWINDOW)
-            else:                                      # placed while hidden, then shown through pywebview: the form has to
-                x, y, wd, ht = self._place(zb)         # know it is visible, or the web view inside stays "hidden" and paints nothing
-                W.SetWindowPos(self.hwnd, W.HWND_TOPMOST, x, y, wd, ht, W.SWP_NOACTIVATE)
+                if user32.IsIconic(self.hwnd):
+                    user32.ShowWindow(self.hwnd, SW_RESTORE)
+                winframe.user32.SetWindowPos(self.hwnd, self._z_order(), 0, 0, 0, 0,
+                                             W.SWP_NOMOVE | W.SWP_NOSIZE | W.SWP_SHOWWINDOW)
+            else:                                      # shown through pywebview: the form has to know it is visible, or the
+                maxed = self._was_max                  # web view inside stays "hidden" and paints nothing
+                if not self._placed:                   # the first time: where it was last session. After that it keeps its place
+                    x, y, wd, ht, maxed = self._place(zb)
+                    winframe.user32.SetWindowPos(self.hwnd, self._z_order(), x, y, wd, ht, W.SWP_NOACTIVATE)
+                    self._placed = True
+                else:
+                    winframe.user32.SetWindowPos(self.hwnd, self._z_order(), 0, 0, 0, 0,
+                                                 W.SWP_NOMOVE | W.SWP_NOSIZE | W.SWP_NOACTIVATE)
                 self.window.show()
+                winframe.user32.SetWindowPos(self.hwnd, self._z_order(), 0, 0, 0, 0,       # Show() may re-apply a stale
+                                             W.SWP_NOMOVE | W.SWP_NOSIZE | W.SWP_NOACTIVATE)  # TopMost: ours wins
+                if maxed and not user32.IsZoomed(self.hwnd):
+                    user32.ShowWindow(self.hwnd, SW_MAXIMIZE)
             # Windows lets only the process that got the last input take the foreground; a no-op key from us
             # (0xE8 is an unassigned virtual key, so nothing acts on it) counts as that input.
             W.send_keys([(0xE8, False), (0xE8, True)])
             got = winframe.force_foreground(self.hwnd)
-            _log(f"shown (tag={tag}, prev_fg={self.prev_fg}, was_visible={was_visible}, foreground={got})")
+            _log(f"shown (tag={tag}, reset={reset}, prev_fg={self.prev_fg}, was_visible={was_visible}, foreground={got})")
             self._focus_page()
 
     def _focus_page(self):
@@ -446,46 +551,67 @@ class Popout:
             pass
         _log(f"web view focused with Win32 ({len(found)} child windows): page has focus {has}")
 
+    def release_focus(self):
+        """The keyboard goes back to the window that had it before (ZBrush). The window stays open. Allowed because
+        this process holds the foreground when the user presses Esc or the hotkey in it."""
+        if self._back_to_target():
+            _log(f"focus handed back to {self.prev_fg}")
+        else:
+            _log("no ZBrush window to hand the focus back to")
+
+    def close(self, why=""):
+        """The user closed the window (the X button, Alt+F4, the taskbar). It is hidden, and kept for the app to
+        show again when the app started it; a popout that is on its own has nothing to wait for and ends."""
+        self.hide(restore=True, why=why)
+        if not self.managed and not self.quitting:
+            self.quit("closed by the user")
+
     def hide(self, restore=True, why=""):
         """Hides the window. restore: give the focus back to ZBrush first (allowed while we hold it); a window that
         lost the focus to something else just goes."""
         with self._lock:
             if not self.visible():
                 return False
-            self._save_rect()
-            if restore and self.prev_fg and W.IsWindow(self.prev_fg) and self._holds_foreground():
+            self._save_placement()
+            self._was_max = bool(user32.IsZoomed(self.hwnd))
+            if restore and _is_target(self.prev_fg) and self._holds_foreground():
                 user32.SetForegroundWindow(self.prev_fg)
             self.window.hide()
             W.nudge_mouse()
             _log(f"hidden ({why})")
             return True
 
-    def set_pinned(self, flag):
+    def set_on_top(self, flag):
         with self._lock:
-            self.pinned = flag
-            _update_state(pinned=flag)
-            _log(f"pinned: {flag}")
+            self.on_top = flag
+            _update_state(on_top=flag)
+            if self.hwnd:
+                winframe.user32.SetWindowPos(self.hwnd, self._z_order(), 0, 0, 0, 0,
+                                             W.SWP_NOMOVE | W.SWP_NOSIZE | W.SWP_NOACTIVATE)
+        # The form keeps its own TopMost (set once at creation) and puts it back when it is shown. pywebview
+        # marshals the property to the UI thread; set it from a thread of ours, never inside the js_api call.
+        threading.Thread(target=self._sync_form_on_top, args=(flag,), daemon=True).start()
+        _log(f"keep on top: {flag}")
+
+    def _sync_form_on_top(self, flag):
+        try:
+            self.window.on_top = flag
+        except Exception as e:
+            _log(f"could not set the form's TopMost: {e!r}")
 
     def pick(self, name) -> dict:
-        """The page picked a brush. The window gets out of the way first (pinned: only the focus goes back to ZBrush),
-        because the app selects the brush with ZBrush in front."""
+        """The page picked a brush. The window stays where it is; the focus goes back to ZBrush, because the app
+        selects the brush with ZBrush in front. Runs inside a js_api call: no show, hide or evaluate_js here."""
         if not name:
             return {"ok": False, "error": "No brush to select."}
         with self._lock:
-            was_visible = self.visible()
-            if self.pinned:
-                if self.prev_fg and W.IsWindow(self.prev_fg):
-                    user32.SetForegroundWindow(self.prev_fg)
-            else:
-                self.hide(restore=True, why="pick")
+            self._back_to_target()
         app = W.find_message_window(APP_CLASS)
         payload = json.dumps({"v": 1, "op": "pick", "kind": "brush", "name": name}).encode("utf-8")
         r = W.send_copydata(app, radiald.COPYDATA_PICK, payload) if app else None
         _log(f"pick {name!r}: app window {app}, result {r}")
         if r == 1:
             return {"ok": True}
-        if was_visible and not self.pinned:
-            self.show(reset=False)                    # nothing was selected: bring the window back with its search intact
         return {"ok": False, "error": "ZOrbit is not running" if r is None else "ZOrbit did not take that brush. Is it up to date?"}
 
     def quit(self, why=""):
@@ -495,7 +621,7 @@ class Popout:
             self.quitting = True
             _log(f"quitting ({why})")
             if self.visible():
-                self._save_rect()
+                self._save_placement()
         self.stop_ctl()
 
         def kill():                                   # the window should close by itself; this makes sure the process ends
@@ -512,50 +638,11 @@ class Popout:
             os._exit(0)
 
     def on_closing(self):
-        """pywebview 'closing' (UI thread; False cancels): Alt+F4 and the like only hide the window."""
+        """pywebview 'closing' (UI thread; False cancels): Alt+F4 and the like only close the window, which is hidden
+        (or ends the process: see close)."""
         if self.quitting:
             return None
-        if self.visible():          # hidden from another thread: this one is the UI thread, which pywebview's hide() needs free
-            threading.Thread(target=self.hide, kwargs={"restore": False, "why": "close requested"}, daemon=True).start()
-        return False
-
-    # --- losing the focus ---------------------------------------------------------------------------
-    def _watch_activation(self, hwnd):
-        """Subclasses the window to see WM_ACTIVATE (everything is passed on). Runs on the UI thread, so it only starts
-        a short timer: the check itself looks at who has the foreground, because a click inside the web view also
-        moves the activation between windows of this process."""
-        GWLP_WNDPROC = -4
-        original = user32.GetWindowLongPtrW(hwnd, GWLP_WNDPROC)
-
-        def proc(h, msg, wp, lp):
-            r = user32.CallWindowProcW(original, h, msg, wp, lp)
-            if msg == WM_ACTIVATE and (wp & 0xFFFF) == WA_INACTIVE:
-                threading.Timer(0.05, self._check_inactive, args=(0,)).start()
-            return r
-        cb = W.WNDPROC(proc)
-        self._refs.append(cb)
-        user32.SetWindowLongPtrW(hwnd, GWLP_WNDPROC, ctypes.cast(cb, ctypes.c_void_p))
-
-    def _check_inactive(self, tries):
-        if self.pinned or self.quitting or not self.visible():
-            return
-        fg = W.GetForegroundWindow()
-        if fg and (W.window_pid(fg) == os.getpid() or _owned_by(fg, self.hwnd)):
-            return                                      # the focus is still ours (inside the web view, or a popup of it)
-        wait = SHOW_GRACE_S - (time.monotonic() - self.shown_at)
-        if wait > 0 or (not fg and tries < 2):          # just shown, or between two windows: look again
-            threading.Timer(max(wait, 0) + 0.05, self._check_inactive, args=(tries + 1,)).start()
-            return
-        self.hide(restore=False, why="lost the focus")
-
-
-def _owned_by(hwnd, owner) -> bool:
-    """hwnd is a popup owned by our window: the web view's own context menu or an IME candidate list belong to
-    another process (msedgewebview2.exe), so by pid alone they would look like the user leaving."""
-    try:
-        root = ctypes.windll.user32.GetAncestor(w.HWND(hwnd), 3)          # GA_ROOTOWNER
-        return bool(root) and int(root) == int(owner)
-    except Exception:
+        threading.Thread(target=self.close, kwargs={"why": "close requested"}, daemon=True).start()   # hiding needs the UI thread free
         return False
 
 
@@ -594,7 +681,7 @@ def main(args) -> int:
     user32.SetProcessDPIAware()                          # as pywebview does: sizes below are logical pixels
     api = PopoutApi(pop)
     window = webview.create_window(TITLE, url=UI_PAGE, js_api=api, width=START_SIZE[0], height=START_SIZE[1],
-                                   min_size=MIN_SIZE, hidden=True, on_top=True, background_color="#1b1c20",
+                                   min_size=MIN_SIZE, hidden=True, on_top=pop.on_top, background_color="#1b1c20",
                                    text_select=False)
     pop.window = window
     window.events.closing += pop.on_closing

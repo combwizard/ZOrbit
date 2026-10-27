@@ -659,6 +659,7 @@ body.dragging .irow:hover { background: transparent; }
 .bridge-key.dim { opacity: .55; }
 .bridge-key .field { margin-bottom: 0; max-width: 520px; }
 .browser-key .field { margin-bottom: 0; max-width: 520px; }
+.browser-open { margin-top: 14px; }
 .zrows { display: flex; flex-direction: column; gap: 8px; margin: 14px 0; }
 .zrow { display: flex; align-items: center; gap: 14px; padding: 10px 12px; border-radius: 8px; background: var(--bg1); border: 1px solid var(--line); }
 .zname { display: flex; align-items: center; gap: 8px; font-weight: 600; }

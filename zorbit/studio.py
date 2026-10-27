@@ -537,6 +537,28 @@ class Api(webapi.LibraryApi, webapi.TagApi):
         os.startfile(folder)
         return True
 
+    def open_browser(self):
+        """Opens the brush browser: asks the running one to show itself (it may be a hidden pre-warmed one, or
+        one the user closed), else starts a new one that shows itself. Not --managed: the browser needs no app.
+        {"ok": bool, "started": bool, "error"}."""
+        try:
+            import win32
+            ctl = win32.find_message_window(radiald.POPOUT_CLASS)
+            if ctl:
+                payload = json.dumps({"tag": None, "zbrush_hwnd": 0, "toggle": False}).encode("utf-8")
+                r = win32.send_copydata(ctl, radiald.COPYDATA_SHOW, payload)
+                if r == 1:
+                    return {"ok": True, "started": False}
+                _startup(f"open_browser: SHOW to {ctl} answered {r}; starting a new one")
+            subprocess.Popen(paths.launch_commands()["popout"] + ["--show"], env=paths.clean_env(),
+                             creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP,
+                             close_fds=True, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                             stderr=subprocess.DEVNULL)
+            return {"ok": True, "started": True}
+        except Exception as e:
+            _startup(f"open_browser failed: {e!r}")
+            return {"ok": False, "started": False, "error": "Could not open the brush browser: " + str(e)}
+
     # --- window (custom title bar; plain Win32 so nothing touches .NET off the UI thread) ---------
     def get_app_info(self):
         return {"version": VERSION, "title": TITLE}
@@ -659,92 +681,18 @@ def _on_closing(api):
 
 def _remember_window(hwnd):
     """Saves the window's normal (restored) rectangle and whether it is maximised, for the next launch.
-    Taken from _limit_maximise_to_work_area's tracker: GetWindowPlacement reports the size WinForms would
-    restore to, which is one caption taller than the window really was."""
+    Taken from winframe's tracker (limit_maximise_to_work_area): GetWindowPlacement reports the size WinForms
+    would restore to, which is one caption taller than the window really was."""
     try:
-        st = _subclass.get(hwnd, (None, None, None))[2]
-        if not st or not st["normal"]:
+        rec = winframe.placement_record(hwnd)
+        if not rec:
             return
-        left, top, right, bottom = st["normal"]
         with _studio_lock:                     # read, change and write as one step
             data = _read_studio_file()
-            data["window"] = {"x": left, "y": top, "width": right - left, "height": bottom - top,
-                              "maximized": st["zoomed"]}
+            data["window"] = rec
             _write_studio_file(data)
     except Exception:
         pass
-
-
-class _MINMAXINFO(ctypes.Structure):
-    _fields_ = [("ptReserved", w.POINT), ("ptMaxSize", w.POINT), ("ptMaxPosition", w.POINT),
-                ("ptMinTrackSize", w.POINT), ("ptMaxTrackSize", w.POINT)]
-
-
-_LRESULT = ctypes.c_ssize_t
-_WNDPROC = ctypes.WINFUNCTYPE(_LRESULT, w.HWND, w.UINT, w.WPARAM, w.LPARAM)
-_subclass = {}                     # keeps the callback and the original proc alive for the window's life
-
-
-def _limit_maximise_to_work_area(hwnd):
-    """Subclasses the window to answer WM_GETMINMAXINFO only. Without a caption Windows maximises over the
-    whole monitor (taskbar included); this makes double-click, Win+Up, snap-to-top and our button all
-    maximise to the work area, with the usual invisible-border overhang. Everything else passes through."""
-    user32.GetWindowLongPtrW.restype = ctypes.c_void_p
-    user32.GetWindowLongPtrW.argtypes = [w.HWND, ctypes.c_int]
-    user32.SetWindowLongPtrW.restype = ctypes.c_void_p
-    user32.SetWindowLongPtrW.argtypes = [w.HWND, ctypes.c_int, ctypes.c_void_p]
-    user32.CallWindowProcW.restype = _LRESULT
-    user32.CallWindowProcW.argtypes = [ctypes.c_void_p, w.HWND, w.UINT, w.WPARAM, w.LPARAM]
-    GWLP_WNDPROC, WM_GETMINMAXINFO, WM_WINDOWPOSCHANGED = -4, 0x0024, 0x0047
-    WM_FIX_RESTORE = 0x8000 + 77
-    if hwnd in _subclass:
-        return
-    original = user32.GetWindowLongPtrW(hwnd, GWLP_WNDPROC)
-    # WinForms still believes the window has a caption, and on restore re-applies a size that is one caption
-    # taller. So remember the last normal rectangle and put it back right after any restore.
-    st = {"zoomed": bool(user32.IsZoomed(hwnd)), "normal": None, "pending": None}
-
-    def proc(h, msg, wp, lp):
-        if msg == WM_FIX_RESTORE:
-            rc = st.pop("pending", None)
-            st["pending"] = None
-            if rc and not user32.IsZoomed(h) and not user32.IsIconic(h):
-                user32.SetWindowPos(h, None, rc[0], rc[1], rc[2] - rc[0], rc[3] - rc[1], 0x0014)
-            return 0
-        r = user32.CallWindowProcW(original, h, msg, wp, lp)
-        if msg == WM_WINDOWPOSCHANGED:
-            zoomed, iconic = bool(user32.IsZoomed(h)), bool(user32.IsIconic(h))
-            if st["zoomed"] and not zoomed and not iconic and st["normal"]:
-                st["pending"] = st["normal"]
-                user32.PostMessageW(h, WM_FIX_RESTORE, 0, 0)
-            elif not zoomed and not iconic and not st["pending"]:
-                rc = w.RECT()
-                user32.GetWindowRect(h, ctypes.byref(rc))
-                st["normal"] = (rc.left, rc.top, rc.right, rc.bottom)
-            if not iconic:
-                st["zoomed"] = zoomed
-        elif msg == WM_GETMINMAXINFO:
-            try:
-                class MONITORINFO(ctypes.Structure):
-                    _fields_ = [("cbSize", w.DWORD), ("rcMonitor", w.RECT), ("rcWork", w.RECT),
-                                ("dwFlags", w.DWORD)]
-                user32.MonitorFromWindow.restype = w.HMONITOR
-                mi = MONITORINFO()
-                mi.cbSize = ctypes.sizeof(MONITORINFO)
-                user32.GetMonitorInfoW(user32.MonitorFromWindow(h, 2), ctypes.byref(mi))
-                b = user32.GetSystemMetrics(32) + user32.GetSystemMetrics(92)   # SIZEFRAME + PADDEDBORDER
-                mm = _MINMAXINFO.from_address(lp)
-                wa, mon = mi.rcWork, mi.rcMonitor
-                mm.ptMaxPosition.x = wa.left - mon.left - b
-                mm.ptMaxPosition.y = wa.top - mon.top - b
-                mm.ptMaxSize.x = wa.right - wa.left + 2 * b
-                mm.ptMaxSize.y = wa.bottom - wa.top + 2 * b
-            except Exception:
-                pass
-        return r
-    cb = _WNDPROC(proc)
-    _subclass[hwnd] = (cb, original, st)
-    user32.SetWindowLongPtrW(hwnd, GWLP_WNDPROC, ctypes.cast(cb, ctypes.c_void_p))
 
 
 def main():
@@ -789,7 +737,7 @@ def main():
     winframe.enable_drag_regions()
     icon = paths.ICON if os.path.isfile(paths.ICON) else None
     webview.start(lambda: winframe.custom_frame(TITLE, placement, pid=os.getpid(),
-                                                on_hwnd=_limit_maximise_to_work_area),
+                                                on_hwnd=winframe.limit_maximise_to_work_area),
                   debug="--debug" in sys.argv, icon=icon)                     # custom_frame: worker thread
     CloseHandle(mutex)
     return 0

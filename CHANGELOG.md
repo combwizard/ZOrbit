@@ -29,13 +29,17 @@ All notable changes to this project are listed here. The format follows
 - Tag colours on the ring. `ring.tag_colors` (`none`, `tint`, `glow` or `both`, default `tint`; Settings > Tag
   colours) shows a brush's first tag on its slot as a coloured rim and tinted disc, a soft halo, or both. The
   hover border, spoke and label take the colour, and a tag slot and its fan always use the tag's colour.
-- The brush browser: a window over ZBrush with search, folders, tag chips and thumbnails. `browser.hotkey`
-  (Alt+B on new installs; Settings > Brush browser) shows and hides it while ZBrush or the browser is in
-  front. Type to search, arrows to move, Enter or a double-click to pick, Esc to close, and a pin button to keep
-  it open. A pick reaches ZBrush through the app like a ring pick and counts towards auto slots; in ZBrush 2022
-  to 2025 it is dropped if ZBrush has not got the focus back within 2 seconds. The app starts it hidden in the
-  background when the config has a browser hotkey or a Browser slot. Its placement is kept in `popout.json`
-  and its log is `popout.log`.
+- The brush browser: a window with your brushes, search, folders, tag chips and thumbnails. It is a normal
+  window with a taskbar button that you can move, resize, maximise and snap, and it stays open until you close
+  it. `browser.hotkey` (Alt+B on new installs; Settings > Brush browser) opens it, brings it to the front, or,
+  when it is already in front, hands the keyboard back to ZBrush. It also opens from a Browser slot, the tray
+  menu, a button in Studio's Library and Settings, and a Start menu shortcut, and it does not need ZBrush: it
+  stays open when ZBrush and the app quit. Type to search, arrows to move, Enter or a double-click to pick, Esc
+  to clear and then give ZBrush the keyboard back, and a Keep on top button (on by default). A pick reaches
+  ZBrush through the app like a ring pick and counts towards auto slots; in ZBrush 2022 to 2025 it is dropped
+  if ZBrush has not got the focus back within 2 seconds. The app starts it hidden in the background when the
+  config has a browser hotkey or a Browser slot. Its placement is kept in `popout.json` and its log is
+  `popout.log`.
 - Tag warnings in the problems panel: a tag or browser filter that does not exist, an unknown `tag_colors`, a
   browser hotkey that a menu already uses (the menu wins) or cannot be read.
 

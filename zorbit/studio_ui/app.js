@@ -163,7 +163,7 @@ const S = {
   tags: [], tagMap: new Map(), itemTags: {}, tagMtime: null, tagsErr: '', tagsLoaded: false, tagsPath: '', palette: null,   // see "tags" below
   lib: { cat: 'All', q: '', size: 112 },
   dock: { cat: 'All', q: '' },
-  pop: { cat: 'All', q: '', size: 96 }, popPinned: false,   // the popout's browser state, and whether it stays open
+  pop: { cat: 'All', q: '', size: 96 }, popOnTop: true,   // the popout's browser state, and whether its window stays above others
   status: null,
   prefs: { show_licence: true },
   ready: false, fatal: false,                 // ready after the first screen is up; fatal when the recovery screen is showing
@@ -2221,10 +2221,12 @@ function addBrushesToCurrent(names) {
      primaryMany(names)  the same for a selection of several (a single name goes to primary)
      cardTitle(), cardLabel(name), enterHint   the card button's tooltip, a card's spoken label and the Enter hint in it
      hint()          nodes for the line under the search box
+     tools()         optional: a node for the end of the toolbar
      badge           null (no "In my menus" folder, no badges) or badge(name) -> { n, titles } | null
      onSize(px)      optional: the thumbnail size changed */
 const STUDIO_HOST = {
   dnd: true,
+  tools: () => h('button', { class: 'btn small', type: 'button', title: 'Open the brush browser in its own window', onclick: openBrowserWindow }, icon('k_browser', 13), 'Brush browser'),
   primaryIcon: 'plus',
   primaryLabel() { const m = curMenu(); return m ? 'Add to ' + (m.title || S.menuId) : 'No menu to add to'; },
   canPrimary() { return !!curMenu(); },
@@ -2242,6 +2244,13 @@ const STUDIO_HOST = {
     return u ? { n: u.length, titles: Array.from(new Set(u.map(x => (S.cfg.menus[x.menuId] || {}).title || x.menuId))) } : null;
   },
 };
+
+/* The brush browser in its own window (the Library toolbar, Settings): the app shows it if it is running, else a new one starts. It needs neither ZBrush nor the app. */
+async function openBrowserWindow() {
+  let r;
+  try { r = await call('open_browser'); } catch (e) { r = { ok: false, error: (e && e.message) || String(e) }; }
+  if (!r || !r.ok) toast((r && r.error) || 'Could not open the brush browser.', { tone: 'warn', ms: 3800 });
+}
 
 /* ---------- finding brushes: rescan button and the empty states */
 function paintRescanBtn(b) {
@@ -2371,7 +2380,7 @@ function makeBrowser({ compact, st, host = STUDIO_HOST }) {
       if (r !== curRes) { curRes = r; $$('.bcard .thumb', grid).forEach(t => rethumb(t, r)); }
     });
     paint(); grid.style.setProperty('--card', st.size + 'px');
-    tools = h('div', { class: 'b-tools' }, searchBox, h('div', { class: 'size-ctl' }, icon('library', 13), size), rescanBtn());
+    tools = h('div', { class: 'b-tools' }, searchBox, h('div', { class: 'size-ctl' }, icon('library', 13), size), rescanBtn(), host.tools ? host.tools() : null);
     root.append(side, h('div', { class: 'lib-main' }, tools, h('div', { class: 'b-sub' }, hint, count), scroll, strip));
   }
 
@@ -2998,8 +3007,9 @@ function buildSettingsScreen(root) {
       bhk.say(bsay(owner), 'warn');
       commit();
     } });
-    page.append(card('Brush browser', 'A popout over ZBrush',
-      h('div', { class: 'browser-key' }, field('Hotkey', bhk, 'Opens the brush browser over ZBrush. The browser also opens from a Browser slot.'))));
+    page.append(card('Brush browser', 'A window of its own',
+      h('div', { class: 'browser-key' }, field('Hotkey', bhk, 'Shows the brush browser; pressed over it, it gives ZBrush the keyboard back. The browser also opens from a Browser slot and the tray menu.')),
+      h('div', { class: 'browser-open' }, h('button', { class: 'btn small', type: 'button', title: 'Open the brush browser in its own window', onclick: openBrowserWindow }, icon('k_browser', 13), 'Open the brush browser'))));
     { const o0 = bOwner(S.cfg.browser && S.cfg.browser.hotkey); if (o0) bhk.say(bsay(o0), 'warn'); }
 
     /* --- studio (preferences of this window, saved immediately, not part of the menus file) */
@@ -3807,8 +3817,9 @@ function init() {
 }
 
 /* ================================================================== POPOUT (popout.html) */
-/* The brush browser popout: a small window that opens over ZBrush (zorbit/popout.py). Picking a brush selects it in ZBrush through the
-   app. The Python side calls __popoutShow({tag}) each time the window is shown and __popoutFocus() once it has the foreground. */
+/* The brush browser popout: a window of its own that stays open until it is closed (zorbit/popout.py). Picking a brush selects it in ZBrush
+   through the app and hands the keyboard back to ZBrush. The Python side calls __popoutShow({tag}) each time the window is shown afresh
+   and __popoutFocus() once it has the foreground. */
 let popBrowser = null, popWant, popPicking = false;
 const popHide = () => { call('popout_hide').catch(() => {}); };
 const POP_HOST = {
@@ -3823,34 +3834,33 @@ const POP_HOST = {
     let r;
     try { r = await call('popout_pick', name); } catch (e) { r = { ok: false, error: 'Could not reach ZOrbit: ' + ((e && e.message) || e) }; }
     popPicking = false;
-    if (r && r.ok) { if (S.popPinned) toast('Selected ' + name, { tone: 'ok', ms: 1400 }); }
+    if (r && r.ok) toast('Selected ' + name, { tone: 'ok', ms: 1400 });
     else toast((r && r.error) || 'ZOrbit is not running', { tone: 'warn', ms: 3800 });
   },
   primaryMany() { toast('ZBrush takes one brush at a time. Select a single brush.', { tone: 'warn', ms: 2600 }); },
   cardTitle: () => 'Select in ZBrush',
   cardLabel: name => 'Select ' + name + ' in ZBrush',
   enterHint: 'Press Enter to select it in ZBrush.',
-  hint: () => ['Double-click or Enter selects a brush in ZBrush. Type to search, arrows to move, Esc to close. Right-click tags.'],
+  hint: () => ['Double-click or Enter selects a brush in ZBrush. Type to search, arrows to move, Esc to go back to ZBrush. Right-click tags.'],
   badge: null,                                       // no "In my menus" folder, no badges: the popout knows nothing of menus
   onSize: debounce(px => { call('popout_set_size', px).catch(() => {}); }, 400),
 };
 
 function buildPopout(root) {
-  const pin = h('button', { class: 'ibtn pin-btn', type: 'button', onclick: () => setPinned(!S.popPinned) }, icon('pin', 15));
+  const pin = h('button', { class: 'ibtn pin-btn', type: 'button', onclick: () => setOnTop(!S.popOnTop) }, icon('pin', 15));
   const paintPin = () => {
-    const t = S.popPinned ? 'Pinned: stays open and on top. Click to unpin.' : 'Pin: stay open and on top';
-    pin.setAttribute('aria-pressed', S.popPinned ? 'true' : 'false'); pin.title = t; pin.setAttribute('aria-label', t);
+    pin.setAttribute('aria-pressed', S.popOnTop ? 'true' : 'false'); pin.title = 'Keep on top'; pin.setAttribute('aria-label', 'Keep on top');
   };
-  async function setPinned(on) {
-    S.popPinned = on; paintPin();
-    try { await call('popout_set_pinned', on); }
-    catch (e) { S.popPinned = !on; paintPin(); toast('Could not change the pin.', { tone: 'warn' }); }
+  async function setOnTop(on) {
+    S.popOnTop = on; paintPin();
+    try { await call('popout_set_on_top', on); }
+    catch (e) { S.popOnTop = !on; paintPin(); toast('Could not change Keep on top.', { tone: 'warn' }); }
   }
   paintPin();
   const head = h('header', { class: 'pop-head' },
     h('span', { class: 'pop-logo', 'aria-hidden': 'true' }, icon('logo', 18)), h('h1', { class: 'pop-title' }, 'Brushes'),
     h('div', { class: 'spacer' }), pin,
-    h('div', { class: 'winctl' }, h('button', { class: 'winbtn close', type: 'button', title: 'Close (Esc)', 'aria-label': 'Close', onclick: popHide }, icon('x', 14))));
+    h('div', { class: 'winctl' }, h('button', { class: 'winbtn close', type: 'button', title: 'Close', 'aria-label': 'Close', onclick: popHide }, icon('x', 14))));
   popBrowser = makeBrowser({ compact: false, st: S.pop, host: POP_HOST });
   root.replaceChildren(head, h('div', { class: 'pop-body' }, popBrowser.el));
   R.libRefresh = () => { popBrowser.refresh(); popBrowser.highlightFirst(); };
@@ -3874,7 +3884,7 @@ async function bootPopout() {
   let state = null;
   try { state = await call('popout_get_state'); } catch (e) { state = null; }
   if (state) {
-    S.popPinned = !!state.pinned;
+    S.popOnTop = state.on_top !== false;
     if (+state.size >= 84) S.pop.size = clamp(+state.size, 84, 220);
     if (state.tag) S.pop.tags = new Set([String(state.tag)]);
   }
@@ -3891,7 +3901,7 @@ function initPopout() {
     if ($('#overlay-root').firstElementChild || $('.popover')) return;       // a dialog or a popover has the keys
     if (e.key === 'Escape') {                                                // the search box and the selection take theirs first (they stop or prevent it)
       if (e.defaultPrevented) return;
-      e.preventDefault(); popHide();
+      e.preventDefault(); call('popout_release_focus').catch(() => {});      // nothing left to clear: the keyboard goes back to ZBrush
       return;
     }
     if (e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey) return;

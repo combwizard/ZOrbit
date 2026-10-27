@@ -68,6 +68,7 @@ Type: files; Name: "{autodesktop}\{#LegacyName} Studio.lnk"
 
 [Icons]
 Name: "{autoprograms}\ZOrbit Studio"; Filename: "{app}\{#AppExe}"; Parameters: "--studio"; WorkingDir: "{app}"; AppUserModelID: "ZOrbit.Studio"; Comment: "Edit radial menus for ZBrush"
+Name: "{autoprograms}\ZOrbit Brush Browser"; Filename: "{app}\{#AppExe}"; Parameters: "--popout --show"; WorkingDir: "{app}"; AppUserModelID: "ZOrbit.Browser"; Comment: "Browse and tag ZBrush brushes"
 Name: "{autodesktop}\ZOrbit Studio"; Filename: "{app}\{#AppExe}"; Parameters: "--studio"; WorkingDir: "{app}"; AppUserModelID: "ZOrbit.Studio"; Tasks: desktopicon
 
 [Run]

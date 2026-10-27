@@ -224,24 +224,27 @@ A brush is `brush:` plus its name in lower case without spaces. The first tag in
 
 ## Brush browser
 
-The brush browser is a window that floats over ZBrush with all your brushes in it: search, folders, tag chips and thumbnails. Pick a brush and ZBrush selects it, without going through the ring.
+The brush browser is a window with all your brushes in it: search, folders, tag chips and thumbnails. Pick a brush and ZBrush selects it, without going through the ring. It is a window like any other: it has a taskbar button, you can move, resize, minimise and maximise it, and snap or dock it to a screen edge (drag its header to an edge, or press Win+Arrow). It does not close by itself. It stays up until you close it with the **X** button or Alt+F4, so you can keep it beside ZBrush all day.
 
 ### Opening it
 
-- Press the browser hotkey (`browser.hotkey`; **Alt+B** on new installs). It works while ZBrush **or the browser** is in front, and pressing it again hides the browser.
+- Press the browser hotkey (`browser.hotkey`; **Alt+B** on new installs). It works while ZBrush **or the browser** is in front. If the browser is hidden it appears; if it is open behind other windows it comes to the front; if it is already in front, the keyboard goes back to ZBrush and the window stays where it is.
 - Pick a **Browser** slot on a ring (new installs have one in **Tools**).
 - Pick **More...** in a tag's fan: the browser opens on that tag.
+- Choose **Brush browser** in the tray menu (the ZOrbit icon in the notification area).
+- Press **Brush browser** in Studio's Library toolbar, or on **Settings > Brush browser**.
+- Start it from the Start menu (**ZOrbit Brush Browser**).
 
-The browser appears over ZBrush, centred on its screen the first time. After that it comes back where, and as large as, you left it.
+The Studio button and the Start menu shortcut work without ZBrush running, so you can browse and tag brushes on their own. The first time it appears centred on a screen. After that it comes back where, and as large as, you left it, maximised or not.
 
 ### Using it
 
 - Type to search by name: any letter you type goes to the search box.
 - Click chips to filter by tag, and folders to filter by folder, as in the Library.
 - **Arrow keys** move from brush to brush. After a search the first match is highlighted.
-- **Enter** or a **double-click** picks the highlighted brush. The browser hides and ZBrush gets the keyboard back, then the brush is selected the same way as a ring pick, and counts towards auto slots.
-- **Esc** clears the search, then the selection, then closes the browser.
-- The **pin** button keeps the browser open: after a pick it stays, and ZBrush still gets the focus. Unpinned, the browser hides when you click anywhere else.
+- **Enter** or a **double-click** picks the highlighted brush. ZBrush gets the keyboard back, then the brush is selected the same way as a ring pick, and counts towards auto slots. The browser stays open.
+- **Esc** clears the search, then the selection, then gives the keyboard back to ZBrush. It never closes the window. The browser hotkey does the same when the browser is in front.
+- The pin button in the header is **Keep on top**. It is on by default: the browser stays above other windows, so it is there when you glance at it. Switch it off and it sits in the stack like any other window. The choice is remembered.
 
 ### Picks, focus and ZBrush 2022 to 2025
 
@@ -249,7 +252,9 @@ The browser is a separate program that sends your pick to the ZOrbit app, which 
 
 ### In the background
 
-The browser takes a moment to start, so when your config has a browser hotkey or a **Browser** slot, the app starts it hidden a few seconds after it starts itself, and the first press is quick. It stays hidden until you call it, holds its web view in memory while it waits, and quits with the app. Without a hotkey or a Browser slot it starts the first time you use **More...**. Its window position, pin and thumbnail size are in `popout.json`, and its log is `popout.log`.
+The browser takes a moment to start, so when your config has a browser hotkey or a **Browser** slot, the app starts it hidden a few seconds after it starts itself, and the first press is quick. It stays hidden until you call it and holds its web view in memory while it waits. Closing it with **X** hides it again, ready for the next press. Without a hotkey or a Browser slot it starts the first time you use **More...**, the tray menu, Studio or the Start menu.
+
+It does not depend on ZBrush. When ZBrush and the app quit, a browser you have open stays open; it just cannot select anything, and a pick says **ZOrbit is not running** until ZBrush is back. Closing it then ends it. A hidden one quits with the app. Its window position, whether it is maximised, Keep on top and the thumbnail size are in `popout.json`, and its log is `popout.log`.
 
 ## Hotkeys
 
@@ -262,10 +267,10 @@ Q          Alt+G          Ctrl+Shift+1          F9          `
 - Keys: letters, digits, F1 to F24, and `space tab enter backspace insert delete home end pageup pagedown` and the punctuation keys `` ` - = [ ] \ ; ' , . / ``.
 - Modifiers: `Ctrl`, `Alt`, `Shift`, in any combination, joined with `+`.
 - Each hotkey can belong to only one menu. Duplicates are reported as problems and ignored.
-- A hotkey only works while **ZBrush is the front window**. In every other program the key behaves normally. The browser hotkey is the one exception: it also works while the brush browser is in front, so it can close it.
+- A hotkey only works while **ZBrush is the front window**. In every other program the key behaves normally. The browser hotkey is the one exception: it also works while the brush browser is in front, where it hands the keyboard back to ZBrush.
 - Keys sent by other programs (macro tools, for example) are ignored.
 - Press the hotkey again while its ring is open to close it. **Esc** also closes the ring.
-- The brush browser has a hotkey of its own, `browser.hotkey`, written the same way (see [Brush browser hotkey](#brush-browser-hotkey)). It cannot be a key a menu already uses: the menu wins and the browser hotkey is reported as a problem. It is swallowed like a menu hotkey. Press it again to hide the browser.
+- The brush browser has a hotkey of its own, `browser.hotkey`, written the same way (see [Brush browser hotkey](#brush-browser-hotkey)). It cannot be a key a menu already uses: the menu wins and the browser hotkey is reported as a problem. It is swallowed like a menu hotkey. Press it again while the browser is in front to hand the keyboard back to ZBrush; the browser stays open.
 
 By default a menu **swallows** its hotkey: ZBrush never sees it, so it does not also run its own shortcut for that key. Set `"swallow": false` (or switch it off in the menu settings in Studio) if you want the key to keep working in ZBrush too.
 
@@ -361,7 +366,7 @@ Except in `none`, the hovered slot's border, its spoke and its label take the ta
 "browser": {"hotkey": "Alt+B"}
 ```
 
-The hotkey that shows and hides the [brush browser](#brush-browser). On Settings it is the **Brush browser** card, where you record it like a menu hotkey and Studio warns if a menu already uses it. New installs get **Alt+B**. An existing `radial.json` has no `browser` section until you add one, so the hotkey does nothing there. Leave it out for no hotkey; the browser then opens from **Browser** slots only.
+The hotkey that opens the [brush browser](#brush-browser) and, pressed over it, hands the keyboard back to ZBrush. On Settings it is the **Brush browser** card, where you record it like a menu hotkey and Studio warns if a menu already uses it. New installs get **Alt+B**. An existing `radial.json` has no `browser` section until you add one, so the hotkey does nothing there. Leave it out for no hotkey; the browser then opens from **Browser** slots only.
 
 ## Open animations
 
@@ -464,7 +469,7 @@ When this version of ZOrbit has a newer plugin than one you installed, **Setting
 | `%LOCALAPPDATA%\ZOrbit\zscript_hotkey.log` | ZBrush 2022 to 2025: the hotkey Apply had when the plugin loaded, and the one it has after (88 is F9). |
 | `%APPDATA%\ZOrbit\studio.json` | Studio's own preferences (Licence button, update check) and window placement. |
 | `%APPDATA%\ZOrbit\tags.json` | Your brush tags: each tag's label and colour, and which brushes carry which tags. Created the first time you change a tag. See [Tags](#where-tags-live). |
-| `%APPDATA%\ZOrbit\popout.json` | The brush browser's window position and size, pin and thumbnail size. Safe to delete. |
+| `%APPDATA%\ZOrbit\popout.json` | The brush browser's window position and size, whether it is maximised, Keep on top and thumbnail size. Safe to delete. |
 | `%LOCALAPPDATA%\ZOrbit\popout.log` | The brush browser: how it started, what it showed, the picks it sent to the app. |
 | `%LOCALAPPDATA%\ZOrbit\studio.log` | How Studio started: which program launched it and how long each step took. A failed update check is noted here. |
 | `%LOCALAPPDATA%\ZOrbit\thumbs\` | Cached brush thumbnails. Safe to delete. |
@@ -493,9 +498,9 @@ The palette was renamed, so a hotkey you bound by hand to the old **Apply** does
 
 **The brush browser does not appear.**
 
-1. Is ZBrush (or the browser itself, to close it) the front window? The browser hotkey is ignored everywhere else.
+1. Is ZBrush (or the browser itself) the front window? The browser hotkey is ignored everywhere else. The tray menu, Studio's **Brush browser** button and the Start menu shortcut work from anywhere.
 2. Does your `radial.json` have a `browser` hotkey? Check **Settings > Brush browser**. If a menu uses the same key, the menu wins and the problems pill says so.
-3. After the app starts, the browser needs a few seconds to be ready. The first press can take a moment when it was not started in advance.
+3. After the app starts, the browser needs a few seconds to be ready. The first press can take a moment when it was not started in advance. If it is open but you cannot see it, it may be behind other windows (Keep on top is off) or on a screen you have unplugged: press the hotkey, or open it from the tray menu.
 4. Read `radiald.log` (lines that start with `browser`) and `popout.log`. A missing WebView2 runtime stops it, as it stops Studio.
 
 **The brush browser opens but does not take the keyboard.**

@@ -8,7 +8,7 @@
     already there (other tools put their own folders in the same variable). No admin rights needed.
   - Writes %APPDATA%\ZOrbit\launch.json (by running the app's --check once), which tells the ZBrush
     bridge how to start the app and the Studio from source.
-  - Creates a Start menu shortcut "ZOrbit Studio (dev)".
+  - Creates Start menu shortcuts "ZOrbit Studio (dev)" and "ZOrbit Brush Browser (dev)".
   - Checks that the Python has the runtime dependencies (requirements.txt).
   ZBrush reads ZBRUSH_PLUGIN_PATH only when it starts, so restart ZBrush afterwards.
   Run with -WhatIf to see what would happen.
@@ -25,6 +25,7 @@ $BridgeDir = Join-Path $Root 'bridge'
 $Main = Join-Path $Root 'zorbit\main.py'
 $Icon = Join-Path $Root 'assets\icon.ico'
 $Shortcut = Join-Path ([Environment]::GetFolderPath('Programs')) 'ZOrbit Studio (dev).lnk'
+$BrowserShortcut = Join-Path ([Environment]::GetFolderPath('Programs')) 'ZOrbit Brush Browser (dev).lnk'
 
 $current = [Environment]::GetEnvironmentVariable('ZBRUSH_PLUGIN_PATH', 'User')
 $entries = @(if ($current) { $current -split ';' | ForEach-Object { $_.Trim() } | Where-Object { $_ } })
@@ -37,7 +38,9 @@ if ($Uninstall) {
         [Environment]::SetEnvironmentVariable('ZBRUSH_PLUGIN_PATH', $(if ($new) { $new } else { $null }), 'User')
         Write-Host "Removed. ZBRUSH_PLUGIN_PATH (user) is now: $(if ($new) { $new } else { '<not set>' })"
     }
-    if ((Test-Path $Shortcut) -and $PSCmdlet.ShouldProcess($Shortcut, 'remove shortcut')) { Remove-Item $Shortcut }
+    foreach ($lnk in $Shortcut, $BrowserShortcut) {
+        if ((Test-Path $lnk) -and $PSCmdlet.ShouldProcess($lnk, 'remove shortcut')) { Remove-Item $lnk }
+    }
     Write-Host 'Restart ZBrush to unload the bridge.'
     return
 }
@@ -65,5 +68,15 @@ if ($PSCmdlet.ShouldProcess($Shortcut, 'create Start menu shortcut')) {
     $lnk.Description = 'ZOrbit Studio (running from source)'
     $lnk.Save()
     Write-Host "Shortcut: $Shortcut"
+}
+if ($PSCmdlet.ShouldProcess($BrowserShortcut, 'create Start menu shortcut')) {
+    $lnk = (New-Object -ComObject WScript.Shell).CreateShortcut($BrowserShortcut)
+    $lnk.TargetPath = $Pythonw
+    $lnk.Arguments = "-I `"$Main`" --popout --show"
+    $lnk.WorkingDirectory = $Root
+    $lnk.IconLocation = $Icon
+    $lnk.Description = 'ZOrbit Brush Browser (running from source)'
+    $lnk.Save()
+    Write-Host "Shortcut: $BrowserShortcut"
 }
 Write-Host "`nRestart ZBrush once. Then press Q over ZBrush. Logs: $env:LOCALAPPDATA\ZOrbit"

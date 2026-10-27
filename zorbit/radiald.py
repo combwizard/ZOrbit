@@ -13,9 +13,11 @@ How it works:
   * Brush picks are counted in usage.json; a menu's auto slots are filled from those counts as it opens.
   * tags.json (the user's brush tags) is watched with radial.json: tag slots open a fan of the brushes with
     that tag, and a slot is drawn in the colour of its brush's first tag (expand.py does both).
-  * The brush browser is a separate popout process (popout.py), opened by browser.hotkey or a "browser" ring
-    item. The app finds its message-only window and sends it WM_COPYDATA; a brush picked there comes back
-    the same way, to the control window, and goes through the normal hand-off once ZBrush has the focus again.
+  * The brush browser is a separate popout process (popout.py): a normal window that stays open until the user
+    closes it. It is opened by browser.hotkey, a "browser" ring item or the tray menu. The app finds its
+    message-only window and sends it WM_COPYDATA; a brush picked there comes back the same way, to the control
+    window, and goes through the normal hand-off once ZBrush has the focus again. The hotkey never closes the
+    window: pressed over the browser it hands the keyboard back to ZBrush. The browser outlives the app.
 
 Started through main.py (ZOrbit.exe), normally by the ZBrush bridge when ZBrush launches; it exits when
 the last ZBrush process has gone. Only one instance runs at a time.
@@ -58,7 +60,7 @@ WM_APP_OPEN = W.WM_APP + 10           # hook -> control window: open menu (wpara
 WM_APP_KEYUP = W.WM_APP + 11          # hook -> control window: the held hotkey went up
 WM_APP_CANCEL = W.WM_APP + 12         # hook -> control window: Esc
 WM_APP_MASK = W.WM_APP + 13           # hook -> control window: inject the Alt menu-mask key
-WM_APP_BROWSER = W.WM_APP + 14        # hook -> control window: the browser hotkey (toggle the popout)
+WM_APP_BROWSER = W.WM_APP + 14        # hook -> control window: the browser hotkey
 WM_APP_BROWSER_PICK = W.WM_APP + 15   # control window -> itself: a brush was picked in the popout
 TIMER_WATCH, TIMER_ACK, TIMER_REHOOK, TIMER_CONFIG, TIMER_BROWSER_PICK, TIMER_PREWARM, TIMER_POPOUT_SHOW = range(1, 8)
 COPYDATA_PICK, COPYDATA_SHOW, COPYDATA_QUIT = 1, 10, 12   # WM_COPYDATA ids: popout -> app, app -> popout
@@ -241,8 +243,8 @@ class App:
         return self._pid_install[pid]
 
     def _popout_in_front(self) -> bool:
-        """The popout is the foreground app, so its hotkey must reach us to close it. The pid of its control
-        window is cached for a second: this runs inside the keyboard hook."""
+        """The popout is the foreground app, so its hotkey must reach us to hand the keyboard back to ZBrush. The
+        pid of its control window is cached for a second: this runs inside the keyboard hook."""
         fg = W.GetForegroundWindow()
         if not fg:
             return False
@@ -406,7 +408,10 @@ class App:
 
     def _tray_command(self, name):
         try:
-            if name == "studio":
+            if name == "browser":
+                log("tray: opening the brush browser")
+                self.open_browser(None, toggle=False)
+            elif name == "studio":
                 subprocess.Popen(paths.launch_commands()["studio"], env=paths.clean_env(),
                                  creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP,
                                  close_fds=True, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
@@ -523,7 +528,8 @@ class App:
         threading.Thread(target=start, daemon=True).start()
 
     def open_browser(self, tag=None, toggle=False):
-        """Shows the brush browser (toggle: or hides it if it is up), starting its process if none is running."""
+        """Shows the brush browser, starting its process if none is running. toggle (the hotkey): if it is already
+        the front window, ZBrush gets the keyboard back instead; the window itself stays open."""
         fg = W.GetForegroundWindow()
         if fg and self.target_in_front():          # remembered for the pick: the popout takes the focus away
             self._popout_zb = (int(fg), self.target_install())
@@ -561,7 +567,7 @@ class App:
         if W.find_message_window(POPOUT_CLASS):
             W.KillTimer(self.ctrl, TIMER_POPOUT_SHOW)
             self._popout_pending = None
-            self.open_browser(pend[0], toggle=False)   # hidden until now, so a toggle would only hide it
+            self.open_browser(pend[0], toggle=False)   # it was not up yet: a toggle must not hand the focus away
         elif not self._spawning():
             W.KillTimer(self.ctrl, TIMER_POPOUT_SHOW)
             self._popout_pending = None
@@ -610,7 +616,7 @@ class App:
         return 1
 
     def _browser_pick_queued(self):
-        """The popout hides and refocuses ZBrush before it sends the pick, but activation finishes on its own
+        """The popout hands the focus back to ZBrush before it sends the pick, but activation finishes on its own
         time and press_bridge_key refuses while ZBrush is not in front: wait for it (at most 0.5 s)."""
         ins = self._popout_zb[1] if self._popout_zb else None
         legacy = ins is not None and not ins["python"]      # only the bridge key can reach it: needs the focus
