@@ -4,7 +4,7 @@ All notable changes to this project are listed here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.5.1] - 2026-10-27
 
 ### Fixed
 - A new or changed menu hotkey works as soon as the menus are saved. Before, the app only re-read the menus
@@ -80,6 +80,7 @@ First public release.
   only brushes included with ZBrush.
 - Documentation: README, user guide, third-party notices and contributing guide.
 
+[0.5.1]: https://github.com/combwizard/zbrush-radial-menu/releases/tag/v0.5.1
 [0.5.0]: https://github.com/combwizard/zbrush-radial-menu/releases/tag/v0.5.0
 [0.4.0]: https://github.com/combwizard/zbrush-radial-menu/releases/tag/v0.4.0
 [0.3.0]: https://github.com/combwizard/zbrush-radial-menu/releases/tag/v0.3.0
