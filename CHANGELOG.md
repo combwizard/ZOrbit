@@ -46,6 +46,7 @@ All notable changes to this project are listed here. The format follows
   drag from the Library, with the same undo step. A drag carries the one brush you pick up, even in a multi-selection.
 
 ### Changed
+- Studio's ring preview takes drops between slots. While you drag a brush or an item over the ring, a bar marks the gap it will land in and the stage says between which two slots; you can also drag a slot on the ring to reorder it, or onto another menu in the list.
 - In the Library and the brush list on the Menus screen, Ctrl-click and Shift-click now select several brushes,
   and Enter or the add button adds all of them. A plain click still selects one.
 - The starter menus ship with `"browser": {"hotkey": "Alt+B"}` and a **Browser** slot in **Tools**. An

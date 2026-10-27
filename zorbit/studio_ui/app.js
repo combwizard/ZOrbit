@@ -644,14 +644,14 @@ const DnD = {
   source(el, getPayload, ghostFn) {
     el.addEventListener('pointerdown', e => {
       if (e.button !== 0 || e.target.closest('button, input, select, textarea, a, [data-nodrag]')) return;
-      const payload = getPayload();
+      const payload = getPayload(e);                         // gets the pointerdown event, so a source can pick by position
       if (!payload) return;
       const sx = e.clientX, sy = e.clientY;
       let started = false;
       const move = ev => {
         if (!started) {
           if (Math.hypot(ev.clientX - sx, ev.clientY - sy) < 6) return;
-          started = true; DnD.begin(payload, ghostFn ? ghostFn() : h('span', null, '...'));
+          started = true; DnD.begin(payload, ghostFn ? ghostFn(e) : h('span', null, '...'));
         }
         DnD.move(ev);
       };
@@ -672,6 +672,7 @@ const DnD = {
     document.body.classList.add('dragging');
     this.active = { payload, ghost, zone: null, onKey: e => { if (e.key === 'Escape') this.end(null, false); } };
     document.addEventListener('keydown', this.active.onKey, true);
+    window.dispatchEvent(new Event('zorbit-dnd'));           // lets a view dim what is being dragged
   },
   findZone(x, y, payload) {
     let el = document.elementFromPoint(x, y);
@@ -699,6 +700,7 @@ const DnD = {
     if (drop && ev && a.zone) a.zone._dz.drop(a.payload, ev.clientX, ev.clientY, ev);
     a.ghost.remove();
     document.body.classList.remove('dragging');
+    window.dispatchEvent(new Event('zorbit-dnd'));
     this.recent = true; setTimeout(() => { this.recent = false; }, 60);
   },
 };
@@ -1472,11 +1474,11 @@ function buildStage() {
   const info = h('div', { class: 'stage-info' });
   const busy = h('span', { class: 'stage-busy', title: 'Updating preview' });
   const playBtn = h('button', { class: 'btn small stage-play', type: 'button' });
-  const tip = h('div', { class: 'stage-tip' }, 'Hover to preview, click to select, drop brushes onto a slot');
+  const tip = h('div', { class: 'stage-tip' }, 'Hover to preview, click to select, drag slots or brushes between slots');
   const el = h('div', { class: 'stage', tabindex: '0', 'aria-label': 'Ring preview. Use arrow keys to move between items.' },
     h('div', { class: 'stage-rings', 'aria-hidden': 'true' }), wrap, emptyEl, errEl, info, tip, busy, playBtn);
   el.classList.add('loading');
-  let curSize = 447, hoverRing = null, dropRing = null, idxs = [], marks = [], haveImage = false;
+  let curSize = 447, hoverRing = null, gap = null, idxs = [], marks = [], haveImage = false;   // gap: {k, text, noop} while a drag is over the ring
   let box = null, baseVer = -1, shownPath = '';     // box: size and ring centre of the image while a fan is open (null: square, ring in the middle); baseVer: the version curSize was read at
 
   const geom = () => ({ R: ringNum('radius'), slot: ringNum('slot'), dead: ringNum('dead_zone') });
@@ -1518,7 +1520,7 @@ function buildStage() {
     idxs = usableIdx(S.menuId);
     const n = idxs.length;
     if (hoverRing !== null && hoverRing >= n) { hoverRing = null; wrap.classList.remove('over-slot'); }   // the ring shrank (undo, menu switch)
-    if (dropRing !== null && dropRing >= n) dropRing = null;
+    if (gap && gap.k > n) gap = null;
     if (!n) { info.classList.remove('on'); return; }
     const g = geom(), D = wrap.clientWidth || curSize, k = D / curSize, c = D / 2, step = (2 * Math.PI) / n;
     idxs.forEach((itemIndex, j) => {
@@ -1530,26 +1532,44 @@ function buildStage() {
     paintMarks();
   }
   function paintMarks() {
+    const moving = DnD.active && DnD.active.payload.type === 'item' && DnD.active.payload.menuId === S.menuId ? DnD.active.payload : null;   // the slot being dragged
     marks.forEach((m, j) => {
       m.classList.toggle('sel', idxs[j] === S.itemIdx);
       m.classList.toggle('hov', hoverRing === j);
-      m.classList.toggle('drop', dropRing === j);
+      m.classList.toggle('moving', !!moving && idxs[j] === moving.index);
     });
+    const old = $('.gap-ov', ov); if (old) old.remove();
     const m = curMenu();
-    if (hoverRing !== null && m && m.items[idxs[hoverRing]]) {
+    if (gap) {
+      const g = geom(), D = wrap.clientWidth || curSize, sc = D / curSize, c = D / 2, a = (gap.k - 0.5) * ((2 * Math.PI) / idxs.length);
+      ov.append(h('div', { class: 'gap-ov' + (gap.noop ? ' noop' : ''), style: {
+        left: c + Math.sin(a) * g.R * sc + 'px', top: c - Math.cos(a) * g.R * sc + 'px', height: g.slot * sc * 1.25 + 'px',
+        transform: `translate(-50%, -50%) rotate(${a}rad)` } }));
+      info.replaceChildren(h('b', null, gap.text)); info.classList.add('on');
+    } else if (hoverRing !== null && m && m.items[idxs[hoverRing]]) {
       const it = m.items[idxs[hoverRing]];
       info.replaceChildren(h('b', null, itemLabel(it)), h('span', { class: 'mono' }, ' ' + KIND[kindOf(it)].label.toLowerCase() + (['steps', 'auto'].includes(kindOf(it)) ? '' : kindOf(it) === 'tag' ? ' / ' + tagName(it.tag) : kindOf(it) === 'browser' ? ' / ' + (it.browser ? tagName(it.browser) : 'all brushes') : ' / ' + targetOf(it))));
       info.classList.add('on');
     } else info.classList.remove('on');
   }
-  function hitTest(x, y) {
-    const n = idxs.length; if (!n) return null;
+  /* Angle of a point in degrees, clockwise from 12 o'clock; null in the dead zone (or with no slots). */
+  function angleAt(x, y) {
+    if (!idxs.length) return null;
     const r = wrap.getBoundingClientRect();
     const k = r.width / curSize;
     const dx = (x - r.left) / k - curSize / 2, dy = (y - r.top) / k - curSize / 2;
     if (Math.hypot(dx, dy) < geom().dead) return null;
     let ang = (Math.atan2(dx, -dy) * 180) / Math.PI;
     if (ang < 0) ang += 360;
+    return ang;
+  }
+  /* The insertion gap nearest a point: k in 1..n, "before ring slot k" (n is the gap before slot 0, so the end of the list). Null in the dead zone. */
+  function gapAt(x, y) {
+    const ang = angleAt(x, y), n = idxs.length;
+    return ang === null ? null : clamp(Math.round(ang / (360 / n) + 0.5), 1, n);
+  }
+  function hitTest(x, y) {
+    const n = idxs.length, ang = angleAt(x, y); if (ang === null) return null;
     const step = 360 / n, i = Math.round(ang / step) % n;
     const off = Math.abs((((ang - i * step + 180) % 360) + 360) % 360 - 180);      // degrees from that slot's direction
     return off <= Math.min(step, MAX_SECTOR) / 2 ? i : null;                       // the app picks nothing in the gaps of a sparse ring
@@ -1638,20 +1658,49 @@ function buildStage() {
     selectItem(j === null ? null : idxs[j]);
     el.focus({ preventScroll: true });
   });
+  /* A ring slot is a drag source too: it moves like a row of the item list. A plain click still selects. */
+  DnD.source(wrap, e => {
+    if (player.state !== 'idle') return null;
+    const j = hitTest(e.clientX, e.clientY);
+    return j === null ? null : { type: 'item', menuId: S.menuId, index: idxs[j] };
+  }, e => {
+    const m = curMenu(), it = m && m.items[idxs[hitTest(e.clientX, e.clientY)]];
+    return it ? h('span', { class: 'ghost-chip' }, itemThumb(it, 22), itemLabel(it)) : h('span', null, '...');
+  });
+  window.addEventListener('zorbit-dnd', function onDnd() {
+    if (!el.isConnected) { window.removeEventListener('zorbit-dnd', onDnd); return; }
+    if (DnD.active) setHover(null);
+    paintMarks();
+  });
+  /* Where a drop at gap k lands in the item list; k === null (the dead zone) and the gap before slot 0 mean the end. */
+  const itemIndexFor = k => { const m = curMenu(); if (!m) return 0; return k === null || k >= idxs.length ? m.items.length : idxs[k]; };
+  const slotLabel = j => { const m = curMenu(), it = m && m.items[idxs[j]]; return it ? itemLabel(it) : ''; };
+  // Dropping an item where it already is changes nothing: its own two gaps (before it, after it)
+  const staysPut = (p, k) => { const j = p.type === 'item' ? idxs.indexOf(p.index) : -1; return j >= 0 && k !== null && (k === j || k === j + 1); };
+  function gapText(p, k) {
+    const n = idxs.length, move = p.type === 'item';
+    if (staysPut(p, k)) return 'Stays in place';
+    if (move && k === n && idxs.indexOf(p.index) === 0) return 'Move to the end';
+    return n === 1 ? (move ? 'Move after ' : 'Insert after ') + slotLabel(0) : (move ? 'Move between ' : 'Insert between ') + slotLabel(k - 1) + ' and ' + slotLabel(k % n);
+  }
   DnD.zone(el, {
-    accept: p => !!idxs.length ? (p.type === 'brush' || (p.type === 'item' && p.menuId === S.menuId)) : p.type === 'brush',
+    accept: p => !!curMenu() && (!!idxs.length ? (p.type === 'brush' || (p.type === 'item' && p.menuId === S.menuId)) : p.type === 'brush'),   // no menu: nothing to add to
     over: (p, x, y) => {
-      const j = idxs.length ? hitTest(x, y) : null;
-      if (j !== dropRing) { dropRing = j; paintMarks(); }
-      el.classList.add('drop-over'); el.classList.toggle('drop-end', j === null);
+      const k = gapAt(x, y), noop = staysPut(p, k);
+      if (k !== (gap ? gap.k : null) || (gap && gap.noop !== noop)) {
+        gap = k === null ? null : { k, text: gapText(p, k), noop };
+        paintMarks();
+      }
+      el.classList.add('drop-over'); el.classList.toggle('drop-end', k === null);
     },
-    leave: () => { dropRing = null; paintMarks(); el.classList.remove('drop-over', 'drop-end'); },
+    leave: () => { gap = null; paintMarks(); el.classList.remove('drop-over', 'drop-end'); },
     drop: (p, x, y) => {
-      const j = idxs.length ? hitTest(x, y) : null;
-      const at = j === null ? null : idxs[j];
-      // An item dropped on a slot takes that slot's position, whichever way it came from (moveItem counts an insertion point)
-      if (p.type === 'item' && at !== null) { if (at !== p.index) moveItem(S.menuId, p.index, at > p.index ? at + 1 : at); return; }
-      dropOnMenu(S.menuId, p, at);
+      const k = gapAt(x, y), at = itemIndexFor(k);
+      if (p.type === 'item') {
+        if (!staysPut(p, k) && at !== p.index && at !== p.index + 1) moveItem(S.menuId, p.index, at);
+        return;
+      }
+      insertBrush(S.menuId, p.name, at);
     },
   });
   new ResizeObserver(() => { if (haveImage || idxs.length) layout(); }).observe(el);

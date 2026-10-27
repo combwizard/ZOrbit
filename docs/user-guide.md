@@ -63,7 +63,8 @@ On the Menus screen you can:
 
 - add, duplicate and delete menus (a duplicate has no hotkey, so it starts out as a submenu);
 - add items with **Add item**, drag brushes from the Library onto the ring or the list, reorder items, and remove them (you can also drag a brush from the [brush browser](#brush-browser) window onto a menu in the list, the ring or the item list);
-- drag an item onto another menu in the list to move it there (hold **Ctrl** to copy it instead);
+- drag on the ring to place things exactly: a bright bar shows the gap between two slots a brush (from the Library or the brush browser) or an item will go into, and dragging a slot itself reorders it. Drag a slot onto another menu in the list to move it there (hold **Ctrl** to copy it instead);
+- drag an item from the item list onto another menu in the list to move it there (hold **Ctrl** to copy it instead);
 - open a submenu by double-clicking its item or pressing **Open** in the inspector; a **Back** chip above the item list returns to the parent menu;
 - edit each item's action, label and icon in the inspector;
 - record a hotkey by clicking the hotkey field and pressing the keys;

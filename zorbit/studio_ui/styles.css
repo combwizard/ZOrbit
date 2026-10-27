@@ -388,14 +388,17 @@ body.dragging, body.dragging * { cursor: grabbing !important; }
 .slot-ov { position: absolute; transform: translate(-50%, -50%); border-radius: 50%; transition: box-shadow .14s, background .14s, outline-color .14s; outline: 1.5px dashed transparent; outline-offset: 5px; }
 .slot-ov.hov { background: rgba(248, 107, 51, .06); }
 .slot-ov.sel { outline-color: var(--accent); box-shadow: 0 0 0 9px rgba(248, 107, 51, .1); }
-.slot-ov.drop { background: rgba(248, 107, 51, .16); box-shadow: 0 0 0 3px var(--accent), 0 0 26px rgba(248, 107, 51, .45); }
+.slot-ov.moving { background: rgba(10, 10, 12, .55); outline-color: var(--muted); box-shadow: none; }
+.gap-ov { position: absolute; width: 5px; border-radius: 3px; background: var(--accent); box-shadow: 0 0 5px var(--accent), 0 0 18px rgba(248, 107, 51, .65); pointer-events: none; }
+.gap-ov.noop { background: var(--muted); box-shadow: none; opacity: .6; }
 .slot-n { position: absolute; top: -5px; right: -5px; min-width: 18px; height: 18px; padding: 0 4px; display: grid; place-items: center; border-radius: 9px; font-size: 11px; font-weight: 600; color: #9a9ca2; background: rgba(20, 19, 22, .92); border: 1px solid var(--line2); transition: all .14s; }
-.slot-ov.hov .slot-n, .slot-ov.drop .slot-n { color: var(--text); border-color: rgba(248, 107, 51, .6); }
+.slot-ov.hov .slot-n { color: var(--text); border-color: rgba(248, 107, 51, .6); }
 .slot-ov.sel .slot-n { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
 .stage.playing .ring-ov { opacity: 0; }
 .stage-empty { position: absolute; inset: 0; display: grid; place-items: center; }
 .stage-err { position: absolute; left: 12px; right: 12px; bottom: 44px; display: none; flex-direction: column; gap: 2px; padding: 8px 12px; border-radius: 8px; background: rgba(224, 85, 85, .12); border: 1px solid rgba(224, 85, 85, .35); color: #f2a0a0; font-size: 12px; }
 .stage.err .stage-err { display: flex; }
+.stage.drop-over .stage-tip { opacity: 0; }
 .stage-tip { position: absolute; top: 12px; left: 0; right: 0; text-align: center; color: var(--muted); font-size: 11.5px; font-style: italic; pointer-events: none; }
 .stage-info { position: absolute; left: 14px; bottom: 12px; max-width: 55%; color: var(--sub); font-size: 12px; opacity: 0; transform: translateY(3px); transition: all .14s; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none; }
 .stage-info b { color: var(--text); font-weight: 600; }
