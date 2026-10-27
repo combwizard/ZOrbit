@@ -404,6 +404,9 @@ body.dragging, body.dragging * { cursor: grabbing !important; }
 .stage-info b { color: var(--text); font-weight: 600; }
 .stage-info.on { opacity: 1; transform: none; }
 .stage-play { position: absolute; right: 12px; bottom: 12px; background: rgba(34, 35, 39, .9); }
+.stage-trash { position: absolute; left: 12px; top: 12px; display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 14px; border-radius: 99px; font-size: 12px; font-weight: 600; color: var(--danger); background: rgba(34, 35, 39, .92); border: 1px dashed rgba(224, 85, 85, .6); opacity: 0; transform: scale(.85); pointer-events: none; transition: opacity .14s, transform .14s, background .14s, color .14s, border-color .14s, box-shadow .14s; }
+.stage.can-trash .stage-trash { opacity: 1; transform: none; pointer-events: auto; }
+.stage.can-trash .stage-trash.over { transform: scale(1.1); color: #fff; background: var(--danger); border-style: solid; border-color: var(--danger); box-shadow: 0 0 18px rgba(224, 85, 85, .5); }
 .stage-busy { position: absolute; right: 14px; top: 14px; width: 10px; height: 10px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 10px var(--accent); opacity: 0; transition: opacity .15s; }
 .stage.busy .stage-busy { opacity: 1; animation: pulse .9s infinite; }
 

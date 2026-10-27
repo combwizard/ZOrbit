@@ -1475,8 +1475,9 @@ function buildStage() {
   const busy = h('span', { class: 'stage-busy', title: 'Updating preview' });
   const playBtn = h('button', { class: 'btn small stage-play', type: 'button' });
   const tip = h('div', { class: 'stage-tip' }, 'Hover to preview, click to select, drag slots or brushes between slots');
+  const trash = h('div', { class: 'stage-trash', 'aria-hidden': 'true' }, icon('trash', 14), 'Delete');     // only there while an item of this menu is being dragged
   const el = h('div', { class: 'stage', tabindex: '0', 'aria-label': 'Ring preview. Use arrow keys to move between items.' },
-    h('div', { class: 'stage-rings', 'aria-hidden': 'true' }), wrap, emptyEl, errEl, info, tip, busy, playBtn);
+    h('div', { class: 'stage-rings', 'aria-hidden': 'true' }), wrap, emptyEl, errEl, info, tip, busy, playBtn, trash);
   el.classList.add('loading');
   let curSize = 447, hoverRing = null, gap = null, idxs = [], marks = [], haveImage = false;   // gap: {k, text, noop} while a drag is over the ring
   let box = null, baseVer = -1, shownPath = '';     // box: size and ring centre of the image while a fan is open (null: square, ring in the middle); baseVer: the version curSize was read at
@@ -1540,7 +1541,10 @@ function buildStage() {
     });
     const old = $('.gap-ov', ov); if (old) old.remove();
     const m = curMenu();
-    if (gap) {
+    if (trash.classList.contains('over') && moving) {           // over the trash: say what goes, whatever redraws the ring meanwhile
+      const it = m && m.items[moving.index];
+      info.replaceChildren(h('span', null, 'Release to delete '), h('b', null, it ? itemLabel(it) : 'this item')); info.classList.add('on');
+    } else if (gap) {
       const g = geom(), D = wrap.clientWidth || curSize, sc = D / curSize, c = D / 2, a = (gap.k - 0.5) * ((2 * Math.PI) / idxs.length);
       ov.append(h('div', { class: 'gap-ov' + (gap.noop ? ' noop' : ''), style: {
         left: c + Math.sin(a) * g.R * sc + 'px', top: c - Math.cos(a) * g.R * sc + 'px', height: g.slot * sc * 1.25 + 'px',
@@ -1670,6 +1674,10 @@ function buildStage() {
   window.addEventListener('zorbit-dnd', function onDnd() {
     if (!el.isConnected) { window.removeEventListener('zorbit-dnd', onDnd); return; }
     if (DnD.active) setHover(null);
+    const p = DnD.active && DnD.active.payload, m = curMenu();
+    const can = !!p && !!m && p.type === 'item' && p.menuId === S.menuId && !!m.items[p.index];      // brushes cannot be deleted, only items
+    el.classList.toggle('can-trash', can); trash.setAttribute('aria-hidden', can ? 'false' : 'true');
+    if (!can) trash.classList.remove('over');
     paintMarks();
   });
   /* Where a drop at gap k lands in the item list; k === null (the dead zone) and the gap before slot 0 mean the end. */
@@ -1702,6 +1710,13 @@ function buildStage() {
       }
       insertBrush(S.menuId, p.name, at);
     },
+  });
+  /* The trash: an item dropped here is deleted, with the same undo toast as the Delete key. As a child of the stage it is the nearer zone, so the ring's gap bar gives way to it. */
+  DnD.zone(trash, {
+    accept: p => p.type === 'item' && p.menuId === S.menuId,
+    over: () => { if (!trash.classList.contains('over')) { trash.classList.add('over'); paintMarks(); } },
+    leave: () => { trash.classList.remove('over'); paintMarks(); },
+    drop: p => { delItem(p.index, p.menuId); },
   });
   new ResizeObserver(() => { if (haveImage || idxs.length) layout(); }).observe(el);
 
