@@ -1,5 +1,5 @@
 ; Inno Setup 6 script for Radial Menu for ZBrush.
-; Build: ISCC.exe /DAppVersion=0.6.0 packaging\installer.iss   (packaging\build.ps1 does this after PyInstaller)
+; Build: ISCC.exe /DAppVersion=0.7.0 packaging\installer.iss   (packaging\build.ps1 does this after PyInstaller)
 ; Expects dist\RadialMenu\ (PyInstaller onedir output) relative to the repository root.
 
 #ifndef AppVersion

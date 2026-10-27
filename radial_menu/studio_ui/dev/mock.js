@@ -201,8 +201,8 @@
     win_close: function () { return Promise.resolve(); },
     win_toggle_maximize: function () { return Promise.resolve(false); },
     win_is_maximized: function () { return Promise.resolve(false); },
-    get_app_info: function () { return Promise.resolve({ version: '0.6.0' }); },
-    check_update: function () { var p = JSON.parse(localStorage.getItem('rm_prefs') || '{}'); if (p.check_updates === false) return Promise.resolve({ newer: false, current: '0.6.0', latest: null, url: 'https://github.com/combwizard/zbrush-radial-menu/releases' }); return sleep(300).then(function () { if (q.has('unreach')) return { newer: false, current: '0.6.0', latest: null, url: 'https://github.com/combwizard/zbrush-radial-menu/releases' }; return q.has('update') ? { newer: true, current: '0.6.0', latest: '0.7.0', url: 'https://github.com/combwizard/zbrush-radial-menu/releases' } : { newer: false, current: '0.6.0', latest: '0.6.0', url: 'https://github.com/combwizard/zbrush-radial-menu/releases' }; }); },
+    get_app_info: function () { return Promise.resolve({ version: '0.7.0' }); },
+    check_update: function () { var p = JSON.parse(localStorage.getItem('rm_prefs') || '{}'); if (p.check_updates === false) return Promise.resolve({ newer: false, current: '0.7.0', latest: null, url: 'https://github.com/combwizard/zbrush-radial-menu/releases' }); return sleep(300).then(function () { if (q.has('unreach')) return { newer: false, current: '0.7.0', latest: null, url: 'https://github.com/combwizard/zbrush-radial-menu/releases' }; return q.has('update') ? { newer: true, current: '0.7.0', latest: '0.7.0', url: 'https://github.com/combwizard/zbrush-radial-menu/releases' } : { newer: false, current: '0.7.0', latest: '0.7.0', url: 'https://github.com/combwizard/zbrush-radial-menu/releases' }; }); },
     open_url: function (url) { console.log('[mock] open_url', url); return Promise.resolve(true); },
   };
   window.pywebview = { api: api };

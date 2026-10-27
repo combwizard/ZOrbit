@@ -4,7 +4,7 @@ All notable changes to this project are listed here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.7.0] - 2026-10-27
 
 ### Added
 - Studio opens on a recovery screen when `radial.json` cannot be read: it shows the error with its line and column
@@ -198,6 +198,7 @@ First public release.
   only brushes included with ZBrush.
 - Documentation: README, user guide, third-party notices and contributing guide.
 
+[0.7.0]: https://github.com/combwizard/zbrush-radial-menu/releases/tag/v0.7.0
 [0.6.0]: https://github.com/combwizard/zbrush-radial-menu/releases/tag/v0.6.0
 [0.5.1]: https://github.com/combwizard/zbrush-radial-menu/releases/tag/v0.5.1
 [0.5.0]: https://github.com/combwizard/zbrush-radial-menu/releases/tag/v0.5.0
