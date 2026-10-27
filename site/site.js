@@ -3,7 +3,7 @@
   'use strict';
 
   var RELEASES_API = 'https://api.github.com/repos/combwizard/zorbit/releases/latest';
-  var CACHE_KEY = 'zorbit.release.v1';
+  var CACHE_KEY = 'zorbit.release.v2';
   var FALLBACK = 'https://github.com/combwizard/zorbit/releases/latest';
 
   function toast(msg) {
@@ -20,7 +20,7 @@
     }, 2200);
   }
 
-  function setDownloadLinks(url, version) {
+  function setDownloadLinks(url, version, portableUrl) {
     document.querySelectorAll('a.download').forEach(function (a) {
       a.href = url;
       if (version && a.classList.contains('primary')) {
@@ -29,13 +29,16 @@
         if (a.dataset.baseLabel === 'Download') a.textContent = 'Download v' + version;
       }
     });
+    if (portableUrl) {
+      document.querySelectorAll('a.portable').forEach(function (a) { a.href = portableUrl; });
+    }
   }
 
   function enhanceDownloads() {
     var cached = null;
     try { cached = JSON.parse(sessionStorage.getItem(CACHE_KEY) || 'null'); } catch (e) {}
     if (cached && cached.url) {
-      setDownloadLinks(cached.url, cached.version);
+      setDownloadLinks(cached.url, cached.version, cached.portableUrl);
       return;
     }
     fetch(RELEASES_API, { headers: { Accept: 'application/vnd.github+json' } })
@@ -43,10 +46,14 @@
       .then(function (data) {
         var assets = data.assets || [];
         var setup = assets.find(function (a) { return /^ZOrbitSetup-.*\.exe$/i.test(a.name); });
+        var portable = assets.find(function (a) { return /-portable\.zip$/i.test(a.name); });
         var version = (data.tag_name || '').replace(/^v/, '');
         var url = setup && setup.browser_download_url ? setup.browser_download_url : FALLBACK;
-        try { sessionStorage.setItem(CACHE_KEY, JSON.stringify({ url: url, version: version })); } catch (e) {}
-        setDownloadLinks(url, setup ? version : null);
+        var portableUrl = portable && portable.browser_download_url;
+        try {
+          sessionStorage.setItem(CACHE_KEY, JSON.stringify({ url: url, version: version, portableUrl: portableUrl || '' }));
+        } catch (e) {}
+        setDownloadLinks(url, setup ? version : null, portableUrl);
       })
       .catch(function () { /* keep FALLBACK href */ });
   }
@@ -271,7 +278,7 @@
   }
 
   function reveal() {
-    var nodes = document.querySelectorAll('.section-head, .price-card, .feature, .spotlight, .wall, .steps li, .stat, .cta > *');
+    var nodes = document.querySelectorAll('.section-head, .price-card, .feature, .spotlight, .wall, .steps li, .shield, .stat, .cta > *');
     nodes.forEach(function (n) {
       n.classList.add('reveal');
       var sibs = n.parentElement ? Array.prototype.indexOf.call(n.parentElement.children, n) : 0;

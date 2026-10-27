@@ -524,10 +524,62 @@
     </ol>
     <p class="fhint">ZBrush 2022 to 2025: after installing, open Studio, go to Settings &gt; Older ZBrush, and click Install. Then restart that ZBrush.</p>
     <p class="fhint">Needs Windows 10 or 11 and the Microsoft Edge WebView2 runtime (part of Windows 11 and of up-to-date Windows 10).</p>
-    <div class="note">
-      <strong>Windows says “Windows protected your PC”.</strong>
-      The installer is not code-signed yet. Click More info, then Run anyway. Or build from the source in the repository.
-    </div>
+    <aside class="shield">
+      <header class="shield-head">
+        <p class="eyebrow">SmartScreen</p>
+        <h3>Windows says “Windows protected your PC”.</h3>
+        <p>The installer is not code-signed yet. Certificates cost money every year, and this is a free project, so Windows shows that warning for any program it does not recognise. It does not mean Windows found a problem.</p>
+      </header>
+      <div class="shield-stage">
+        <div class="win-col">
+          <figure class="win" aria-hidden="true">
+            <div class="win-chrome"><span class="win-x">&#x2715;</span></div>
+            <div class="win-body">
+              <svg class="win-shield" viewBox="0 0 48 48" width="46" height="46">
+                <path fill="#0078d4" d="M24 3l18 7v13c0 11-7.4 18.6-18 22C13.4 41.6 6 34 6 23V10z"/>
+                <rect fill="#fff" x="22" y="14" width="4" height="14" rx="2"/>
+                <circle fill="#fff" cx="24" cy="33.5" r="2.3"/>
+              </svg>
+              <p class="win-title">Windows protected your PC</p>
+              <p class="win-text">Microsoft Defender SmartScreen prevented an unrecognized app from starting. Running this app might put your PC at risk.</p>
+              <p class="win-more">More info</p>
+              <dl>
+                <div><dt>App:</dt><dd>ZOrbitSetup.exe</dd></div>
+                <div><dt>Publisher:</dt><dd>Unknown publisher</dd></div>
+              </dl>
+              <div class="win-actions">
+                <span class="win-btn win-run">Run anyway</span>
+                <span class="win-btn win-dont">Don't run</span>
+              </div>
+            </div>
+          </figure>
+          <p class="win-caption">After More info. The outlined button is the one.</p>
+        </div>
+        <ol class="paths">
+          <li>
+            <span class="path-k">01</span>
+            <div>
+              <h4>Click through it</h4>
+              <p>Choose <strong>More info</strong>, then <strong>Run anyway</strong>. The installer does the rest, including the Start menu shortcut.</p>
+            </div>
+          </li>
+          <li>
+            <span class="path-k">02</span>
+            <div>
+              <h4>Use the portable zip</h4>
+              <p>Unzip the <a class="portable" href="https://github.com/combwizard/zorbit/releases/latest">portable zip</a>, run <code>ZOrbit.exe</code> once, and add its <code>bridge</code> folder to <code>ZBRUSH_PLUGIN_PATH</code>. Then restart ZBrush. The first launch of that file can show the same warning.</p>
+            </div>
+          </li>
+          <li>
+            <span class="path-k">03</span>
+            <div>
+              <h4>Build it yourself</h4>
+              <p><a href="https://github.com/combwizard/zorbit#build-from-source">Build it from the source</a> in the repository, if you would rather not run a binary you did not build.</p>
+            </div>
+          </li>
+        </ol>
+      </div>
+    </aside>
   </section>
 
   <section class="cta" aria-labelledby="ctaTitle">
