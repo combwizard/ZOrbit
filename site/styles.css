@@ -201,10 +201,12 @@ kbd {
   display: grid; place-items: center;
 }
 .orbits { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none; }
+/* o1 and o3 share a period and start opposite, so they stay on a diameter and the
+   three dots never bunch into less than a semicircle; o2 starts between them. */
 .orbit {
   position: absolute; border-radius: 50%;
   border: 1px dashed rgba(248, 107, 51, .22);
-  animation: spin 60s linear infinite;
+  animation: spin 80s linear infinite;
 }
 .orbit::before {
   content: ""; position: absolute; left: 50%; top: -4px;
@@ -215,15 +217,14 @@ kbd {
 .o2 {
   width: min(530px, 104vw); height: min(530px, 104vw);
   border-color: rgba(77, 200, 233, .16); border-style: solid;
-  animation-duration: 90s; animation-direction: reverse;
+  animation-duration: 150s; animation-direction: reverse;
 }
-.o2::before { background: var(--cyan); box-shadow: 0 0 12px 2px rgba(77, 200, 233, .8); }
+.o2::before { background: var(--cyan); box-shadow: 0 0 12px 2px rgba(77, 200, 233, .8); top: 50%; left: auto; right: -4px; margin: -3.5px 0 0; }
 .o3 {
   width: min(640px, 124vw); height: min(640px, 124vw);
   border-color: rgba(255, 255, 255, .05);
-  animation-duration: 140s;
 }
-.o3::before { background: var(--amber); box-shadow: 0 0 10px 2px rgba(240, 192, 64, .7); top: 50%; left: -4px; margin: -3.5px 0 0; }
+.o3::before { background: var(--amber); box-shadow: 0 0 10px 2px rgba(240, 192, 64, .7); top: auto; bottom: -4px; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .hero-ring::before {
   content: ""; position: absolute; width: 360px; height: 360px; border-radius: 50%;
