@@ -83,6 +83,8 @@ const ICONS = {
   k_steps: '<path d="M12 4l8 4-8 4-8-4z"/><path d="M4 12l8 4 8-4M4 16l8 4 8-4"/>',
   k_menu: '<circle cx="12" cy="12" r="8.500"/><path d="M10 8.500l5 3.500-5 3.500z" fill="currentColor"/>',
   k_auto: '<path d="M19.500 12a7.500 7.500 0 0 1-13 5.100M4.500 12a7.500 7.500 0 0 1 13-5.100"/><path d="M17.500 3.500v3.400h-3.400M6.500 20.500v-3.400h3.400"/>',
+  tag: '<path d="M20.600 13.400l-7.200 7.200a2 2 0 0 1-2.800 0L3 13V3h10l7.600 7.600a2 2 0 0 1 0 2.800z"/><circle cx="7.500" cy="7.500" r="1.300" fill="currentColor" stroke="none"/>',
+  pin: '<path d="M9 4h6l-.8 5.500L17 13H7l2.800-3.500z"/><path d="M12 13v7"/>',
   logo: '<circle cx="12" cy="12" r="2.200" fill="currentColor" stroke="none"/><circle cx="12" cy="3.800" r="1.700"/><circle cx="19.100" cy="7.900" r="1.700"/><circle cx="19.100" cy="16.100" r="1.700"/><circle cx="12" cy="20.200" r="1.700"/><circle cx="4.900" cy="16.100" r="1.700"/><circle cx="4.900" cy="7.900" r="1.700"/>',
 };
 function icon(name, size = 16, cls = '') {
@@ -146,6 +148,7 @@ const S = {
   library: [], libSorted: [], libByName: new Map(), libState: 'loading', suggestions: [],
   libSources: [], zbrushFound: true, libError: null, libBusy: false,
   version: 0, hist: [], histI: 0,
+  tags: [], tagMap: new Map(), itemTags: {}, tagMtime: null, tagsErr: '', tagsLoaded: false, tagsPath: '', palette: null,   // see "tags" below
   lib: { cat: 'All', q: '', size: 112 },
   dock: { cat: 'All', q: '' },
   status: null,
@@ -214,6 +217,8 @@ const nsOf = k => (k === 'brush' ? 'brush' : k === 'menu' ? 'menu' : 'path');
 const TARGET_NOUN = { brush: 'brush', press: 'button path', set: 'value path', toggle: 'switch path', menu: 'submenu' };
 /* Brush names are compared ignoring case and spaces (the guide says neither matters). */
 const nameKey = s => String(s === undefined || s === null ? '' : s).toLowerCase().replace(/\s+/g, '');
+/* A brush's key in tags.json: 'brush:' and its name in lower case without spaces (tags.item_key in Python). */
+const tagKey = s => 'brush:' + nameKey(s);
 const hasText = v => String(v === undefined || v === null ? '' : v).trim() !== '';
 const joinList = a => (a.length < 2 ? a.join('') : a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1]);
 /* Returns { item, lost }: lost lists, in words, what the switch could not carry over (empty when nothing was lost). */
@@ -1281,7 +1286,7 @@ function renderItemList(box, menuId, compact) {
     r.classList.toggle('sel', on); r.setAttribute('aria-selected', on ? 'true' : 'false');
   });
   // Rebuilt only when a row would look different; a plain selection change just moves the `sel` class, so focus stays put.
-  const sig = m ? JSON.stringify([menuId, compact, (m.items || []).map(it => [itemLabel(it), itemUsable(it), it])]) : 'none';
+  const sig = m ? JSON.stringify([menuId, compact, (m.items || []).map(it => [itemLabel(it), itemUsable(it), it, kindOf(it) === 'brush' ? (firstTag(it.brush) || {}).color || '' : ''])]) : 'none';
   if (sig === box._sig) { refreshSel(); box._sel = compact ? null : S.itemIdx; return; }
   box._sig = sig;
   const switched = box._menu !== menuId, keepTop = box.scrollTop, prevSel = box._sel;
@@ -1300,7 +1305,7 @@ function renderItemList(box, menuId, compact) {
       compact ? null : h('span', { class: 'grip', 'aria-hidden': 'true' }, icon('grip', 14)),
       h('span', { class: 'inum mono' }, String(i + 1)),
       itemThumb(it, compact ? 26 : 32),
-      h('span', { class: 'imain' }, h('span', { class: 'iname' }, itemLabel(it)),
+      h('span', { class: 'imain' }, h('span', { class: 'iname' }, k === 'brush' ? tagDot(it.brush) : null, itemLabel(it)),
         compact ? null : h('span', { class: 'isub mono' }, k === 'auto' ? 'filled from your picks' : k === 'steps' ? `${(it.steps || []).length} step${(it.steps || []).length === 1 ? '' : 's'}` : (k === 'set' ? `${targetOf(it)} = ${it.value}` : targetOf(it) || '(not set)'))),
       h('span', { class: 'ikind', title: KIND[k].hint }, icon(KIND[k].icon, 13), compact ? null : KIND[k].label),
       itemWarn(menuId, i, ok),
@@ -1805,6 +1810,270 @@ function buildMenuProps() {
   return box;
 }
 
+/* ================================================================== tags */
+/* Tags live in tags.json and the backend writes it as they change, so they are not part of Save, Revert or undo.
+   S.tags / S.tagMap / S.itemTags mirror the last snapshot any tag call returned (see webapi.TagApi). */
+const TAG_PALETTE_FALLBACK = ['#F86B33', '#4DC8E9', '#A8DF23', '#E8413C', '#C77DFF', '#FFD166', '#5EEAD4', '#F472B6'];
+const browsers = new Map();            // browser state object (S.lib, S.dock) -> its live browser, so a tag change can repaint it
+let tagMgr = null, tagPick = null;     // repaint hooks of the open tag manager and tag picker
+const plural = (n, w) => n + ' ' + w + (n === 1 ? '' : /(s|sh|ch|x)$/.test(w) ? 'es' : 's');
+
+const tagsOf = name => { const l = S.itemTags[tagKey(name)]; return l ? l.filter(k => S.tagMap.has(k)) : []; };
+const firstTag = name => { const l = tagsOf(name); return l.length ? S.tagMap.get(l[0]) : null; };
+/* The colour dot of a brush's first tag (null when it has none), for the item list. */
+function tagDot(name) {
+  const t = firstTag(name);
+  return t ? h('i', { class: 'tdot', style: { '--tag': t.color }, title: 'Tag: ' + t.label }) : null;
+}
+/* How many installed brushes each tag is on, and how many carry none (the sidebar's counts). */
+function tagCounts() {
+  if (S._tc && S._tcItems === S.itemTags && S._tcMap === S.tagMap && S._tcLib === S.library) return S._tc;
+  const byKey = new Map();
+  let untagged = 0;
+  for (const b of S.library) {
+    const ks = tagsOf(b.name);
+    if (!ks.length) untagged++;
+    for (const k of ks) byKey.set(k, (byKey.get(k) || 0) + 1);
+  }
+  S._tc = { byKey, untagged }; S._tcItems = S.itemTags; S._tcMap = S.tagMap; S._tcLib = S.library;
+  return S._tc;
+}
+/* How many ring items point at a tag ({"tag": key}). */
+function tagRingUses(key) {
+  let n = 0;
+  for (const m of Object.values(S.cfg.menus)) for (const it of (m.items || [])) if (it && (it.tag === key || it.browser === key)) n++;
+  return n;
+}
+
+/* Takes a get_tags answer or a changing call's answer. A changing call reports its own failure in `error`, which is not a
+   problem with the file, so only get_tags answers (mutated = false) set S.tagsErr. Returns true when anything on screen changed. */
+function applyTagSnapshot(res, mutated = false) {
+  if (!res || typeof res !== 'object') return false;
+  if (res.unchanged) { S.tagMtime = res.mtime_ns; return false; }
+  if (!Array.isArray(res.tags)) return false;
+  // Answers can land out of order (two picker clicks, a focus reload over a write): an older file state never replaces a newer one.
+  if (S.tagsLoaded && typeof res.mtime_ns === 'number' && typeof S.tagMtime === 'number' && res.mtime_ns < S.tagMtime - 1000) return false;
+  const err = mutated ? (res.ok ? '' : S.tagsErr) : (res.error ? String(res.error) : '');
+  const sig = JSON.stringify([res.tags, res.items || {}]);
+  const changed = !S.tagsLoaded || sig !== S._tagSig || err !== S.tagsErr;
+  if (err && err !== S.tagsErr) toast(err, { tone: 'warn', ms: 5000 });
+  S.tags = res.tags; S.tagMap = new Map(res.tags.map(t => [t.key, t]));
+  S.itemTags = res.items && typeof res.items === 'object' ? res.items : {};
+  if (Array.isArray(res.palette) && res.palette.length) S.palette = res.palette;
+  if (res.path) S.tagsPath = String(res.path);
+  S.tagMtime = res.mtime_ns === undefined ? S.tagMtime : res.mtime_ns;
+  S.tagsErr = err; S._tagSig = sig; S.tagsLoaded = true;
+  if (changed) tagsChanged();
+  return changed;
+}
+async function loadTags(force = false) {
+  let res = null;
+  try { res = await call('get_tags', force ? null : S.tagMtime); } catch (e) { res = null; }
+  applyTagSnapshot(res);
+}
+/* Every tag change goes through here: the answer carries the fresh snapshot, a refusal is toasted. A name that clashes
+   (res.exists) is left to the caller, which can offer to use or merge into the other tag. */
+async function tagCall(name, ...args) {
+  let res;
+  try { res = await call(name, ...args); } catch (e) { res = { ok: false, error: 'Could not save the tags: ' + ((e && e.message) || e) }; }
+  if (!res || typeof res !== 'object') res = { ok: false, error: 'Could not save the tags.' };
+  applyTagSnapshot(res, true);
+  if (!res.ok && !res.exists) toast(res.error || 'That tag change did not work.', { tone: 'warn', ms: 4500 });
+  return res;
+}
+function tagsChanged() {
+  for (const el of $$('.tag-path')) { setText(el, S.tagsPath); el.hidden = !S.tagsPath; }
+  for (const b of browsers.values()) b.updateTags();
+  if (R.itemList) R.itemList();
+  if (R.libTarget) R.libTarget();
+  if (tagMgr) tagMgr.paint();
+  if (tagPick) tagPick.paint();
+}
+
+/* A popover for tagging brushes: one checkable row per tag (ticked when all of the brushes carry it, a dash when some do),
+   and a field that makes a new tag and puts it on them. `at` is the pointer position for a right-click. */
+function tagPicker(anchor, names, at = null) {
+  if (!names.length) return;
+  if (openPopover) { const same = openPopover.anchor === anchor; openPopover(); if (same && !at) return; }
+  const keys = names.map(tagKey);
+  const list = h('div', { class: 'tp-list', role: 'group', 'aria-label': 'Tags' });
+  const input = h('input', { class: 'inp tp-new', type: 'text', maxlength: 40, placeholder: 'New tag...', 'aria-label': 'New tag name', spellcheck: 'false', autocomplete: 'off' });
+  const title = names.length === 1 ? names[0] : names.length + ' brushes';
+  const pop = h('div', { class: 'popover tagpick', role: 'dialog', 'aria-label': 'Tags for ' + title },
+    h('div', { class: 'tp-head' }, icon('tag', 13), h('b', null, title)), list, h('div', { class: 'tp-add' }, input));
+  const stateOf = t => {
+    const n = names.filter(nm => tagsOf(nm).includes(t.key)).length;
+    return n === 0 ? 'none' : n === names.length ? 'all' : 'some';
+  };
+  const row = t => {
+    const st = stateOf(t);
+    return h('button', { class: 'tp-row' + (st === 'all' ? ' on' : ''), type: 'button', role: 'menuitemcheckbox', 'aria-checked': st === 'all' ? 'true' : st === 'some' ? 'mixed' : 'false', dataset: { k: t.key },
+      onclick: () => tagCall('tag_items', keys, st === 'all' ? [] : [t.key], st === 'all' ? [t.key] : []) },
+      h('span', { class: 'tcheck' }, st === 'all' ? icon('check', 11) : st === 'some' ? h('i', { class: 'tdash' }) : null),
+      h('i', { class: 'tdot', style: { '--tag': t.color } }), h('span', { class: 'tc-name' }, t.label), h('span', { class: 'tc-n mono' }, String(t.count)));
+  };
+  const paint = () => {
+    const act = document.activeElement, fk = act && list.contains(act) ? act.dataset.k : null;
+    list.replaceChildren(...(S.tags.length ? S.tags.map(row) : [h('div', { class: 'tp-empty fhint' }, 'No tags yet. Type a name below to make one.')]));
+    if (fk) { const r = $$('.tp-row', list).find(x => x.dataset.k === fk); if (r) r.focus(); }
+  };
+  input.addEventListener('keydown', async e => {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    const v = input.value.trim();
+    if (!v || input.disabled) return;
+    input.disabled = true;
+    const r = await tagCall('create_tag', v);
+    input.disabled = false;
+    const key = r.ok ? r.key : r.exists;                       // the name of a tag that exists just puts that tag on them
+    if (key) {
+      input.value = '';
+      await tagCall('tag_items', keys, [key], []);
+    }
+    if (document.contains(input)) input.focus();
+  });
+  document.body.append(pop);
+  paint();
+  const r = anchor.getBoundingClientRect();
+  const x = at ? at.x : r.left, y = at ? at.y : r.bottom + 6;
+  pop.style.left = clamp(x, 8, Math.max(8, innerWidth - pop.offsetWidth - 8)) + 'px';
+  const room = innerHeight - y - 8;
+  pop.style.top = (pop.offsetHeight <= room || at ? Math.max(8, Math.min(y, innerHeight - pop.offsetHeight - 8)) : Math.max(8, r.top - pop.offsetHeight - 6)) + 'px';
+  requestAnimationFrame(() => pop.classList.add('in'));
+  const onDown = e => { if (!pop.contains(e.target) && !anchor.contains(e.target)) close(); };
+  const onKey = e => {
+    if (e.key === 'Escape') { e.preventDefault(); close(); return; }
+    const items = $$('.tp-row', pop).concat([input]), i = items.indexOf(document.activeElement);
+    if (e.key === 'ArrowDown') { e.preventDefault(); items[(i + 1) % items.length].focus(); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); items[(i - 1 + items.length) % items.length].focus(); }
+    else if (e.key === 'Home' && e.target !== input) { e.preventDefault(); items[0].focus(); }
+    else if (e.key === 'End' && e.target !== input) { e.preventDefault(); items[items.length - 1].focus(); }
+  };
+  function close() {
+    const had = pop.contains(document.activeElement);
+    pop.remove(); document.removeEventListener('mousedown', onDown, true); document.removeEventListener('keydown', onKey, true);
+    if (openPopover === close) openPopover = null;
+    if (tagPick === me) tagPick = null;
+    if (had && document.contains(anchor)) anchor.focus();
+  }
+  close.anchor = anchor;
+  const me = { paint };
+  tagPick = me;
+  document.addEventListener('mousedown', onDown, true);
+  document.addEventListener('keydown', onKey, true);
+  openPopover = close;
+  (S.tags.length ? $('.tp-row', pop) : input).focus();
+}
+
+/* The tag manager: rename, recolour, merge and delete tags, and make new ones. Every change is saved at once. */
+function openTagManager() {
+  const list = h('div', { class: 'tm-list' });
+  const empty = h('div', { class: 'tm-empty fhint' }, 'No tags yet. Add one below, or select brushes in the Library and press Tag.');
+  const warn = h('div', { class: 'fhint bad tm-warn', role: 'alert', hidden: true });
+  const say = h('div', { class: 'fhint tm-say', role: 'status' });
+  const rows = new Map();
+  const newInp = h('input', { class: 'inp tm-new', type: 'text', maxlength: 40, placeholder: 'New tag name', 'aria-label': 'New tag name', spellcheck: 'false', autocomplete: 'off' });
+  const addTag = async () => {
+    const v = newInp.value.trim();
+    if (!v || newInp.disabled) return;
+    newInp.disabled = true;
+    const r = await tagCall('create_tag', v);
+    newInp.disabled = false;
+    if (r.ok) {
+      newInp.value = ''; say.textContent = '';
+      const el = rows.get(r.key);
+      if (el) el.scrollIntoView({ block: 'nearest' });
+    } else if (r.exists) say.textContent = r.error || 'That tag already exists.';
+    else say.textContent = '';
+    newInp.focus();
+  };
+  newInp.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); addTag(); } });
+  newInp.addEventListener('input', () => { say.textContent = ''; });
+
+  const makeRow = t0 => {
+    let tag = t0;
+    const sw = h('button', { class: 'tm-sw', type: 'button', 'aria-expanded': 'false' });
+    const inp = h('input', { class: 'inp tm-label', type: 'text', maxlength: 40, spellcheck: 'false', autocomplete: 'off' });
+    const n = h('span', { class: 'tm-n mono' });
+    const del = h('button', { class: 'ibtn danger', type: 'button', onclick: () => remove() }, icon('trash', 15));
+    const msg = h('div', { class: 'tm-msg fhint', role: 'status', hidden: true });
+    const pal = h('div', { class: 'tm-pal', hidden: true });
+    const hex = h('input', { class: 'inp mono tm-hex', type: 'text', maxlength: 7, placeholder: '#RRGGBB', spellcheck: 'false', autocomplete: 'off' });
+    const setColor = async c => { if (c.toLowerCase() === tag.color.toLowerCase()) return; await tagCall('recolor_tag', tag.key, c.toUpperCase()); };
+    hex.addEventListener('change', () => {
+      const c = normHex(hex.value);
+      if (!c) { hex.classList.add('bad'); return; }
+      hex.classList.remove('bad'); setColor(c);
+    });
+    hex.addEventListener('input', () => hex.classList.remove('bad'));
+    const swatches = () => (S.palette || TAG_PALETTE_FALLBACK).map(c => h('button', { class: 'tm-pc', type: 'button', style: { '--tag': c }, title: c, 'aria-label': 'Colour ' + c, 'aria-pressed': c.toLowerCase() === tag.color.toLowerCase() ? 'true' : 'false', onclick: () => setColor(c) }));
+    sw.addEventListener('click', () => { const open = pal.hidden; pal.hidden = !open; sw.setAttribute('aria-expanded', open ? 'true' : 'false'); });
+    pal.append(h('div', { class: 'tm-pcs' }), hex);
+    inp.addEventListener('change', async () => {
+      const v = inp.value.trim();
+      msg.hidden = true;
+      if (v === tag.label) { inp.value = tag.label; return; }
+      const r = await tagCall('rename_tag', tag.key, v);
+      if (r.ok) return;
+      inp.value = tag.label;
+      const other = r.exists && S.tagMap.get(r.exists);
+      if (other) {
+        msg.replaceChildren('A tag called "' + other.label + '" already exists. ',
+          h('button', { class: 'link', type: 'button', onclick: async () => {
+            const m = await tagCall('merge_tags', tag.key, other.key);
+            if (m.ok) toast('Merged "' + tag.label + '" into "' + other.label + '"', { tone: 'ok', ms: 2600 });
+          } }, 'Merge into ' + other.label),
+          ' or ', h('button', { class: 'link', type: 'button', onclick: () => { msg.hidden = true; inp.focus(); } }, 'keep them separate'), '.');
+        msg.hidden = false;
+      }
+    });
+    const remove = async () => {
+      const uses = tagRingUses(tag.key);
+      const text = (tag.count ? 'It is on ' + plural(tag.count, 'brush') + (uses ? ', used by ' + plural(uses, 'ring item') : '') : 'It is not on any brush' + (uses ? ', but ' + plural(uses, 'ring item') + (uses === 1 ? ' uses' : ' use') + ' it' : '')) + '. Brushes keep working.';
+      const ok = await modal({ title: 'Delete tag "' + tag.label + '"?', body: h('p', null, text),
+        actions: [{ text: 'Cancel', value: false, focus: true }, { text: 'Delete tag', value: true, kind: 'danger' }] });
+      if (ok) await tagCall('delete_tag', tag.key);
+      openTagManager();                                   // the confirm replaced this dialog: bring it back
+    };
+    const el = h('div', { class: 'tm-row', dataset: { key: tag.key } }, h('div', { class: 'tm-line' }, sw, inp, n, del), pal, msg);
+    el._update = t => {
+      tag = t;
+      sw.style.setProperty('--tag', t.color);
+      sw.title = 'Colour of ' + t.label + ': ' + t.color + '. Click to change it.';
+      sw.setAttribute('aria-label', 'Colour of ' + t.label + ', ' + t.color);
+      if (document.activeElement !== inp) inp.value = t.label;
+      inp.setAttribute('aria-label', 'Name of the tag ' + t.label);
+      setText(n, plural(t.count, 'brush'));
+      del.title = 'Delete ' + t.label; del.setAttribute('aria-label', 'Delete the tag ' + t.label);
+      $('.tm-pcs', pal).replaceChildren(...swatches());
+      if (document.activeElement !== hex) hex.value = t.color.toUpperCase();
+    };
+    el._update(t0);
+    return el;
+  };
+  const paint = () => {
+    warn.hidden = !S.tagsErr; setText(warn, S.tagsErr || '');
+    for (const [k, el] of rows) if (!S.tagMap.has(k)) { el.remove(); rows.delete(k); }
+    const want = S.tags.map(t => {
+      let el = rows.get(t.key);
+      if (!el) { el = makeRow(t); rows.set(t.key, el); } else el._update(t);
+      return el;
+    });
+    empty.hidden = want.length > 0;
+    const have = Array.from(list.children);
+    if (want.length !== have.length || want.some((el, i) => el !== have[i])) list.replaceChildren(...want);
+  };
+  const me = { paint };
+  tagMgr = me;
+  paint();
+  const body = h('div', { class: 'tagmgr' },
+    h('p', { class: 'fhint' }, 'Tags group your brushes. A brush can carry several; the first one is its colour. Tags save as you go; they are not part of Save or Undo.'),
+    warn, empty, list,
+    h('div', { class: 'tm-add' }, newInp, h('button', { class: 'btn small', type: 'button', onclick: addTag }, icon('plus', 13), 'Add')), say);
+  return modal({ title: 'Tags', body, actions: [{ text: 'Done', value: true, kind: 'primary', focus: true }] }).then(() => { if (tagMgr === me) tagMgr = null; });
+}
+const manageTagsBtn = (cls = 'btn small') => h('button', { class: cls, type: 'button', onclick: () => openTagManager() }, icon('tag', 13), 'Manage tags...');
+
 /* ================================================================== brush browser (Library screen + Menus dock) */
 function catTree() {
   if (S._tree && S._treeLib === S.library) return S._tree;
@@ -1840,6 +2109,19 @@ function addBrushToCurrent(name) {
     return;
   }
   insertBrush(id, name, null);
+}
+
+/* Adds several brushes to the menu being edited as one undoable step; the ones it already has are skipped. */
+function addBrushesToCurrent(names) {
+  const m = curMenu();
+  if (!m) { toast('Create or select a menu first.', { tone: 'warn' }); return; }
+  const id = S.menuId, title = m.title || id, used = usageMap();
+  const fresh = names.filter(n => !(used.get(nameKey(n)) || []).some(u => u.menuId === id));
+  if (!fresh.length) { toast(`All ${names.length} are already in "${title}"`, { tone: 'warn' }); return; }
+  sealSnap();
+  fresh.forEach(n => insertBrush(id, n, null, true));
+  const skipped = names.length - fresh.length;
+  undoToast(`Added ${plural(fresh.length, 'brush')} to "${title}"` + (skipped ? ` (${skipped} already there)` : ''));
 }
 
 /* ---------- finding brushes: rescan button and the empty states */
@@ -1882,10 +2164,18 @@ function makeBrowser({ compact, st }) {
   const count = h('span', { class: 'b-count mono' });
   const grid = h('div', { class: 'bgrid' });
   const scroll = h('div', { class: 'b-scroll' }, grid);
-  const side = h('div', { class: 'lib-side', role: 'listbox', 'aria-label': 'Folders' });
+  const side = h('div', { class: 'lib-side' });
+  const catsBox = h('div', { class: 'cats', role: 'listbox', 'aria-label': 'Folders' });
+  const tagSec = h('div', { class: 'tag-sec', role: 'group', 'aria-label': 'Tags' });                     // full: the Tags section under Folders
+  const tagRow = h('div', { class: 'tagrow', role: 'group', 'aria-label': 'Filter by tag', hidden: true });   // compact: the same chips, wrapped
+  side.append(catsBox, tagSec);
   const lazy = makeLazyIO(scroll);
-  let token = 0, selName = null, curRes = compact ? 128 : resFor(st.size);
+  let token = 0, curRes = compact ? 128 : resFor(st.size), lastSig = '';
+  const sel = new Set();                 // names of the selected brushes
+  let anchor = null;                     // the last plain or Ctrl click: where a Shift-click range starts
   if (!st.open) st.open = new Set();
+  if (!(st.tags instanceof Set)) st.tags = new Set();     // the tags to show (any of them), kept on the state like st.cat
+  st.untagged = !!st.untagged;                            // the virtual "Untagged" chip: brushes without any tag
   if (st.cat.includes('/')) st.open.add(st.cat.split('/')[0]);   // a folder chosen from outside (a link) starts unfolded
 
   const searchBox = h('label', { class: 'searchbox' }, icon('search', 14), search, clearBtn);
@@ -1894,43 +2184,63 @@ function makeBrowser({ compact, st }) {
   search.addEventListener('keydown', e => { if (e.key === 'Escape' && search.value) { e.stopPropagation(); clearBtn.click(); } });
   function clearQuery() { onSearch.cancel(); search.value = ''; st.q = ''; clearBtn.hidden = true; }
 
-  /* The selected brush and its action strip. Clicking a card selects it; the strip adds it to the menu being edited. */
+  /* The selected brushes and their action strip. A click selects one brush, Ctrl-click adds or removes one, Shift-click selects a
+     range of the brushes on show. The strip tags them or adds them to the menu being edited. */
   const hint = h('div', { class: 'b-hint' });
-  const addBtn = h('button', { class: 'btn primary small as-add', type: 'button', onclick: () => { if (selName) addBrushToCurrent(selName); } });
+  const addNames = names => { if (names.length === 1) addBrushToCurrent(names[0]); else if (names.length) addBrushesToCurrent(names); };
+  const addBtn = h('button', { class: 'btn primary small as-add', type: 'button', onclick: () => addNames(Array.from(sel)) });
+  const tagBtn = h('button', { class: 'btn small as-tag', type: 'button', title: 'Tag the selected brushes', 'aria-label': 'Tag the selected brushes', onclick: () => tagPicker(tagBtn, Array.from(sel)) },
+    icon('tag', 13), compact ? null : 'Tag...');
   const stripThumb = h('span', { class: 'as-thumb' }), stripName = h('b'), stripCat = h('small');
-  const strip = h('div', { class: 'add-strip', hidden: true, role: 'region', 'aria-label': 'Selected brush' },
-    stripThumb, h('div', { class: 'as-name' }, stripName, stripCat), addBtn, iconBtn('x', 'Clear selection', () => setSel(null)));
+  const strip = h('div', { class: 'add-strip', hidden: true, role: 'region', 'aria-label': 'Selected brushes' },
+    stripThumb, h('div', { class: 'as-name' }, stripName, stripCat), tagBtn, addBtn, iconBtn('x', 'Clear selection', () => setSel(null)));
   const targetName = () => { const m = curMenu(); return m ? (m.title || S.menuId) : ''; };
   function paintTarget() {
     const n = targetName(), label = n ? 'Add to ' + n : 'No menu to add to';
-    hint.replaceChildren('Click a brush to select it, then Add to ', h('b', null, n || 'a menu'), '; or drag it onto a menu, the ring or the item list. Double-click or Enter adds it too.');
+    hint.replaceChildren('Click a brush to select it, then Add to ', h('b', null, n || 'a menu'), '; or drag it onto a menu, the ring or the item list. Double-click or Enter adds it too. Ctrl-click or Shift-click selects several; right-click tags.');
     if (addBtn.dataset.label !== label) {
       addBtn.dataset.label = label; addBtn.title = label;
       addBtn.replaceChildren(icon('plus', 13), h('span', { class: 'as-add-txt' }, label));
     }
     addBtn.disabled = !n;
   }
+  /* Repaints the cards and the strip from `sel`; `focusName` is the card to give focus. */
+  function paintSel(focusName = null) {
+    $$('.bcard', grid).forEach(c => {
+      const on = sel.has(c.dataset.name);
+      c.classList.toggle('sel', on); c.setAttribute('aria-pressed', on ? 'true' : 'false');
+      if (on && c.dataset.name === focusName && document.activeElement !== c) c.focus({ preventScroll: true });
+    });
+    strip.hidden = sel.size === 0;
+    if (sel.size === 1) {
+      const b = S.libByName.get(nameKey(sel.values().next().value));
+      if (b) { stripThumb.replaceChildren(thumb(b.name, { size: 34 })); setText(stripName, b.name); setText(stripCat, b.category); }
+    } else if (sel.size > 1) {
+      stripThumb.replaceChildren(h('span', { class: 'as-multi' }, String(sel.size)));
+      setText(stripName, sel.size + ' selected'); setText(stripCat, 'Ctrl-click or Shift-click to change');
+    }
+  }
   function setSel(name, focusCard = false) {
     const b = name ? S.libByName.get(nameKey(name)) : null;
-    selName = b ? b.name : null;
-    $$('.bcard', grid).forEach(c => {
-      const on = !!b && c.dataset.name === b.name;
-      c.classList.toggle('sel', on); c.setAttribute('aria-pressed', on ? 'true' : 'false');
-      if (on && focusCard && document.activeElement !== c) c.focus({ preventScroll: true });
-    });
-    strip.hidden = !b;
-    if (b) { stripThumb.replaceChildren(thumb(b.name, { size: 34 })); setText(stripName, b.name); setText(stripCat, b.category); }
+    sel.clear(); anchor = b ? b.name : null;
+    if (b) sel.add(b.name);
+    paintSel(focusCard && b ? b.name : null);
   }
   root.addEventListener('keydown', e => {
-    if (e.key === 'Escape' && selName && !S.problemsOpen && !e.defaultPrevented) { e.preventDefault(); setSel(null); }
+    if (e.key === 'Escape' && sel.size && !S.problemsOpen && !e.defaultPrevented) { e.preventDefault(); setSel(null); }
   });
-  scroll.addEventListener('click', e => { if (selName && !e.target.closest('.bcard, button, a, input')) setSel(null); });
-
+  scroll.addEventListener('click', e => { if (sel.size && !e.target.closest('.bcard, button, a, input')) setSel(null); });
+  scroll.addEventListener('keydown', e => {       // Ctrl+A in the grid selects every brush on show
+    if (!(e.ctrlKey || e.metaKey) || e.altKey || e.key.toLowerCase() !== 'a' || e.target.closest('input, textarea')) return;
+    e.preventDefault();
+    sel.clear(); for (const b of filtered()) sel.add(b.name);
+    paintSel();
+  });
   let tools, catSel = null;
   if (compact) {
     catSel = h('select', { class: 'inp sel', 'aria-label': 'Category', onchange: () => { st.cat = catSel.value; renderGrid(); } });
     tools = h('div', { class: 'b-tools' }, searchBox, catSel);
-    root.append(h('div', { class: 'dock-hint' }, 'Click a brush and press Add, or drag it onto the ring or the list.'), tools, count, scroll, strip);
+    root.append(h('div', { class: 'dock-hint' }, 'Click a brush and press Add, or drag it onto the ring or the list.'), tools, tagRow, count, scroll, strip);
   } else {
     const size = h('input', { type: 'range', min: 84, max: 220, step: 4, value: st.size, 'aria-label': 'Thumbnail size' });
     const paint = () => size.style.setProperty('--pct', ((st.size - 84) / (220 - 84)) * 100 + '%');
@@ -1944,11 +2254,51 @@ function makeBrowser({ compact, st }) {
     root.append(side, h('div', { class: 'lib-main' }, tools, h('div', { class: 'b-sub' }, hint, count), scroll, strip));
   }
 
-  const filtered = () => {
-    const q = st.q.trim().toLowerCase(), terms = q ? q.split(/\s+/) : [];
-    return S.libSorted.filter(b => catMatch(b, st.cat) && (!terms.length || terms.every(t => b.name.toLowerCase().includes(t))));
+  /* --- tag filter: a brush shows when it carries any chosen tag; "Untagged" shows the brushes without a tag */
+  const tagFilterOn = () => st.untagged || st.tags.size > 0;
+  function pruneTagSel() { if (S.tagsLoaded) for (const k of Array.from(st.tags)) if (!S.tagMap.has(k)) st.tags.delete(k); }
+  const tagMatch = b => {
+    if (!tagFilterOn()) return true;
+    const ks = tagsOf(b.name);
+    return st.untagged ? !ks.length : ks.some(k => st.tags.has(k));
   };
-
+  const filtered = () => {
+    pruneTagSel();
+    const q = st.q.trim().toLowerCase(), terms = q ? q.split(/\s+/) : [];
+    return S.libSorted.filter(b => catMatch(b, st.cat) && (!terms.length || terms.every(t => b.name.toLowerCase().includes(t))) && tagMatch(b));
+  };
+  function toggleTag(key) {
+    if (key === '@untagged') { st.untagged = !st.untagged; if (st.untagged) st.tags.clear(); }
+    else { st.untagged = false; if (st.tags.has(key)) st.tags.delete(key); else st.tags.add(key); }
+    renderTags(); renderGrid();
+  }
+  function clearTagFilter() { st.tags.clear(); st.untagged = false; renderTags(); renderGrid(); }
+  /* The chips: a list under Folders in the full browser, a wrapped row under the category in the dock. */
+  function renderTags() {
+    const host = compact ? tagRow : tagSec;
+    const act = document.activeElement, fr = act && host.contains(act) ? act.closest('[data-tk]') : null, fk = fr ? fr.dataset.tk : null;
+    pruneTagSel();
+    const counts = tagCounts();
+    const chip = (key, label, n, color) => {
+      const on = key === '@untagged' ? st.untagged : st.tags.has(key);
+      return h('button', { class: 'tagchip' + (on ? ' on' : ''), type: 'button', 'aria-pressed': on ? 'true' : 'false', title: label + ' (' + plural(n, 'brush') + ')', style: color ? { '--tag': color } : null,
+        dataset: { tk: key }, onclick: () => toggleTag(key) },
+        h('i', { class: 'tdot' + (color ? '' : ' none') }), h('span', { class: 'tc-name' }, label), h('span', { class: 'tc-n mono' }, String(n)));
+    };
+    const chips = S.tags.map(t => chip(t.key, t.label, counts.byKey.get(t.key) || 0, t.color));
+    if (S.tags.length) chips.push(chip('@untagged', 'Untagged', counts.untagged, null));
+    const clear = tagFilterOn() ? h('button', { class: 'link tag-clear', type: 'button', onclick: clearTagFilter }, 'Clear') : null;
+    if (compact) {
+      tagRow.hidden = !S.tags.length;
+      tagRow.replaceChildren(...[...chips, clear, h('button', { class: 'ibtn tag-manage', type: 'button', title: 'Manage tags...', 'aria-label': 'Manage tags', onclick: () => openTagManager() }, icon('tag', 14))].filter(Boolean));
+    } else {
+      tagSec.replaceChildren(...[h('div', { class: 'tag-head' }, h('span', { class: 'micro side-title' }, 'Tags'), clear),
+        S.tags.length ? h('div', { class: 'tagchips' }, chips) : h('div', { class: 'tag-none fhint' }, 'No tags yet. Select brushes and press Tag to make one.'),
+        S.tagsErr ? h('div', { class: 'fhint bad' }, S.tagsErr) : null,
+        manageTagsBtn('btn small tag-manage')].filter(Boolean));
+    }
+    if (fk !== null) { const t = $$('[data-tk]', host).find(x => x.dataset.tk === fk); if (t) t.focus(); }
+  }
   function paintBadge(card) {
     const u = usageMap().get(nameKey(card.dataset.name));
     card.classList.toggle('used', !!u);
@@ -1961,43 +2311,95 @@ function makeBrowser({ compact, st }) {
     bd.title = 'Used in: ' + names.join(', ');
     if (u.length < 2) bd.replaceChildren(icon('check', 10));
   }
+  /* Up to three dots (the first tag first) bottom-left of the thumbnail, and --tag, the first tag's colour, for the card's stripe. */
+  function paintTags(card) {
+    const name = card.dataset.name, b = S.libByName.get(nameKey(name));
+    const ks = tagsOf(name).map(k => S.tagMap.get(k)), box = $('.bthumb', card);
+    let dots = $('.tagdots', box);
+    const tagText = ks.length ? 'Tags: ' + ks.map(t => t.label).join(', ') : '';
+    card.title = name + (b ? '\n' + b.category : '') + (tagText ? '\n' + tagText : '');
+    card.setAttribute('aria-label', name + '.' + (tagText ? ' ' + tagText + '.' : '') + ' Press Enter to add to the current menu.');
+    card.classList.toggle('tagged', ks.length > 0);
+    if (!ks.length) { card.style.removeProperty('--tag'); if (dots) dots.remove(); return; }
+    card.style.setProperty('--tag', ks[0].color);
+    if (!dots) { dots = h('span', { class: 'tagdots', 'aria-hidden': 'true' }); box.append(dots); }
+    dots.replaceChildren(...ks.slice(0, 3).map(t => h('i', { class: 'tdot', style: { '--tag': t.color } })));
+  }
   function makeCard(b) {
-    const on = b.name === selName;
-    const card = h('div', { class: 'bcard' + (on ? ' sel' : ''), tabindex: '0', role: 'button', 'aria-pressed': on ? 'true' : 'false', 'aria-label': b.name + '. Press Enter to add to the current menu.', title: b.name + '\n' + b.category, dataset: { name: b.name } },
+    const on = sel.has(b.name);
+    const card = h('div', { class: 'bcard' + (on ? ' sel' : ''), tabindex: '0', role: 'button', 'aria-pressed': on ? 'true' : 'false', dataset: { name: b.name } },
       h('div', { class: 'bthumb' }, thumb(b.name, { size: 0, lazy, cls: 'fill', res: curRes }),
         h('button', { class: 'badd', type: 'button', title: 'Add to ' + ((curMenu() && curMenu().title) || 'current menu'), 'aria-label': 'Add ' + b.name + ' to the current menu', onclick: e => { e.stopPropagation(); addBrushToCurrent(b.name); } }, icon('plus', 14))),
       h('div', { class: 'bname' }, b.name));
-    card.addEventListener('click', () => setSel(b.name, true));
-    card.addEventListener('dblclick', () => addBrushToCurrent(b.name));
+    card.addEventListener('click', e => {
+      if (e.shiftKey && anchor && S.libByName.has(nameKey(anchor))) {      // a range over the brushes on show, from the last plain click
+        const names = filtered().map(x => x.name), a = names.indexOf(anchor), z = names.indexOf(b.name);
+        if (a >= 0 && z >= 0) {
+          if (!(e.ctrlKey || e.metaKey)) sel.clear();
+          for (let i = Math.min(a, z); i <= Math.max(a, z); i++) sel.add(names[i]);
+          paintSel(b.name);
+          return;
+        }
+      }
+      if (e.ctrlKey || e.metaKey) {
+        if (sel.has(b.name)) sel.delete(b.name); else sel.add(b.name);
+        anchor = b.name; paintSel(b.name);
+        return;
+      }
+      setSel(b.name, true);
+    });
+    card.addEventListener('dblclick', e => { if (!e.ctrlKey && !e.shiftKey && !e.metaKey) addBrushToCurrent(b.name); });
+    card.addEventListener('contextmenu', e => {                              // tag this brush, or the whole selection when it is in it
+      e.preventDefault();
+      tagPicker(card, sel.size > 1 && sel.has(b.name) ? Array.from(sel) : [b.name], { x: e.clientX, y: e.clientY });
+    });
     card.addEventListener('keydown', e => {
       if (e.target !== card) return;
-      if (e.key === 'Enter') { e.preventDefault(); setSel(b.name); addBrushToCurrent(b.name); }
-      else if (e.key === ' ') { e.preventDefault(); setSel(b.name); }
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        if (sel.size > 1 && sel.has(b.name)) addNames(Array.from(sel)); else { setSel(b.name); addBrushToCurrent(b.name); }
+      } else if (e.key === ' ') {
+        e.preventDefault();
+        if (e.ctrlKey || e.metaKey) { if (sel.has(b.name)) sel.delete(b.name); else sel.add(b.name); anchor = b.name; paintSel(); } else setSel(b.name);
+      }
     });
     DnD.source(card, () => ({ type: 'brush', name: b.name }), () => h('span', { class: 'ghost-chip' }, thumb(b.name, { size: 26 }), b.name));
     paintBadge(card);
+    paintTags(card);
     return card;
+  }
+  function paintCount(list) {
+    const f = tagFilterOn();
+    let t = list.length + (list.length === 1 ? ' brush' : ' brushes') + (st.cat !== 'All' || st.q || f ? ' of ' + S.library.length : '');
+    if (f) t += ' · ' + (st.untagged ? 'untagged' : plural(st.tags.size, 'tag'));
+    setText(count, t);
   }
   function renderGrid() {
     $$('.thumb', grid).forEach(t => { if (t._io) t._io.unobserve(t); });   // the old cards are about to go: do not keep them in the observer
     const my = ++token;
     grid.replaceChildren();
+    lastSig = '';
     if (S.libState === 'loading') {
       setText(count, 'Scanning...');
-      for (let i = 0; i < 24; i++) grid.append(h('div', { class: 'bcard skel' }, h('div', { class: 'bthumb' }, h('span', { class: 'thumb fill loading' })), h('div', { class: 'bname' }, '\u00a0')));
+      for (let i = 0; i < 24; i++) grid.append(h('div', { class: 'bcard skel' }, h('div', { class: 'bthumb' }, h('span', { class: 'thumb fill loading' })), h('div', { class: 'bname' }, ' ')));
       return;
     }
-    if (selName && !S.libByName.has(nameKey(selName))) setSel(null);
+    const gone = Array.from(sel).filter(n => !S.libByName.has(nameKey(n)));
+    if (gone.length) { gone.forEach(n => sel.delete(n)); paintSel(); }
     if (S.libState === 'error' || !S.library.length) {
       setText(count, '0 brushes');
       grid.append(h('div', { class: 'grid-empty' }, libEmptyState()));
       return;
     }
     const list = filtered();
-    setText(count, list.length + (list.length === 1 ? ' brush' : ' brushes') + (st.cat !== 'All' || st.q ? ' of ' + S.library.length : ''));
+    lastSig = list.map(b => b.name).join('\n');
+    paintCount(list);
     if (!list.length) {
       let e;
-      if (st.q) {
+      if (tagFilterOn()) {
+        e = emptyState('tag', st.untagged ? 'Every brush here has a tag' : 'No brushes with ' + (st.tags.size === 1 ? 'that tag' : 'those tags'),
+          st.q || st.cat !== 'All' ? 'The search and the folder narrow it too.' : 'Select brushes and press Tag, or right-click a brush.', { text: 'Clear the tag filter', fn: clearTagFilter });
+      } else if (st.q) {
         const where = st.cat === '@used' ? 'In my menus' : st.cat.split('/').join(' / ');
         e = emptyState('search', `No brushes match "${st.q}"`, st.cat !== 'All' ? `Only "${where}" was searched.` : 'Check the spelling.');
         e.append(h('div', { class: 'btn-row' },
@@ -2027,7 +2429,7 @@ function makeBrowser({ compact, st }) {
       catSel.replaceChildren(...opts.map(([v, t]) => h('option', { value: v, selected: v === st.cat }, t)));
       return;
     }
-    const act = document.activeElement, fr = act && side.contains(act) ? act.closest('.cat') : null;
+    const act = document.activeElement, fr = act && catsBox.contains(act) ? act.closest('.cat') : null;
     const fid = fr ? fr.dataset.id : null, onChev = !!fr && act.classList.contains('cat-chev');
     const row = (id, label, n, o = {}) => {
       const toggle = () => { st.open.has(id) ? st.open.delete(id) : st.open.add(id); renderCats(); };
@@ -2050,21 +2452,29 @@ function makeBrowser({ compact, st }) {
       rows.push(row(g.id, g.id, g.count, { group: true, hasKids }));
       if (hasKids && st.open.has(g.id)) g.kids.forEach(k => rows.push(row(k.id, k.label, k.count, { kid: true })));
     });
-    side.replaceChildren(...rows);
+    catsBox.replaceChildren(...rows);
     if (fid !== null) {
-      const nr = $$('.cat', side).find(r => r.dataset.id === fid);
+      const nr = $$('.cat', catsBox).find(r => r.dataset.id === fid);
       const t = nr && ((onChev && $('button.cat-chev', nr)) || nr);
       if (t) t.focus();
     }
   }
-  function renderAll() { if (S.libState === 'ready') renderCats(); renderGrid(); }
+  function renderAll() { if (S.libState === 'ready') renderCats(); renderTags(); renderGrid(); }
 
   renderAll(); paintTarget();
-  return {
+  const api = {
     el: root, scroller: () => scroll,
     refresh() { renderAll(); paintTarget(); },
     updateBadges() { $$('.bcard[data-name]', grid).forEach(paintBadge); paintTarget(); if (S.libState === 'ready') { renderCats(); if (st.cat === '@used') renderGrid(); } },
+    /* After a tag change: dots, chips, and the grid itself when the tag filter now shows other brushes. */
+    updateTags() {
+      $$('.bcard[data-name]', grid).forEach(paintTags);
+      renderTags();
+      if (S.libState === 'ready' && filtered().map(b => b.name).join('\n') !== lastSig) { const top = scroll.scrollTop; renderGrid(); scroll.scrollTop = top; }
+    },
   };
+  browsers.set(st, api);
+  return api;
 }
 
 /* ================================================================== LIBRARY screen */
@@ -2404,6 +2814,13 @@ function buildSettingsScreen(root) {
     paintZNote();
     R.zpaint = zpaint;
     zpaint();
+
+    /* --- tags (saved as they change in tags.json, not part of the menus file) */
+    page.append(card('Tags', 'Labels for your brushes. Saved straight away.',
+      h('div', { class: 'field row' }, h('div', { class: 'grow' }, h('span', { class: 'flabel' }, 'Brush tags'),
+        h('div', { class: 'fhint' }, 'Tags group your brushes so you can filter the Library by them. A brush can carry several. Tags are not part of Save or Undo.'),
+        h('div', { class: 'fhint mono tag-path', hidden: !S.tagsPath }, S.tagsPath)),
+        manageTagsBtn('btn'))));
 
     /* --- studio (preferences of this window, saved immediately, not part of the menus file) */
     const updNote = h('div', { class: 'fhint upd-status', role: 'status' });
@@ -3133,7 +3550,7 @@ async function boot() {
   setPathHint(S.path);
   updateDirty(); renderProblems();
   applyPrefs();
-  loadLibrary(); loadSuggestions();
+  loadLibrary(); loadSuggestions(); loadTags();
   showScreen(params.get('screen') || S.prefs.last_screen || 'menus');
   S.ready = true;
   rememberSel(); updateHistButtons();
@@ -3186,6 +3603,7 @@ function init() {
     else if ((e.ctrlKey || e.metaKey) && !e.altKey && !ed && e.key.toLowerCase() === 'y') { e.preventDefault(); redo(); }
     else if (e.altKey && !e.ctrlKey && !e.shiftKey && /^[1-5]$/.test(e.key)) { e.preventDefault(); const scr = ['menus', 'library', 'settings', 'status', 'licence'][+e.key - 1]; if (scr !== 'licence' || licenceVisible()) showScreen(scr); }
   });
+  window.addEventListener('focus', debounce(() => { if (S.ready && !S.fatal) loadTags(); }, 300));      // tags.json may have changed (the popout, a hand edit)
   window.addEventListener('beforeunload', e => { if (dirtyNow()) { e.preventDefault(); e.returnValue = ''; } });
   const showErr = msg => {
     console.error(msg);

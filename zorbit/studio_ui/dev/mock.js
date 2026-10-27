@@ -10,7 +10,10 @@
    found but no .zbp files in its folders), ?liberr (get_library reports an error), ?thumbfail (the first two get_thumbs
    calls are rejected, then they work), ?already (the first "Add a ZBrush folder" says the folder is already listed), ?busy
    (install/remove report that another operation is running), ?update (check_update finds a newer release), ?unreach
-   (check_update cannot reach GitHub), ?prefsfail (set_pref is rejected). */
+   (check_update cannot reach GitHub), ?prefsfail (set_pref is rejected).
+   Tags (state in localStorage rm_tags, seeded with the two starters and a few tagged brushes): ?tags=empty (no tags, nothing tagged),
+   ?tagsmany (30 tags with long names), ?tagfail (every tag change is refused), ?tagexists (create and rename always clash with
+   the first tag). The first two keep their state in memory only, so a reload starts clean. */
 (function () {
   var M = window.__RADIAL_MOCK__ || {};
   var q = new URLSearchParams(location.search);
@@ -20,6 +23,9 @@
   var ticks = 0, thumbCalls = 0, alreadyDone = false, appStarted = false;
   var saved = clone(M.get_config.config);
   var mtime = 1700000000000000000, conflictDone = false;
+  var TAG_PALETTE = ['#F86B33', '#4DC8E9', '#A8DF23', '#E8413C', '#C77DFF', '#FFD166', '#5EEAD4', '#F472B6'];
+  var tagsMode = q.get('tags') === 'empty' ? 'empty' : q.has('tagsmany') ? 'many' : 'saved';
+  var tagMtime = 1700000000000000000, tagStore = null;
   var BROKEN_ERR = "Expecting ',' delimiter: line 12 column 5 (char 301)";
 
   // The items the ring would draw: one action each, submenu targets that exist (the order preview_ring's indices count in)
@@ -77,6 +83,85 @@
     for (var i = 0; i < 36; i++) out.push(stamp(now - (37 - i) * 6000) + ' ' + msgs[i % msgs.length]);
     out.push(stamp(now) + ' mock refresh #' + ticks);
     return out;
+  }
+
+  // --- tags: the same shapes as zorbit/webapi.py's TagApi, kept in localStorage (rm_tags) or, for ?tags=empty and ?tagsmany, in memory
+  function uniq(a) { return a.filter(function (x, i) { return a.indexOf(x) === i; }); }
+  function tagSlug(label) {
+    var s = label.toLowerCase().replace(/[^a-z0-9_-]+/g, '-').replace(/^[-_]+|[-_]+$/g, '');
+    if (!s || !/^[a-z]/.test(s)) s = 'tag-' + s;
+    return s.slice(0, 32).replace(/[-_]+$/, '') || 'tag';
+  }
+  function tagItemKey(k) {
+    k = typeof k === 'string' ? k.replace(/\s+/g, '').toLowerCase() : '';
+    return /^[a-z]+:.+$/.test(k) ? k : null;
+  }
+  function tagSeed() {
+    var st = { tags: [], items: {} }, names = ((M.get_library && M.get_library.brushes) || []).map(function (b) { return b.name; });
+    var key = function (n) { return 'brush:' + n.replace(/\s+/g, '').toLowerCase(); };
+    if (tagsMode === 'empty') return st;
+    if (tagsMode === 'many') {
+      for (var i = 0; i < 30; i++) st.tags.push({ key: 'tag-' + (i + 1), label: (i % 3 ? 'Sculpting pass number ' : 'A rather long tag name for ') + (i + 1), color: TAG_PALETTE[i % 8] });
+      names.slice(0, 40).forEach(function (n, i) { st.items[key(n)] = [st.tags[i % 30].key].concat(i % 4 === 0 ? [st.tags[(i + 7) % 30].key] : []); });
+      return st;
+    }
+    st.tags = [{ key: 'blocking', label: 'Blocking', color: '#F86B33' }, { key: 'detailing', label: 'Detailing', color: '#4DC8E9' }];
+    names.slice(0, 12).forEach(function (n, i) {
+      if (i % 6 === 5) return;
+      st.items[key(n)] = i % 5 === 4 ? ['blocking', 'detailing'] : [i % 2 ? 'detailing' : 'blocking'];
+    });
+    return st;
+  }
+  function tagState() {
+    if (tagStore) return tagStore;
+    var st = null;
+    if (tagsMode === 'saved') { try { st = JSON.parse(localStorage.getItem('rm_tags')); } catch (e) { st = null; } }
+    if (!st || !Array.isArray(st.tags) || !st.items) st = tagSeed();
+    tagStore = st;
+    return st;
+  }
+  function tagSave() {
+    tagMtime += 1000000;
+    if (tagsMode === 'saved') { try { localStorage.setItem('rm_tags', JSON.stringify(tagStore)); } catch (e) {} }
+  }
+  function findTag(st, key) { return st.tags.filter(function (t) { return t.key === key; })[0] || null; }
+  function hasTag(st, key) { return !!findTag(st, key); }
+  function tagUnknown(key) { return { ok: false, error: "Tag '" + key + "' does not exist." }; }
+  function tagDrop(st, key) {
+    st.tags = st.tags.filter(function (t) { return t.key !== key; });
+    Object.keys(st.items).forEach(function (ik) {
+      st.items[ik] = st.items[ik].filter(function (k) { return k !== key; });
+      if (!st.items[ik].length) delete st.items[ik];
+    });
+  }
+  function tagNextColor(st) {
+    var used = st.tags.map(function (t) { return t.color; });
+    return TAG_PALETTE.filter(function (c) { return used.indexOf(c) < 0; })[0] || TAG_PALETTE[st.tags.length % 8];
+  }
+  // { label } or { err }: 1 to 40 characters, no clash (case-insensitive) with another tag; ?tagexists clashes with the first other tag
+  function tagLabel(st, label, ignore) {
+    label = typeof label === 'string' ? label.trim() : '';
+    if (label.length < 1 || label.length > 40) return { err: { ok: false, error: 'A tag name is 1 to 40 characters.' } };
+    var low = label.toLowerCase();
+    var other = st.tags.filter(function (t) { return t.key !== ignore && (q.has('tagexists') || t.label.toLowerCase() === low); })[0];
+    if (other) return { err: { ok: false, exists: other.key, error: "A tag called '" + other.label + "' already exists." } };
+    return { label: label };
+  }
+  function tagSnapshot() {
+    var st = tagState(), count = {};
+    st.tags.forEach(function (t) { count[t.key] = 0; });
+    Object.keys(st.items).forEach(function (ik) { st.items[ik].forEach(function (k) { if (k in count) count[k]++; }); });
+    return { ok: true, tags: st.tags.map(function (t) { return { key: t.key, label: t.label, color: t.color, count: count[t.key] }; }),
+      items: clone(st.items), palette: TAG_PALETTE.slice(), mtime_ns: tagMtime, path: 'C:\\Users\\mock\\AppData\\Roaming\\ZOrbit\\tags.json', error: null };
+  }
+  // Runs one change like TagStore._change: refused under ?tagfail; written (and the time bumped) only when it says ok
+  function tagChange(apply) {
+    return sleep(80 + lag).then(function () {
+      if (q.has('tagfail')) return { ok: false, error: 'tags.json could not be written: Access is denied (mock)' };
+      var res = apply(tagState());
+      if (res.ok) tagSave();
+      return Object.assign(tagSnapshot(), res);
+    });
   }
 
   var api = {
@@ -161,6 +246,86 @@
         var out = {};
         (names || []).forEach(function (n) { out[n] = (M.get_thumbs && M.get_thumbs[n]) || null; });
         return out;
+      });
+    },
+    get_tags: function (since) {
+      return sleep(40).then(function () {
+        if (since !== null && since !== undefined && since === tagMtime) return { unchanged: true, mtime_ns: tagMtime };
+        return tagSnapshot();
+      });
+    },
+    create_tag: function (label, color) {
+      return tagChange(function (st) {
+        var lb = tagLabel(st, label, null);
+        if (lb.err) return lb.err;
+        if (color !== null && color !== undefined && !/^#[0-9a-f]{6}$/i.test(color)) return { ok: false, error: 'A tag colour is #RRGGBB.' };
+        var base = tagSlug(lb.label), key = base, n = 2;
+        while (hasTag(st, key)) { var suf = '-' + n++; key = base.slice(0, 32 - suf.length) + suf; }
+        st.tags.push({ key: key, label: lb.label, color: color ? color.toUpperCase() : tagNextColor(st) });
+        return { ok: true, key: key };
+      });
+    },
+    rename_tag: function (key, label) {
+      return tagChange(function (st) {
+        var t = findTag(st, key);
+        if (!t) return tagUnknown(key);
+        var lb = tagLabel(st, label, key);
+        if (lb.err) return lb.err;
+        t.label = lb.label;
+        return { ok: true, key: key };
+      });
+    },
+    recolor_tag: function (key, color) {
+      return tagChange(function (st) {
+        var t = findTag(st, key);
+        if (!t) return tagUnknown(key);
+        if (!/^#[0-9a-f]{6}$/i.test(color || '')) return { ok: false, error: 'A tag colour is #RRGGBB.' };
+        t.color = color.toUpperCase();
+        return { ok: true, key: key };
+      });
+    },
+    delete_tag: function (key) {
+      return tagChange(function (st) {
+        if (!findTag(st, key)) return tagUnknown(key);
+        tagDrop(st, key);
+        return { ok: true, key: key };
+      });
+    },
+    merge_tags: function (src, dst) {
+      return tagChange(function (st) {
+        if (!findTag(st, src)) return tagUnknown(src);
+        if (!findTag(st, dst)) return tagUnknown(dst);
+        if (src === dst) return { ok: false, error: 'A tag cannot be merged into itself.' };
+        Object.keys(st.items).forEach(function (ik) {
+          var lst = st.items[ik], i = lst.indexOf(src);
+          if (i < 0) return;
+          if (lst.indexOf(dst) >= 0) lst.splice(i, 1); else lst[i] = dst;
+        });
+        tagDrop(st, src);
+        return { ok: true, key: dst };
+      });
+    },
+    set_item_tags: function (itemKey, keys) {
+      return tagChange(function (st) {
+        var ik = tagItemKey(itemKey);
+        if (!ik) return { ok: false, error: "'" + itemKey + "' is not an item key like 'brush:name'." };
+        var ks = uniq(keys || []);
+        for (var i = 0; i < ks.length; i++) if (!findTag(st, ks[i])) return tagUnknown(ks[i]);
+        if (ks.length) st.items[ik] = ks; else delete st.items[ik];
+        return { ok: true };
+      });
+    },
+    tag_items: function (itemKeys, add, remove) {
+      return tagChange(function (st) {
+        var iks = (itemKeys || []).map(tagItemKey);
+        if (iks.indexOf(null) >= 0) return { ok: false, error: "Item keys look like 'brush:name'." };
+        for (var i = 0; i < (add || []).length; i++) if (!findTag(st, add[i])) return tagUnknown(add[i]);
+        uniq(iks).forEach(function (ik) {
+          var lst = (st.items[ik] || []).filter(function (k) { return (remove || []).indexOf(k) < 0; });
+          uniq(add || []).forEach(function (k) { if (lst.indexOf(k) < 0) lst.push(k); });
+          if (lst.length) st.items[ik] = lst; else delete st.items[ik];
+        });
+        return { ok: true };
       });
     },
     get_auto_slots: function (cfg, menuId) {

@@ -30,6 +30,7 @@ import installs             # noqa: E402
 import paths                # noqa: E402
 import radiald              # noqa: E402
 import tags                 # noqa: E402
+import webapi               # noqa: E402
 import winframe             # noqa: E402
 import zscript_bridge       # noqa: E402
 
@@ -108,7 +109,7 @@ def _title_path(p: str) -> str:
     return ":".join(seg if not seg.isupper() else seg.title() for seg in p.split(":"))
 
 
-class Api:
+class Api(webapi.LibraryApi, webapi.TagApi):
     def __init__(self):
         self._window = None    # underscore: pywebview must not expose (and crawl) it to JS
         self._dirty = False            # the page's last report of unsaved changes (set_dirty); informational
@@ -303,61 +304,6 @@ class Api:
         """Choices the UI offers: animation modes, label modes, action kinds, defaults."""
         return {"animations": list(C.ANIMATIONS), "labels": list(C.LABEL_MODES), "actions": list(C.ACTION_KEYS),
                 "ring_defaults": C.DEFAULT_RING, "ring_ranges": C._RING_RANGES}
-
-    # --- brush library ---------------------------------------------------------------------------
-    def get_library(self, refresh=False):
-        """All brushes ZBrush can load, first location wins (same rule the app uses), with categories.
-        Also every folder searched (found or not), so the page can say where it looked."""
-        try:
-            if refresh:
-                brushes.brush_index(refresh=True)       # find_brush, thumbnails and ring previews see new brushes
-            dirs = brushes.zbrush_dirs()
-            seen, items, sources = set(), [], []
-            labels = {"user ZStartup/BrushPresets": "My Brushes", "install ZStartup/BrushPresets": "My Brushes",
-                      "install ZData/BrushPresets": "ZBrush", "install Lightbox/Brushes": "Lightbox",
-                      "install ZBrushes": "Lightbox"}
-            for label, folder, _rec in brushes.brush_sources():
-                src = labels.get(label, label)
-                exists, count = folder.is_dir(), 0
-                if exists:
-                    for root, subs, files in os.walk(folder):
-                        subs[:] = sorted(d for d in subs if not d.startswith("_"))
-                        rel = os.path.relpath(root, folder)
-                        for fn in sorted(files, key=str.lower):
-                            if not fn.lower().endswith(".zbp"):
-                                continue
-                            count += 1
-                            name = os.path.splitext(fn)[0]
-                            if name.lower() in seen:
-                                continue
-                            seen.add(name.lower())
-                            cat = src if rel == "." else f"{src}/{rel.replace(os.sep, '/')}"
-                            items.append({"name": name, "source": src, "category": cat,
-                                          "path": os.path.join(root, fn)})
-                sources.append({"label": src, "path": str(folder), "exists": exists, "count": count})
-            cats = {}
-            for it in items:
-                cats[it["category"]] = cats.get(it["category"], 0) + 1
-            if refresh:
-                brushes.cache_prune()
-            return {"brushes": items, "categories": [{"id": k, "count": v} for k, v in cats.items()],
-                    "sources": sources, "zbrush_found": bool(dirs.get("install") or dirs.get("user_assets")),
-                    "error": None}
-        except Exception as e:
-            return {"brushes": [], "categories": [], "sources": [], "zbrush_found": False,
-                    "error": str(e) or e.__class__.__name__}
-
-    def get_thumbs(self, names, size=128):
-        """{name: data URL or None} for a batch of brush names (cached on disk after the first decode)."""
-        try:
-            size = max(32, min(256, int(size)))
-        except (TypeError, ValueError):
-            size = 128
-        out = {}
-        for n in names or []:
-            data = brushes.thumbnail_png(n, size)
-            out[n] = "data:image/png;base64," + base64.b64encode(data).decode("ascii") if data else None
-        return out
 
     # --- suggestions for press/set/toggle targets ------------------------------------------------
     def get_suggestions(self):

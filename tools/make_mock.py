@@ -22,7 +22,7 @@ def main():
     first = next(iter(cfg["config"]["menus"]))
     mock = {
         "get_config": cfg, "get_library": lib, "get_thumbs": a.get_thumbs(names, 128),
-        "get_suggestions": a.get_suggestions(), "get_status": a.get_status(), "get_options": a.get_options(),
+        "get_suggestions": a.get_suggestions(), "get_tags": a.get_tags(), "get_status": a.get_status(), "get_options": a.get_options(),
         "preview_ring": {mid: a.preview_ring(cfg["config"], mid) for mid in cfg["config"]["menus"]},
         "preview_ring_hover0": a.preview_ring(cfg["config"], first, hover=0),
         "preview_animation": a.preview_animation(cfg["config"], first),

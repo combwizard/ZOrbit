@@ -187,6 +187,11 @@ class TagStore:
             return [{"key": k, "label": t["label"], "color": t["color"], "count": count[k]}
                     for k, t in self._tags.items()]
 
+    def items(self) -> dict:
+        """{item key: [tag key]} as a copy."""
+        with self._lock:
+            return {ik: list(lst) for ik, lst in self._items.items()}
+
     def has(self, key) -> bool:
         return key in self._tags
 
