@@ -1,2 +1,6 @@
 # Compiled ZScript plugin (bridge/zscript): never convert line endings.
 *.zsc binary
+
+# Shell scripts run under sh: keep LF on checkout even with core.autocrlf.
+*.sh text eol=lf
+tools/hooks/* text eol=lf
