@@ -278,7 +278,7 @@
   }
 
   function reveal() {
-    var nodes = document.querySelectorAll('.section-head, .price-card, .feature, .spotlight, .wall, .steps li, .shield, .stat, .cta > *');
+    var nodes = document.querySelectorAll('.section-head, .price-card, .feature, .spotlight, .wall, .steps li, .shield, .stat, .faq-group, .cta > *');
     nodes.forEach(function (n) {
       n.classList.add('reveal');
       var sibs = n.parentElement ? Array.prototype.indexOf.call(n.parentElement.children, n) : 0;
@@ -299,7 +299,57 @@
     nodes.forEach(function (n) { io.observe(n); });
   }
 
+  // FAQ: a search that filters the questions, open-on-link, and the topic list following the scroll.
+  function faq() {
+    var root = document.getElementById('faq');
+    if (!root) return;
+    var items = Array.prototype.slice.call(root.querySelectorAll('.faq-q'));
+    var groups = Array.prototype.slice.call(root.querySelectorAll('.faq-group'));
+    var links = {};
+    root.querySelectorAll('.faq-topics a').forEach(function (a) { links[a.hash.slice(1)] = a; });
+    var empty = document.getElementById('faqEmpty');
+    var input = document.getElementById('faqSearch');
+    var text = items.map(function (q) { return q.textContent.toLowerCase().replace(/\s+/g, ' '); });
+
+    if (input) {
+      input.closest('.faq-search').hidden = false;
+      input.addEventListener('input', function () {
+        var words = input.value.toLowerCase().split(/\s+/).filter(Boolean);
+        items.forEach(function (q, i) {
+          var hit = words.every(function (w) { return text[i].indexOf(w) >= 0; });
+          q.hidden = !hit;
+          if (words.length && hit && !q.open) { q.open = true; q.dataset.auto = '1'; }
+          if (!words.length && q.dataset.auto) { q.open = false; delete q.dataset.auto; }
+        });
+        var shown = 0;
+        groups.forEach(function (g) {
+          var any = !!g.querySelector('.faq-q:not([hidden])');
+          g.hidden = !any;
+          if (links[g.id]) links[g.id].classList.toggle('none', !any);
+          if (any) shown++;
+        });
+        empty.hidden = shown > 0;
+      });
+    }
+
+    function openFromHash() {
+      var el = location.hash && document.getElementById(location.hash.slice(1));
+      if (el && el.matches('.faq-q')) el.open = true;
+    }
+    window.addEventListener('hashchange', openFromHash);
+    openFromHash();
+
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (en) {
+        if (!en.isIntersecting) return;
+        Object.keys(links).forEach(function (id) { links[id].classList.toggle('on', id === en.target.id); });
+      });
+    }, { rootMargin: '-35% 0px -60% 0px' });
+    groups.forEach(function (g) { io.observe(g); });
+  }
+
   function boot() {
+    faq();
     enhanceDownloads();
     reviewWall();
     reveal();
