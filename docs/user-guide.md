@@ -37,10 +37,12 @@ Studio is where you edit everything. Open it from the Start menu (**Radial Menu 
 |---|---|---|
 | Menus | Alt+1 | Create and edit menus and their items, with a live ring preview. |
 | Library | Alt+2 | Browse every brush ZBrush can load, with search, folders and thumbnails. |
-| Settings | Alt+3 | Ring size, animation, labels, colours, tap time, auto-close and bridge. |
+| Settings | Alt+3 | Ring size, animation, labels, colours, tap time, auto-close, bridge, and Studio's own preferences. |
 | Status | Alt+4 | Is ZBrush running, is the app running, is the bridge connected; the app log. |
 
 Other shortcuts: **Ctrl+S** saves, **Ctrl+Z** undoes, **Ctrl+Y** (or Ctrl+Shift+Z) redoes.
+
+The version at the top links to its release notes. When Studio opens, it asks GitHub whether there is a newer release. If there is, the top shows your version, an orange dot and the new version in orange. Clicking it opens the new release's page, where you can download it. The check only asks GitHub for the latest release and sends nothing about you or your menus. Turn it off in **Settings > Studio > Check for updates**. It is never made while that is off.
 
 How saving works:
 
@@ -315,7 +317,8 @@ When this version of Radial Menu has a newer plugin than one you installed, **Se
 | `%LOCALAPPDATA%\RadialMenu\request.txt` | The same pick for the ZBrush 2022 to 2025 plugin. |
 | `%LOCALAPPDATA%\RadialMenu\zscript_bridge.log` | ZBrush 2022 to 2025: what the last pick did. |
 | `%LOCALAPPDATA%\RadialMenu\zscript_launch.log` | ZBrush 2022 to 2025: how the plugin last started the app or Studio. |
-| `%LOCALAPPDATA%\RadialMenu\studio.log` | How Studio started: which program launched it and how long each step took. |
+| `%APPDATA%\RadialMenu\studio.json` | Studio's own preferences (Licence button, update check) and window placement. |
+| `%LOCALAPPDATA%\RadialMenu\studio.log` | How Studio started: which program launched it and how long each step took. A failed update check is noted here. |
 | `%LOCALAPPDATA%\RadialMenu\thumbs\` | Cached brush thumbnails. Safe to delete. |
 | `<ZBrush>\ZStartup\ZPlugs64\RadialMenuBridge.zsc` | ZBrush 2022 to 2025: the plugin. Its `RadialMenuData` folder says where picks arrive and how to start the app. |
 

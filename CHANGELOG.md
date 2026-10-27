@@ -4,6 +4,14 @@ All notable changes to this project are listed here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+- Studio checks GitHub for a newer release when it opens and shows it at the top, next to the current
+  version with an orange dot; clicking it opens that release's page. Settings > Studio > Check for updates
+  turns this off, and no request is made while it is off.
+- The version at the top of Studio links to its release notes.
+
 ## [0.5.1] - 2026-10-27
 
 ### Fixed

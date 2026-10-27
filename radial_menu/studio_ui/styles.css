@@ -68,8 +68,15 @@ h1, h2, h3, p { margin: 0; }
   filter: drop-shadow(0 0 6px rgba(248, 107, 51, .35)); }
 .wordmark { font-size: 14px; font-weight: 800; letter-spacing: .01em; color: var(--text); white-space: nowrap; }
 .wordmark em { font-style: normal; color: var(--accent); }
-.version-chip { font-size: 10.5px; color: var(--sub); padding: 3px 8px; border-radius: 99px;
-  background: rgba(255, 255, 255, .05); border: 1px solid var(--line); }
+.version-chip { font-size: 10.5px; color: var(--sub); padding: 3px 2px; border-radius: 4px; background: none; border: 0; }
+.version-chip:hover { color: var(--text); text-decoration: underline; text-underline-offset: 2px; }
+.version-chip.has-update { display: inline-flex; align-items: center; gap: 5px; }
+.version-chip .upd-dot { color: var(--accent); flex: none; overflow: visible;
+  filter: drop-shadow(0 0 2px rgba(248, 107, 51, .9)) drop-shadow(0 0 6px rgba(248, 107, 51, .6));
+  animation: upd-glow 2.4s ease-in-out infinite; }
+.version-chip .upd-new { color: var(--accent); text-shadow: 0 0 6px rgba(248, 107, 51, .55); }
+@keyframes upd-glow { 50% { filter: drop-shadow(0 0 1px rgba(248, 107, 51, .6)) drop-shadow(0 0 3px rgba(248, 107, 51, .2)); } }
+@media (prefers-reduced-motion: reduce) { .version-chip .upd-dot { animation: none; } }
 .winctl { display: flex; align-self: stretch; margin-left: 10px; }
 .winbtn { width: 46px; border: 0; background: transparent; color: var(--sub); display: grid; place-items: center;
   transition: background .12s, color .12s; }

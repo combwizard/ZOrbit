@@ -1779,7 +1779,10 @@ function buildSettingsScreen(root) {
     page.append(card('Studio', 'Preferences for this window. Saved straight away.',
       h('div', { class: 'field row' }, h('div', { class: 'grow' }, h('span', { class: 'flabel' }, 'Show the Licence button'),
         h('div', { class: 'fhint' }, 'The Licence screen is a joke: Radial Menu is free software and needs no licence. Turn this off to hide its button.')),
-        toggleSwitch(licenceVisible(), v => { setPref('show_licence', v); toast(v ? 'The Licence button is back. It missed you.' : 'Licence button hidden.', { ms: 2800 }); }, 'Show the Licence button'))));
+        toggleSwitch(licenceVisible(), v => { setPref('show_licence', v); toast(v ? 'The Licence button is back. It missed you.' : 'Licence button hidden.', { ms: 2800 }); }, 'Show the Licence button')),
+      h('div', { class: 'field row' }, h('div', { class: 'grow' }, h('span', { class: 'flabel' }, 'Check for updates'),
+        h('div', { class: 'fhint' }, 'When Studio opens, it asks GitHub for the newest release and shows it next to the version at the top. Nothing about you or your menus is sent.')),
+        toggleSwitch(S.prefs.check_updates !== false, async v => { await setPref('check_updates', v); if (window.RadialUpdate) window.RadialUpdate.check(); }, 'Check for updates'))));
     R.preview();
   };
   R.settings = () => { build(); buildToc(); };

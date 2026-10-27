@@ -37,6 +37,8 @@ TITLE = "Radial Menu Studio"
 VERSION = paths.VERSION
 APP_ID = "RadialMenu.Studio"           # taskbar identity, so the Studio groups under its own icon
 STUDIO_FILE = os.path.join(paths.CONFIG_DIR, "studio.json")   # Studio preferences and window placement
+RELEASES_API = "https://api.github.com/repos/combwizard/zbrush-radial-menu/releases/latest"
+RELEASES_URL = "https://github.com/combwizard/zbrush-radial-menu/releases"
 
 kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
 user32 = ctypes.WinDLL("user32", use_last_error=True)
@@ -64,6 +66,12 @@ def _tail(path, n=40):
             return f.read().splitlines()[-n:]
     except OSError:
         return []
+
+
+def _version_key(v):
+    """'v0.5.1' or '0.5.1' -> (0, 5, 1); None for anything else."""
+    m = re.fullmatch(r"v?(\d+)\.(\d+)\.(\d+)", str(v or "").strip())
+    return tuple(int(x) for x in m.groups()) if m else None
 
 
 def _png_data_url(im) -> str:
@@ -320,7 +328,7 @@ class Api:
         return {"ok": True, "message": f"Added {e['name']}."}
 
     # --- Studio preferences (not part of the menus; saved straight away) --------------------------
-    _PREFS_DEFAULTS = {"show_licence": True}
+    _PREFS_DEFAULTS = {"show_licence": True, "check_updates": True}
 
     def get_prefs(self):
         prefs = dict(self._PREFS_DEFAULTS)
@@ -334,6 +342,31 @@ class Api:
         data[key] = value
         _write_studio_file(data)
         return self.get_prefs()
+
+    def check_update(self):
+        """Asks GitHub for the latest release. {"current", "latest", "url", "newer"}; latest is None when the
+        check is off (no request is made) or GitHub could not be reached."""
+        out = {"current": VERSION, "latest": None, "url": f"{RELEASES_URL}/tag/v{VERSION}", "newer": False}
+        if not self.get_prefs()["check_updates"]:
+            return out
+        try:
+            import urllib.request
+            req = urllib.request.Request(RELEASES_API, headers={
+                "Accept": "application/vnd.github+json", "User-Agent": f"RadialMenuStudio/{VERSION}"})
+            with urllib.request.urlopen(req, timeout=8) as r:
+                data = json.load(r)
+        except Exception as e:
+            _startup(f"update check failed: {e!r}")
+            return out
+        tag = data.get("tag_name") if isinstance(data, dict) else None
+        latest, current = _version_key(tag), _version_key(VERSION)
+        if latest is None:
+            return out
+        out["latest"] = "%d.%d.%d" % latest
+        out["newer"] = current is not None and latest > current
+        if out["newer"]:
+            out["url"] = f"{RELEASES_URL}/tag/{tag}"
+        return out
 
     def open_url(self, url):
         """Opens one of the project's own links in the default browser (nothing else is allowed)."""
