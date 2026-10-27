@@ -150,6 +150,10 @@ h1, h2, h3, p { margin: 0; }
   transition: color .12s, background .12s;
 }
 .ibtn:hover { color: var(--text); background: rgba(255, 255, 255, .08); }
+.ibtn:disabled { opacity: .35; cursor: default; }
+.ibtn:disabled:hover { color: var(--sub); background: transparent; }
+.histctl { display: flex; align-items: center; gap: 2px; }
+.histctl .ibtn { width: 30px; height: 30px; }
 .ibtn.accent { color: var(--accent); }
 .ibtn.accent:hover { background: var(--accent-wash); }
 .ibtn.danger:hover { color: #fff; background: var(--danger); }
@@ -426,6 +430,7 @@ body.dragging .irow:hover { background: transparent; }
 .step .stgt, .step .vin { grid-column: 2 / -1; }
 .step .sacts { grid-column: 3; grid-row: 1; justify-self: end; }
 .step .snum { grid-row: 1; }
+.step .svhint { grid-column: 2 / -1; }
 .step .inp { height: 30px; font-size: 12px; }
 .step .inp.sel { padding-right: 22px; background-position: right 6px center; }
 .snum { font-size: 10.5px; color: var(--sub); text-align: center; }

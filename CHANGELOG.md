@@ -18,6 +18,17 @@ All notable changes to this project are listed here. The format follows
   carry an amber marker.
 - Studio reopens on the screen you left and keeps each screen's scroll position while it is open. Clicking the
   screen you are already on no longer rebuilds it.
+- Undo and Redo buttons next to Revert. Undo and redo put the selection back where it was, and the Undo on a
+  "Removed" or "Deleted" toast undoes that change only, never a later one.
+- Clicking a menu or item row keeps keyboard focus on it, so Delete, F2, Enter and Alt+Up/Down work straight
+  after a click, and you can delete several items in a row with the Delete key.
+- Switching an item's kind no longer carries a brush name into a button path (or the reverse), and when a
+  switch drops a target, value, label, icon or steps it says so in a toast with Undo. "Required" hints only
+  appear once you have touched the field.
+- A Set item's value must be a number; Studio says so under the field and the app reports it as a problem
+  instead of sending text to ZBrush.
+- The ring preview no longer selects a slot when you click or drop on the empty side of a ring with one to
+  three slots, matching the app's quarter-circle cap on a slot.
 
 ### Changed
 - The Settings screen is called Settings everywhere (it was "Appearance & Behaviour" on the page itself), and

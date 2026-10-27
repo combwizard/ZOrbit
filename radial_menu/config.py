@@ -140,6 +140,9 @@ def _check_action(a, errors, where, allow_nested=True) -> bool:
     if k == "set" and "value" not in a:
         errors.append(f"{where}: 'set' needs a 'value'")
         return False
+    if k == "set" and (isinstance(a["value"], bool) or not isinstance(a["value"], (int, float))):
+        errors.append(f"{where}: 'set' value must be a number")
+        return False
     if k == "steps":
         if not allow_nested or not isinstance(a["steps"], list) or not a["steps"]:
             errors.append(f"{where}: 'steps' must be a non-empty list of brush/press/set/toggle actions")

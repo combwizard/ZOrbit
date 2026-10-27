@@ -32,6 +32,10 @@
     </button>
     <div class="spacer"></div>
     <div class="dirty" id="dirty" hidden role="status"><i class="dot"></i>Unsaved changes</div>
+    <div class="histctl" role="group" aria-label="History">
+      <button class="ibtn" id="undoBtn" type="button" title="Undo (Ctrl+Z)" aria-label="Undo (Ctrl+Z)" disabled></button>
+      <button class="ibtn" id="redoBtn" type="button" title="Redo (Ctrl+Y)" aria-label="Redo (Ctrl+Y)" disabled></button>
+    </div>
     <button class="btn" id="revertBtn" type="button" disabled>Revert</button>
     <button class="btn primary" id="saveBtn" type="button" disabled>Save <kbd>Ctrl+S</kbd></button>
     <div class="winctl" role="group" aria-label="Window">

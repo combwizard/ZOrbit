@@ -70,6 +70,7 @@ const ICONS = {
   alert: '<path d="M12 4l9 16H3z"/><path d="M12 10v4M12 17v.4"/>',
   folder: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
   undo: '<path d="M4 12a8 8 0 1 1 3 6.2M4 5v5h5"/>',
+  redo: '<path d="M20 12a8 8 0 1 0-3 6.2M20 5v5h-5"/>',
   record: '<circle cx="12" cy="12" r="5" fill="currentColor" stroke="none"/>',
   info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8v.4"/>',
   external: '<path d="M14 5h5v5M19 5l-8 8M18 14v4a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h4"/>',
@@ -176,7 +177,7 @@ function actionValid(a, nested) {
   const kinds = ACTIONS.filter(k => k in a);
   if (kinds.length !== 1) return false;
   const k = kinds[0];
-  if (k === 'set' && !('value' in a)) return false;
+  if (k === 'set' && !(typeof a.value === 'number' && Number.isFinite(a.value))) return false;   // a number, as config.py demands
   if (k === 'steps') {
     if (nested || !Array.isArray(a.steps) || !a.steps.length) return false;
     return a.steps.every(s => actionValid(s, true) && !('menu' in s) && !('steps' in s) && !('auto' in s));
@@ -203,26 +204,48 @@ function makeItem(kind, target, extra = {}) {
   if (extra.icon) it.icon = extra.icon;
   return it;
 }
+/* A target lives in one of three namespaces: brush names, ZBrush item paths (press, set, toggle) and menu ids.
+   Switching kind keeps a target only inside its own namespace, so a brush name never lands in a path field. */
+const nsOf = k => (k === 'brush' ? 'brush' : k === 'menu' ? 'menu' : 'path');
+const TARGET_NOUN = { brush: 'brush', press: 'button path', set: 'value path', toggle: 'switch path', menu: 'submenu' };
+const hasText = v => String(v === undefined || v === null ? '' : v).trim() !== '';
+const joinList = a => (a.length < 2 ? a.join('') : a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1]);
+/* Returns { item, lost }: lost lists, in words, what the switch could not carry over (empty when nothing was lost). */
 function convertItem(it, kind) {
   const old = kindOf(it);
-  if (old === kind) return it;
-  const label = it.label, icon = it.icon;
-  let target = '', value, steps;
-  if (old === 'auto' || kind === 'auto') return makeItem(kind, '', kind === 'auto' ? {} : { label, icon });
-  if (old === 'steps') {
-    const first = (it.steps || [])[0];
-    if (first && kindOf(first) === kind) { target = targetOf(first); value = first.value; }
-  } else {
-    target = targetOf(it);
-    if (kind === 'set' && old === 'set') value = it.value;
+  if (old === kind) return { item: it, lost: [] };
+  const label = it.label, icon = it.icon, lost = [];
+  const oldSteps = old === 'steps' && Array.isArray(it.steps) ? it.steps : [];
+  const oldTarget = targetOf(it);
+  let target = '', value, steps, carriedStep = false;
+  if (kind === 'auto') {
+    if (hasText(oldTarget)) lost.push(`the ${TARGET_NOUN[old]} "${oldTarget.trim()}"`);
+    if (old === 'set' && hasText(it.value)) lost.push(`the value ${it.value}`);
+  } else if (old === 'steps') {
+    const first = oldSteps[0];
+    if (first && nsOf(kindOf(first)) === nsOf(kind)) {
+      target = targetOf(first); value = first.value; carriedStep = true;
+      if (kind !== 'set' && kindOf(first) === 'set' && hasText(first.value)) lost.push(`the value ${first.value}`);
+    }
+  } else if (old !== 'auto') {
+    if (kind === 'steps') {
+      if (old !== 'menu' && (hasText(oldTarget) || (old === 'set' && hasText(it.value)))) steps = [makeItem(old, oldTarget, { value: it.value })];
+      else steps = [];
+    } else target = nsOf(old) === nsOf(kind) ? oldTarget : '';
   }
-  if (kind === 'steps') {
-    steps = old === 'menu' ? [] : (targetOf(it) ? [makeItem(old, targetOf(it), { value: it.value })] : []);
-    if (old === 'steps') steps = it.steps;
+  if (kind !== 'auto' && kind !== 'steps' && old !== 'auto' && old !== 'steps' && hasText(oldTarget) && !hasText(target)) lost.push(`the ${TARGET_NOUN[old]} "${oldTarget.trim()}"`);
+  if (kind === 'steps' && old === 'menu' && hasText(oldTarget)) lost.push(`the submenu "${oldTarget.trim()}"`);
+  if (kind !== 'set' && kind !== 'steps' && kind !== 'auto' && old === 'set' && hasText(it.value)) lost.push(`the value ${it.value}`);
+  if (old === 'steps' && kind !== 'steps') {
+    const n = oldSteps.length - (carriedStep ? 1 : 0);
+    if (n > 0) lost.push((carriedStep ? n + ' other step' : n + ' step') + (n === 1 ? '' : 's'));
   }
-  if (kind === 'menu' && old !== 'menu') target = '';
-  if ((kind === 'brush' || kind === 'press' || kind === 'toggle' || kind === 'set') && old === 'menu') target = '';
-  return makeItem(kind, target, { value, steps, label, icon });
+  if (kind === 'auto') {
+    if (hasText(label)) lost.push(`the label "${String(label).trim()}"`);
+    if (hasText(icon)) lost.push(`the icon "${String(icon).trim()}"`);
+  }
+  const item = kind === 'auto' ? makeItem('auto', '') : makeItem(kind, target, { value, steps, label, icon });
+  return { item, lost };
 }
 
 function usageMap() {
@@ -710,7 +733,7 @@ const validateSoon = debounce(async () => {
 const previewSoon = debounce(() => { if (R.preview) R.preview(); }, 150);
 const snapSoon = debounce(() => pushSnap(), 450);
 
-function touch() { S.version++; updateDirty(); validateSoon(); previewSoon(); snapSoon(); }
+function touch() { S.version++; updateDirty(); validateSoon(); previewSoon(); snapSoon(); updateHistButtons(); }
 function refreshRegions(inspector) {
   if (R.menuList) R.menuList();
   if (R.itemList) R.itemList();
@@ -722,23 +745,55 @@ function refreshRegions(inspector) {
 function commit({ inspector = false } = {}) { touch(); refreshRegions(inspector); }
 function renderAllMenus() { refreshRegions(true); if (R.head) R.head(); }
 
+/* History entries are { cfg, menuId, itemIdx, id }: cfg is the JSON string (cheap to compare), the selection is where the
+   user was while sitting at that state, so Undo puts them back on what they were editing. */
+let histSeq = 0;
+const newEntry = str => ({ cfg: str, menuId: S.menuId, itemIdx: S.itemIdx, id: ++histSeq });
+function resetHistory(str) { S.hist = [newEntry(str)]; S.histI = 0; updateHistButtons(); }
+function histPending() { const cur = S.hist[S.histI]; return !!S.cfg && !!cur && JSON.stringify(S.cfg) !== cur.cfg; }
+function updateHistButtons() {
+  const u = $('#undoBtn'), r = $('#redoBtn'); if (!u || !r) return;
+  const live = !!S.cfg && S.ready && !S.fatal, pending = live && histPending();
+  u.disabled = !live || !(S.histI > 0 || pending);
+  r.disabled = !live || pending || S.histI >= S.hist.length - 1;      // a change not yet filed would be lost by Redo
+}
 function pushSnap() {
-  const s = JSON.stringify(S.cfg);
-  if (s === S.hist[S.histI]) return;
-  S.hist.splice(S.histI + 1); S.hist.push(s);
+  const s = JSON.stringify(S.cfg), cur = S.hist[S.histI];
+  if (cur && s === cur.cfg) { cur.menuId = S.menuId; cur.itemIdx = S.itemIdx; updateHistButtons(); return; }
+  S.hist.splice(S.histI + 1); S.hist.push(newEntry(s));
   if (S.hist.length > 100) S.hist.shift();
   S.histI = S.hist.length - 1;
+  updateHistButtons();
 }
-function applySnap(str) {
-  S.cfg = JSON.parse(str);
-  if (!S.cfg.menus[S.menuId]) S.menuId = Object.keys(S.cfg.menus)[0] || null;
+/* While the config sits unchanged at the current history entry, the entry follows the selection. */
+function rememberSel() {
+  const cur = S.hist[S.histI];
+  if (cur && S.cfg && JSON.stringify(S.cfg) === cur.cfg) { cur.menuId = S.menuId; cur.itemIdx = S.itemIdx; }
+}
+/* Files the change just made as its own history entry (and the state before it, if an edit was still waiting), and
+   returns that entry's id. A toast's Undo is only honoured while this entry is still the current one. */
+function sealSnap() { snapSoon.cancel(); pushSnap(); return S.hist[S.histI].id; }
+function undoToast(msg, o = {}) {
+  const at = sealSnap();
+  toast(msg, Object.assign({}, o, { action: { text: 'Undo', fn: () => {
+    if (S.hist[S.histI].id !== at || histPending()) { toast('That change was already undone or followed by another', { ms: 2800 }); return; }
+    undo();
+  } } }));
+}
+function applySnap(e) {
+  S.cfg = JSON.parse(e.cfg);
+  const ids = Object.keys(S.cfg.menus);
+  S.menuId = S.cfg.menus[e.menuId] ? e.menuId : (S.cfg.menus[S.menuId] ? S.menuId : (ids[0] || null));
   const m = curMenu();
-  if (!m || S.itemIdx === null || S.itemIdx >= m.items.length) S.itemIdx = null;
-  S.version++; updateDirty(); validateSoon(); previewSoon();
+  S.itemIdx = m && S.menuId === e.menuId && Number.isInteger(e.itemIdx) && e.itemIdx >= 0 && e.itemIdx < (m.items || []).length ? e.itemIdx : null;
+  if (S.itemIdx === null && S.tab === 'item') S.tab = 'menu';
+  else if (S.itemIdx !== null && S.tab === 'menu') S.tab = 'item';
+  S.version++; updateDirty(); validateSoon(); previewSoon(); updateHistButtons();
   renderAllMenus(); if (R.settings) R.settings();
+  const row = $('.irow.sel'); if (row) row.scrollIntoView({ block: 'nearest' });
 }
 function undo() { snapSoon.cancel(); pushSnap(); if (S.histI > 0) { S.histI--; applySnap(S.hist[S.histI]); toast('Undone', { ms: 1400 }); } }
-function redo() { if (S.histI < S.hist.length - 1) { S.histI++; applySnap(S.hist[S.histI]); toast('Redone', { ms: 1400 }); } }
+function redo() { snapSoon.cancel(); pushSnap(); if (S.histI < S.hist.length - 1) { S.histI++; applySnap(S.hist[S.histI]); toast('Redone', { ms: 1400 }); } }
 
 /* ---------- menu operations */
 function selectMenu(id, { keepItem = false } = {}) {
@@ -746,6 +801,7 @@ function selectMenu(id, { keepItem = false } = {}) {
   S.menuId = id;
   if (!keepItem) S.itemIdx = null;
   if (S.tab === 'item' && S.itemIdx === null) S.tab = 'menu';
+  rememberSel();
   renderAllMenus();
   if (R.preview) R.preview();
   if (R.libTarget) R.libTarget();
@@ -754,6 +810,7 @@ function selectItem(i, { focusTarget = false } = {}) {
   S.itemIdx = i;
   if (i !== null) S.tab = 'item';
   else if (S.tab === 'item') S.tab = 'menu';
+  rememberSel();
   if (R.itemList) R.itemList();
   if (R.overlay) R.overlay();
   if (R.right) R.right();
@@ -791,6 +848,7 @@ async function deleteMenu(id) {
   if (!ok) return;
   if (!S.cfg.menus[id]) return;
   const fresh = referrers(id).filter(r => r.menuId !== id);     // the config may have changed while the dialog was open
+  sealSnap();
   if (S.itemIdx !== null && S.menuId !== id) {
     const here = fresh.filter(r => r.menuId === S.menuId).map(r => r.index);
     S.itemIdx = here.includes(S.itemIdx) ? null : S.itemIdx - here.filter(x => x < S.itemIdx).length;
@@ -801,7 +859,7 @@ async function deleteMenu(id) {
   if (S.menuId === id) { const rest = Object.keys(S.cfg.menus); S.menuId = rest[Math.min(pos, rest.length - 1)] || null; S.itemIdx = null; }
   if (S.itemIdx !== null && curMenu() && S.itemIdx >= curMenu().items.length) S.itemIdx = null;
   commit({ inspector: true }); if (R.head) R.head(); if (R.preview) R.preview();
-  toast(`Deleted "${m.title || id}"`, { action: { text: 'Undo', fn: undo } });
+  undoToast(`Deleted "${m.title || id}"`);
 }
 function renameMenuId(oldId, newId) {
   newId = newId.trim();
@@ -843,10 +901,11 @@ function insertBrush(menuId, name, at = null, silent = false) {
   const m = S.cfg.menus[menuId]; if (!m) return;
   const i = at === null || at > m.items.length ? m.items.length : at;
   const sel = menuId === S.menuId ? curItem() : null;
+  if (!silent) sealSnap();
   m.items.splice(i, 0, { brush: name });
   if (sel) S.itemIdx = m.items.indexOf(sel);
   commit({ inspector: true }); if (R.head) R.head();
-  if (!silent) toast(`Added ${name} to "${m.title || menuId}"`, { action: { text: 'Undo', fn: undo } });
+  if (!silent) undoToast(`Added ${name} to "${m.title || menuId}"`);
 }
 function dupItem(i) {
   const m = curMenu(); if (!m || !m.items[i]) return;
@@ -856,13 +915,14 @@ function dupItem(i) {
 }
 function delItem(i, menuId = S.menuId) {
   const m = S.cfg.menus[menuId]; if (!m || !m.items[i]) return;
+  sealSnap();
   const removed = m.items.splice(i, 1)[0];
   if (menuId === S.menuId) {
     if (S.itemIdx === i) S.itemIdx = m.items.length ? Math.min(i, m.items.length - 1) : null;
     else if (S.itemIdx !== null && S.itemIdx > i) S.itemIdx--;
   }
   commit({ inspector: true }); if (R.head) R.head(); if (R.right) R.right();
-  toast(`Removed "${itemLabel(removed)}"`, { action: { text: 'Undo', fn: undo }, ms: 3800 });
+  undoToast(`Removed "${itemLabel(removed)}"`, { ms: 3800 });
 }
 function moveItem(menuId, from, to) {
   const m = S.cfg.menus[menuId]; if (!m) return;
@@ -896,7 +956,10 @@ function textInput(value, onInput, o = {}) {
   if (o.onChange) inp.addEventListener('change', () => o.onChange(inp.value, inp));
   return inp;
 }
-function parseValue(s) { const t = s.trim(); return t !== '' && !isNaN(Number(t)) ? Number(t) : s; }
+/* A 'set' value must be a number (config.py rejects anything else): plain decimals become numbers, the rest stays text so it can be flagged. */
+function parseValue(s) { const t = s.trim(); return /^-?\d+(\.\d+)?$/.test(t) ? Number(t) : s; }
+const validValue = v => typeof v === 'number' && Number.isFinite(v);
+const VALUE_HINT = 'Use a number, e.g. 32';
 function sectionTitle(t, sub) { return h('div', { class: 'sect' }, h('span', null, t), sub ? h('em', null, sub) : null); }
 
 /* ================================================================== MENUS screen */
@@ -927,9 +990,18 @@ function buildMenusScreen(root) {
   };
 
   /* --- menu list */
+  // Rebuilt only when what it shows changed; a plain selection change just moves the `sel` class, so the clicked row keeps focus.
+  const menuRows = () => $$('.mrow', listEl);
+  const menuRowOf = id => menuRows().find(r => r.dataset.id === id);
+  const refreshMenuSel = () => menuRows().forEach(r => { const on = r.dataset.id === S.menuId; r.classList.toggle('sel', on); r.setAttribute('aria-selected', on ? 'true' : 'false'); });
   R.menuList = () => {
     const ids = Object.keys(S.cfg.menus);
     setText($('.count', left), String(ids.length));
+    const sig = JSON.stringify(ids.map(id => { const m = S.cfg.menus[id]; return [id, m.title || '', m.hotkey || '', (m.items || []).length]; }));
+    if (sig === listEl._sig) { refreshMenuSel(); listEl._sel = S.menuId; return; }
+    listEl._sig = sig;
+    const act = document.activeElement, fr = act && listEl.contains(act) ? act.closest('.mrow') : null;
+    const had = !!act && listEl.contains(act), fid = fr ? fr.dataset.id : null, fidx = fr ? menuRows().indexOf(fr) : -1, prevSel = listEl._sel;
     listEl.replaceChildren();
     if (!ids.length) { listEl.append(emptyState('menus', 'No menus yet', 'Create a menu to get started. Give it a hotkey to open it from ZBrush.', { text: 'Add menu', fn: addMenu })); return; }
     ids.forEach(id => {
@@ -973,6 +1045,13 @@ function buildMenusScreen(root) {
       });
       listEl.append(row);
     });
+    listEl._sel = S.menuId;
+    if (had) {
+      const rows = menuRows();
+      const t = fid !== null && fid === prevSel && menuRowOf(S.menuId) ? menuRowOf(S.menuId)
+        : (fid !== null ? (menuRowOf(fid) || rows[clamp(fidx, 0, rows.length - 1)]) : null);
+      if (t) t.focus();
+    }
   };
   R.renameMenu = id => {
     const row = $(`.mrow[data-id="${CSS.escape(id)}"]`, listEl); if (!row) return;
@@ -984,9 +1063,15 @@ function buildMenusScreen(root) {
     const finish = ok => {
       if (done) return; done = true;
       if (ok) { const v = inp.value.trim(); if (v && v !== m.title) { m.title = v; commit({ inspector: true }); if (R.head) R.head(); return; } }
+      listEl._sig = null;                                       // the row holds the input: force a rebuild
       R.menuList();
     };
-    inp.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Enter') finish(true); else if (e.key === 'Escape') finish(false); });
+    // Only Enter and Escape are ours; everything else (Ctrl+S, Alt+1..5) still reaches the window, after the new title is taken in
+    inp.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.stopPropagation(); finish(true); }
+      else if (e.key === 'Escape') { e.stopPropagation(); finish(false); }
+      else if (((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === 's') || (e.altKey && !e.ctrlKey && /^[1-5]$/.test(e.key))) finish(true);
+    });
     inp.addEventListener('blur', () => finish(true));
     inp.addEventListener('click', e => e.stopPropagation());
   };
@@ -1031,10 +1116,21 @@ function buildMenusScreen(root) {
 /* Reusable item list: used by the Menus screen and the Library screen's target panel. */
 function renderItemList(box, menuId, compact) {
   const m = S.cfg.menus[menuId];
-  box.replaceChildren();
   box.classList.toggle('compact', compact);
+  const refreshSel = () => $$('.irow', box).forEach(r => {
+    const on = !compact && +r.dataset.i === S.itemIdx;
+    r.classList.toggle('sel', on); r.setAttribute('aria-selected', on ? 'true' : 'false');
+  });
+  // Rebuilt only when a row would look different; a plain selection change just moves the `sel` class, so focus stays put.
+  const sig = m ? JSON.stringify([menuId, compact, (m.items || []).map(it => [itemLabel(it), itemUsable(it), it])]) : 'none';
+  if (sig === box._sig) { refreshSel(); box._sel = compact ? null : S.itemIdx; return; }
+  box._sig = sig;
+  const switched = box._menu !== menuId, keepTop = box.scrollTop, prevSel = box._sel;
+  box._menu = menuId;
+  const act = document.activeElement, fr = act && box.contains(act) ? act.closest('.irow') : null;
+  const had = !!act && box.contains(act), fi = fr ? +fr.dataset.i : null;
+  box.replaceChildren();
   if (!m) { box.append(emptyState('menus', 'No menu selected', '')); return; }
-  const refreshSel = () => $$('.irow', box).forEach(r => r.classList.toggle('sel', !compact && +r.dataset.i === S.itemIdx));
   if (!m.items.length) {
     box.append(emptyState('plus', 'No items yet', compact ? 'Drag a brush here or press + on a card.' : 'Drag a brush here from the Brushes tab, or use Add item.'));
   }
@@ -1051,7 +1147,7 @@ function renderItemList(box, menuId, compact) {
       itemWarn(menuId, i, ok),
       h('span', { class: 'iacts' },
         compact ? null : iconBtn('copy', 'Duplicate item', e => { e.stopPropagation(); S.itemIdx = i; dupItem(i); }),
-        iconBtn('trash', 'Delete item', e => { e.stopPropagation(); delItem(i, menuId); }, 'danger')));
+        iconBtn('trash', 'Delete item', e => { e.stopPropagation(); if (e.detail > 1) return; delItem(i, menuId); }, 'danger')));
     if (!compact) {
       row.addEventListener('click', () => selectItem(i));
       row.addEventListener('dblclick', () => { if (k === 'menu' && S.cfg.menus[it.menu]) selectMenu(it.menu); });
@@ -1066,7 +1162,7 @@ function renderItemList(box, menuId, compact) {
         else if (e.key === 'ArrowDown' && rows[i + 1]) { e.preventDefault(); selectItem(i + 1); $$('.irow', box)[i + 1].focus(); }
         else if (e.key === 'ArrowUp' && rows[i - 1]) { e.preventDefault(); selectItem(i - 1); $$('.irow', box)[i - 1].focus(); }
         else if (e.key === 'Enter') { e.preventDefault(); selectItem(i, { focusTarget: true }); }
-        else if (e.key === 'Delete') { e.preventDefault(); delItem(i); }
+        else if (e.key === 'Delete') { e.preventDefault(); delItem(i, menuId); }
       });
     }
     DnD.source(row, () => ({ type: 'item', menuId, index: i }), () => h('span', { class: 'ghost-chip' }, itemThumb(it, 22), itemLabel(it)));
@@ -1089,9 +1185,20 @@ function renderItemList(box, menuId, compact) {
     drop: (p, x, y) => dropOnMenu(menuId, p, insertIndex(y)),
   });
   refreshSel();
+  box._sel = compact ? null : S.itemIdx;
+  box.scrollTop = switched ? 0 : keepTop;                      // another menu starts at the top, the same menu keeps its place
+  if (had) {                                                   // the focused row was replaced: focus its successor
+    const rows = $$('.irow', box);
+    const t = switched ? (rows[S.itemIdx] || rows[0])
+      : fi !== null && fi === prevSel && rows[S.itemIdx] ? rows[S.itemIdx]
+      : (fi !== null ? rows[clamp(fi, 0, rows.length - 1)] : (!compact && S.itemIdx !== null ? rows[S.itemIdx] : null));
+    if (t) t.focus();
+  } else if (switched && !compact) { const sr = $('.irow.sel', box); if (sr) sr.scrollIntoView({ block: 'nearest' }); }
 }
 
 /* ---------- the ring stage (live preview with overlay) */
+// Widest angle (degrees) one slot answers to. A copy of MAX_SECTOR in radial_menu/ring.py (Ring._index_at): keep the two in step.
+const MAX_SECTOR = 90;
 function buildStage() {
   const img = h('img', { class: 'ring-img', alt: 'Ring preview', draggable: false });
   const ov = h('div', { class: 'ring-ov' });
@@ -1126,7 +1233,10 @@ function buildStage() {
   function buildMarks() {
     ov.replaceChildren(); marks = [];
     idxs = usableIdx(S.menuId);
-    const n = idxs.length; if (!n) return;
+    const n = idxs.length;
+    if (hoverRing !== null && hoverRing >= n) { hoverRing = null; wrap.classList.remove('over-slot'); }   // the ring shrank (undo, menu switch)
+    if (dropRing !== null && dropRing >= n) dropRing = null;
+    if (!n) { info.classList.remove('on'); return; }
     const g = geom(), D = wrap.clientWidth || curSize, k = D / curSize, c = D / 2, step = (2 * Math.PI) / n;
     idxs.forEach((itemIndex, j) => {
       const a = step * j, d = g.slot * k;
@@ -1157,8 +1267,9 @@ function buildStage() {
     if (Math.hypot(dx, dy) < geom().dead) return null;
     let ang = (Math.atan2(dx, -dy) * 180) / Math.PI;
     if (ang < 0) ang += 360;
-    const step = 360 / n;
-    return Math.round(ang / step) % n;
+    const step = 360 / n, i = Math.round(ang / step) % n;
+    const off = Math.abs((((ang - i * step + 180) % 360) + 360) % 360 - 180);      // degrees from that slot's direction
+    return off <= Math.min(step, MAX_SECTOR) / 2 ? i : null;                       // the app picks nothing in the gaps of a sparse ring
   }
   let wantedUrl = '';
   function setImg(url) {
@@ -1219,7 +1330,7 @@ function buildStage() {
     const m = curMenu(); if (!m || !idxs.length || e.target !== el) return;
     const pos = idxs.indexOf(S.itemIdx);
     if (e.key === 'ArrowRight' || e.key === 'ArrowDown') { e.preventDefault(); selectItem(idxs[(pos + 1) % idxs.length]); el.focus(); }
-    else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') { e.preventDefault(); selectItem(idxs[(pos - 1 + idxs.length) % idxs.length]); el.focus(); }
+    else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') { e.preventDefault(); selectItem(idxs[pos < 0 ? idxs.length - 1 : (pos - 1 + idxs.length) % idxs.length]); el.focus(); }
   });
   wrap.addEventListener('pointermove', e => { if (player.state === 'idle' && !DnD.active) setHover(hitTest(e.clientX, e.clientY)); });
   wrap.addEventListener('pointerleave', () => setHover(null));
@@ -1268,7 +1379,14 @@ function buildItemInspector() {
   /* action type */
   const seg = h('div', { class: 'kinds', role: 'radiogroup', 'aria-label': 'Action type' }, Object.keys(KIND).map(kk =>
     h('button', { class: 'kind' + (kk === k ? ' on' : '') + ' k-' + kk, type: 'button', role: 'radio', 'aria-checked': kk === k ? 'true' : 'false', title: KIND[kk].hint,
-      onclick: () => { if (kk === k) return; m.items[i] = convertItem(it, kk); commit({ inspector: true }); const t = $('[data-focus="target"]'); if (t && !t.value) t.focus(); } },
+      onclick: () => {
+        if (kk === k) return;
+        sealSnap();
+        const r = convertItem(it, kk);
+        m.items[i] = r.item; commit({ inspector: true });
+        const t = $('[data-focus="target"]'); if (t && !t.value) t.focus();
+        if (r.lost.length) undoToast(`Switched to ${KIND[kk].label}. Dropped ${joinList(r.lost)}.`, { ms: 6500 });
+      } },
       icon(KIND[kk].icon, 18), h('span', null, KIND[kk].label))));
   box.append(field('Action', seg, KIND[k].hint + '.'));
 
@@ -1282,24 +1400,27 @@ function buildItemInspector() {
   }
   if (k !== 'steps') {
     const placeholders = { brush: 'Search brushes, e.g. ClayBuildup', press: 'Item path, e.g. Tool:Masking:Clear', set: 'Item path, e.g. Draw:Draw Size', toggle: 'Item path, e.g. Transform:Activate Symmetry', menu: 'Pick a menu' };
-    const inp = textInput(targetOf(it), v => { it[k] = v; commit(); updateHint(); updateHead(); }, { mono: k !== 'brush', placeholder: placeholders[k], focus: 'target', label: 'Target' });
+    let touched = false;                                   // "required" hints wait until the field has been edited or left once
+    const inp = textInput(targetOf(it), v => { touched = true; it[k] = v; commit(); updateHint(); updateHead(); }, { mono: k !== 'brush', placeholder: placeholders[k], focus: 'target', label: 'Target' });
     inp.addEventListener('change', () => { it[k] = inp.value.trim(); inp.value = it[k]; commit(); updateHint(); });
+    inp.addEventListener('blur', () => { touched = true; updateHint(); });
     combo(inp, q => matchOpts(k === 'brush' ? brushOpts() : (k === 'menu' ? menuOpts() : pathOpts()), q), { brush: k === 'brush', mono: k !== 'brush' });
     const tlabel = { brush: 'Brush', press: 'Button path', set: 'Slider or value path', toggle: 'Switch path', menu: 'Submenu' }[k];
     const wrap = h('div', { class: 'target-row' }, k === 'brush' ? h('span', { class: 'tthumb' }) : null, inp);
     box.append(field(tlabel, wrap, hintEl));
     function updateHint() {
       const v = targetOf(it).trim(); hintEl.className = 'fhint'; hintEl.replaceChildren();
+      if (!v && touched) { hintEl.classList.add('bad'); hintEl.append('A target is required. '); }
       if (k === 'brush') {
         const tt = $('.tthumb', wrap); if (tt) tt.replaceChildren(thumb(v || null, { size: 30 }));
         if (v && S.libState === 'ready' && !S.libByName.has(v.toLowerCase())) { hintEl.classList.add('warn'); hintEl.append('Not found in your brush library. ZBrush needs a .zbp with this name.'); }
         else if (!v) hintEl.append('Type to search your library.');
       } else if (k === 'menu') {
         const t = S.cfg.menus[v];
-        if (t) hintEl.append('Opens ', h('b', null, t.title || v), ` (${t.items.length} items). `, h('button', { class: 'link', type: 'button', onclick: () => selectMenu(v) }, 'Open it'));
+        if (t) hintEl.append('Opens ', h('b', null, t.title || v), ` (${t.items.length} items). `, h('button', { class: 'link', type: 'button', onmousedown: e => e.preventDefault(), onclick: () => selectMenu(v) }, 'Open it'));
         else {
           if (v) { hintEl.classList.add('bad'); hintEl.append('No menu with this id. '); }
-          hintEl.append(h('button', { class: 'link', type: 'button', onclick: () => {
+          hintEl.append(h('button', { class: 'link', type: 'button', onmousedown: e => e.preventDefault(), onclick: () => {
             const nid = uniqueId(it.label || v || 'submenu'), keep = S.menuId, mi = S.itemIdx;
             S.cfg.menus[nid] = { title: it.label || (v ? v : 'Submenu'), items: [] };
             it.menu = nid; S.menuId = keep; S.itemIdx = mi; commit({ inspector: true }); toast('Created an empty submenu. Open it to add items.', { action: { text: 'Open', fn: () => selectMenu(nid) } });
@@ -1314,10 +1435,19 @@ function buildItemInspector() {
     }
     updateHint();
     if (k === 'set') {
-      const val = textInput(it.value === undefined ? '' : String(it.value), v => { it.value = parseValue(v); commit(); setText($('.vhint', box), String(it.value).trim() === '' ? 'A value is required.' : ''); updateHeadSub(); }, { mono: true, placeholder: 'e.g. 64 or 0.5', label: 'Value' });
+      let vTouched = false;
+      const vhint = h('span', { class: 'vhint' });
+      const paintVal = () => {
+        const show = !validValue(it.value) && (vTouched || hasText(it.value));       // not on a fresh item until it was edited or left
+        vhint.textContent = show ? (hasText(it.value) ? VALUE_HINT : 'A value is required. ' + VALUE_HINT) : '';
+        if (vhint.parentElement) vhint.parentElement.classList.toggle('bad', show);
+        val.classList.toggle('bad', show);
+      };
+      const val = textInput(it.value === undefined ? '' : String(it.value), v => { vTouched = true; it.value = parseValue(v); commit(); paintVal(); }, { mono: true, placeholder: 'e.g. 64 or 0.5', label: 'Value' });
       val.inputMode = 'decimal';
-      box.append(field('Value', val, h('span', { class: 'vhint' }, String(it.value ?? '').trim() === '' ? 'A value is required.' : '')));
-      function updateHeadSub() { /* the list row shows the value; commit() already refreshed it */ }
+      val.addEventListener('blur', () => { vTouched = true; paintVal(); });
+      box.append(field('Value', val, vhint));
+      paintVal();
     }
   } else {
     box.append(field('Steps', buildSteps(it), 'Run in order. Steps can set brushes, press buttons, set values and flip switches (no submenus).'));
@@ -1330,7 +1460,9 @@ function buildItemInspector() {
   updateIcon();
   box.append(sectionTitle('Appearance'),
     field('Label', labelInp, 'Shown under the icon. Leave empty to use the default.'),
-    field('Icon', h('div', { class: 'target-row' }, iconPrev, iconInp), 'By default the icon comes from the brush. Use a brush name or a full path to a .png or .zbp to override it.'));
+    field('Icon', h('div', { class: 'target-row' }, iconPrev, iconInp), k === 'brush'
+      ? 'By default the icon comes from the brush. Use a brush name or a full path to a .png or .zbp to override it.'
+      : 'Use a brush name or a full path to a .png or .zbp as the icon.'));
   return box;
 }
 
@@ -1353,18 +1485,36 @@ function buildSteps(it) {
     if (!Array.isArray(it.steps)) it.steps = [];
     it.steps.forEach((st, j) => {
       const sk = kindOf(st);
-      const sel = h('select', { class: 'inp sel', 'aria-label': 'Step ' + (j + 1) + ' type', onchange: () => { it.steps[j] = makeItem(sel.value, targetOf(st)); commit({ inspector: false }); render(); } },
+      const sel = h('select', { class: 'inp sel', 'aria-label': 'Step ' + (j + 1) + ' type', onchange: () => {
+        const nk = sel.value, was = targetOf(st), keep = nsOf(nk) === nsOf(sk) ? was : '', lost = [];
+        if (hasText(was) && !hasText(keep)) lost.push(`the ${TARGET_NOUN[sk]} "${was.trim()}"`);
+        if (sk === 'set' && nk !== 'set' && hasText(st.value)) lost.push(`the value ${st.value}`);
+        sealSnap();
+        it.steps[j] = makeItem(nk, keep); commit({ inspector: false }); render();
+        if (lost.length) undoToast(`Step ${j + 1} is now ${KIND[nk].label}. Dropped ${joinList(lost)}.`, { ms: 6500 });
+      } },
         ['brush', 'press', 'set', 'toggle'].map(x => h('option', { value: x, selected: x === sk }, KIND[x].label)));
       const tin = textInput(targetOf(st), v => { st[sk] = v; commit(); }, { mono: sk !== 'brush', placeholder: sk === 'brush' ? 'Brush name' : 'Item path', label: 'Step ' + (j + 1) + ' target' });
       tin.addEventListener('change', () => { st[sk] = tin.value.trim(); tin.value = st[sk]; commit(); });
       tin.classList.add('stgt');
       combo(tin, q => matchOpts(sk === 'brush' ? brushOpts() : pathOpts(), q), { brush: sk === 'brush', mono: sk !== 'brush' });
+      const vhint = h('div', { class: 'fhint bad svhint', hidden: true });
       const row = h('div', { class: 'step' }, h('span', { class: 'snum mono' }, String(j + 1)), sel, tin,
-        sk === 'set' ? (() => { const v = textInput(st.value === undefined ? '' : String(st.value), x => { st.value = parseValue(x); commit(); }, { mono: true, placeholder: 'value', label: 'Step value' }); v.classList.add('vin'); return v; })() : null,
+        sk === 'set' ? (() => {
+          let vTouched = false;
+          const paint = () => {
+            const show = !validValue(st.value) && (vTouched || hasText(st.value));
+            vhint.textContent = show ? (hasText(st.value) ? VALUE_HINT : 'A value is required. ' + VALUE_HINT) : ''; vhint.hidden = !show; v.classList.toggle('bad', show);
+          };
+          const v = textInput(st.value === undefined ? '' : String(st.value), x => { vTouched = true; st.value = parseValue(x); commit(); paint(); }, { mono: true, placeholder: 'value', label: 'Step value' });
+          v.classList.add('vin'); v.addEventListener('blur', () => { vTouched = true; paint(); });
+          paint(); return v;
+        })() : null,
+        sk === 'set' ? vhint : null,
         h('span', { class: 'sacts' },
           iconBtn('up', 'Move step up', () => { if (j > 0) { [it.steps[j - 1], it.steps[j]] = [it.steps[j], it.steps[j - 1]]; commit(); render(); } }),
           iconBtn('down', 'Move step down', () => { if (j < it.steps.length - 1) { [it.steps[j + 1], it.steps[j]] = [it.steps[j], it.steps[j + 1]]; commit(); render(); } }),
-          iconBtn('trash', 'Remove step', () => { it.steps.splice(j, 1); commit(); render(); }, 'danger')));
+          iconBtn('trash', 'Remove step', e => { if (e.detail > 1) return; it.steps.splice(j, 1); commit(); render(); }, 'danger')));
       host.append(row);
     });
     if (!it.steps.length) host.append(h('div', { class: 'fhint bad' }, 'Add at least one step.'));
@@ -1582,6 +1732,7 @@ function buildLibraryScreen(root) {
   R.libRefresh = () => browser.refresh();
   R.badges = () => browser.updateBadges();
   R.libTarget = () => {
+    const hadSel = !!document.activeElement && document.activeElement.matches && document.activeElement.matches('.target-sel select') && target.contains(document.activeElement);
     target.replaceChildren();
     const ids = Object.keys(S.cfg.menus), m = curMenu();
     const sel = h('select', { class: 'inp sel', 'aria-label': 'Target menu', onchange: () => selectMenu(sel.value) }, ids.map(id => h('option', { value: id, selected: id === S.menuId }, (S.cfg.menus[id].title || id))));
@@ -1592,6 +1743,7 @@ function buildLibraryScreen(root) {
       h('div', { class: 'target-foot' }, h('button', { class: 'btn small', type: 'button', onclick: () => showScreen('menus') }, 'Open in Menus editor', icon('chevR', 12))));
     renderItemList(list, S.menuId, true);
     if (!m) list.replaceChildren(emptyState('menus', 'No menus', 'Create a menu in the Menus screen first.'));
+    if (hadSel) sel.focus();
   };
   R.libTarget();
 }
@@ -2086,10 +2238,10 @@ function closeProblems(refocus) {
 /* Takes a freshly loaded get_config result (boot, or "reload from disk") and makes it the current and saved config. */
 function adoptConfig(res) {
   S.cfg = res.config;
-  if (!S.cfg.menus || typeof S.cfg.menus !== 'object') S.cfg.menus = {};
+  if (!S.cfg.menus || typeof S.cfg.menus !== 'object' || Array.isArray(S.cfg.menus)) S.cfg.menus = {};   // an array would lose menus on save
   S.path = res.path || S.path || ''; S.problems = res.problems || [];
   S.mtimeNs = res.mtime_ns !== undefined ? res.mtime_ns : null;
-  S.savedStr = JSON.stringify(S.cfg); S.hist = [S.savedStr]; S.histI = 0;
+  S.savedStr = JSON.stringify(S.cfg); resetHistory(S.savedStr);
 }
 async function reloadFromDisk() {
   let res;
@@ -2100,6 +2252,7 @@ async function reloadFromDisk() {
   if (!S.cfg.menus[S.menuId]) S.menuId = Object.keys(S.cfg.menus)[0] || null;
   const m = curMenu();
   if (!m || S.itemIdx === null || S.itemIdx >= (m.items || []).length) S.itemIdx = null;
+  rememberSel();
   S.version++; updateDirty(); renderProblems(); previewSoon();
   renderAllMenus(); if (R.settings) R.settings(); if (R.libTarget) R.libTarget();
   toast('Reloaded the file from disk.', { tone: 'ok', ms: 2600 });
@@ -2418,6 +2571,7 @@ async function boot() {
   loadLibrary(); loadSuggestions();
   showScreen(params.get('screen') || S.prefs.last_screen || 'menus');
   S.ready = true;
+  rememberSel(); updateHistButtons();
   $('#saveBtn').disabled = false;
   refreshZsBadge();
   if (params.has('hover')) { /* debug aid */ }
@@ -2428,6 +2582,9 @@ function init() {
   $$('.rail-btn').forEach(b => b.addEventListener('click', () => { if (S.ready && !S.fatal) showScreen(b.dataset.screen); }));
   $('#saveBtn').addEventListener('click', () => save());
   $('#revertBtn').addEventListener('click', revert);
+  $('#undoBtn').append(icon('undo', 16)); $('#redoBtn').append(icon('redo', 16));
+  $('#undoBtn').addEventListener('click', () => { if (S.ready && !S.fatal) undo(); });
+  $('#redoBtn').addEventListener('click', () => { if (S.ready && !S.fatal) redo(); });
   $('#problemsBtn').addEventListener('click', () => { S.problemsOpen = !S.problemsOpen; renderProblems(); });
   document.addEventListener('mousedown', e => { if (S.problemsOpen && !e.target.closest('#problemsPanel, #problemsBtn')) closeProblems(false); }, true);
   window.addEventListener('keydown', e => {
@@ -2436,7 +2593,8 @@ function init() {
   });
   window.addEventListener('resize', () => { if (S.problemsOpen) placeProblemsPanel(); });
   window.addEventListener('keydown', e => {
-    if ($('#overlay-root').firstElementChild) return;      // a dialog is open: Ctrl+S, undo/redo and Alt+1..5 stay quiet
+    const ours = ((e.ctrlKey || e.metaKey) && !e.altKey && /^[szy]$/i.test(e.key)) || (e.altKey && !e.ctrlKey && !e.shiftKey && /^[1-5]$/.test(e.key));
+    if ($('#overlay-root').firstElementChild) { if (ours) e.preventDefault(); return; }   // a dialog is open: our shortcuts stay quiet, and the web view must not get Ctrl+S either
     const ed = e.target && e.target.closest && e.target.closest('input, textarea, select, [contenteditable]');
     if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === 's') { e.preventDefault(); if (S.ready && !S.fatal) save(); }
     else if (!S.ready || S.fatal) return;

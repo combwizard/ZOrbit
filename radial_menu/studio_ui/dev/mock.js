@@ -30,6 +30,7 @@
         var k = kinds[0];
         if (k === 'steps') { if (!Array.isArray(it.steps) || !it.steps.length) { out.push(where + ": 'steps' must be a non-empty list of brush/press/set/toggle actions"); return; } }
         else if (k === 'set' && !('value' in it)) { out.push(where + ": 'set' needs a 'value'"); return; }
+        else if (k === 'set' && typeof it.value !== 'number') { out.push(where + ": 'set' value must be a number"); return; }
         else if (typeof it[k] !== 'string' || !it[k].trim()) { out.push(where + ": '" + k + "' must be a non-empty string"); return; }
         if (k === 'menu' && !menus[it.menu]) { out.push(where + ": submenu '" + it.menu + "' does not exist"); return; }
         good++;

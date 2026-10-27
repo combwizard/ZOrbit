@@ -40,7 +40,7 @@ Studio is where you edit everything. Open it from the Start menu (**Radial Menu 
 | Settings | Alt+3 | Ring size, animation, labels, colours, tap time, auto-close, bridge, and Studio's own preferences. |
 | Status | Alt+4 | Is ZBrush running, is the app running, is the bridge connected; the app log. |
 
-Other shortcuts: **Ctrl+S** saves, **Ctrl+Z** undoes, **Ctrl+Y** (or Ctrl+Shift+Z) redoes.
+Other shortcuts: **Ctrl+S** saves, **Ctrl+Z** undoes, **Ctrl+Y** (or Ctrl+Shift+Z) redoes. The Undo and Redo buttons next to Revert do the same, and undoing puts the selection back on what you were editing. In the lists, **Delete** removes the selected menu or item, **F2** renames a menu and **Alt+Up/Down** moves an item.
 
 The version at the top links to its release notes. When Studio opens, it asks GitHub whether there is a newer release. If there is, the top shows your version, an orange dot and the new version in orange. Clicking it opens the new release's page, where you can download it. The check only asks GitHub for the latest release and sends nothing about you or your menus. Turn it off in **Settings > Studio > Check for updates**. It is never made while that is off.
 
