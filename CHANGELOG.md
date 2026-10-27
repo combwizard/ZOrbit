@@ -69,6 +69,14 @@ All notable changes to this project are listed here. The format follows
   picked the change up. "Open app folder" is now "Open config folder" (where radial.json lives).
 - The Status check no longer hangs Studio if the process list is slow, reads only the end of large logs,
   and recognises an app running as administrator.
+- Toasts have a close button, pause while you hover or focus them, and no longer stack copies of the same
+  message; errors are red and stay until closed. Orange buttons and badges use dark text, muted hints are
+  brighter and the smallest labels are larger, all for readable contrast.
+- Keyboard and screen readers: the brush and path pickers are proper comboboxes, menus opened from a button
+  return focus to it, the hotkey field says what it is for and its current value, the Status log is a log
+  region, and a "Skip to content" link is the first Tab stop. The maximise button says Restore when the
+  window is maximised, the path of the menus file at the top can be selected and copied, and the ring
+  preview no longer flashes a broken image before the first picture arrives.
 - Brush thumbnails are sharp at the largest card size, a failed thumbnail batch is retried instead of
   showing initials for the rest of the session, and thumbnails start loading just before they scroll into
   view. Folder groups collapse again when you click the open one.

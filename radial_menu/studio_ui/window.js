@@ -3,7 +3,11 @@
 (function () {
   var root = document.documentElement;
   function api() { return window.pywebview && window.pywebview.api; }
-  function setMax(on) { root.classList.toggle('is-max', !!on); }
+  function setMax(on) {
+    root.classList.toggle('is-max', !!on);
+    var btn = document.getElementById('winMax'), label = on ? 'Restore' : 'Maximise';
+    if (btn) { btn.title = label; btn.setAttribute('aria-label', label); }
+  }
   function call(name, arg) {
     var a = api();
     if (!a || typeof a[name] !== 'function') return Promise.resolve(null);   // mock mode: no window
@@ -19,7 +23,7 @@
       if (info && chip && !chip.classList.contains('has-update')) chip.textContent = 'v' + info.version;
     });
     if (chip) chip.addEventListener('click', function () {
-      call('open_url', chip.dataset.url || 'https://github.com/combwizard/zbrush-radial-menu/releases/tag/' + chip.textContent.trim());
+      call('open_url', chip.dataset.url || 'https://github.com/combwizard/zbrush-radial-menu/releases');
     });
     checkUpdate();
     call('win_is_maximized').then(setMax);
@@ -48,6 +52,7 @@
     }, function () { return { latest: null, newer: false }; });
   }
   window.RadialUpdate = { check: checkUpdate };
+  window.RadialWin = { setMax: setMax };
   if (window.pywebview && window.pywebview.api) wire();
   else window.addEventListener('pywebviewready', wire, { once: true });
 })();
@@ -59,7 +64,7 @@
     t = setTimeout(function () {
       var a = window.pywebview && window.pywebview.api;
       if (a && a.win_is_maximized) a.win_is_maximized().then(function (on) {
-        document.documentElement.classList.toggle('is-max', !!on);
+        window.RadialWin.setMax(on);
       });
     }, 120);
   });

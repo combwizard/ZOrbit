@@ -447,7 +447,8 @@ class Api:
     def start_app(self):
         if _mutex_exists(APP_MUTEX):
             return {"ok": True, "running": True, "message": "The app is already running."}
-        if not _zbrush_running()[0]:
+        zb_running, zb_checked = _zbrush_running()
+        if zb_checked and not zb_running:                  # a failed check is not "not running": let the launch try
             return {"ok": False, "running": False, "reason": "zbrush",
                     "message": "ZBrush is not running. The app starts together with ZBrush."}
         p = subprocess.Popen(paths.launch_commands()["app"], cwd=os.path.dirname(paths.PKG_DIR),

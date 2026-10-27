@@ -313,15 +313,48 @@ async function call(name, ...args) {
 }
 
 /* ================================================================== toasts, modal, popover */
+/* Tones: 'ok' (check), 'warn' (amber), 'err' (red, stays until closed). The timer pauses while the pointer is over a toast or focus
+   is inside it, and a toast with the same text as one on screen replaces it instead of stacking. */
 function toast(msg, o = {}) {
   const root = $('#toasts');
-  const t = h('div', { class: 'toast ' + (o.tone || ''), role: 'status' }, h('span', { class: 'toast-msg' }, msg));
-  if (o.action) t.append(h('button', { class: 'toast-act', onclick: () => { o.action.fn(); kill(); } }, o.action.text));
-  root.append(t);
-  requestAnimationFrame(() => t.classList.add('in'));
-  const kill = () => { t.classList.remove('in'); setTimeout(() => t.remove(), 220); };
-  setTimeout(kill, o.ms || (o.action ? 5200 : 3200));
-  while (root.children.length > 4) root.firstChild.remove();
+  const text = String(msg), tone = o.tone || '', err = tone === 'err';
+  let t = $$('.toast', root).find(x => x._msg === text && !x._dying);
+  const fresh = !t;
+  if (fresh) {
+    t = h('div', { class: 'toast' });
+    Object.assign(t, { _msg: text, _hold: new Set(), _dying: false, _left: 0, _started: 0, _timer: 0, _err: false, _back: null });
+    t._kill = () => {
+      if (t._dying) return;
+      t._dying = true; clearTimeout(t._timer); t.classList.remove('in');
+      if (t.contains(document.activeElement) && t._back && document.contains(t._back)) t._back.focus();
+      setTimeout(() => t.remove(), 220);
+    };
+    t._arm = () => { clearTimeout(t._timer); if (t._err || t._dying || t._hold.size) return; t._started = Date.now(); t._timer = setTimeout(t._kill, t._left); };
+    const hold = (who, on) => {
+      if (on) { if (!t._hold.size && t._started) t._left = Math.max(1200, t._left - (Date.now() - t._started)); t._hold.add(who); clearTimeout(t._timer); }
+      else { t._hold.delete(who); t._arm(); }
+    };
+    t.addEventListener('pointerenter', () => hold('ptr', true));
+    t.addEventListener('pointerleave', () => hold('ptr', false));
+    t.addEventListener('focusin', e => { if (e.relatedTarget && !t.contains(e.relatedTarget)) t._back = e.relatedTarget; hold('focus', true); });
+    t.addEventListener('focusout', e => { if (!t.contains(e.relatedTarget)) hold('focus', false); });
+  }
+  clearTimeout(t._timer);
+  t._err = err;
+  t.className = 'toast' + (tone ? ' ' + tone : '') + (!fresh && t.classList.contains('in') ? ' in' : '');
+  if (err) t.setAttribute('role', 'alert'); else t.removeAttribute('role');     // #toasts is the polite live region; only errors announce themselves
+  const ico = tone === 'ok' ? 'check' : (tone === 'warn' || err) ? 'alert' : null;
+  t.replaceChildren(...[ico ? h('span', { class: 'toast-ico' }, icon(ico, 15)) : null, h('span', { class: 'toast-msg' }, text),
+    o.action ? h('button', { class: 'toast-act', type: 'button', onclick: () => { o.action.fn(); t._kill(); } }, o.action.text) : null,
+    h('button', { class: 'ibtn toast-x', type: 'button', title: 'Dismiss', 'aria-label': 'Dismiss: ' + text, onclick: () => t._kill() }, icon('x', 12))].filter(Boolean));
+  if (!fresh && !t.contains(document.activeElement)) t._hold.delete('focus');   // the focused child was just replaced: no focusout will come
+  if (fresh) {
+    root.append(t);
+    requestAnimationFrame(() => t.classList.add('in'));
+    while (root.children.length > 4) root.firstChild.remove();
+  }
+  t._left = o.ms || (o.action ? 5200 : 3200); t._started = 0;
+  t._arm();
 }
 
 let activeModal = null;                                       // { close }: at most one dialog at a time
@@ -368,7 +401,7 @@ function modal({ title, body, actions }) {
 
 let openPopover = null;
 function popover(anchor, entries) {
-  if (openPopover) openPopover();
+  if (openPopover) { const same = openPopover.anchor === anchor; openPopover(); if (same) return; }   // a second click on the anchor closes it
   const pop = h('div', { class: 'popover', role: 'menu' }, entries.map(en => h('button', { class: 'pop-item', role: 'menuitem', type: 'button', onclick: () => { close(); en.fn(); } },
     en.icon ? icon(en.icon, 16) : null, h('span', { class: 'pop-text' }, h('b', null, en.label), en.hint ? h('small', null, en.hint) : null))));
   document.body.append(pop);
@@ -380,11 +413,18 @@ function popover(anchor, entries) {
   const onDown = e => { if (!pop.contains(e.target) && !anchor.contains(e.target)) close(); };
   const onKey = e => {
     const items = $$('.pop-item', pop), i = items.indexOf(document.activeElement);
-    if (e.key === 'Escape') { e.preventDefault(); close(); anchor.focus(); }
+    if (e.key === 'Escape') { e.preventDefault(); close(); }
+    else if (e.key === 'Home') { e.preventDefault(); items[0].focus(); }
+    else if (e.key === 'End') { e.preventDefault(); items[items.length - 1].focus(); }
     else if (e.key === 'ArrowDown') { e.preventDefault(); items[(i + 1) % items.length].focus(); }
     else if (e.key === 'ArrowUp') { e.preventDefault(); items[(i - 1 + items.length) % items.length].focus(); }
   };
-  function close() { pop.remove(); document.removeEventListener('mousedown', onDown, true); document.removeEventListener('keydown', onKey, true); openPopover = null; }
+  function close() {
+    const had = pop.contains(document.activeElement);            // focus goes back to the anchor, not to the page
+    pop.remove(); document.removeEventListener('mousedown', onDown, true); document.removeEventListener('keydown', onKey, true); openPopover = null;
+    if (had && document.contains(anchor)) anchor.focus();
+  }
+  close.anchor = anchor;
   document.addEventListener('mousedown', onDown, true);
   document.addEventListener('keydown', onKey, true);
   openPopover = close;
@@ -634,12 +674,21 @@ const DnD = {
 window.addEventListener('click', e => { if (DnD.recent) { e.stopPropagation(); e.preventDefault(); } }, true);
 
 /* ================================================================== combobox (autocomplete) */
-let comboClose = null;
+let comboClose = null, comboSeq = 0;
 function combo(input, getOpts, o = {}) {
   let list = null, items = [], active = -1, typed = false, picking = false;
+  const lid = 'combo-list-' + (++comboSeq), oid = i => lid + '-o' + i;
+  input.setAttribute('role', 'combobox');
+  input.setAttribute('aria-autocomplete', 'list');
+  input.setAttribute('aria-expanded', 'false');
+  input.setAttribute('aria-controls', lid);
+  const sync = () => {                                        // aria-activedescendant follows the highlighted option
+    input.setAttribute('aria-expanded', list ? 'true' : 'false');
+    if (list && active >= 0) input.setAttribute('aria-activedescendant', oid(active)); else input.removeAttribute('aria-activedescendant');
+  };
   const close = () => {
     if (list) list.remove();
-    list = null; active = -1;
+    list = null; active = -1; sync();
     window.removeEventListener('scroll', onScroll, true);
     if (comboClose === close) comboClose = null;
   };
@@ -653,22 +702,24 @@ function combo(input, getOpts, o = {}) {
   };
   const setActive = i => {
     active = i;
-    $$('.combo-opt', list).forEach((n, j) => n.classList.toggle('active', j === i));
+    $$('.combo-opt', list).forEach((n, j) => { n.classList.toggle('active', j === i); n.setAttribute('aria-selected', j === i ? 'true' : 'false'); });
     const n = $$('.combo-opt', list)[i]; if (n) n.scrollIntoView({ block: 'nearest' });
+    sync();
   };
   const render = () => {
     items = getOpts(typed ? input.value.trim().toLowerCase() : '');
     if (!items.length) { close(); return; }
     if (!list) {
       if (comboClose) comboClose();
-      list = h('div', { class: 'combo-list', role: 'listbox' }); document.body.append(list);
+      list = h('div', { class: 'combo-list', id: lid, role: 'listbox' }); document.body.append(list);
       comboClose = close; window.addEventListener('scroll', onScroll, true);
     }
-    list.replaceChildren(...items.map((it, i) => h('div', { class: 'combo-opt' + (i === active ? ' active' : ''), role: 'option',
+    if (active >= items.length) active = -1;
+    list.replaceChildren(...items.map((it, i) => h('div', { class: 'combo-opt' + (i === active ? ' active' : ''), id: oid(i), role: 'option', 'aria-selected': i === active ? 'true' : 'false',
       onmousedown: e => { e.preventDefault(); pick(i); } },
       o.brush ? thumb(it.value, { size: 24 }) : null,
       h('span', { class: 'combo-main' }, h('b', { class: o.mono ? 'mono' : '' }, it.label || it.value), it.sub ? h('small', null, it.sub) : null))));
-    position();
+    position(); sync();
   };
   const pick = i => {
     const it = items[i]; if (!it) return;
@@ -689,6 +740,7 @@ function combo(input, getOpts, o = {}) {
     else if (e.key === 'ArrowUp') { e.preventDefault(); setActive((active - 1 + items.length) % items.length); }
     else if (e.key === 'Enter') { if (active >= 0) { e.preventDefault(); pick(active); } else close(); }
     else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(); }
+    else if (e.key === 'Tab' && active >= 0) pick(active);      // Tab takes the highlighted option and moves on
   });
 }
 function matchOpts(all, q, cap = 60) {
@@ -720,14 +772,15 @@ function keyFromEvent(e) {
   if (/^F([1-9]|1\d|2[0-4])$/.test(c)) return c;
   return CODE_KEYS[c] || null;
 }
-function hotkeyField({ value, mods = { ctrl: true, alt: true, shift: true }, onChange, placeholder = 'Not set', noMessage }) {
+function hotkeyField({ value, mods = { ctrl: true, alt: true, shift: true }, onChange, placeholder = 'Not set', noMessage, what = 'Hotkey' }) {
   let rec = false;
-  const field = h('div', { class: 'hk-field', role: 'button', tabindex: '0', 'aria-label': 'Hotkey. Press Enter to record a new one.' });
+  const field = h('div', { class: 'hk-field', role: 'button', tabindex: '0', title: 'Press Enter to record a new one' });
   const msg = h('div', { class: 'hk-msg', 'aria-live': 'polite' });
   const recBtn = h('button', { class: 'btn small', type: 'button' }, 'Record');
   const clearBtn = h('button', { class: 'btn small danger-o', type: 'button' }, 'Clear');
   const paint = (live) => {
     field.classList.toggle('rec', rec);
+    field.setAttribute('aria-label', rec ? what + ', listening for a key combination. Escape cancels.' : what + (value ? ', currently ' + value : ', not set'));
     recBtn.textContent = rec ? 'Listening...' : 'Record';
     field.replaceChildren();
     if (rec) field.append(h('span', { class: 'hk-listen' }, live || 'Press a key combination'));
@@ -1306,7 +1359,7 @@ function renderItemList(box, menuId, compact) {
 // Widest angle (degrees) one slot answers to. A copy of MAX_SECTOR in radial_menu/ring.py (Ring._index_at): keep the two in step.
 const MAX_SECTOR = 90;
 function buildStage() {
-  const img = h('img', { class: 'ring-img', alt: 'Ring preview', draggable: false });
+  const img = h('img', { class: 'ring-img pending', alt: 'Ring preview', draggable: false });     // hidden until the first image has decoded, so no broken-image icon
   const ov = h('div', { class: 'ring-ov' });
   const wrap = h('div', { class: 'ring-wrap' }, img, ov);
   const emptyEl = h('div', { class: 'stage-empty' });
@@ -1378,17 +1431,22 @@ function buildStage() {
     return off <= Math.min(step, MAX_SECTOR) / 2 ? i : null;                       // the app picks nothing in the gaps of a sparse ring
   }
   let wantedUrl = '';
+  const reveal = () => { img.classList.remove('pending'); el.classList.remove('loading'); };   // the shimmer stays until a decoded image can take its place
   function setImg(url) {
     if (img.getAttribute('src') === url) { wantedUrl = url; return; }
     wantedUrl = url;
-    if (!img.getAttribute('src')) { img.src = url; return; }
+    if (!img.getAttribute('src')) {
+      img.src = url;
+      img.decode().catch(() => {}).then(() => { if (wantedUrl === url || img.getAttribute('src') === url) reveal(); });
+      return;
+    }
     const pre = new Image(); pre.src = url;
-    pre.decode().catch(() => {}).then(() => { if (wantedUrl === url) img.src = url; });
+    pre.decode().catch(() => {}).then(() => { if (wantedUrl === url) { img.src = url; reveal(); } });
   }
   function showRes(res) {
     el.classList.remove('busy');
     if (res && res.image) {
-      el.classList.remove('err', 'loading'); haveImage = true;
+      el.classList.remove('err'); haveImage = true;
       if (res.size && res.size !== curSize) curSize = res.size;
       setImg(res.image);
       layout();
@@ -1674,7 +1732,7 @@ function buildMenuProps() {
   box.append(field('Id', idInp, h('div', { class: 'id-notes' }, idErr, ...idNotes)));
 
   const owner0 = m.hotkey ? hotkeyOwner(m.hotkey, id) : null;
-  const hk = hotkeyField({ value: m.hotkey || '', placeholder: 'No hotkey (submenu only)', onChange: str => {
+  const hk = hotkeyField({ what: 'Hotkey for this menu', value: m.hotkey || '', placeholder: 'No hotkey (submenu only)', onChange: str => {
     if (str) m.hotkey = str; else delete m.hotkey;
     const owner = str ? hotkeyOwner(str, id) : null;
     if (owner) hk.say(`Also used by "${S.cfg.menus[owner].title || owner}". Only one of them will open.`, 'warn');
@@ -2229,7 +2287,7 @@ function buildSettingsScreen(root) {
     const paintKey = () => {
       const mode = (S.cfg.bridge && S.cfg.bridge.mode) || 'auto';
       keyWrap.classList.toggle('dim', mode === 'message');
-      keyWrap.replaceChildren(field('Bridge key', hotkeyField({ value: (S.cfg.bridge && S.cfg.bridge.key) || '', mods: { ctrl: false, alt: true, shift: false }, placeholder: 'Not set (F9 is the usual choice)',
+      keyWrap.replaceChildren(field('Bridge key', hotkeyField({ what: 'Bridge key', value: (S.cfg.bridge && S.cfg.bridge.key) || '', mods: { ctrl: false, alt: true, shift: false }, placeholder: 'Not set (F9 is the usual choice)',
         onChange: v => { if (v) bridge().key = v; else delete bridge().key; commit(); paintZNote(); } }),
         mode === 'message' ? 'Not used in Message mode, but kept in case you switch back.' : 'Must be bound in ZBrush to Zplugin > Radial Menu > Apply. Ctrl and Shift are rejected because ZBrush reads them as mask and smooth. A bare F-key is best.'));
     };
@@ -2361,7 +2419,12 @@ const localDate = d => d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pa
 
 /* Copies text to the clipboard. Falls back to a throw-away textarea when the async API is missing or refused. */
 async function copyText(text) {
-  try { if (navigator.clipboard && navigator.clipboard.writeText) { await navigator.clipboard.writeText(text); return true; } } catch (e) { /* try the fallback */ }
+  try {                                                      // a pending permission prompt must not hang the button: give up on it after a moment
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await Promise.race([navigator.clipboard.writeText(text), new Promise((_, no) => setTimeout(() => no(new Error('clipboard timed out')), 1200))]);
+      return true;
+    }
+  } catch (e) { /* try the fallback */ }
   const prev = document.activeElement;
   const ta = h('textarea', { style: 'position:fixed;left:-9999px;top:0;opacity:0', 'aria-hidden': 'true', tabindex: '-1', readOnly: true });
   ta.value = text;
@@ -2395,7 +2458,7 @@ function buildStatusScreen(root) {
   root.replaceChildren();
   const page = h('div', { class: 'settings status' });
   const grid = h('div', { class: 'status-grid' });
-  const logBox = h('div', { class: 'logbox mono', tabindex: '0', 'aria-label': 'App log' });
+  const logBox = h('div', { class: 'logbox mono', tabindex: '0', role: 'log', 'aria-live': 'off', 'aria-label': 'App log' });   // it is rebuilt every few seconds, so no live announcements
   const stamp = h('span', { class: 'stamp mono' });
   let startLog = [];                       // lines a failed start brought back; kept (highlighted) until the app runs or Start is pressed again
   let curLines = [];                       // the raw lines on screen now: what Copy log copies
@@ -2694,8 +2757,8 @@ function adoptConfig(res) {
 }
 async function reloadFromDisk() {
   let res;
-  try { res = await call('get_config'); } catch (e) { toast('Could not reload: ' + (e.message || e), { tone: 'warn', ms: 6000 }); return false; }
-  if (!res || !res.config) { toast('Could not reload: ' + ((res && res.error) || 'the file cannot be read'), { tone: 'warn', ms: 6000 }); return false; }
+  try { res = await call('get_config'); } catch (e) { toast('Could not reload: ' + (e.message || e), { tone: 'err' }); return false; }
+  if (!res || !res.config) { toast('Could not reload: ' + ((res && res.error) || 'the file cannot be read'), { tone: 'err' }); return false; }
   validateSoon.cancel(); snapSoon.cancel();
   adoptConfig(res);
   if (!S.cfg.menus[S.menuId]) S.menuId = Object.keys(S.cfg.menus)[0] || null;
@@ -2758,9 +2821,9 @@ async function doSave({ force = false, allowUnusable = false } = {}) {
         actions: [{ text: 'Keep editing', value: 'keep', kind: 'primary', focus: true }, { text: 'Save anyway', value: 'force', kind: 'danger-ghost' }] });
       return v === 'force' ? doSave({ allowUnusable: true }) : 'cancelled';   // never carries force: a new disk change still warns
     }
-    toast((r && r.message) || 'The config could not be saved.', { tone: 'warn', ms: 5000 });
+    toast((r && r.message) || 'The config could not be saved.', { tone: 'err' });
     return 'failed';
-  } catch (e) { toast('Save failed: ' + (e.message || e), { tone: 'warn', ms: 6000 }); return 'failed'; }
+  } catch (e) { toast('Save failed: ' + (e.message || e), { tone: 'err' }); return 'failed'; }
 }
 async function revert() {
   if (!dirtyNow()) return;
@@ -2991,14 +3054,14 @@ function recovery(res) {
   const loading = $('#screens > .loading'); if (loading) loading.remove();
   $$('.rail-btn').forEach(b => { b.classList.remove('on'); b.setAttribute('aria-current', 'false'); });
   $('#saveBtn').disabled = true; $('#revertBtn').disabled = true;
-  if (path) { $('#pathHint').textContent = path; $('#pathHint').title = path; }
+  if (path) setPathHint(path);
   const run = async (btn, method) => {
     btn.disabled = true;
     try {
       const r = await call(method);
       toast((r && r.message) || (r && r.ok ? 'Done.' : 'That did not work.'), { tone: r && r.ok ? 'ok' : 'warn', ms: 4000 });
       if (r && r.ok) { setTimeout(() => location.reload(), 700); return; }
-    } catch (e) { toast('That failed: ' + (e.message || e), { tone: 'warn', ms: 6000 }); }
+    } catch (e) { toast('That failed: ' + (e.message || e), { tone: 'err' }); }
     btn.disabled = false;
   };
   const folderBtn = h('button', { class: 'btn', type: 'button', onclick: async () => { try { await call('open_folder', 'config'); } catch (e) { toast('Could not open the folder.', { tone: 'warn' }); } } }, icon('folder', 13), 'Open folder');
@@ -3035,8 +3098,7 @@ async function boot() {
   if (params.get('q')) S.lib.q = params.get('q');
   if (params.get('cat')) S.lib.cat = params.get('cat');
   if (params.get('dock')) S.dock.cat = params.get('dock');
-  $('#pathHint').textContent = S.path;
-  $('#pathHint').title = S.path;
+  setPathHint(S.path);
   updateDirty(); renderProblems();
   applyPrefs();
   loadLibrary(); loadSuggestions();
@@ -3050,7 +3112,25 @@ async function boot() {
   document.documentElement.classList.add('ready');
 }
 
+/* The path in the top bar, with its Copy path button (hidden while there is no path). */
+function setPathHint(path) {
+  const el = $('#pathHint'), btn = $('#copyPath');
+  el.textContent = path || ''; el.title = path || '';
+  if (btn) btn.hidden = !path;
+}
+
 function init() {
+  const cp = $('#copyPath');
+  if (cp) {
+    cp.append(icon('copy', 13));
+    cp.addEventListener('click', async () => {
+      const path = S.path || $('#pathHint').textContent;
+      if (!path) return;
+      if (await copyText(path)) toast('Path copied', { ms: 1800 }); else toast('Could not copy the path', { tone: 'warn' });
+    });
+  }
+  const skip = $('#skipLink');
+  if (skip) skip.addEventListener('click', e => { e.preventDefault(); const main = $('#screens'); if (main) main.focus(); });
   $$('.rail-btn').forEach(b => b.addEventListener('click', () => { if (S.ready && !S.fatal) showScreen(b.dataset.screen); }));
   $('#saveBtn').addEventListener('click', () => save());
   $('#revertBtn').addEventListener('click', revert);
