@@ -2,7 +2,8 @@
 
 Look: slots of round icons around a glowing accent centre dot,
 hairline spokes and faint guide rings; hover = accent border, soft ring, glow, 1.12x scale and accent label;
-submenus use the highlight colour and a small badge. Selection is by angle outside a dead zone.
+submenus use the highlight colour and a small badge. Selection is by angle outside a dead zone; a slot covers
+at most a quarter of the circle, so a ring of one to three slots has gaps between them.
 
 Flicking: moving the cursor out past a slot's outer edge picks it straight away (ring.flick), and reaching a
 submenu's disc opens it (ring.hover_submenus). Either way a submenu opens centred on that slot, still in hold
@@ -32,6 +33,7 @@ SS = 3                      # supersampling for sprites (drawn large, reduced on
 TIMER_TICK = 1
 CLASS_NAME = "RadialMenuRing"
 HOVER_MS = 120
+MAX_SECTOR = 90.0           # widest angle (degrees) a single slot answers to
 _instances = {}
 _class_registered = False
 _wndproc_ref = None
@@ -276,7 +278,9 @@ class Ring:
         if math.hypot(dx, dy) < self.dead:
             return None
         ang = math.degrees(math.atan2(dx, -dy)) % 360          # 0 at top, clockwise
-        return int(round(ang / self.step)) % self.n
+        i = int(round(ang / self.step)) % self.n
+        off = abs((ang - i * self.step + 180) % 360 - 180)      # degrees from that slot's direction
+        return i if off <= MAX_SECTOR / 2 else None
 
     def _current_hover(self):
         x, y = W.cursor_pos()

@@ -1881,7 +1881,7 @@ async function save() {
     if (r && r.saved) {
       S.savedStr = snap; S.problems = r.problems || [];
       const t = r.time ? new Date(r.time * 1000).toLocaleTimeString() : '';
-      toast(S.problems.length ? `Saved at ${t} with ${S.problems.length} problem${S.problems.length === 1 ? '' : 's'}` : `Saved at ${t}. The app picks it up on the next open.`, { tone: S.problems.length ? 'warn' : 'ok', ms: 3800 });
+      toast(S.problems.length ? `Saved at ${t} with ${S.problems.length} problem${S.problems.length === 1 ? '' : 's'}` : `Saved at ${t}. The app picks it up straight away.`, { tone: S.problems.length ? 'warn' : 'ok', ms: 3800 });
       if (S.problems.length) { S.problemsOpen = true; }
     } else toast('The config could not be saved.', { tone: 'warn' });
   } catch (e) { toast('Save failed: ' + (e.message || e), { tone: 'warn', ms: 6000 }); }

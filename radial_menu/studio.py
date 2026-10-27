@@ -114,8 +114,8 @@ class Api:
         return {"problems": problems}
 
     def save_config(self, cfg):
-        """Writes radial.json (previous version kept as radial.json.bak). The app re-reads it on the next
-        open. Saves even with problems (the loader skips bad items) and reports them."""
+        """Writes radial.json (previous version kept as radial.json.bak). The app notices the change within
+        half a second. Saves even with problems (the loader skips bad items) and reports them."""
         _, problems = self._load_dict(cfg)
         text = json.dumps(cfg, indent=2, ensure_ascii=False) + "\n"
         if os.path.exists(CONFIG_FILE):

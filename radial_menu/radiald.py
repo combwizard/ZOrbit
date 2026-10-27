@@ -49,7 +49,7 @@ WM_APP_OPEN = W.WM_APP + 10           # hook -> control window: open menu (wpara
 WM_APP_KEYUP = W.WM_APP + 11          # hook -> control window: the held hotkey went up
 WM_APP_CANCEL = W.WM_APP + 12         # hook -> control window: Esc
 WM_APP_MASK = W.WM_APP + 13           # hook -> control window: inject the Alt menu-mask key
-TIMER_WATCH, TIMER_ACK, TIMER_REHOOK = 1, 2, 3
+TIMER_WATCH, TIMER_ACK, TIMER_REHOOK, TIMER_CONFIG = 1, 2, 3, 4
 THUMB_PX = 128                        # thumbnail cache size, shared with the Studio
 
 
@@ -90,6 +90,7 @@ class App:
         self.no_tray = no_tray
         self.tray = None
         self.cfg = None
+        self._bad_mtime = None          # mtime of a radial.json that failed to load
         self.slots = []                 # menus with hotkeys, indexed for WM_APP_OPEN
         self.ring = None
         self.held_vk = None             # hotkey vk currently held (between our keydown and keyup)
@@ -108,10 +109,14 @@ class App:
     def load_config(self, force=False) -> None:
         try:
             mtime = os.stat(self.cfg_path).st_mtime
-            if not force and self.cfg and mtime == self.cfg.mtime:
-                return
+        except OSError:
+            mtime = None                           # missing: reported once, by the load below
+        if not force and ((self.cfg and mtime == self.cfg.mtime) or mtime == self._bad_mtime):
+            return
+        try:
             cfg = C.load(self.cfg_path)
         except Exception as e:
+            self._bad_mtime = mtime                # logged once per broken version, not on every poll
             log(f"config error, keeping previous config: {e!r}")
             return
         self.cfg = cfg
@@ -260,6 +265,8 @@ class App:
                     self._check_ack()
                 elif wparam == TIMER_REHOOK and self.ring is None and self.held_vk is None:
                     self.install_hook()         # Windows silently drops hooks that ever timed out
+                elif wparam == TIMER_CONFIG:
+                    self.load_config()          # a new or changed hotkey must work before any ring opens
                 return 0
         except Exception:
             log("control error:\n" + traceback.format_exc())
@@ -497,6 +504,7 @@ class App:
         self.install_hook()
         W.SetTimer(self.ctrl, TIMER_WATCH, 3000, None)
         W.SetTimer(self.ctrl, TIMER_REHOOK, 120000, None)
+        W.SetTimer(self.ctrl, TIMER_CONFIG, 500, None)
         self._create_tray()
         msg = W.w.MSG()
         try:

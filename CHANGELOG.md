@@ -4,6 +4,14 @@ All notable changes to this project are listed here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+- A new or changed menu hotkey works as soon as the menus are saved. Before, the app only re-read the menus
+  when a ring opened, so a new hotkey did nothing until one of the old hotkeys had been pressed.
+- In a ring with one to three slots, a slot no longer answers to every direction. Each slot covers at most a
+  quarter of the circle, so with one slot, moving or flicking away from it picks nothing.
+
 ## [0.5.0] - 2026-10-27
 
 ### Added

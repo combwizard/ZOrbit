@@ -46,7 +46,7 @@ How saving works:
 
 - **Save** writes `radial.json` and keeps the previous version as `radial.json.bak`.
 - **Revert** goes back to what is saved on disk.
-- The app re-reads the file every time a ring opens, so saved changes apply immediately. You do not need to restart ZBrush or the app.
+- The app re-reads the file as soon as it changes, so saved changes apply immediately, new hotkeys included. You do not need to restart ZBrush or the app.
 - If something in the file is wrong, a **problems** pill appears at the top with the details. Studio saves anyway, and the app skips the bad items and logs what it skipped.
 
 On the Menus screen you can:
@@ -173,7 +173,7 @@ Turn this off with **Open submenus on hover** in Settings (`"hover_submenus": fa
 
 Notes:
 
-- A slot is chosen by the *direction* of the cursor from the centre, not by hitting the icon. You can point toward a slot and release without moving far. Within the **dead zone** radius no slot is chosen.
+- A slot is chosen by the *direction* of the cursor from the centre, not by hitting the icon. You can point toward a slot and release without moving far. Within the **dead zone** radius no slot is chosen. Each slot covers at most a quarter of the circle, so in a ring with one to three slots, pointing away from all of them chooses nothing.
 - The slot under the cursor grows slightly, gets an accent ring, and its label changes colour.
 - The ring never takes keyboard focus, so ZBrush keeps working normally behind it.
 - If the cursor is near a screen edge, the ring is moved to stay fully on screen.
