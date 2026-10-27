@@ -303,7 +303,7 @@ class Api(webapi.LibraryApi, webapi.TagApi):
     def get_options(self):
         """Choices the UI offers: animation modes, label modes, action kinds, defaults."""
         return {"animations": list(C.ANIMATIONS), "labels": list(C.LABEL_MODES), "actions": list(C.ACTION_KEYS),
-                "ring_defaults": C.DEFAULT_RING, "ring_ranges": C._RING_RANGES}
+                "tag_colors": list(C.TAG_COLOR_MODES), "ring_defaults": C.DEFAULT_RING, "ring_ranges": C._RING_RANGES}
 
     # --- suggestions for press/set/toggle targets ------------------------------------------------
     def get_suggestions(self):

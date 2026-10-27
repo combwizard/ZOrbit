@@ -83,6 +83,7 @@ const ICONS = {
   k_steps: '<path d="M12 4l8 4-8 4-8-4z"/><path d="M4 12l8 4 8-4M4 16l8 4 8-4"/>',
   k_menu: '<circle cx="12" cy="12" r="8.500"/><path d="M10 8.500l5 3.500-5 3.500z" fill="currentColor"/>',
   k_auto: '<path d="M19.500 12a7.500 7.500 0 0 1-13 5.100M4.500 12a7.500 7.500 0 0 1 13-5.100"/><path d="M17.500 3.500v3.400h-3.400M6.500 20.500v-3.400h3.400"/>',
+  k_browser: '<rect x="4.500" y="4.500" width="6" height="6" rx="1.300"/><rect x="13.500" y="4.500" width="6" height="6" rx="1.300"/><rect x="4.500" y="13.500" width="6" height="6" rx="1.300"/><rect x="13.500" y="13.500" width="6" height="6" rx="1.300"/>',
   tag: '<path d="M20.600 13.400l-7.200 7.200a2 2 0 0 1-2.800 0L3 13V3h10l7.600 7.600a2 2 0 0 1 0 2.800z"/><circle cx="7.500" cy="7.500" r="1.300" fill="currentColor" stroke="none"/>',
   pin: '<path d="M9 4h6l-.8 5.500L17 13H7l2.800-3.500z"/><path d="M12 13v7"/>',
   logo: '<circle cx="12" cy="12" r="2.200" fill="currentColor" stroke="none"/><circle cx="12" cy="3.800" r="1.700"/><circle cx="19.100" cy="7.900" r="1.700"/><circle cx="19.100" cy="16.100" r="1.700"/><circle cx="12" cy="20.200" r="1.700"/><circle cx="4.900" cy="16.100" r="1.700"/><circle cx="4.900" cy="7.900" r="1.700"/>',
@@ -98,7 +99,7 @@ function iconBtn(name, title, onclick, cls = '') {
 function setText(el, t) { if (el.textContent !== t) el.textContent = t; }
 
 /* ================================================================== state */
-const ACTIONS = ['brush', 'press', 'set', 'toggle', 'steps', 'menu', 'auto'];
+const ACTIONS = ['brush', 'press', 'set', 'toggle', 'steps', 'menu', 'auto', 'tag', 'browser'];
 const KIND = {
   brush: { label: 'Brush', icon: 'k_brush', hint: 'Select a brush' },
   press: { label: 'Press', icon: 'k_press', hint: 'Press any ZBrush button' },
@@ -107,6 +108,14 @@ const KIND = {
   steps: { label: 'Steps', icon: 'k_steps', hint: 'Run several actions in order' },
   menu: { label: 'Submenu', icon: 'k_menu', hint: 'Open another ring' },
   auto: { label: 'Auto', icon: 'k_auto', hint: 'A slot filled with a brush you pick often' },
+  tag: { label: 'Tag', icon: 'tag', hint: 'Every brush with a tag, most used first' },
+  browser: { label: 'Browser', icon: 'k_browser', hint: 'Open the brush browser' },
+};
+const TAG_COLOR_INFO = {
+  none: ['None', 'Tags never colour a slot'],
+  tint: ['Tint', 'A coloured rim and a tinted disc'],
+  glow: ['Glow', 'A soft halo in the tag colour'],
+  both: ['Both', 'The tint and the halo together'],
 };
 const ANIM_INFO = {
   smooth: 'Slots scale in together with a slight overshoot.',
@@ -134,7 +143,7 @@ const BRIDGE_INFO = {
   message: ['Message', 'Posts a message to a small listener window inside ZBrush. No keystroke is sent, so nothing can collide with your own shortcuts. Needs the ZOrbit plugin loaded in ZBrush.'],
   key: ['Key', 'Presses the bridge key. Bind that key in ZBrush to Zplugin > ZOrbit > Apply (Ctrl+Alt+click the button, press the key, then Preferences > Hotkeys > Store).'],
 };
-const FALLBACK_DEFAULTS = { radius: 145, slot: 72, dead_zone: 38, tap_ms: 250, timeout_s: 20, animation: 'smooth', labels: 'name', flick: true, hover_submenus: true,
+const FALLBACK_DEFAULTS = { radius: 145, slot: 72, dead_zone: 38, tap_ms: 250, timeout_s: 20, animation: 'smooth', labels: 'name', tag_colors: 'tint', flick: true, hover_submenus: true,
   colors: { bg: '#222327', accent: '#f86b33', highlight: '#4dc8e9', text: '#f0f0f0', lines: '#f86b33' } };
 const FALLBACK_RANGES = { radius: [60, 400], slot: [32, 160], dead_zone: [10, 120], tap_ms: [0, 1000], timeout_s: [2, 120] };
 
@@ -175,8 +184,12 @@ function defaultLabel(it) {
   if (k === 'menu') { const m = S.cfg.menus[it.menu]; return (m && m.title) || String(it.menu || ''); }
   if (k === 'steps') return 'Steps';
   if (k === 'auto') return 'Auto';
+  if (k === 'tag') return tagName(it.tag);
+  if (k === 'browser') return it.browser && S.tagMap.has(it.browser) ? tagName(it.browser) : 'Browser';   // as _default_label in config.py
   return String(it[k] || '').split(':').pop();
 }
+/* A tag's label, or its key when the tag is not (or not yet) known. */
+function tagName(key) { const t = S.tagMap.get(key); return (t && t.label) || String(key || ''); }
 const itemLabel = it => String(it.label || defaultLabel(it) || '(empty)');
 
 function actionValid(a, nested) {
@@ -187,11 +200,13 @@ function actionValid(a, nested) {
   if (k === 'set' && !(typeof a.value === 'number' && Number.isFinite(a.value))) return false;   // a number, as config.py demands
   if (k === 'steps') {
     if (nested || !Array.isArray(a.steps) || !a.steps.length) return false;
-    return a.steps.every(s => actionValid(s, true) && !('menu' in s) && !('steps' in s) && !('auto' in s));
+    return a.steps.every(s => actionValid(s, true) && !('menu' in s) && !('steps' in s) && !('auto' in s) && !('tag' in s) && !('browser' in s));   // steps cannot open menus, nest steps, be auto slots or open tags or the browser
   }
   if (k === 'auto') return a.auto === 'brush';
+  if (k === 'browser') return typeof a.browser === 'string';          // '' = all brushes
   return typeof a[k] === 'string' && a[k].trim() !== '';
 }
+/* A tag slot whose tag does not exist stays usable: the loader keeps it as an empty slot and the Problems panel warns. */
 const itemUsable = it => actionValid(it, false) && (!('menu' in it) || !!S.cfg.menus[it.menu]);
 function usableIdx(menuId) {
   const m = S.cfg.menus[menuId];
@@ -213,14 +228,16 @@ function makeItem(kind, target, extra = {}) {
 }
 /* A target lives in one of three namespaces: brush names, ZBrush item paths (press, set, toggle) and menu ids.
    Switching kind keeps a target only inside its own namespace, so a brush name never lands in a path field. */
-const nsOf = k => (k === 'brush' ? 'brush' : k === 'menu' ? 'menu' : 'path');
-const TARGET_NOUN = { brush: 'brush', press: 'button path', set: 'value path', toggle: 'switch path', menu: 'submenu' };
+const nsOf = k => (k === 'brush' ? 'brush' : k === 'menu' ? 'menu' : k === 'tag' || k === 'browser' ? 'tag' : 'path');
+const TARGET_NOUN = { brush: 'brush', press: 'button path', set: 'value path', toggle: 'switch path', menu: 'submenu', tag: 'tag', browser: 'tag filter' };
 /* Brush names are compared ignoring case and spaces (the guide says neither matters). */
 const nameKey = s => String(s === undefined || s === null ? '' : s).toLowerCase().replace(/\s+/g, '');
 /* A brush's key in tags.json: 'brush:' and its name in lower case without spaces (tags.item_key in Python). */
 const tagKey = s => 'brush:' + nameKey(s);
 const hasText = v => String(v === undefined || v === null ? '' : v).trim() !== '';
 const joinList = a => (a.length < 2 ? a.join('') : a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1]);
+/* Kinds that cannot be a step (and so are dropped when an item becomes Steps). */
+const NO_STEP = ['menu', 'tag', 'browser'];
 /* Returns { item, lost }: lost lists, in words, what the switch could not carry over (empty when nothing was lost). */
 function convertItem(it, kind) {
   const old = kindOf(it);
@@ -240,12 +257,12 @@ function convertItem(it, kind) {
     }
   } else if (old !== 'auto') {
     if (kind === 'steps') {
-      if (old !== 'menu' && (hasText(oldTarget) || (old === 'set' && hasText(it.value)))) steps = [makeItem(old, oldTarget, { value: it.value })];
+      if (!NO_STEP.includes(old) && (hasText(oldTarget) || (old === 'set' && hasText(it.value)))) steps = [makeItem(old, oldTarget, { value: it.value })];
       else steps = [];
     } else target = nsOf(old) === nsOf(kind) ? oldTarget : '';
   }
   if (kind !== 'auto' && kind !== 'steps' && old !== 'auto' && old !== 'steps' && hasText(oldTarget) && !hasText(target)) lost.push(`the ${TARGET_NOUN[old]} "${oldTarget.trim()}"`);
-  if (kind === 'steps' && old === 'menu' && hasText(oldTarget)) lost.push(`the submenu "${oldTarget.trim()}"`);
+  if (kind === 'steps' && NO_STEP.includes(old) && hasText(oldTarget)) lost.push(`the ${TARGET_NOUN[old]} "${oldTarget.trim()}"`);
   if (kind !== 'set' && kind !== 'steps' && kind !== 'auto' && old === 'set' && hasText(it.value)) lost.push(`the value ${it.value}`);
   if (old === 'steps' && kind !== 'steps') {
     const n = oldSteps.length - (carriedStep ? 1 : 0);
@@ -285,12 +302,17 @@ function hkNorm(s) {
   const mods = parts.map(p => (p === 'control' ? 'ctrl' : p)).sort();
   return [...mods, key].join('+');
 }
+/* Who else uses a hotkey: a menu id, BROWSER for browser.hotkey, or null. exceptId is the menu (or BROWSER) being edited. */
+const BROWSER = ':browser';                     // not a valid menu id (':' is rejected), so it never collides with one
 function hotkeyOwner(str, exceptId) {
   const n = hkNorm(str);
   if (!n) return null;
   for (const [id, m] of Object.entries(S.cfg.menus)) if (id !== exceptId && hkNorm(m.hotkey) === n) return id;
+  const b = S.cfg.browser;
+  if (exceptId !== BROWSER && b && typeof b === 'object' && hkNorm(b.hotkey) === n) return BROWSER;
   return null;
 }
+const ownerName = id => (id === BROWSER ? 'the brush browser' : '“' + (S.cfg.menus[id].title || id) + '”');
 function hkChips(str, cls = '') {
   const w = h('span', { class: 'hk ' + cls });
   String(str).split(/\+(?=.)/).forEach(p => w.append(h('kbd', null, p)));
@@ -535,7 +557,7 @@ function itemThumb(it, size = 30) {
 
 /* ================================================================== ring preview + animation loaders */
 const RingLoader = {
-  cache: new Map(), ver: -1, queue: null, cur: null, busy: false,
+  cache: new Map(), ver: -1, gen: 0, queue: null, cur: null, busy: false,   // gen: bumped by tag edits, which S.version does not see
   key: (m, hv, path) => m + '|' + (hv === null || hv === undefined ? 'n' : hv) + '|' + (path && path.length ? path.join('.') : ''),
   sync() { if (this.ver !== S.version) { this.cache.clear(); this.ver = S.version; } },
   peek(menuId, hover, path) { this.sync(); return this.cache.get(this.key(menuId, hover, path)) || null; },
@@ -545,10 +567,10 @@ const RingLoader = {
     if (c) return Promise.resolve(c);
     return new Promise(res => {
       // the same picture asked for twice (several previews on one screen) shares one backend call
-      const same = [this.cur, this.queue].find(q => q && q.k === k && q.ver === S.version);
+      const same = [this.cur, this.queue].find(q => q && q.k === k && q.ver === S.version && q.gen === this.gen);
       if (same) { same.waiters.push(res); return; }
       if (this.queue) this.settle(this.queue, null);           // latest request wins
-      this.queue = { menuId, hover: hover === undefined ? null : hover, path: path && path.length ? path : null, k, ver: S.version, res, waiters: [] };
+      this.queue = { menuId, hover: hover === undefined ? null : hover, path: path && path.length ? path : null, k, ver: S.version, gen: this.gen, res, waiters: [] };
       this.pump();
     });
   },
@@ -560,7 +582,7 @@ const RingLoader = {
     let out;
     try {
       out = await call('preview_ring', S.cfg, q.menuId, q.hover, 1.0, q.path);
-      if (out && out.image && q.ver === this.ver) {
+      if (out && out.image && q.ver === this.ver && q.gen === this.gen) {
         this.cache.set(q.k, out);
         if (this.cache.size > 60) this.cache.delete(this.cache.keys().next().value);
       }
@@ -571,14 +593,14 @@ const RingLoader = {
   },
 };
 const FrameLoader = {
-  cache: new Map(), ver: -1,
+  cache: new Map(), ver: -1, gen: 0,
   async get(menuId, ringAnim = false) {          // ringAnim: ring.animation even if the menu has its own
     if (this.ver !== S.version) { this.cache.clear(); this.ver = S.version; }
     const k = menuId + (ringAnim ? '|ring' : '');
     if (this.cache.has(k)) return this.cache.get(k);
-    const ver = S.version;
+    const ver = S.version, gen = this.gen;
     const res = await call('preview_animation', S.cfg, menuId, 30, ringAnim);
-    if (res && res.frames && res.frames.length && ver === S.version) this.cache.set(k, res);
+    if (res && res.frames && res.frames.length && ver === S.version && gen === this.gen) this.cache.set(k, res);
     return res;
   },
 };
@@ -987,6 +1009,7 @@ function menuIdProblem(oldId, newId) {
   newId = newId.trim();
   if (newId === oldId) return null;
   if (!newId) return 'The id cannot be empty.';
+  if (/^tag:/.test(newId)) return 'Ids starting with "tag:" are reserved for tag submenus.';
   if (!/^[A-Za-z0-9_-]+$/.test(newId)) return 'Use letters, digits, - and _ only.';
   if (/^\d+$/.test(newId)) return 'The id cannot be only digits.';
   if (S.cfg.menus[newId]) return 'Another menu already uses that id.';
@@ -1286,7 +1309,7 @@ function renderItemList(box, menuId, compact) {
     r.classList.toggle('sel', on); r.setAttribute('aria-selected', on ? 'true' : 'false');
   });
   // Rebuilt only when a row would look different; a plain selection change just moves the `sel` class, so focus stays put.
-  const sig = m ? JSON.stringify([menuId, compact, (m.items || []).map(it => [itemLabel(it), itemUsable(it), it, kindOf(it) === 'brush' ? (firstTag(it.brush) || {}).color || '' : ''])]) : 'none';
+  const sig = m ? JSON.stringify([menuId, compact, (m.items || []).map(it => [itemLabel(it), itemUsable(it), it, kindOf(it) === 'brush' ? (firstTag(it.brush) || {}).color || '' : keyTag(it) ? [keyTag(it).label, keyTag(it).color] : ''])]) : 'none';
   if (sig === box._sig) { refreshSel(); box._sel = compact ? null : S.itemIdx; return; }
   box._sig = sig;
   const switched = box._menu !== menuId, keepTop = box.scrollTop, prevSel = box._sel;
@@ -1305,8 +1328,8 @@ function renderItemList(box, menuId, compact) {
       compact ? null : h('span', { class: 'grip', 'aria-hidden': 'true' }, icon('grip', 14)),
       h('span', { class: 'inum mono' }, String(i + 1)),
       itemThumb(it, compact ? 26 : 32),
-      h('span', { class: 'imain' }, h('span', { class: 'iname' }, k === 'brush' ? tagDot(it.brush) : null, itemLabel(it)),
-        compact ? null : h('span', { class: 'isub mono' }, k === 'auto' ? 'filled from your picks' : k === 'steps' ? `${(it.steps || []).length} step${(it.steps || []).length === 1 ? '' : 's'}` : (k === 'set' ? `${targetOf(it)} = ${it.value}` : targetOf(it) || '(not set)'))),
+      h('span', { class: 'imain' }, h('span', { class: 'iname' }, k === 'brush' ? tagDot(it.brush) : keyTag(it) ? keyDot(keyTag(it)) : null, itemLabel(it)),
+        compact ? null : h('span', { class: 'isub mono' }, k === 'auto' ? 'filled from your picks' : k === 'tag' ? (it.tag ? 'all brushes tagged ' + tagName(it.tag) : '(not set)') : k === 'browser' ? 'opens the brush browser' + (it.browser ? ' for ' + tagName(it.browser) : '') : k === 'steps' ? `${(it.steps || []).length} step${(it.steps || []).length === 1 ? '' : 's'}` : (k === 'set' ? `${targetOf(it)} = ${it.value}` : targetOf(it) || '(not set)'))),
       h('span', { class: 'ikind', title: KIND[k].hint }, icon(KIND[k].icon, 13), compact ? null : KIND[k].label),
       itemWarn(menuId, i, ok),
       h('span', { class: 'iacts' },
@@ -1405,11 +1428,12 @@ function buildStage() {
     st.position = 'absolute'; st.maxWidth = 'none';
     st.left = D / 2 - box.cx * k + 'px'; st.top = D / 2 - box.cy * k + 'px'; st.width = box.w * k + 'px'; st.height = box.h * k + 'px';
   }
-  /* Item indices (in the ring's own order) of the fan to show open: the hovered slot, else the selected one, when it is a submenu whose menu has "fan". */
+  /* Item indices (in the ring's own order) of the fan to show open: the hovered slot, else the selected one, when it is a submenu whose menu has "fan" or a tag with brushes. */
   function fanPath() {
     const m = curMenu(); if (!m) return null;
     const at = hoverRing !== null ? idxs[hoverRing] : S.itemIdx, j = idxs.indexOf(at);
     const it = j >= 0 ? m.items[at] : null, t = it && 'menu' in it ? S.cfg.menus[it.menu] : null;
+    if (it && 'tag' in it) return tagBrushCount(it.tag) > 0 ? [j] : null;     // the expander turns it into a fan submenu of its brushes
     return t && t.fan === true && it.menu !== S.menuId ? [j] : null;
   }
   function buildMarks() {
@@ -1437,7 +1461,7 @@ function buildStage() {
     const m = curMenu();
     if (hoverRing !== null && m && m.items[idxs[hoverRing]]) {
       const it = m.items[idxs[hoverRing]];
-      info.replaceChildren(h('b', null, itemLabel(it)), h('span', { class: 'mono' }, ' ' + KIND[kindOf(it)].label.toLowerCase() + (kindOf(it) === 'steps' || kindOf(it) === 'auto' ? '' : ' / ' + targetOf(it))));
+      info.replaceChildren(h('b', null, itemLabel(it)), h('span', { class: 'mono' }, ' ' + KIND[kindOf(it)].label.toLowerCase() + (['steps', 'auto'].includes(kindOf(it)) ? '' : kindOf(it) === 'tag' ? ' / ' + tagName(it.tag) : kindOf(it) === 'browser' ? ' / ' + (it.browser ? tagName(it.browser) : 'all brushes') : ' / ' + targetOf(it))));
       info.classList.add('on');
     } else info.classList.remove('on');
   }
@@ -1597,7 +1621,9 @@ function buildItemInspector() {
     box.append(field('Right now', autoNow(m, i), 'The brush you pick most often from any ring, apart from the brushes this menu already has. Picks fade with a two-week half-life. A newcomer has to come out on top twice in a row before it takes a slot, and it takes the slot of a brush you have stopped using, so the rest of the ring stays put.'));
     return box;
   }
-  if (k !== 'steps') {
+  if (k === 'tag' || k === 'browser') {
+    box.append(tagTargetField(it, k, updateHead));
+  } else if (k !== 'steps') {
     const placeholders = { brush: 'Search brushes, e.g. ClayBuildup', press: 'Item path, e.g. Tool:Masking:Clear', set: 'Item path, e.g. Draw:Draw Size', toggle: 'Item path, e.g. Transform:Activate Symmetry', menu: 'Pick a menu' };
     let touched = false;                                   // "required" hints wait until the field has been edited or left once
     let inp, openBtn = null;
@@ -1768,11 +1794,11 @@ function buildMenuProps() {
   const hk = hotkeyField({ what: 'Hotkey for this menu', value: m.hotkey || '', placeholder: 'No hotkey (submenu only)', onChange: str => {
     if (str) m.hotkey = str; else delete m.hotkey;
     const owner = str ? hotkeyOwner(str, id) : null;
-    if (owner) hk.say(`Also used by "${S.cfg.menus[owner].title || owner}". Only one of them will open.`, 'warn');
+    if (owner) hk.say(`Also used by ${ownerName(owner)}. Only one of them will open.`, 'warn');
     commit(); if (R.head) R.head();
   } });
   box.append(field('Hotkey', hk, m.hotkey ? 'Hold or tap this key in ZBrush to open the ring. Click the field and press a combination to change it.' : 'Without a hotkey this menu can only be opened as a submenu from another menu.'));
-  if (owner0) hk.say(`Also used by "${S.cfg.menus[owner0].title || owner0}". Only one of them will open.`, 'warn');
+  if (owner0) hk.say(`Also used by ${ownerName(owner0)}. Only one of them will open.`, 'warn');
 
   box.append(h('div', { class: 'field row' }, h('div', { class: 'grow' }, h('span', { class: 'flabel' }, 'Swallow hotkey'),
     h('div', { class: 'fhint' }, 'Hides the key from ZBrush while the ring is in use, so it does not also trigger ZBrush\'s own shortcut for that key. Turn off if you want the key to keep working in ZBrush too.')),
@@ -1825,6 +1851,59 @@ function tagDot(name) {
   const t = firstTag(name);
   return t ? h('i', { class: 'tdot', style: { '--tag': t.color }, title: 'Tag: ' + t.label }) : null;
 }
+/* The tag a Tag or Browser item points at (null for other kinds, an empty filter or an unknown key), and its colour dot. */
+const keyTag = it => { const key = it && (('tag' in it) ? it.tag : ('browser' in it) ? it.browser : ''); return key ? S.tagMap.get(key) || null : null; };
+const keyDot = t => h('i', { class: 'tdot', style: { '--tag': t.color }, title: 'Tag: ' + t.label });
+/* How many brushes a tag has to show: the installed ones once the library is read, else what tags.json says. */
+function tagBrushCount(key) {
+  if (!S.tagMap.has(key)) return 0;
+  if (S.libState === 'ready') return tagCounts().byKey.get(key) || 0;
+  return S.tagMap.get(key).count || 0;
+}
+let tagField = null;                   // repaint hook of the tag picker in the item inspector
+
+/* The Tag / Browser target in the item inspector: a list of the current tags with a dot for the colour of the chosen one
+   (an <option> cannot be styled). A key that is not in tags.json is kept and shown as unknown rather than silently replaced. */
+function tagTargetField(it, k, updateHead) {
+  const isTag = k === 'tag';
+  let touched = false;
+  const dot = h('i', { class: 'tdot tt-dot none', 'aria-hidden': 'true' });
+  const hint = h('div', { class: 'fhint' });
+  const sel = h('select', { class: 'inp sel', 'aria-label': isTag ? 'Tag' : 'Tag filter', dataset: { focus: 'target' },
+    onchange: () => { touched = true; it[k] = sel.value; commit(); paint(); updateHead(); } });
+  sel.addEventListener('blur', () => { touched = true; paintHint(); });
+  const paintHint = () => {
+    const cur = String(it[k] ?? ''), t = S.tagMap.get(cur), n = tagBrushCount(cur);
+    hint.className = 'fhint'; hint.replaceChildren();
+    if (cur && !t && S.tagsLoaded) {
+      hint.classList.add('warn');
+      hint.append(isTag ? 'This tag no longer exists; the slot stays empty until you pick another. ' : 'This tag no longer exists; the browser opens unfiltered. ');
+    } else if (isTag && !cur) {
+      if (touched) hint.classList.add('bad');
+      hint.append('Pick a tag. ');
+    } else if (isTag) {
+      if (t && !n) { hint.classList.add('warn'); hint.append('No brush has this tag yet; the slot stays empty until one does. '); }
+      else hint.append('Opens a submenu of ', h('b', null, plural(n, 'brush')), ', most used first. ');
+    } else hint.append(t ? 'Opens the brush browser popout, filtered to this tag. ' : 'Opens the brush browser popout with every brush. Pick a tag to filter it. ');
+    hint.append(h('button', { class: 'link', type: 'button', onmousedown: e => e.preventDefault(), onclick: () => openTagManager() }, 'Manage tags...'));
+  };
+  const paint = () => {
+    const cur = String(it[k] ?? ''), t = S.tagMap.get(cur), opts = [];
+    if (!isTag) opts.push(h('option', { value: '' }, 'All brushes'));
+    else if (!cur) opts.push(h('option', { value: '' }, 'Pick a tag...'));
+    if (cur && !t) opts.unshift(h('option', { value: cur }, S.tagsLoaded ? `Unknown tag '${cur}'` : cur));
+    for (const x of S.tags) opts.push(h('option', { value: x.key }, `${x.label} (${plural(x.count || 0, 'brush')})`));
+    sel.replaceChildren(...opts);
+    sel.value = cur;
+    dot.classList.toggle('none', !t);
+    if (t) dot.style.setProperty('--tag', t.color); else dot.style.removeProperty('--tag');
+    paintHint();
+  };
+  paint();
+  tagField = { sel, paint };
+  return field(isTag ? 'Tag' : 'Tag filter', h('div', { class: 'target-row' }, dot, sel), hint);
+}
+
 /* How many installed brushes each tag is on, and how many carry none (the sidebar's counts). */
 function tagCounts() {
   if (S._tc && S._tcItems === S.itemTags && S._tcMap === S.tagMap && S._tcLib === S.library) return S._tc;
@@ -1888,6 +1967,11 @@ function tagsChanged() {
   if (R.libTarget) R.libTarget();
   if (tagMgr) tagMgr.paint();
   if (tagPick) tagPick.paint();
+  if (tagField) { if (tagField.sel.isConnected) tagField.paint(); else tagField = null; }
+  if (R.overlay) R.overlay();                          // a tag slot may now have (or no longer have) a fan to show
+  RingLoader.cache.clear(); RingLoader.gen++;          // tags are not part of S.version: forget cached and in-flight previews
+  FrameLoader.cache.clear(); FrameLoader.gen++;
+  previewSoon();
 }
 
 /* A popover for tagging brushes: one checkable row per tag (ticked when all of the brushes carry it, a dash when some do),
@@ -2686,6 +2770,11 @@ function buildSettingsScreen(root) {
     const LAB = { name: ['Icon and name', 'Each slot shows its label underneath.'], none: ['Icon only', 'A cleaner ring. Names appear only in this Studio.'] };
     page.append(card('Labels', null, choiceCards(labelOpts.map(l => [l, (LAB[l] || [l, ''])[0], (LAB[l] || [l, ''])[1]]), ring().labels || S.defaults.labels, v => setRing('labels', v), 'two', 'Labels')));
 
+    /* --- tag colours: how a brush's first tag shows on its slot (tag slots always show their tag's colour) */
+    const tcOpts = (S.opts && S.opts.tag_colors) || Object.keys(TAG_COLOR_INFO);
+    page.append(card('Tag colours', "How a brush's first tag shows on its slot",
+      choiceCards(tcOpts.map(v => [v, (TAG_COLOR_INFO[v] || [v[0].toUpperCase() + v.slice(1), ''])[0], (TAG_COLOR_INFO[v] || [v, ''])[1]]), ring().tag_colors || S.defaults.tag_colors || 'tint', v => setRing('tag_colors', v), 'tag-cards', 'Tag colours')));
+
     /* --- colours (the preview is the same picture as the geometry card's: one request per edit) */
     const colorPaints = [];
     const colorRows = Object.keys(COLOR_INFO).map(k => {
@@ -2821,6 +2910,22 @@ function buildSettingsScreen(root) {
         h('div', { class: 'fhint' }, 'Tags group your brushes so you can filter the Library by them. A brush can carry several. Tags are not part of Save or Undo.'),
         h('div', { class: 'fhint mono tag-path', hidden: !S.tagsPath }, S.tagsPath)),
         manageTagsBtn('btn'))));
+
+    /* --- brush browser (browser.hotkey; the object is dropped again when it ends up empty) */
+    const browserObj = () => { if (!S.cfg.browser || typeof S.cfg.browser !== 'object') S.cfg.browser = {}; return S.cfg.browser; };
+    const bOwner = hotkey => (hotkey ? hotkeyOwner(hotkey, BROWSER) : null);
+    const bsay = owner => (owner ? `Also used by ${ownerName(owner)}. That menu wins, so this hotkey will not open the browser.` : '');
+    const bhk = hotkeyField({ what: 'Brush browser hotkey', value: (S.cfg.browser && typeof S.cfg.browser === 'object' && S.cfg.browser.hotkey) || '', placeholder: 'No hotkey (open it from a Browser slot)', onChange: str => {
+      const b = browserObj();
+      if (str) b.hotkey = str; else delete b.hotkey;
+      if (!Object.keys(b).length) delete S.cfg.browser;
+      const owner = bOwner(str);
+      bhk.say(bsay(owner), 'warn');
+      commit();
+    } });
+    page.append(card('Brush browser', 'A popout over ZBrush',
+      h('div', { class: 'browser-key' }, field('Hotkey', bhk, 'Opens the brush browser over ZBrush. The browser also opens from a Browser slot.'))));
+    { const o0 = bOwner(S.cfg.browser && S.cfg.browser.hotkey); if (o0) bhk.say(bsay(o0), 'warn'); }
 
     /* --- studio (preferences of this window, saved immediately, not part of the menus file) */
     const updNote = h('div', { class: 'fhint upd-status', role: 'status' });
@@ -3036,9 +3141,9 @@ function updateDirty() {
 /* Turns one message from the loader (config.py) into plain words plus where to go to fix it.
    Returns { text, raw, target }; target is null when the format is not recognised. */
 const RING_CARD = { radius: 'set-ring-geometry', slot: 'set-ring-geometry', dead_zone: 'set-ring-geometry', animation: 'set-open-animation',
-  labels: 'set-labels', colors: 'set-colours', tap_ms: 'set-behaviour', timeout_s: 'set-behaviour', flick: 'set-behaviour', hover_submenus: 'set-behaviour' };
+  labels: 'set-labels', tag_colors: 'set-tag-colours', colors: 'set-colours', tap_ms: 'set-behaviour', timeout_s: 'set-behaviour', flick: 'set-behaviour', hover_submenus: 'set-behaviour' };
 const RING_NAME = { radius: 'Ring radius', slot: 'Slot size', dead_zone: 'Dead zone', tap_ms: 'Tap time', timeout_s: 'Auto-close', flick: 'Flick to pick',
-  hover_submenus: 'Open submenus on hover', animation: 'Open animation', labels: 'Labels' };
+  hover_submenus: 'Open submenus on hover', animation: 'Open animation', labels: 'Labels', tag_colors: 'Tag colours' };
 const unq = s => String(s).replace(/^(['"])(.*)\1$/, '$2');
 function describeProblem(raw) {
   const out = (text, target) => ({ text, raw, target: target || null });
@@ -3063,6 +3168,7 @@ function describeProblem(raw) {
       const other = m[2];
       return out(`${titleOf(mid)} and ${titleOf(other)} both use the hotkey ${unq(m[1])}; only ${titleOf(other)} (the first) will open it`, tgt('hotkey'));
     }
+    if (rest.startsWith(': ids starting with')) return out(`The id of ${titleOf(mid)} cannot start with “tag:”; those ids are reserved for tag submenus`, tgt('id'));
     if ((m = /^: hotkey (.+) not understood$/s.exec(rest))) return out(`The hotkey ${unq(m[1])} on ${titleOf(mid)} is not understood`, tgt('hotkey'));
     if ((m = /^: animation (.+) unknown; using ring\.animation$/s.exec(rest))) return out(`${titleOf(mid)} has an unknown animation (${unq(m[1])}); the one from Settings is used instead`, tgt('animation'));
     return out(titleOf(mid) + rest, tgt());
@@ -3084,6 +3190,10 @@ function describeProblem(raw) {
   if ((m = /^bridge\.mode (.+) unknown; using auto$/s.exec(raw))) return out(`Bridge mode ${unq(m[1])} is unknown; Auto is used instead`, bridge);
   if ((m = /^bridge\.key (.+) not understood$/s.exec(raw))) return out(`The bridge key ${unq(m[1])} is not understood`, bridge);
   if (raw.startsWith('bridge.key ')) return out('The bridge key ' + raw.slice('bridge.key '.length), bridge);
+  const browserCard = { kind: 'settings', card: 'set-brush-browser' };
+  if ((m = /^browser\.hotkey (.+) not understood$/s.exec(raw))) return out(`The brush browser hotkey ${unq(m[1])} is not understood`, browserCard);
+  if ((m = /^browser\.hotkey (.+) already used by menu (.+)$/s.exec(raw))) return out(`The brush browser hotkey ${unq(m[1])} is also used by ${titleOf(m[2])}; that menu wins, so the browser will not open with it`, browserCard);
+  if (raw.startsWith('browser: ')) return out('The browser settings are not valid: ' + raw.slice('browser: '.length), browserCard);
   if (raw.startsWith('menus: must be a non-empty object')) return out('There are no menus yet; add one', { kind: 'screen', screen: 'menus' });
   if (raw.startsWith('no menu has a hotkey')) {
     const first = Object.keys(cfgMenus).find(known);
@@ -3141,7 +3251,7 @@ function goToProblem(t) {
     if (!S.cfg.menus[t.menuId]) return;
     selectMenu(t.menuId); S.tab = 'menu'; if (R.right) R.right();
     const mr = $('.mrow.sel'); if (mr) mr.scrollIntoView({ block: 'nearest' });
-    const el = t.field === 'hotkey' ? $('.insp .hk-field') : t.field === 'animation' ? $('.insp select[aria-label="Open animation for this menu"]') : null;
+    const el = t.field === 'hotkey' ? $('.insp .hk-field') : t.field === 'id' ? $('.insp input[aria-label="Menu id"]') : t.field === 'animation' ? $('.insp select[aria-label="Open animation for this menu"]') : null;
     if (el) { el.focus(); el.scrollIntoView({ block: 'nearest' }); }
   }
 }
@@ -3340,7 +3450,7 @@ function describeChanges() {
   const after = S.cfg || {};
   const groups = [];
   const q = s => '\u201c' + s + '\u201d';
-  const itemName = it => it.label || it.brush || it.press || it.toggle || it.set || (it.menu ? 'Submenu ' + it.menu : (it.steps ? 'Steps' : 'item'));
+  const itemName = it => it.label || it.brush || it.press || it.toggle || it.set || (it.menu ? 'Submenu ' + it.menu : it.steps ? 'Steps' : it.tag ? 'Tag ' + it.tag : 'browser' in it ? 'Browser' + (it.browser ? ' ' + it.browser : '') : 'item');
   const bm = before.menus || {}, am = after.menus || {};
   for (const id of Object.keys(am)) {
     const a = am[id] || {}, b = bm[id];
@@ -3377,7 +3487,7 @@ function describeChanges() {
   for (const id of Object.keys(bm)) if (!am[id]) groups.push({ area: 'Menu ' + q(bm[id].title || id), lines: ['Deleted'] });
   const ringLines = [];
   const br = before.ring || {}, ar = after.ring || {};
-  const NAMES = { radius: 'Ring radius', slot: 'Slot size', dead_zone: 'Dead zone', tap_ms: 'Tap time', timeout_s: 'Auto-close', animation: 'Open animation', labels: 'Labels',
+  const NAMES = { radius: 'Ring radius', slot: 'Slot size', dead_zone: 'Dead zone', tap_ms: 'Tap time', timeout_s: 'Auto-close', animation: 'Open animation', labels: 'Labels', tag_colors: 'Tag colours',
     flick: 'Flick to pick', hover_submenus: 'Open submenus on hover' };
   for (const k of new Set([...Object.keys(br), ...Object.keys(ar)])) {
     if (k === 'colors') continue;
@@ -3393,7 +3503,9 @@ function describeChanges() {
   if ((bb.mode || 'auto') !== (ab.mode || 'auto')) bridgeLines.push('Mode: ' + (bb.mode || 'auto') + ' \u2192 ' + (ab.mode || 'auto'));
   if ((bb.key || '') !== (ab.key || '')) bridgeLines.push('Bridge key: ' + (bb.key || 'none') + ' \u2192 ' + (ab.key || 'none'));
   if (bridgeLines.length) groups.push({ area: 'ZBrush bridge', lines: bridgeLines });
-  const known = new Set(['menus', 'ring', 'bridge']);
+  const bwb = before.browser || {}, bwa = after.browser || {};
+  if ((bwb.hotkey || '') !== (bwa.hotkey || '')) groups.push({ area: 'Brush browser', lines: ['Hotkey: ' + (bwb.hotkey || 'none') + ' → ' + (bwa.hotkey || 'none')] });
+  const known = new Set(['menus', 'ring', 'bridge', 'browser']);
   const other = [...new Set([...Object.keys(before), ...Object.keys(after)])].filter(k => !known.has(k) && JSON.stringify(before[k]) !== JSON.stringify(after[k]));
   if (other.length) groups.push({ area: 'Other', lines: other.map(k => 'Changed ' + k) });
   return groups;

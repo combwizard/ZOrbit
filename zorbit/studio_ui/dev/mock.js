@@ -13,7 +13,9 @@
    (check_update cannot reach GitHub), ?prefsfail (set_pref is rejected).
    Tags (state in localStorage rm_tags, seeded with the two starters and a few tagged brushes): ?tags=empty (no tags, nothing tagged),
    ?tagsmany (30 tags with long names), ?tagfail (every tag change is refused), ?tagexists (create and rename always clash with
-   the first tag). The first two keep their state in memory only, so a reload starts clean. */
+   the first tag). The first two keep their state in memory only, so a reload starts clean.
+   ?kinds adds a Tag item ({"tag": "blocking"}) and a Browser item ({"browser": ""}) to the end of the Tools menu, so the two newer
+   kinds can be seen (the recorded config has none). The default stays the faithful recording. */
 (function () {
   var M = window.__RADIAL_MOCK__ || {};
   var q = new URLSearchParams(location.search);
@@ -22,16 +24,24 @@
   var clone = function (o) { return JSON.parse(JSON.stringify(o)); };
   var ticks = 0, thumbCalls = 0, alreadyDone = false, appStarted = false;
   var saved = clone(M.get_config.config);
+  var KINDS = ['brush', 'press', 'set', 'toggle', 'steps', 'menu', 'auto', 'tag', 'browser'];
+  if (q.has('kinds') && saved.menus && saved.menus.tools) saved.menus.tools.items.push({ tag: 'blocking' }, { browser: '' });
   var mtime = 1700000000000000000, conflictDone = false;
   var TAG_PALETTE = ['#F86B33', '#4DC8E9', '#A8DF23', '#E8413C', '#C77DFF', '#FFD166', '#5EEAD4', '#F472B6'];
   var tagsMode = q.get('tags') === 'empty' ? 'empty' : q.has('tagsmany') ? 'many' : 'saved';
   var tagMtime = 1700000000000000000, tagStore = null;
   var BROKEN_ERR = "Expecting ',' delimiter: line 12 column 5 (char 301)";
 
+  // Python's repr of a string, close enough for the messages: 'x'
+  function pyr(v) { return typeof v === 'string' ? "'" + v + "'" : String(v); }
+
   // The items the ring would draw: one action each, submenu targets that exist (the order preview_ring's indices count in)
   function usable(m) {
     return (m.items || []).filter(function (it) {
-      return ['brush', 'press', 'set', 'toggle', 'steps', 'menu', 'auto'].filter(function (k) { return k in it; }).length === 1;
+      var ks = KINDS.filter(function (k) { return k in it; });
+      if (ks.length !== 1) return false;
+      var k = ks[0];                       // config.py: every string target but a browser's must be non-empty
+      return k === 'steps' || k === 'auto' || k === 'browser' || (typeof it[k] === 'string' && it[k].trim() !== '');
     });
   }
 
@@ -39,20 +49,34 @@
     var out = [];
     var menus = (cfg && cfg.menus) || {};
     var ids = Object.keys(menus);
-    var seen = {};
+    var seen = {}, st = tagState();
+    var ringc = (cfg && cfg.ring) || {};
+    if (ringc.tag_colors !== undefined && ['none', 'tint', 'glow', 'both'].indexOf(ringc.tag_colors) < 0) out.push('ring.tag_colors: ' + pyr(ringc.tag_colors) + ' unknown; one of none, tint, glow, both');
     if (!ids.length) out.push('menus: must be a non-empty object of id -> menu');
     ids.forEach(function (id) {
       var m = menus[id], good = 0;
+      if (id.indexOf('tag:') === 0) { out.push('menu ' + id + ": ids starting with 'tag:' are reserved for tag submenus"); return; }
       (m.items || []).forEach(function (it, i) {
-        var kinds = ['brush', 'press', 'set', 'toggle', 'steps', 'menu', 'auto'].filter(function (k) { return k in it; });
+        var kinds = KINDS.filter(function (k) { return k in it; });
         var where = 'menu ' + id + ' item ' + (i + 1);
-        if (kinds.length !== 1) { out.push(where + ': needs exactly one of brush, press, set, toggle, steps, menu, auto'); return; }
+        if (kinds.length !== 1) { out.push(where + ': needs exactly one of ' + KINDS.join(', ')); return; }
         var k = kinds[0];
-        if (k === 'steps') { if (!Array.isArray(it.steps) || !it.steps.length) { out.push(where + ": 'steps' must be a non-empty list of brush/press/set/toggle actions"); return; } }
+        if (k === 'steps') {
+          if (!Array.isArray(it.steps) || !it.steps.length) { out.push(where + ": 'steps' must be a non-empty list of brush/press/set/toggle actions"); return; }
+          for (var j = 0; j < it.steps.length; j++) {
+            var sk = KINDS.filter(function (x) { return it.steps[j] && x in it.steps[j]; });
+            if (sk.some(function (x) { return ['menu', 'steps', 'auto', 'tag', 'browser'].indexOf(x) >= 0; })) {
+              out.push(where + ' step ' + (j + 1) + ': steps cannot open menus, nest steps, be auto slots or open tags or the browser'); return;
+            }
+          }
+        }
+        else if (k === 'browser') { if (typeof it.browser !== 'string') { out.push(where + ": 'browser' must be a string (a tag key, or \"\" for all brushes)"); return; } }
         else if (k === 'set' && !('value' in it)) { out.push(where + ": 'set' needs a 'value'"); return; }
         else if (k === 'set' && typeof it.value !== 'number') { out.push(where + ": 'set' value must be a number"); return; }
         else if (typeof it[k] !== 'string' || !it[k].trim()) { out.push(where + ": '" + k + "' must be a non-empty string"); return; }
         if (k === 'menu' && !menus[it.menu]) { out.push(where + ": submenu '" + it.menu + "' does not exist"); return; }
+        if (k === 'tag' && !hasTag(st, it.tag)) out.push(where + ': tag ' + pyr(it.tag) + ' does not exist; the slot stays empty');
+        else if (k === 'browser' && it.browser && !hasTag(st, it.browser)) out.push(where + ': tag ' + pyr(it.browser) + ' does not exist; the browser opens unfiltered');
         good++;
       });
       if (!good) out.push('menu ' + id + ': no usable items');
@@ -62,6 +86,12 @@
         else seen[key] = id;
       }
     });
+    var bh = cfg && cfg.browser && cfg.browser.hotkey;
+    if (bh) {
+      var bkey = String(bh).toLowerCase();
+      if (!/^((ctrl|alt|shift)\+)*([a-z0-9`~\-=\[\]\\;',.\/]|f([1-9]|1[0-9]|2[0-4])|space|tab|enter|backspace|insert|delete|home|end|pageup|pagedown)$/.test(bkey)) out.push('browser.hotkey ' + pyr(bh) + ' not understood');
+      else if (seen[bkey]) out.push('browser.hotkey ' + pyr(bh) + ' already used by menu ' + seen[bkey]);
+    }
     if (!ids.some(function (id) { return menus[id].hotkey; })) out.push('no menu has a hotkey, so nothing can open the ring');
     if (q.has('problems')) out.push('menu brushes item 3: sample problem for the problems panel (?problems)', 'bridge.key must not use Ctrl or Shift (ZBrush reads them as mask/smooth); use a bare F-key',
       'ring.radius: 500 must be a number from 60 to 400', "menu tools: hotkey 'Q' already used by menu brushes");
@@ -200,6 +230,10 @@
         var res = clone((hover === 0 && menuId === 'brushes' && M.preview_ring_hover0) || M.preview_ring[menuId] || M.preview_ring.brushes);
         res.width = res.height = res.size; res.centre = [res.size / 2, res.size / 2];
         var it = openPath && openPath.length ? usable(m)[openPath[0]] : null, sub = it && it.menu ? cfg.menus[it.menu] : null;
+        if (it && it.tag) {                                          // a tag slot with brushes is a fan of them, like the expander makes
+          var tn = (tagSnapshot().tags.filter(function (t) { return t.key === it.tag; })[0] || {}).count || 0;
+          if (tn) sub = { fan: true, items: new Array(Math.min(tn, 12)) };
+        }
         if (!(sub && sub.fan === true && it.menu !== menuId)) return res;
         // No Python here: a fan is faked as a wider canvas with the ring on the left and dashed lines to a few discs on the right
         return new Promise(function (resolve) {
@@ -226,7 +260,14 @@
     preview_animation: function (cfg, menuId) {
       return sleep(350 + lag).then(function () { return M.preview_animation; });
     },
-    get_options: function () { return sleep(10).then(function () { return clone(M.get_options); }); },
+    get_options: function () {
+      return sleep(10).then(function () {
+        var o = clone(M.get_options);
+        o.actions = KINDS.slice(); o.tag_colors = ['none', 'tint', 'glow', 'both'];
+        o.ring_defaults = Object.assign({}, o.ring_defaults, { tag_colors: 'tint' });
+        return o;
+      });
+    },
     get_library: function (refresh) {
       return sleep(refresh ? 700 : 250).then(function () {
         var lib = clone(M.get_library), n = lib.brushes.length;
