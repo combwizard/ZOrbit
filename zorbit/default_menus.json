@@ -2,6 +2,7 @@
   "bridge": {"mode": "auto", "key": "F9"},
   "ring": {"radius": 145, "slot": 72, "dead_zone": 38, "tap_ms": 250, "timeout_s": 20,
            "animation": "smooth", "labels": "name"},
+  "browser": {"hotkey": "Alt+B"},
   "menus": {
     "brushes": {
       "title": "Brushes",
@@ -43,7 +44,8 @@
         {"toggle": "Stroke:LazyMouse", "label": "LazyMouse"},
         {"toggle": "Brush:Auto Masking:BackfaceMask", "label": "Backface"},
         {"menu": "subdiv", "label": "SubDivide"},
-        {"steps": [{"press": "Tool:Masking:Clear"}, {"brush": "Standard"}], "label": "Fresh Start", "icon": "Standard"}
+        {"steps": [{"press": "Tool:Masking:Clear"}, {"brush": "Standard"}], "label": "Fresh Start", "icon": "Standard"},
+        {"browser": "", "label": "Browser"}
       ]
     },
     "subdiv": {

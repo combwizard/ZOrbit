@@ -37,6 +37,7 @@ class Usage:
     def __init__(self, path=USAGE_FILE):
         self.path = path
         self.mtime = None
+        self.version = 0               # counts changes in memory too, for caches keyed on the ranking
         self.brushes = {}
         self.menus = {}
 
@@ -50,6 +51,7 @@ class Usage:
         if mtime == self.mtime:
             return self
         self.mtime, self.brushes, self.menus = mtime, {}, {}
+        self.version += 1
         try:
             with open(self.path, encoding="utf-8") as f:
                 raw = json.load(f)
@@ -83,11 +85,17 @@ class Usage:
         now = time.time() if now is None else now
         k = name.lower()
         self.brushes[k] = {"name": name, "score": self.score(k, now) + 1.0, "t": now}
+        self.version += 1
 
     def ranked(self, now: float) -> list:
         """Brush names, best first (ties by name, so the order is stable)."""
         keys = sorted(self.brushes, key=lambda k: (-self.score(k, now), k))
         return [self.brushes[k]["name"] for k in keys]
+
+    def rank(self, names, now: float | None = None) -> list:
+        """The given brush names, best-scoring first (ties by name); unknown brushes score 0 and come last."""
+        now = time.time() if now is None else now
+        return sorted(names, key=lambda n: (-self.score(n.lower(), now), n.lower()))
 
     # --- slots -----------------------------------------------------------------------------------
     def slots(self, menu, now: float | None = None) -> list:
@@ -129,3 +137,4 @@ class Usage:
             else:
                 pending.append(name)
         st["slots"], st["pending"] = slots, pending
+        self.version += 1

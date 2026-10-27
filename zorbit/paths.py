@@ -1,6 +1,8 @@
 """Where things live, both in a source checkout and in the installed (PyInstaller) build.
 
   %APPDATA%\\ZOrbit\\radial.json      the user's menus and settings (created from default_menus.json)
+  %APPDATA%\\ZOrbit\\tags.json        the user's brush tags
+  %APPDATA%\\ZOrbit\\popout.json      window placement of the brush browser popout
   %APPDATA%\\ZOrbit\\launch.json      how to start the app and the Studio (read by the ZBrush bridge)
   %LOCALAPPDATA%\\ZOrbit\\            logs, thumbnail cache, request/listener exchange with ZBrush
 
@@ -27,6 +29,8 @@ DATA_DIR = os.path.join(os.environ.get("LOCALAPPDATA") or os.path.expanduser("~"
 CONFIG_DIR = os.path.join(os.environ.get("APPDATA") or os.path.expanduser("~"), "ZOrbit")
 CONFIG_FILE = os.path.join(CONFIG_DIR, "radial.json")
 LAUNCH_FILE = os.path.join(CONFIG_DIR, "launch.json")
+TAGS_FILE = os.path.join(CONFIG_DIR, "tags.json")
+POPOUT_FILE = os.path.join(CONFIG_DIR, "popout.json")
 
 # What carries over from a Radial Menu install. launch.json is left out (rewritten on every start), and so are
 # logs and the thumbnail cache.

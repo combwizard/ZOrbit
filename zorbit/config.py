@@ -14,10 +14,12 @@ Schema (all keys optional except menus):
            "animation": "smooth",            # smooth bounce pop zoom fade drift fancy spiral ripple breath
                                              # mist snappy
            "labels": "name",                 # name | none
+           "tag_colors": "tint",             # none | tint | glow | both: how a brush's first tag shows on its slot
            "flick": true,                    # moving out past a slot picks it without releasing the hotkey
            "hover_submenus": true,           # reaching a submenu slot opens that submenu, centred on it
            "colors": {"bg": "#222327", "accent": "#f86b33", "highlight": "#4dc8e9", "text": "#f0f0f0",
                       "lines": "#f86b33"}},
+  "browser": {"hotkey": "Alt+B"},         # opens the brush browser popout (tags, search, folders)
   "menus": {
     "<id>": {
       "title": "Brushes",
@@ -39,20 +41,25 @@ Schema (all keys optional except menus):
   {"steps": [<action>, ...]}                     run several actions in order
   {"menu": "<id>"}                               open another ring in place
   {"auto": "brush"}                              a slot the app fills with a brush you pick often (usage.py)
+  {"tag": "blocking"}                            a submenu of every brush carrying that tag (tags.py), most used first
+  {"browser": ""}                                open the brush browser; a tag key filters it ("" = all brushes)
+
+Menu ids starting with "tag:" are reserved for the submenus a tag slot opens.
 """
 import json
 import os
 import re
 from dataclasses import dataclass, field
 
-ACTION_KEYS = ("brush", "press", "set", "toggle", "steps", "menu", "auto")
+ACTION_KEYS = ("brush", "press", "set", "toggle", "steps", "menu", "auto", "tag", "browser")
 AUTO_KINDS = ("brush",)
 ANIMATIONS = ("smooth", "bounce", "pop", "zoom", "fade", "drift", "fancy", "spiral", "ripple", "breath", "mist",
               "snappy")
 LABEL_MODES = ("name", "none")
+TAG_COLOR_MODES = ("none", "tint", "glow", "both")
 
 DEFAULT_RING = {"radius": 145, "slot": 72, "dead_zone": 38, "tap_ms": 250, "timeout_s": 20,
-                "animation": "smooth", "labels": "name", "flick": True, "hover_submenus": True,
+                "animation": "smooth", "labels": "name", "tag_colors": "tint", "flick": True, "hover_submenus": True,
                 "colors": {"bg": "#222327", "accent": "#f86b33", "highlight": "#4dc8e9", "text": "#f0f0f0",
                            "lines": "#f86b33"}}
 _RING_SWITCHES = ("flick", "hover_submenus")
@@ -84,6 +91,8 @@ class Item:
     data: dict                # the raw action dict ({"brush": ...}, {"steps": [...]}, ...)
     icon: str = ""            # explicit icon, else derived from a brush action
     auto: bool = False        # put into an auto slot by the app (from usage.json), not by the user
+    tag: str = ""             # tag key of a tag item (and of the submenu it opens)
+    color: str = ""           # #rrggbb from the item's tag, stamped by expand.py, never by the loader
 
 
 @dataclass
@@ -103,6 +112,7 @@ class Config:
     mtime: float
     bridge_mode: str = "auto"
     bridge_key: Hotkey | None = None
+    browser_key: Hotkey | None = None
     ring: dict = field(default_factory=lambda: json.loads(json.dumps(DEFAULT_RING)))
     menus: dict = field(default_factory=dict)
     errors: list = field(default_factory=list)
@@ -153,19 +163,24 @@ def _check_action(a, errors, where, allow_nested=True) -> bool:
         for i, s in enumerate(a["steps"]):
             if not _check_action(s, errors, f"{where} step {i + 1}", allow_nested=False):
                 return False
-            if "menu" in s or "steps" in s or "auto" in s:
-                errors.append(f"{where} step {i + 1}: steps cannot open menus, nest steps or be auto slots")
+            if any(x in s for x in ("menu", "steps", "auto", "tag", "browser")):
+                errors.append(f"{where} step {i + 1}: steps cannot open menus, nest steps, be auto slots "
+                              f"or open tags or the browser")
                 return False
     elif k == "auto" and a["auto"] not in AUTO_KINDS:
         errors.append(f"{where}: 'auto' must be one of {', '.join(AUTO_KINDS)}")
         return False
+    elif k == "browser":
+        if not isinstance(a[k], str):
+            errors.append(f"{where}: 'browser' must be a string (a tag key, or \"\" for all brushes)")
+            return False
     elif not isinstance(a[k], str) or not a[k].strip():
         errors.append(f"{where}: '{k}' must be a non-empty string")
         return False
     return True
 
 
-def _default_label(a: dict, menus_raw: dict) -> str:
+def _default_label(a: dict, menus_raw: dict, tags=None) -> str:
     if "brush" in a:
         return a["brush"]
     if "menu" in a:
@@ -175,13 +190,18 @@ def _default_label(a: dict, menus_raw: dict) -> str:
         return "Steps"
     if "auto" in a:
         return "Auto"
+    if "tag" in a:
+        return (tags.label(a["tag"]) if tags is not None and tags.has(a["tag"]) else "") or a["tag"]
+    if "browser" in a:
+        return (tags.label(a["browser"]) if tags is not None and tags.has(a["browser"]) else "") or "Browser"
     for k in ("press", "set", "toggle"):
         if k in a:
             return a[k].split(":")[-1]
     return "?"
 
 
-def load(path: str) -> Config:
+def load(path: str, tags=None) -> Config:
+    """tags: a tags.TagStore (anything with has(key) and label(key)); None skips the checks on tag names."""
     st = os.stat(path)
     with open(path, encoding="utf-8-sig") as f:         # -sig: an editor's byte-order mark is accepted
         raw = json.load(f)
@@ -230,6 +250,11 @@ def load(path: str) -> Config:
                 cfg.ring[k] = v
             else:
                 errors.append(f"ring.labels: {v!r} unknown; one of {', '.join(LABEL_MODES)}")
+        elif k == "tag_colors":
+            if v in TAG_COLOR_MODES:
+                cfg.ring[k] = v
+            else:
+                errors.append(f"ring.tag_colors: {v!r} unknown; one of {', '.join(TAG_COLOR_MODES)}")
     menus_raw = raw.get("menus") or {}
     if not isinstance(menus_raw, dict) or not menus_raw:
         errors.append("menus: must be a non-empty object of id -> menu")
@@ -238,6 +263,9 @@ def load(path: str) -> Config:
     for mid, m in menus_raw.items():
         if not isinstance(m, dict):
             errors.append(f"menu {mid}: not an object")
+            continue
+        if mid.startswith("tag:"):
+            errors.append(f"menu {mid}: ids starting with 'tag:' are reserved for tag submenus")
             continue
         items = []
         for i, it in enumerate(m.get("items") or []):
@@ -248,9 +276,13 @@ def load(path: str) -> Config:
             if kind == "menu" and it["menu"] not in menus_raw:
                 errors.append(f"{where}: submenu {it['menu']!r} does not exist")
                 continue
-            items.append(Item(label=str(it.get("label") or _default_label(it, menus_raw)), kind=kind,
+            if tags is not None and kind == "tag" and not tags.has(it["tag"]):
+                errors.append(f"{where}: tag {it['tag']!r} does not exist; the slot stays empty")
+            elif tags is not None and kind == "browser" and it["browser"] and not tags.has(it["browser"]):
+                errors.append(f"{where}: tag {it['browser']!r} does not exist; the browser opens unfiltered")
+            items.append(Item(label=str(it.get("label") or _default_label(it, menus_raw, tags)), kind=kind,
                               data={k: v for k, v in it.items() if k not in ("label", "icon")},
-                              icon=str(it.get("icon") or "")))
+                              icon=str(it.get("icon") or ""), tag=it["tag"] if kind == "tag" else ""))
         if not items:
             errors.append(f"menu {mid}: no usable items")
             continue
@@ -272,6 +304,18 @@ def load(path: str) -> Config:
         cfg.menus[mid] = Menu(id=mid, title=str(m.get("title") or mid), items=items, hotkey=hk,
                               swallow=bool(m.get("swallow", True)), animation=anim,
                               fan=bool(m.get("fan", False)))
+    browser = raw.get("browser") or {}
+    if isinstance(browser, dict) and browser.get("hotkey"):
+        hk = parse_hotkey(browser["hotkey"])
+        if hk is None:
+            errors.append(f"browser.hotkey {browser['hotkey']!r} not understood")
+        elif (hk.vk, hk.ctrl, hk.alt, hk.shift) in used_keys:
+            errors.append(f"browser.hotkey {browser['hotkey']!r} already used by menu "
+                          f"{used_keys[(hk.vk, hk.ctrl, hk.alt, hk.shift)]}")
+        else:
+            cfg.browser_key = hk
+    elif browser and not isinstance(browser, dict):
+        errors.append("browser: must be an object like {\"hotkey\": \"Alt+B\"}")
     if not any(m.hotkey for m in cfg.menus.values()):
         errors.append("no menu has a hotkey, so nothing can open the ring")
     return cfg

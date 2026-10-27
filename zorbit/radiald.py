@@ -11,13 +11,14 @@ How it works:
   * The same pick also goes to request.txt for the ZScript bridge of ZBrush 2022-2025 (no Python API, so no
     listener: those always get the bridge key, and brushes load from their own installation's .zbp files).
   * Brush picks are counted in usage.json; a menu's auto slots are filled from those counts as it opens.
+  * tags.json (the user's brush tags) is watched with radial.json: tag slots open a fan of the brushes with
+    that tag, and a slot is drawn in the colour of its brush's first tag (expand.py does both).
 
 Started through main.py (ZOrbit.exe), normally by the ZBrush bridge when ZBrush launches; it exits when
 the last ZBrush process has gone. Only one instance runs at a time.
 """
 import argparse
 import ctypes
-import dataclasses
 import json
 import os
 import subprocess
@@ -30,8 +31,10 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 
 import config as C          # noqa: E402
+import expand               # noqa: E402
 import installs             # noqa: E402
 import paths                # noqa: E402
+import tags                 # noqa: E402
 import usage                # noqa: E402
 import win32 as W           # noqa: E402
 import zscript_bridge       # noqa: E402
@@ -54,6 +57,11 @@ WM_APP_CANCEL = W.WM_APP + 12         # hook -> control window: Esc
 WM_APP_MASK = W.WM_APP + 13           # hook -> control window: inject the Alt menu-mask key
 TIMER_WATCH, TIMER_ACK, TIMER_REHOOK, TIMER_CONFIG = 1, 2, 3, 4
 THUMB_PX = 128                        # thumbnail cache size, shared with the Studio
+
+
+def tags_path():
+    """tags.json; the environment variable ZORBIT_TAGS_FILE points tests and --check at another file."""
+    return os.environ.get("ZORBIT_TAGS_FILE") or paths.TAGS_FILE
 
 
 def log(msg: str) -> None:
@@ -107,10 +115,18 @@ class App:
         self._ack = None                # (seq, deadline) of a message-mode pick awaiting pickup
         self._target_misses = 0
         self.usage = usage.Usage()
+        self.tags = tags.TagStore(tags_path())
+        self.expander = None            # expand.Expander of the current config, tags and usage
         self._refs = []                 # ctypes callbacks that must outlive their registration
 
     # --- config ----------------------------------------------------------------------------------
     def load_config(self, force=False) -> None:
+        if self.tags.reload_if_changed():          # new tag labels and colours show in the next ring
+            if self.tags.error:
+                log(f"tags: {self.tags.error}; keeping the previous tags")
+            else:
+                log(f"tags loaded: {len(self.tags.tags())} tags, {len(self.tags.tagged('brush'))} tagged brushes")
+            force = True
         try:
             mtime = os.stat(self.cfg_path).st_mtime
         except OSError:
@@ -118,12 +134,13 @@ class App:
         if not force and ((self.cfg and mtime == self.cfg.mtime) or mtime == self._bad_mtime):
             return
         try:
-            cfg = C.load(self.cfg_path)
+            cfg = C.load(self.cfg_path, self.tags)
         except Exception as e:
             self._bad_mtime = mtime                # logged once per broken version, not on every poll
             log(f"config error, keeping previous config: {e!r}")
             return
         self.cfg = cfg
+        self.expander = expand.Expander(cfg, self.usage, self.tags)
         self.slots = [m for m in cfg.menus.values() if m.hotkey]
         for err in cfg.errors:
             log(f"config: {err}")
@@ -144,6 +161,11 @@ class App:
         for m in self.cfg.menus.values():
             if usage.auto_count(m):
                 names.update(n for n in self.usage.slots(m) if n)
+            for it in m.items:
+                if it.kind == "tag":               # warm the fan before it opens
+                    tm = self.expander.tag_menu(it.data["tag"])
+                    if tm is not None:
+                        names.update(i.data["brush"] for i in tm.items if i.kind == "brush")
         size = THUMB_PX
         threading.Thread(target=brushes.prefetch, args=(sorted(names), size), daemon=True).start()
 
@@ -351,17 +373,6 @@ class App:
                 return                             # pressing the hotkey again closes the ring
         self.open_menu(menu, W.cursor_pos(), held=self.held_vk is not None)
 
-    def fill_auto(self, menu):
-        """The menu with its auto slots filled from usage.json (an empty slot stays as a placeholder)."""
-        if not usage.auto_count(menu):
-            return menu
-        filled = iter(self.usage.load().slots(menu))
-        items = []
-        for it in menu.items:
-            name = next(filled) if it.kind == "auto" else None
-            items.append(C.Item(label=name, kind="brush", data={"brush": name}, auto=True) if name else it)
-        return dataclasses.replace(menu, items=items)
-
     def _record_pick(self, item):
         """Counts a brush pick and lets the auto slots of every menu react to it."""
         if item.kind != "brush":
@@ -382,10 +393,9 @@ class App:
 
     def open_menu(self, menu, pos, held, nested=False):
         from ring import Ring
-        menu = self.fill_auto(menu)
-        menus = self.cfg.menus
+        menu = self.expander.menu(menu)
         ring = Ring(menu, self.cfg.ring, self.icon_for, self._on_ring_done, log, held=held, nested=nested,
-                    submenus=lambda mid: self.fill_auto(menus[mid]) if mid in menus else None)
+                    submenus=self.expander.resolve)
         self.ring = ring
         try:
             ring.show(*pos)
@@ -400,14 +410,17 @@ class App:
         if item is None:
             return
         if item.kind == "menu":
-            sub = self.cfg.menus.get(item.data["menu"])
+            sub = self.expander.resolve(item.data["menu"])
             if sub is not None and at is not None:  # flicked or hovered: centred on its slot, still held if so
                 self.open_menu(sub, at, held=self.held_vk is not None, nested=True)
             elif sub is not None:
                 self.open_menu(sub, W.cursor_pos(), held=False)   # re-centred on the pick
             return
-        if item.kind == "auto":
-            log("empty auto slot picked; nothing sent")
+        if item.kind in ("auto", "tag"):
+            log(f"empty {item.kind} slot picked; nothing sent")
+            return
+        if item.kind == "browser":
+            log("browser item picked; the popout comes in a later batch")
             return
         self.send(item)
         try:
@@ -568,9 +581,11 @@ class App:
 
 
 def check(cfg_path) -> int:
-    cfg = C.load(cfg_path)
+    store = tags.TagStore(tags_path()).load()
+    cfg = C.load(cfg_path, store)
     print(f"{cfg_path}: {len(cfg.menus)} menus, bridge mode={cfg.bridge_mode} "
-          f"key={cfg.bridge_key.text if cfg.bridge_key else None}")
+          f"key={cfg.bridge_key.text if cfg.bridge_key else None}, "
+          f"browser hotkey={cfg.browser_key.text if cfg.browser_key else None}")
     for m in cfg.menus.values():
         print(f"  [{m.id}] '{m.title}' hotkey={m.hotkey.text if m.hotkey else '-'} swallow={m.swallow}")
         for it in m.items:
@@ -578,10 +593,16 @@ def check(cfg_path) -> int:
             if it.kind == "brush" and brushes is not None:
                 p = brushes.find_brush(it.data["brush"])
                 extra = f"  ({p})" if p else "  (no .zbp found: must already be loaded in ZBrush)"
-            print(f"      {it.kind:6s} {it.label}{extra}")
-    for e in cfg.errors:
+            elif it.kind == "tag":
+                key = it.data["tag"]
+                n = len(store.items_with(key, "brush"))
+                extra = (f"  ({n} brush{'' if n == 1 else 'es'} tagged)" if store.has(key)
+                         else f"  (tag {key!r} does not exist)")
+            print(f"      {it.kind:7s} {it.label}{extra}")
+    problems = ([f"tags: {store.error}"] if store.error else []) + cfg.errors
+    for e in problems:
         print(f"  PROBLEM: {e}")
-    return 1 if cfg.errors else 0
+    return 1 if problems else 0
 
 
 def main(argv=None) -> int:

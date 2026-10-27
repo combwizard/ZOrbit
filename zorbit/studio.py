@@ -24,8 +24,13 @@ sys.path.insert(0, HERE)
 
 import config as C          # noqa: E402
 import brushes              # noqa: E402
+import expand               # noqa: E402
+import fsutil               # noqa: E402
 import installs             # noqa: E402
 import paths                # noqa: E402
+import radiald              # noqa: E402
+import tags                 # noqa: E402
+import winframe             # noqa: E402
 import zscript_bridge       # noqa: E402
 
 DATA_DIR = paths.DATA_DIR
@@ -86,28 +91,6 @@ def _zbrush_running():
         return False, False
 
 
-def _write_atomic(path, data):
-    """Writes str (as UTF-8 text) or bytes to path.tmp, flushes it to disk, then swaps it in, so a crash or a
-    power cut leaves either the old file or the new one, never half of one."""
-    tmp = path + ".tmp"
-    try:
-        if isinstance(data, bytes):
-            f = open(tmp, "wb")
-        else:
-            f = open(tmp, "w", encoding="utf-8")
-        with f:
-            f.write(data)
-            f.flush()
-            os.fsync(f.fileno())
-        os.replace(tmp, path)
-    except OSError:
-        try:
-            os.remove(tmp)
-        except OSError:
-            pass
-        raise
-
-
 def _version_key(v):
     """'v0.5.1' or '0.5.1' -> (0, 5, 1); None for anything else."""
     m = re.fullmatch(r"v?(\d+)\.(\d+)\.(\d+)", str(v or "").strip())
@@ -141,7 +124,7 @@ class Api:
         try:
             with os.fdopen(fd, "w", encoding="utf-8") as f:
                 json.dump(cfg, f)
-            loaded = C.load(tmp)
+            loaded = C.load(tmp, tags.TagStore(radiald.tags_path()).load())   # tag names checked like the app does
             return loaded, loaded.errors
         except Exception as e:
             return None, [f"config could not be read: {e}"]
@@ -222,10 +205,10 @@ class Api:
                     old = old_bytes.decode("utf-8-sig")
                     json.loads(old)
                     if old.replace("\r\n", "\n") != text:
-                        _write_atomic(CONFIG_FILE + ".bak", old_bytes)
+                        fsutil.write_atomic(CONFIG_FILE + ".bak", old_bytes)
                 except ValueError:
                     pass                                   # corrupt: not worth keeping as the backup
-            _write_atomic(CONFIG_FILE, text)
+            fsutil.write_atomic(CONFIG_FILE, text)
             st = os.stat(CONFIG_FILE)
         except OSError as e:
             return {"saved": False, "message": f"radial.json could not be written: {e.strerror or e}"}
@@ -247,7 +230,7 @@ class Api:
         except ValueError as e:
             return {"ok": False, "message": f"radial.json.bak is not valid JSON ({e}), so it was not restored."}
         try:
-            _write_atomic(CONFIG_FILE, data)
+            fsutil.write_atomic(CONFIG_FILE, data)
         except OSError as e:
             return {"ok": False, "message": f"radial.json could not be written: {e.strerror or e}"}
         return {"ok": True, "message": "Restored radial.json from radial.json.bak."}
@@ -262,10 +245,10 @@ class Api:
                 with open(CONFIG_FILE, "rb") as f:
                     current = f.read()
                 if current != default:
-                    _write_atomic(CONFIG_FILE + ".broken", current)
+                    fsutil.write_atomic(CONFIG_FILE + ".broken", current)
             else:
                 os.makedirs(paths.CONFIG_DIR, exist_ok=True)
-            _write_atomic(CONFIG_FILE, default)
+            fsutil.write_atomic(CONFIG_FILE, default)
         except OSError as e:
             return {"ok": False, "message": f"Could not start again from the defaults: {e.strerror or e}"}
         return {"ok": True, "message": "Started again from the default menus. The old file is kept as "
@@ -279,13 +262,13 @@ class Api:
         loaded, problems = self._load_dict(cfg)
         if loaded is None or menu_id not in loaded.menus:
             return {"image": None, "problems": problems or [f"menu {menu_id!r} has no usable items"]}
-        import radiald
         from ring import Ring
         app = radiald.App(CONFIG_FILE)
         app.cfg = loaded
-        menu = app.fill_auto(loaded.menus[menu_id])       # as the app would fill it now; nothing is saved
+        ex = expand.Expander(loaded, app.usage, app.tags.load())
+        menu = ex.menu(loaded.menus[menu_id])             # as the app would fill it now; nothing is saved
         im = Ring.preview(menu, loaded.ring, app.icon_for, hover=hover, scale=float(scale),
-                          submenus=lambda mid: app.fill_auto(loaded.menus[mid]) if mid in loaded.menus else None,
+                          submenus=ex.resolve,
                           open_path=[int(i) for i in open_path] if open_path else None)
         cx, cy = im.info.get("centre", (im.size[0] / 2, im.size[1] / 2))
         return {"image": _png_data_url(im), "size": im.size[0], "width": im.size[0], "height": im.size[1],
@@ -298,11 +281,10 @@ class Api:
         if loaded is None or menu_id not in loaded.menus:
             return {"frames": [], "interval_ms": 33, "problems": problems}
         import dataclasses
-        import radiald
         from ring import Ring
         app = radiald.App(CONFIG_FILE)
         app.cfg = loaded
-        menu = app.fill_auto(loaded.menus[menu_id])
+        menu = expand.Expander(loaded, app.usage, app.tags.load()).menu(loaded.menus[menu_id])
         if ring_anim:
             menu = dataclasses.replace(menu, animation="")
         frames = Ring.preview_frames(menu, loaded.ring, app.icon_for, fps=int(fps))
@@ -615,7 +597,7 @@ class Api:
 
     def _hwnd(self):
         if not getattr(self, "_hwnd_cache", None) or not IsWindow(self._hwnd_cache):
-            self._hwnd_cache = _main_window(TITLE, os.getpid())
+            self._hwnd_cache = winframe.main_window(TITLE, os.getpid())
         return self._hwnd_cache
 
     def win_minimize(self):
@@ -625,7 +607,7 @@ class Api:
         return True
 
     def win_toggle_maximize(self):
-        """Native maximise/restore. Maximised size is limited to the work area by _custom_frame's
+        """Native maximise/restore. Maximised size is limited to the work area by winframe.custom_frame's
         WM_GETMINMAXINFO handler, so the taskbar stays visible. Returns the new state."""
         h = self._hwnd()
         if not h:
@@ -696,48 +678,7 @@ def _read_studio_file() -> dict:
 def _write_studio_file(data: dict):
     with _studio_lock:
         os.makedirs(paths.CONFIG_DIR, exist_ok=True)
-        _write_atomic(STUDIO_FILE, json.dumps(data, indent=2))
-
-
-class _WINDOWPLACEMENT(ctypes.Structure):
-    _fields_ = [("length", w.UINT), ("flags", w.UINT), ("showCmd", w.UINT), ("ptMinPosition", w.POINT),
-                ("ptMaxPosition", w.POINT), ("rcNormalPosition", w.RECT)]
-
-
-def _main_window(title=TITLE, pid=None):
-    """The largest visible top-level window with this exact title (optionally in process pid).
-    pywebview also creates a tiny helper window with the same title, so FindWindow alone picks wrongly.
-    Size comes from the window's normal (restored) rectangle, so a minimised Studio still counts."""
-    best, best_area = None, 0
-    EnumProc = ctypes.WINFUNCTYPE(w.BOOL, w.HWND, w.LPARAM)
-    user32.EnumWindows.argtypes = [EnumProc, w.LPARAM]
-
-    def visit(h, _):
-        nonlocal best, best_area
-        if not user32.IsWindowVisible(h):
-            return True
-        buf = ctypes.create_unicode_buffer(256)
-        user32.GetWindowTextW(h, buf, 256)
-        if buf.value != title:
-            return True
-        if pid is not None:
-            p = w.DWORD()
-            user32.GetWindowThreadProcessId(h, ctypes.byref(p))
-            if p.value != pid:
-                return True
-        wp = _WINDOWPLACEMENT()
-        wp.length = ctypes.sizeof(wp)
-        if user32.GetWindowPlacement(h, ctypes.byref(wp)):
-            r = wp.rcNormalPosition
-        else:
-            r = w.RECT()
-            user32.GetWindowRect(h, ctypes.byref(r))
-        area = (r.right - r.left) * (r.bottom - r.top)
-        if area > best_area:
-            best, best_area = h, area
-        return True
-    user32.EnumWindows(EnumProc(visit), 0)
-    return best if best_area > 200 * 200 else None
+        fsutil.write_atomic(STUDIO_FILE, json.dumps(data, indent=2))
 
 
 def _on_closing(api):
@@ -786,46 +727,6 @@ def _remember_window(hwnd):
             _write_studio_file(data)
     except Exception:
         pass
-
-
-def _saved_window(min_w, min_h):
-    """Last session's window as (x, y, width, height, maximized) in pixels, or None. Shrunk to fit its
-    screen, and centred on the nearest screen when that monitor is gone or the header is out of reach."""
-    s = _read_studio_file().get("window")
-    try:
-        x, y, wd, ht = (int(s[k]) for k in ("x", "y", "width", "height"))
-        maxed = bool(s.get("maximized"))
-    except (TypeError, KeyError, ValueError, AttributeError):
-        return None
-
-    class MONITORINFO(ctypes.Structure):
-        _fields_ = [("cbSize", w.DWORD), ("rcMonitor", w.RECT), ("rcWork", w.RECT), ("dwFlags", w.DWORD)]
-    user32.MonitorFromRect.restype = w.HMONITOR
-    user32.MonitorFromRect.argtypes = [ctypes.POINTER(w.RECT), w.DWORD]
-    mi = MONITORINFO()
-    mi.cbSize = ctypes.sizeof(MONITORINFO)
-    mon = user32.MonitorFromRect(ctypes.byref(w.RECT(x, y, x + wd, y + ht)), 2)   # MONITOR_DEFAULTTONEAREST
-    if not user32.GetMonitorInfoW(mon, ctypes.byref(mi)):
-        return None
-    wa = mi.rcWork
-    wd = min(max(wd, min_w), wa.right - wa.left)
-    ht = min(max(ht, min_h), wa.bottom - wa.top)
-    header_visible = min(x + wd, wa.right) - max(x, wa.left) >= 200 and wa.top <= y <= wa.bottom - 48
-    if not header_visible:
-        x = wa.left + (wa.right - wa.left - wd) // 2
-        y = wa.top + (wa.bottom - wa.top - ht) // 2
-    return x, y, wd, ht, maxed
-
-
-def _work_area(hwnd) -> w.RECT:
-    class MONITORINFO(ctypes.Structure):
-        _fields_ = [("cbSize", w.DWORD), ("rcMonitor", w.RECT), ("rcWork", w.RECT), ("dwFlags", w.DWORD)]
-    user32.MonitorFromWindow.restype = w.HMONITOR
-    user32.MonitorFromWindow.argtypes = [w.HWND, w.DWORD]
-    mi = MONITORINFO()
-    mi.cbSize = ctypes.sizeof(MONITORINFO)
-    user32.GetMonitorInfoW(user32.MonitorFromWindow(hwnd, 2), ctypes.byref(mi))
-    return mi.rcWork
 
 
 class _MINMAXINFO(ctypes.Structure):
@@ -900,67 +801,12 @@ def _limit_maximise_to_work_area(hwnd):
     user32.SetWindowLongPtrW(hwnd, GWLP_WNDPROC, ctypes.cast(cb, ctypes.c_void_p))
 
 
-def _custom_frame(title=TITLE, placement=None):
-    """Removes the Windows title bar but keeps the resizable frame (native resize and Aero Snap), and
-    themes the remaining 1 px border and corners. The page draws its own header (see index.html).
-    placement: _saved_window()'s result, applied exactly (create_window only gets it to within a pixel).
-    Plain Win32 only: touching window.native (a .NET Form) from pywebview's worker thread deadlocks."""
-    try:
-        hwnd = None
-        for _ in range(100):                                                       # up to ~10 s for the window
-            hwnd = _main_window(title, os.getpid())
-            if hwnd:
-                break
-            time.sleep(0.1)
-        if not hwnd:
-            return
-        _limit_maximise_to_work_area(hwnd)
-        GWL_STYLE, WS_CAPTION = -16, 0x00C00000
-        WS_KEEP = 0x00040000 | 0x00080000 | 0x00020000 | 0x00010000      # THICKFRAME SYSMENU MIN MAX boxes
-        style = user32.GetWindowLongW(hwnd, GWL_STYLE)
-        user32.SetWindowLongW(hwnd, GWL_STYLE, (style & ~WS_CAPTION) | WS_KEEP)
-        dwm = ctypes.WinDLL("dwmapi")
-        dwm.DwmSetWindowAttribute.argtypes = [w.HWND, w.DWORD, ctypes.c_void_p, w.DWORD]
-        for attr, val in ((20, 1),                       # immersive dark mode
-                          (33, 2),                       # rounded corners
-                          (34, 0x00352F2B)):             # border colour #2b2f35 (COLORREF is 0x00bbggrr)
-            v = ctypes.c_int(val)
-            dwm.DwmSetWindowAttribute(hwnd, attr, ctypes.byref(v), 4)
-        user32.SetWindowPos(hwnd, None, 0, 0, 0, 0, 0x0001 | 0x0002 | 0x0004 | 0x0010 | 0x0020)  # FRAMECHANGED
-        if placement:
-            x, y, wd, ht, maxed = placement
-            user32.SetWindowPos(hwnd, None, x, y, wd, ht, 0x0004 | 0x0010)             # NOZORDER NOACTIVATE
-            if maxed:
-                user32.ShowWindow(hwnd, 3)                                         # SW_MAXIMIZE
-    except Exception:
-        pass
-
-
-def _enable_drag_regions():
-    """Turns on WebView2 non-client region support, so CSS `app-region: drag` areas act as a real title bar
-    (native move, Aero Snap, double-click). Patched into pywebview's own init hook, which runs on the UI
-    thread once WebView2 is ready."""
-    from webview.platforms import edgechromium
-    original = edgechromium.EdgeChrome.on_webview_ready
-    if getattr(original, "_radial_patched", False):
-        return
-
-    def on_webview_ready(self, sender, args):
-        original(self, sender, args)
-        try:
-            sender.CoreWebView2.Settings.IsNonClientRegionSupportEnabled = True
-        except Exception:
-            pass
-    on_webview_ready._radial_patched = True
-    edgechromium.EdgeChrome.on_webview_ready = on_webview_ready
-
-
 def main():
     _startup(f"Studio {VERSION} main()")
     mutex = CreateMutexW(None, False, STUDIO_MUTEX)       # before the slow import: a second launch exits fast
     if ctypes.get_last_error() == 183:                     # already open: bring it forward
         _startup("already open: bringing it forward")
-        hwnd = _main_window(TITLE)
+        hwnd = winframe.main_window(TITLE)
         if hwnd:
             if user32.IsIconic(hwnd):
                 user32.ShowWindow(hwnd, 9)                                             # SW_RESTORE
@@ -979,7 +825,8 @@ def main():
     user32.SetProcessDPIAware()
     scale = user32.GetDpiForSystem() / 96
     min_size = (980, 640)
-    placement = _saved_window(round(min_size[0] * scale), round(min_size[1] * scale))
+    placement = winframe.saved_window(_read_studio_file().get("window"),
+                                      round(min_size[0] * scale), round(min_size[1] * scale))
     if placement:
         x, y, wd, ht, _maxed = placement
         geometry = {"x": round(x / scale), "y": round(y / scale), "width": round(wd / scale),
@@ -993,10 +840,11 @@ def main():
     window.events.closing += lambda: _on_closing(api)
     window.events.shown += lambda: _startup("window shown")
     window.events.loaded += lambda: _startup("page loaded")
-    _enable_drag_regions()
+    winframe.enable_drag_regions()
     icon = paths.ICON if os.path.isfile(paths.ICON) else None
-    webview.start(lambda: _custom_frame(placement=placement), debug="--debug" in sys.argv,
-                  icon=icon)                                                  # _custom_frame: worker thread
+    webview.start(lambda: winframe.custom_frame(TITLE, placement, pid=os.getpid(),
+                                                on_hwnd=_limit_maximise_to_work_area),
+                  debug="--debug" in sys.argv, icon=icon)                     # custom_frame: worker thread
     CloseHandle(mutex)
     return 0
 
