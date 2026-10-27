@@ -8,6 +8,9 @@
   - [x] Compile `ZOrbitBridge.txt` in ZBrush 2022 (commit the `.zsc` with the source)
   - [x] 2022: palette loads, Studio install, F9 Apply selects a loaded brush
   - [ ] 2022: load a brush that isn't loaded yet, press/set/toggle, steps, Status, Studio button
+    - The 2026 bridge had to press a freshly loaded brush again once ZBrush had added its button (a timer on
+      the listener). The ZScript bridge presses it straight after `Brush:Load Brush` too: check whether 2022
+      selects it, and if not, retry the press (ZScript has no timer: a second Apply, or `[Delay]`)
   - [ ] Let the plugin bind its own Apply hotkey (F9 is stored as code 88: `[ZPLUGIN:ZORBIT:APPLY,88]`)
     - [x] Docs and Studio say F9 needs no setup
     - [x] Tried the hotkey argument of `IButton` (`, , , 88`): Apply got no hotkey in 2022

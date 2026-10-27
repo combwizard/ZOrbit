@@ -39,7 +39,8 @@ PALETTE = "Zplugin:ZOrbit"
 
 WM_APP_PICK = 0x8000 + 1
 WM_TIMER = 0x113
-TIMER_VERIFY, TIMER_RETRY = 1, 2
+TIMER_VERIFY, TIMER_RETRY, TIMER_SELECT = 1, 2, 3
+SELECT_TRIES = 25                 # a brush just loaded: look for its button every 40 ms, for up to a second
 VK_LBUTTON = 0x01
 
 
@@ -109,9 +110,17 @@ def _do_brush(a: dict) -> str:
     if f and os.path.isfile(f):
         zbc.set_next_filename(f.replace("\\", "/"))
         zbc.press("Brush:Load Brush")
-        if zbc.exists(path):
+        now = zbc.exists(path)
+        if now:
             zbc.press(path)
-        return f"brush {name}: loaded from {f}"
+        # ZBrush finishes adding the new brush only after this call returns, so a press now may find no button or
+        # not take: the listener presses it again once ZBrush is done. Without a listener (the Apply button) this
+        # is all we can do.
+        if S.hwnd and IsWindow(S.hwnd):
+            S.select_pending = (path, SELECT_TRIES)
+            SetTimer(S.hwnd, TIMER_SELECT, 40, None)
+            return f"brush {name}: loaded from {f}; selecting it once ZBrush has added it (button there now: {now})"
+        return f"brush {name}: loaded from {f} (button there now: {now})"
     return f"brush {name}: NOT loaded in ZBrush and no .zbp file known"
 
 
@@ -136,6 +145,7 @@ def _do_action(a: dict) -> str:
 
 def apply_request(sender: str = "") -> None:
     """Button callback and listener entry point: carry out request.json, then delete it."""
+    S.select_pending = None                               # a newer pick wins over a brush still waiting to be selected
     try:
         with open(REQUEST_FILE, encoding="utf-8") as f:
             req = json.load(f)
@@ -174,6 +184,28 @@ def _publish_listener():
     os.replace(tmp, LISTENER_FILE)
 
 
+def _select_pending(hwnd):
+    """Presses the button of a brush loaded a moment ago, once ZBrush shows it (never during a stroke)."""
+    pend = getattr(S, "select_pending", None)
+    if pend is None:
+        KillTimer(hwnd, TIMER_SELECT)
+        return
+    path, tries = pend
+    if GetAsyncKeyState(VK_LBUTTON) & 0x8000:
+        return                                            # a stroke: wait, without using up a try
+    if zbc.exists(path):
+        KillTimer(hwnd, TIMER_SELECT)
+        S.select_pending = None
+        zbc.press(path)
+        log(f"{path}: selected after loading ({SELECT_TRIES - tries + 1} looks)")
+    elif tries <= 1:
+        KillTimer(hwnd, TIMER_SELECT)
+        S.select_pending = None
+        log(f"{path}: loaded, but its button did not appear within a second; not selected")
+    else:
+        S.select_pending = (path, tries - 1)
+
+
 def _wndproc(hwnd, msg, wparam, lparam):
     try:
         if msg == WM_APP_PICK:
@@ -186,6 +218,9 @@ def _wndproc(hwnd, msg, wparam, lparam):
             if not GetAsyncKeyState(VK_LBUTTON) & 0x8000:
                 KillTimer(hwnd, TIMER_RETRY)
                 apply_request("listener, after stroke")
+            return 0
+        if msg == WM_TIMER and wparam == TIMER_SELECT:
+            _select_pending(hwnd)
             return 0
         if msg == WM_TIMER and wparam == TIMER_VERIFY:
             KillTimer(hwnd, TIMER_VERIFY)

@@ -50,6 +50,12 @@ All notable changes to this project are listed here. The format follows
   existing `radial.json` is not touched: add the `browser` section or set the hotkey in Settings.
 - A tag fan's order can shift after you pick, because the most used brushes come first.
 
+### Fixed
+
+- ZBrush 2026: a brush that ZBrush had not loaded yet, picked from the ring or the brush browser, is now selected
+  as well as loaded. Before, it only became the current brush on a second pick.
+
+
 ## [0.7.1] - 2026-10-27
 
 ### Changed
