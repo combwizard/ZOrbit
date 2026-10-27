@@ -3,6 +3,11 @@
 Look: slots of round icons around a glowing accent centre dot,
 hairline spokes and faint guide rings; hover = accent border, soft ring, glow, 1.12x scale and accent label;
 submenus use the highlight colour and a small badge; an auto slot nothing has filled yet is a faint "+".
+Tag colours: an item that carries a colour (config.Item.color, from its first tag) gets a rim and a slightly
+tinted disc, a soft halo, or both, as ring.tag_colors says; its hover border, spoke and label take the colour
+too. A tag slot is a solid disc in the tag colour with a tag glyph whatever ring.tag_colors says; one with no
+brushes is a faint tag glyph and nothing else of it is coloured.
+All of it is drawn into the sprites when they are built, so a frame costs the same as before.
 Selection is by angle outside a dead zone; a slot covers at most a quarter of the circle, so a ring of one to
 three slots has gaps between them.
 
@@ -131,6 +136,11 @@ def _rgba(c: str, a: float):
     return _rgb(c) + (int(round(255 * a)),)
 
 
+def _mix(c1: str, c2: str, t: float):
+    """RGB tuple t of the way from colour c1 to colour c2."""
+    return tuple(int(round(a + (b - a) * t)) for a, b in zip(_rgb(c1), _rgb(c2)))
+
+
 def _fade(im, a: float):
     if a >= 0.999:
         return im
@@ -141,6 +151,12 @@ def _fade(im, a: float):
     return out
 
 
+def _chrome(it):
+    """The colour an item's rim, spoke, hover and fan lines take: its tag colour, except for an empty tag slot,
+    which stays faint all over (its colour only tints the glyph)."""
+    return it.color if it.kind != "tag" else ""
+
+
 def _blit(canvas, im, x, y):
     """alpha_composite im at (x, y), clipped to the canvas (Pillow refuses offsets off its top or left)."""
     x, y = int(x), int(y)
@@ -148,6 +164,29 @@ def _blit(canvas, im, x, y):
     r, b = min(im.size[0], canvas.size[0] - x), min(im.size[1], canvas.size[1] - y)
     if r > l and b > t:
         canvas.alpha_composite(im, (x + l, y + t), (l, t, r, b))
+
+
+def _glyph_tag(draw, cx, cy, size, fill):
+    """A luggage tag (outline, a ring hole near the blunt end) pointing up and right, size across."""
+    a = math.radians(-45)
+    ca, sa = math.cos(a), math.sin(a)
+
+    def pt(x, y):                                  # tag space (x along the tag) to the picture
+        return cx + (x * ca - y * sa) * size, cy + (x * sa + y * ca) * size
+    draw.polygon([pt(-0.5, -0.27), pt(0.06, -0.27), pt(0.5, 0.0), pt(0.06, 0.27), pt(-0.5, 0.27)],
+                 outline=fill, width=max(1, int(size * 0.1)))
+    hx, hy = pt(-0.27, 0.0)
+    hr = size * 0.07
+    draw.ellipse((hx - hr, hy - hr, hx + hr, hy + hr), outline=fill, width=max(1, int(size * 0.07)))
+
+
+def _glyph_grid(draw, cx, cy, size, fill):
+    """Four small rounded squares in a 2x2 grid, size across."""
+    q, g = size * 0.43, size * 0.14
+    for dx in (-1, 1):
+        for dy in (-1, 1):
+            x0, y0 = cx + (g / 2 if dx > 0 else -g / 2 - q), cy + (g / 2 if dy > 0 else -g / 2 - q)
+            draw.rounded_rectangle((x0, y0, x0 + q, y0 + q), radius=q * 0.25, fill=fill)
 
 
 def _wndproc(hwnd, msg, wparam, lparam):
@@ -466,7 +505,7 @@ class Ring:
         fan = _Fan(path, menu, anchor, anchor_r, cs, *self._layout(path)[:-1])
         art = self._fan_art(menu)
         fan.sprites, fan.labels = [a[0] for a in art], [a[1] for a in art]
-        fan.lines = self._fan_lines(anchor, anchor_r, fan.pos, cs)
+        fan.lines = self._fan_lines(anchor, anchor_r, fan.pos, cs, _chrome(self._item(path)))
         mode = MODES.get(menu.animation or self.cfg.get("animation", "smooth"), MODES["smooth"])
         dur = min(mode["dur"], FAN_MS)
         fade = max(1, min(mode["fade"], 150)) if dur else 0
@@ -640,7 +679,7 @@ class Ring:
             if (flick or hover_sub) and tuple(self.open[:len(path)]) != path:
                 self._set_open(path, time.time())
             return False
-        if not flick:
+        if not flick or self._item(path).kind in ("auto", "tag"):   # empty slots: nothing to pick
             return False
         self._finish(self._item(path), "flick", self._node_screen(path))
         return True
@@ -669,7 +708,11 @@ class Ring:
         C = int(D + 2 * m)
         c = C / 2
         sub = it.kind == "menu"
-        hue = self.c_hi if sub else self.c_accent
+        col = _chrome(it)
+        hue = col or (self.c_hi if sub else self.c_accent)
+        mode = self.cfg.get("tag_colors", "tint")
+        tint = bool(col) and (mode in ("tint", "both") or bool(it.tag))
+        soft = bool(col) and mode in ("glow", "both")
         icon = None
         try:
             icon = self.icon_for(it)
@@ -681,6 +724,9 @@ class Ring:
             mask = Image.new("L", (ins, ins), 0)
             ImageDraw.Draw(mask).ellipse((0, 0, ins - 1, ins - 1), fill=255)
             icon.putalpha(ImageChops.multiply(icon.getchannel("A"), mask))
+        solid = bool(col) and bool(it.tag) and sub and icon is None   # a tag slot: solid disc in the tag colour
+        fill = _mix(self.c_bg, col, 0.6) + (255,) if solid else (
+            _mix(self.c_bg, col, 0.45) + (235,) if tint else _rgba(self.c_bg, 0.92))
 
         def disc(hover):
             im = Image.new("RGBA", (C, C), (0, 0, 0, 0))
@@ -694,9 +740,9 @@ class Ring:
                 ImageDraw.Draw(im).ellipse((c - rr, c - rr, c + rr, c + rr), fill=_rgba(hue, 0.20))
             d = ImageDraw.Draw(im)
             r = D / 2
-            border = _rgba(hue, 1.0) if hover else _rgba(self.c_text, 0.10)
-            d.ellipse((c - r, c - r, c + r, c + r), fill=_rgba(self.c_bg, 0.92), outline=border,
-                      width=max(1, int(2 * self.scale * s)))
+            border = _rgba(hue, 1.0) if hover else (_rgba(col, 0.9) if tint else _rgba(self.c_text, 0.10))
+            d.ellipse((c - r, c - r, c + r, c + r), fill=fill, outline=border,
+                      width=max(1, int((3 if tint and not hover else 2) * self.scale * s)))
             if icon is not None:
                 im.alpha_composite(icon, (int(c - ins / 2), int(c - ins / 2)))
             elif it.kind == "auto":                # an auto slot nothing has filled yet: faint, no disc
@@ -704,6 +750,10 @@ class Ring:
                 l, t_, r_, b_ = gd.textbbox((0, 0), "+", font=self.f_glyph)
                 gd.text((c - (r_ - l) / 2 - l, c - (b_ - t_) / 2 - t_), "+", font=self.f_glyph,
                         fill=_rgba(self.c_text, 0.35))
+            elif it.kind == "tag":                 # a tag with no brushes (or no such tag): faint, no tint
+                _glyph_tag(ImageDraw.Draw(im), c, c, ins * 0.42, _rgba(it.color or self.c_text, 0.35))
+            elif solid:                            # tag slot: the disc is the tag colour
+                _glyph_tag(ImageDraw.Draw(im), c, c, ins * 0.46, _rgba(self.c_text, 0.9))
             else:                                  # placeholder disc with a short glyph
                 pr = ins / 2
                 ph = Image.new("RGBA", (C, C), (0, 0, 0, 0))
@@ -714,11 +764,14 @@ class Ring:
                     rr = pr * t
                     pd.ellipse((c - rr, c - rr, c + rr, c + rr), fill=g + (255,))
                 im.alpha_composite(ph)
-                glyph = it.label if len(it.label) <= 4 else "".join(w[0] for w in it.label.split()[:2]).upper()
                 gd = ImageDraw.Draw(im)
-                l, t_, r_, b_ = gd.textbbox((0, 0), glyph, font=self.f_glyph)
-                gd.text((c - (r_ - l) / 2 - l, c - (b_ - t_) / 2 - t_), glyph, font=self.f_glyph,
-                        fill=_rgba(self.c_text, 0.9))
+                if it.kind == "browser":           # the brush browser: a 2x2 grid
+                    _glyph_grid(gd, c, c, ins * 0.46, _rgba(it.color or self.c_text, 0.95))
+                else:
+                    glyph = it.label if len(it.label) <= 4 else "".join(w[0] for w in it.label.split()[:2]).upper()
+                    l, t_, r_, b_ = gd.textbbox((0, 0), glyph, font=self.f_glyph)
+                    gd.text((c - (r_ - l) / 2 - l, c - (b_ - t_) / 2 - t_), glyph, font=self.f_glyph,
+                            fill=_rgba(self.c_text, 0.9))
             if sub:                                # submenu badge, bottom-right
                 bw = 14 * self.scale * s
                 bx, by = c + r * 0.62, c + r * 0.62
@@ -727,7 +780,16 @@ class Ring:
                 tri = 3.5 * self.scale * s
                 d.polygon([(bx - tri * 0.7, by - tri), (bx - tri * 0.7, by + tri), (bx + tri, by)],
                           fill=_rgba(self.c_hi, 1.0))
-            return im.resize((int(C / s), int(C / s)), Image.LANCZOS)
+            out = im.resize((int(C / s), int(C / s)), Image.LANCZOS)
+            if soft and not hover:                 # soft halo in the tag colour, blurred at 1x
+                n = out.size[0]
+                gr = D / 2 / s + 2 * self.scale
+                halo = Image.new("RGBA", (n, n), (0, 0, 0, 0))
+                ImageDraw.Draw(halo).ellipse((n / 2 - gr, n / 2 - gr, n / 2 + gr, n / 2 + gr), fill=_rgba(col, 0.4))
+                halo = halo.filter(ImageFilter.GaussianBlur(8 * self.scale))
+                halo.alpha_composite(out)
+                out = halo
+            return out
         return disc(False), disc(True)
 
     def _label_sprites(self, it, slot=None):
@@ -747,7 +809,7 @@ class Ring:
         Wd, Hd = r - l + 2 * pad, b - t + 2 * pad
         out = []
         for hover in (False, True):
-            hue = (self.c_hi if it.kind == "menu" else self.c_accent) if hover else self.c_text
+            hue = (_chrome(it) or (self.c_hi if it.kind == "menu" else self.c_accent)) if hover else self.c_text
             im = Image.new("RGBA", (Wd, Hd), (0, 0, 0, 0))
             sh = Image.new("RGBA", (Wd, Hd), (0, 0, 0, 0))
             ImageDraw.Draw(sh).text((pad - l, pad - t + self.scale * s), text, font=font, fill=(0, 0, 0, 205))
@@ -769,9 +831,9 @@ class Ring:
         ImageDraw.Draw(im).ellipse((c - d / 2, c - d / 2, c + d / 2, c + d / 2), fill=_rgba(self.c_accent, 1.0))
         return im.resize((int(C / s), int(C / s)), Image.LANCZOS)
 
-    def _fan_lines(self, anchor, anchor_r, pos, cs):
-        """Dashed lines from a fan's slot out to each of its slots: (image, top-left relative to the ring
-        centre)."""
+    def _fan_lines(self, anchor, anchor_r, pos, cs, color=""):
+        """Dashed lines from a fan's slot out to each of its slots, in color if it has one: (image, top-left
+        relative to the ring centre)."""
         s = SS
         m = 4 * self.scale
         xs, ys = [anchor[0]] + [p[0] for p in pos], [anchor[1]] + [p[1] for p in pos]
@@ -779,7 +841,7 @@ class Ring:
         w, h = math.ceil(max(xs) + m) - x0, math.ceil(max(ys) + m) - y0
         im = Image.new("RGBA", (w * s, h * s), (0, 0, 0, 0))
         d = ImageDraw.Draw(im)
-        col = _rgba(self.c_lines, 0.75)
+        col = _rgba(color or self.c_lines, 0.75)
         lw = max(1, int(1.3 * self.scale * s))
         dash, gap = 5 * self.scale, 4 * self.scale
         ax, ay = anchor
@@ -814,7 +876,8 @@ class Ring:
             d.ellipse((cx - r, cy - r, cx + r, cy + r), outline=_rgba(self.c_lines, a), width=lw)
         r0, r1 = 8 * self.scale * s, (self.R - self.slot / 2 - 6 * self.scale) * s
         for (ux, uy), it in zip(self.seats, self.items):
-            colr = _rgba(self.c_hi, 0.35) if it.kind == "menu" else _rgba(self.c_lines, 0.30)
+            colr = _rgba(_chrome(it), 0.35) if _chrome(it) else (
+                _rgba(self.c_hi, 0.35) if it.kind == "menu" else _rgba(self.c_lines, 0.30))
             d.line((cx + ux * r0, cy + uy * r0, cx + ux * r1, cy + uy * r1), fill=colr, width=lw)
         title = " ".join(self.menu.title.upper())                 # letter-spaced caps
         hint = "release to pick" if self.mode == "hold" else "click to cancel"
