@@ -79,6 +79,7 @@ const ICONS = {
   k_toggle: '<rect x="3" y="7.500" width="18" height="9" rx="4.500"/><circle cx="16.500" cy="12" r="2.300" fill="currentColor" stroke="none"/>',
   k_steps: '<path d="M12 4l8 4-8 4-8-4z"/><path d="M4 12l8 4 8-4M4 16l8 4 8-4"/>',
   k_menu: '<circle cx="12" cy="12" r="8.500"/><path d="M10 8.500l5 3.500-5 3.500z" fill="currentColor"/>',
+  k_auto: '<path d="M19.500 12a7.500 7.500 0 0 1-13 5.100M4.500 12a7.500 7.500 0 0 1 13-5.100"/><path d="M17.500 3.500v3.400h-3.400M6.500 20.500v-3.400h3.400"/>',
   logo: '<circle cx="12" cy="12" r="2.200" fill="currentColor" stroke="none"/><circle cx="12" cy="3.800" r="1.700"/><circle cx="19.100" cy="7.900" r="1.700"/><circle cx="19.100" cy="16.100" r="1.700"/><circle cx="12" cy="20.200" r="1.700"/><circle cx="4.900" cy="16.100" r="1.700"/><circle cx="4.900" cy="7.900" r="1.700"/>',
 };
 function icon(name, size = 16, cls = '') {
@@ -92,7 +93,7 @@ function iconBtn(name, title, onclick, cls = '') {
 function setText(el, t) { if (el.textContent !== t) el.textContent = t; }
 
 /* ================================================================== state */
-const ACTIONS = ['brush', 'press', 'set', 'toggle', 'steps', 'menu'];
+const ACTIONS = ['brush', 'press', 'set', 'toggle', 'steps', 'menu', 'auto'];
 const KIND = {
   brush: { label: 'Brush', icon: 'k_brush', hint: 'Select a brush' },
   press: { label: 'Press', icon: 'k_press', hint: 'Press any ZBrush button' },
@@ -100,6 +101,7 @@ const KIND = {
   toggle: { label: 'Toggle', icon: 'k_toggle', hint: 'Flip a switch' },
   steps: { label: 'Steps', icon: 'k_steps', hint: 'Run several actions in order' },
   menu: { label: 'Submenu', icon: 'k_menu', hint: 'Open another ring' },
+  auto: { label: 'Auto', icon: 'k_auto', hint: 'A slot filled with a brush you pick often' },
 };
 const ANIM_INFO = {
   smooth: 'Slots scale in together with a slight overshoot.',
@@ -160,6 +162,7 @@ function defaultLabel(it) {
   if (k === 'brush') return String(it.brush || '');
   if (k === 'menu') { const m = S.cfg.menus[it.menu]; return (m && m.title) || String(it.menu || ''); }
   if (k === 'steps') return 'Steps';
+  if (k === 'auto') return 'Auto';
   return String(it[k] || '').split(':').pop();
 }
 const itemLabel = it => String(it.label || defaultLabel(it) || '(empty)');
@@ -172,8 +175,9 @@ function actionValid(a, nested) {
   if (k === 'set' && !('value' in a)) return false;
   if (k === 'steps') {
     if (nested || !Array.isArray(a.steps) || !a.steps.length) return false;
-    return a.steps.every(s => actionValid(s, true) && !('menu' in s) && !('steps' in s));
+    return a.steps.every(s => actionValid(s, true) && !('menu' in s) && !('steps' in s) && !('auto' in s));
   }
+  if (k === 'auto') return a.auto === 'brush';
   return typeof a[k] === 'string' && a[k].trim() !== '';
 }
 const itemUsable = it => actionValid(it, false) && (!('menu' in it) || !!S.cfg.menus[it.menu]);
@@ -188,6 +192,7 @@ function usableIdx(menuId) {
 function makeItem(kind, target, extra = {}) {
   const it = {};
   if (kind === 'steps') it.steps = extra.steps || [];
+  else if (kind === 'auto') it.auto = 'brush';
   else it[kind] = target || '';
   if (kind === 'set') it.value = extra.value !== undefined ? extra.value : '';
   if (extra.label) it.label = extra.label;
@@ -199,6 +204,7 @@ function convertItem(it, kind) {
   if (old === kind) return it;
   const label = it.label, icon = it.icon;
   let target = '', value, steps;
+  if (old === 'auto' || kind === 'auto') return makeItem(kind, '', kind === 'auto' ? {} : { label, icon });
   if (old === 'steps') {
     const first = (it.steps || [])[0];
     if (first && kindOf(first) === kind) { target = targetOf(first); value = first.value; }
@@ -1017,7 +1023,7 @@ function renderItemList(box, menuId, compact) {
       h('span', { class: 'inum mono' }, String(i + 1)),
       itemThumb(it, compact ? 26 : 32),
       h('span', { class: 'imain' }, h('span', { class: 'iname' }, itemLabel(it)),
-        compact ? null : h('span', { class: 'isub mono' }, k === 'steps' ? `${(it.steps || []).length} step${(it.steps || []).length === 1 ? '' : 's'}` : (k === 'set' ? `${targetOf(it)} = ${it.value}` : targetOf(it) || '(not set)'))),
+        compact ? null : h('span', { class: 'isub mono' }, k === 'auto' ? 'filled from your picks' : k === 'steps' ? `${(it.steps || []).length} step${(it.steps || []).length === 1 ? '' : 's'}` : (k === 'set' ? `${targetOf(it)} = ${it.value}` : targetOf(it) || '(not set)'))),
       h('span', { class: 'ikind', title: KIND[k].hint }, icon(KIND[k].icon, 13), compact ? null : KIND[k].label),
       ok ? null : h('span', { class: 'iwarn', title: 'This item is incomplete and will be skipped' }, icon('alert', 14)),
       h('span', { class: 'iacts' },
@@ -1116,7 +1122,7 @@ function buildStage() {
     const m = curMenu();
     if (hoverRing !== null && m && m.items[idxs[hoverRing]]) {
       const it = m.items[idxs[hoverRing]];
-      info.replaceChildren(h('b', null, itemLabel(it)), h('span', { class: 'mono' }, ' ' + KIND[kindOf(it)].label.toLowerCase() + (kindOf(it) === 'steps' ? '' : ' / ' + targetOf(it))));
+      info.replaceChildren(h('b', null, itemLabel(it)), h('span', { class: 'mono' }, ' ' + KIND[kindOf(it)].label.toLowerCase() + (kindOf(it) === 'steps' || kindOf(it) === 'auto' ? '' : ' / ' + targetOf(it))));
       info.classList.add('on');
     } else info.classList.remove('on');
   }
@@ -1247,6 +1253,10 @@ function buildItemInspector() {
   const labelInp = textInput(it.label || '', v => { if (v.trim()) it.label = v; else delete it.label; commit(); updateHead(); }, { placeholder: defaultLabel(it), label: 'Label' });
   const updateHead = () => { setText($('.insp-title b', box), itemLabel(it)); labelInp.placeholder = defaultLabel(it); };
 
+  if (k === 'auto') {
+    box.append(field('Right now', autoNow(m, i), 'The brush you pick most often from any ring, apart from the brushes this menu already has. Picks fade with a two-week half-life. A newcomer has to come out on top twice in a row before it takes a slot, and it takes the slot of a brush you have stopped using, so the rest of the ring stays put.'));
+    return box;
+  }
   if (k !== 'steps') {
     const placeholders = { brush: 'Search brushes, e.g. ClayBuildup', press: 'Item path, e.g. Tool:Masking:Clear', set: 'Item path, e.g. Draw:Draw Size', toggle: 'Item path, e.g. Transform:Activate Symmetry', menu: 'Pick a menu' };
     const inp = textInput(targetOf(it), v => { it[k] = v; commit(); updateHint(); updateHead(); }, { mono: k !== 'brush', placeholder: placeholders[k], focus: 'target', label: 'Target' });
@@ -1299,6 +1309,18 @@ function buildItemInspector() {
     field('Label', labelInp, 'Shown under the icon. Leave empty to use the default.'),
     field('Icon', h('div', { class: 'target-row' }, iconPrev, iconInp), 'By default the icon comes from the brush. Use a brush name or a full path to a .png or .zbp to override it.'));
   return box;
+}
+
+/* The brush the app puts into auto slot i of menu m at the moment (read from usage.json). */
+function autoNow(m, i) {
+  const el = h('div', { class: 'target-row' }, h('span', { class: 'fhint' }, 'Loading...'));
+  const j = m.items.slice(0, i).filter(x => kindOf(x) === 'auto' && itemUsable(x)).length;
+  call('get_auto_slots', S.cfg, S.menuId).then(r => {
+    const name = r && r.slots ? r.slots[j] : null;
+    el.replaceChildren(...(name ? [thumb(name, { size: 30 }), h('b', null, name)]
+      : [h('span', { class: 'fhint' }, 'Empty. It fills when you pick a brush from any ring that this menu does not have.')]));
+  }).catch(() => el.replaceChildren(h('span', { class: 'fhint' }, 'Could not read your brush usage.')));
+  return el;
 }
 
 function buildSteps(it) {
@@ -1770,8 +1792,12 @@ function buildSettingsScreen(root) {
       zpaint();
     };
     const zkey = (S.cfg.bridge && S.cfg.bridge.key) || 'F9';
+    // The plugin's Apply button brings F9 as its own hotkey (RadialMenuBridge.txt); any other key is bound by hand.
+    const zbind = zkey.toUpperCase() === 'F9'
+      ? ['After installing, restart ZBrush. Apply comes with ', h('b', null, 'F9'), ' as its hotkey, so there is nothing to bind.']
+      : ['After installing, restart ZBrush, Ctrl+Alt+click Zplugin > Radial Menu > Apply, press ', h('b', null, zkey), ' and choose Preferences > Hotkeys > Store. (Only F9 works without this step.)'];
     page.append(card('Older ZBrush', 'ZBrush 2022 to 2025. Acts straight away.',
-      h('div', { class: 'fhint' }, 'These versions have no Python API, so they get a ZScript plugin with the same Zplugin > Radial Menu palette. It has no listener, so every pick there uses the bridge key, whatever the mode above. After installing, restart ZBrush, Ctrl+Alt+click Zplugin > Radial Menu > Apply, press ', h('b', null, zkey), ' and choose Preferences > Hotkeys > Store. A ZBrush under Program Files asks for administrator rights to install.'),
+      h('div', { class: 'fhint' }, 'These versions have no Python API, so they get a ZScript plugin with the same Zplugin > Radial Menu palette. It has no listener, so every pick there uses the bridge key, whatever the mode above. ', ...zbind, ' A ZBrush under Program Files asks for administrator rights to install.'),
       zbox, h('div', { class: 'btn-row' }, addBtn)));
     zpaint();
 
@@ -1906,7 +1932,7 @@ async function revert() {
 function buildLicenceScreen(root) {
   root.replaceChildren();
   const page = h('div', { class: 'settings licence' });
-  const key = 'RMZB-FREE-4EVR-NOKY-GPL3';
+  const key = 'FCKGW-RHQQ2-YXRKT-8TG6W-2B7Q8';
   const quips = ['Already activated. Forever. You can stop typing.', 'Still activated. It was activated before you got here.',
     'Activation status: extremely activated.', 'The key is not checked. Nothing is checked. Go sculpt.'];
   let q = 0;

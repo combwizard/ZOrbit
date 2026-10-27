@@ -4,6 +4,21 @@ All notable changes to this project are listed here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+- ZBrush 2022 to 2025: the plugin binds F9 to Zplugin > Radial Menu > Apply itself, so the default bridge key
+  works without Ctrl+Alt+click and Preferences > Hotkeys > Store. A key you bound and stored yourself keeps
+  working. Settings > Older ZBrush offers Update for plugins installed before this.
+- A brush pick made outside Edit mode says "(Edit mode is off)" in the bridge log and Status, to explain a
+  brush that seems not to switch. The pick still goes through.
+- When ZBrush loads the plugin, it deletes a pick left over from a ZBrush that quit before applying it, so
+  the first Apply of a new session can't carry out an old pick.
+
+### Fixed
+- ZBrush 2026 and newer: loading the plugin ended in a Python error (`BRIDGE_DIR` is not defined) after
+  everything else had started. Nothing stopped working, but `bridge.log` never said "bridge loaded".
+
 ## [0.6.0] - 2026-10-27
 
 ### Added

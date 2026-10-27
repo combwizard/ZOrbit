@@ -2,8 +2,9 @@
 
 Look: slots of round icons around a glowing accent centre dot,
 hairline spokes and faint guide rings; hover = accent border, soft ring, glow, 1.12x scale and accent label;
-submenus use the highlight colour and a small badge. Selection is by angle outside a dead zone; a slot covers
-at most a quarter of the circle, so a ring of one to three slots has gaps between them.
+submenus use the highlight colour and a small badge; an auto slot nothing has filled yet is a faint "+".
+Selection is by angle outside a dead zone; a slot covers at most a quarter of the circle, so a ring of one to
+three slots has gaps between them.
 
 Flicking: moving the cursor out past a slot's outer edge picks it straight away (ring.flick), and reaching a
 submenu's disc opens it (ring.hover_submenus). Either way a submenu opens centred on that slot, still in hold
@@ -348,6 +349,11 @@ class Ring:
                       width=max(1, int(2 * self.scale * s)))
             if icon is not None:
                 im.alpha_composite(icon, (int(c - ins / 2), int(c - ins / 2)))
+            elif it.kind == "auto":                # an auto slot nothing has filled yet: faint, no disc
+                gd = ImageDraw.Draw(im)
+                l, t_, r_, b_ = gd.textbbox((0, 0), "+", font=self.f_glyph)
+                gd.text((c - (r_ - l) / 2 - l, c - (b_ - t_) / 2 - t_), "+", font=self.f_glyph,
+                        fill=_rgba(self.c_text, 0.35))
             else:                                  # placeholder disc with a short glyph
                 pr = ins / 2
                 ph = Image.new("RGBA", (C, C), (0, 0, 0, 0))

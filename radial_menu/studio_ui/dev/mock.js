@@ -20,9 +20,9 @@
     ids.forEach(function (id) {
       var m = menus[id], good = 0;
       (m.items || []).forEach(function (it, i) {
-        var kinds = ['brush', 'press', 'set', 'toggle', 'steps', 'menu'].filter(function (k) { return k in it; });
+        var kinds = ['brush', 'press', 'set', 'toggle', 'steps', 'menu', 'auto'].filter(function (k) { return k in it; });
         var where = 'menu ' + id + ' item ' + (i + 1);
-        if (kinds.length !== 1) { out.push(where + ': needs exactly one of brush, press, set, toggle, steps, menu'); return; }
+        if (kinds.length !== 1) { out.push(where + ': needs exactly one of brush, press, set, toggle, steps, menu, auto'); return; }
         var k = kinds[0];
         if (k === 'steps') { if (!Array.isArray(it.steps) || !it.steps.length) { out.push(where + ": 'steps' must be a non-empty list of brush/press/set/toggle actions"); return; } }
         else if (k === 'set' && !('value' in it)) { out.push(where + ": 'set' needs a 'value'"); return; }
@@ -73,6 +73,9 @@
         (names || []).forEach(function (n) { out[n] = (M.get_thumbs && M.get_thumbs[n]) || null; });
         return out;
       });
+    },
+    get_auto_slots: function (cfg, menuId) {
+      return sleep(30).then(function () { return { slots: menuId === 'brushes' ? ['Pinch', null] : [] }; });
     },
     get_suggestions: function () { return sleep(60).then(function () { return clone(M.get_suggestions); }); },
     get_status: function () {

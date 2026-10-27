@@ -36,13 +36,15 @@ Schema (all keys optional except menus):
   {"toggle": "Transform:Activate Symmetry"}      flip a switch
   {"steps": [<action>, ...]}                     run several actions in order
   {"menu": "<id>"}                               open another ring in place
+  {"auto": "brush"}                              a slot the app fills with a brush you pick often (usage.py)
 """
 import json
 import os
 import re
 from dataclasses import dataclass, field
 
-ACTION_KEYS = ("brush", "press", "set", "toggle", "steps", "menu")
+ACTION_KEYS = ("brush", "press", "set", "toggle", "steps", "menu", "auto")
+AUTO_KINDS = ("brush",)
 ANIMATIONS = ("smooth", "bounce", "pop", "zoom", "fade", "drift", "fancy", "spiral", "ripple", "breath", "mist",
               "snappy")
 LABEL_MODES = ("name", "none")
@@ -79,6 +81,7 @@ class Item:
     kind: str                 # one of ACTION_KEYS
     data: dict                # the raw action dict ({"brush": ...}, {"steps": [...]}, ...)
     icon: str = ""            # explicit icon, else derived from a brush action
+    auto: bool = False        # put into an auto slot by the app (from usage.json), not by the user
 
 
 @dataclass
@@ -144,9 +147,12 @@ def _check_action(a, errors, where, allow_nested=True) -> bool:
         for i, s in enumerate(a["steps"]):
             if not _check_action(s, errors, f"{where} step {i + 1}", allow_nested=False):
                 return False
-            if "menu" in s or "steps" in s:
-                errors.append(f"{where} step {i + 1}: steps cannot open menus or nest steps")
+            if "menu" in s or "steps" in s or "auto" in s:
+                errors.append(f"{where} step {i + 1}: steps cannot open menus, nest steps or be auto slots")
                 return False
+    elif k == "auto" and a["auto"] not in AUTO_KINDS:
+        errors.append(f"{where}: 'auto' must be one of {', '.join(AUTO_KINDS)}")
+        return False
     elif not isinstance(a[k], str) or not a[k].strip():
         errors.append(f"{where}: '{k}' must be a non-empty string")
         return False
@@ -161,6 +167,8 @@ def _default_label(a: dict, menus_raw: dict) -> str:
         return (m.get("title") if isinstance(m, dict) else None) or a["menu"]
     if "steps" in a:
         return "Steps"
+    if "auto" in a:
+        return "Auto"
     for k in ("press", "set", "toggle"):
         if k in a:
             return a[k].split(":")[-1]

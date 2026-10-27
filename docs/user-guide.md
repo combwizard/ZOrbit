@@ -287,7 +287,7 @@ These versions have no Python API, so they get a ZScript plugin with the same pa
 
 Differences from ZBrush 2026 and newer:
 
-- There is no listener, so **every pick uses the bridge key**, whatever the mode. Bind and store it in each of these versions (the steps above); each version keeps its own hotkeys.
+- There is no listener, so **every pick uses the bridge key**, whatever the mode. The plugin binds **F9** to **Apply** itself, so the default key needs no setup. If you choose another bridge key, bind and store it in each of these versions (the steps above); each version keeps its own hotkeys.
 - Brushes load from that version's own `.zbp` files, because an older ZBrush cannot always read a newer version's brushes.
 - Status shows where picks arrive, whether one is waiting, and the last pick. The plugin also writes that last pick to `zscript_bridge.log`, which Studio's Status screen shows.
 
@@ -298,7 +298,7 @@ When this version of Radial Menu has a newer plugin than one you installed, **Se
 | Button | What it does |
 |---|---|
 | Studio | Opens Radial Menu Studio. |
-| Apply | Carries out the pending pick. Bound to the bridge key for the fallback route. |
+| Apply | Carries out the pending pick. Bound to the bridge key for the fallback route. In ZBrush 2022 to 2025 it comes with F9 already bound. |
 | Start App | Starts the app if it is not running. Normally unnecessary. |
 | Status | Shows whether the listener is verified, whether the app is running, and the last pick. |
 
@@ -317,6 +317,7 @@ When this version of Radial Menu has a newer plugin than one you installed, **Se
 | `%LOCALAPPDATA%\RadialMenu\request.txt` | The same pick for the ZBrush 2022 to 2025 plugin. |
 | `%LOCALAPPDATA%\RadialMenu\zscript_bridge.log` | ZBrush 2022 to 2025: what the last pick did. |
 | `%LOCALAPPDATA%\RadialMenu\zscript_launch.log` | ZBrush 2022 to 2025: how the plugin last started the app or Studio. |
+| `%LOCALAPPDATA%\RadialMenu\zscript_hotkey.log` | ZBrush 2022 to 2025: the hotkey Apply had when the plugin loaded, and the one it has after (88 is F9). |
 | `%APPDATA%\RadialMenu\studio.json` | Studio's own preferences (Licence button, update check) and window placement. |
 | `%LOCALAPPDATA%\RadialMenu\studio.log` | How Studio started: which program launched it and how long each step took. A failed update check is noted here. |
 | `%LOCALAPPDATA%\RadialMenu\thumbs\` | Cached brush thumbnails. Safe to delete. |
@@ -338,7 +339,7 @@ When you report a bug, paste the last lines of `radiald.log` and `bridge.log`. T
 Check the listener on the Status screen. If it is not verified, use the fallback: bind the bridge key (see above) and leave the mode on `auto`. Then read `bridge.log`; it names each action and says whether it worked. Common causes: a `press`, `set` or `toggle` path that does not exist in your ZBrush (logged as "no such interface item"), or a `brush` with no `.zbp` file (logged as "NOT loaded in ZBrush and no .zbp file known").
 
 **ZBrush 2022 to 2025: the ring opens, but picks do nothing.**
-Picks there only arrive through the bridge key. Check that it is bound to **Zplugin > Radial Menu > Apply** in that ZBrush and that you clicked **Preferences > Hotkeys > Store**; a binding that was not stored is gone after a restart. If the palette is missing, install the plugin again in **Studio > Settings > Older ZBrush** and restart that ZBrush. `zscript_bridge.log` shows what the last pick did.
+Picks there only arrive through the bridge key. Hover **Zplugin > Radial Menu > Apply** in that ZBrush: its hotkey should match the bridge key. The plugin brings F9 itself, but only once it is up to date, so update it if **Settings > Older ZBrush** says **Update available**. For any other key, check that it is bound to **Apply** and that you clicked **Preferences > Hotkeys > Store**; a binding that was not stored is gone after a restart. If the palette is missing, install the plugin again in **Studio > Settings > Older ZBrush** and restart that ZBrush. `zscript_bridge.log` shows what the last pick did.
 
 **A slot shows letters instead of a picture.**
 There is no thumbnail for it. For brushes, that means no `.zbp` was found. For other items it is the normal placeholder; set an `icon` to change it.

@@ -147,7 +147,8 @@ class Api:
         from ring import Ring
         app = radiald.App(CONFIG_FILE)
         app.cfg = loaded
-        im = Ring.preview(loaded.menus[menu_id], loaded.ring, app.icon_for, hover=hover, scale=float(scale))
+        menu = app.fill_auto(loaded.menus[menu_id])       # as the app would fill it now; nothing is saved
+        im = Ring.preview(menu, loaded.ring, app.icon_for, hover=hover, scale=float(scale))
         return {"image": _png_data_url(im), "size": im.size[0], "problems": problems}
 
     def preview_animation(self, cfg, menu_id, fps=30, ring_anim=False):
@@ -161,12 +162,20 @@ class Api:
         from ring import Ring
         app = radiald.App(CONFIG_FILE)
         app.cfg = loaded
-        menu = loaded.menus[menu_id]
+        menu = app.fill_auto(loaded.menus[menu_id])
         if ring_anim:
             menu = dataclasses.replace(menu, animation="")
         frames = Ring.preview_frames(menu, loaded.ring, app.icon_for, fps=int(fps))
         return {"frames": [_png_data_url(f) for f in frames], "interval_ms": round(1000 / int(fps)),
                 "problems": problems}
+
+    def get_auto_slots(self, cfg, menu_id):
+        """The brushes the app would put into the menu's auto slots now, in order (None: empty)."""
+        loaded, _ = self._load_dict(cfg)
+        if loaded is None or menu_id not in loaded.menus:
+            return {"slots": []}
+        import usage
+        return {"slots": usage.Usage().load().slots(loaded.menus[menu_id])}
 
     def get_options(self):
         """Choices the UI offers: animation modes, label modes, action kinds, defaults."""

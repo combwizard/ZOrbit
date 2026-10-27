@@ -34,6 +34,7 @@ REQUEST_FILE = os.path.join(DATA_DIR, "request.json")
 REQUEST_TXT = os.path.join(DATA_DIR, "request.txt")       # the same pick for the ZScript bridge (ZBrush 2022-2025)
 LISTENER_FILE = os.path.join(DATA_DIR, "listener.json")
 LOG_FILE = os.path.join(DATA_DIR, "bridge.log")
+BRIDGE_DIR = os.path.dirname(os.path.abspath(__file__))
 PALETTE = "Zplugin:Radial Menu"
 
 WM_APP_PICK = 0x8000 + 1
@@ -116,7 +117,8 @@ def _do_brush(a: dict) -> str:
 
 def _do_action(a: dict) -> str:
     if "brush" in a:
-        return _do_brush(a)
+        # Still switched: the note only explains a brush that seems not to take outside Edit mode.
+        return _do_brush(a) + ("" if zbc.get("Transform:Edit") else " (Edit mode is off)")
     for kind in ("press", "set", "toggle"):
         if kind in a:
             path = a[kind]
@@ -315,6 +317,12 @@ def install() -> None:
         if zbc.exists(path):
             zbc.delete_interface_item(path)
         zbc.add_button(path, info, fn)
+    for p in (REQUEST_FILE, REQUEST_TXT):          # a pick left by a ZBrush that quit before applying it
+        try:
+            os.remove(p)
+            log(f"removed a pick left over from earlier: {os.path.basename(p)}")
+        except OSError:
+            pass
     start_listener()
     try:
         start_app()

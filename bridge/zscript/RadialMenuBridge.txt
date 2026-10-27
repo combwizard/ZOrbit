@@ -4,8 +4,9 @@
 //
 // Palette Zplugin > Radial Menu:
 //   Apply      carries out the pending pick (request.txt in the folder named by bridge.cfg), then deletes it.
-//              The app presses the bridge key after every pick; bind it natively: Ctrl+Alt+click Apply,
-//              press F9, then Preferences > Hotkeys > Store. There is no listener window in ZScript.
+//              The app presses the bridge key after every pick (there is no listener window in ZScript). When
+//              ZBrush loads the plugin it gives Apply F9 unless Apply already has a hotkey, so the default needs
+//              no setup. Another key is bound natively: Ctrl+Alt+click Apply, press it, Preferences > Hotkeys > Store.
 //   Studio     opens Radial Menu Studio.
 //   Start App  starts the Radial Menu app (it also starts when ZBrush loads this plugin).
 //   Status     shows where picks arrive, whether one is pending, and the last pick.
@@ -115,6 +116,8 @@
 			[VarSet, rmRes, [StrMerge, "brush ", #rmA, ": NOT loaded and no .zbp file known"]]
 		]
 	]
+	// Still switched: the note only explains a brush that seems not to take outside Edit mode.
+	[If, [IGet, "Transform:Edit"] == 0, [VarSet, rmRes, [StrMerge, #rmRes, " (Edit mode is off)"]]]
 ]
 
 [RoutineDef, RM_Press,
@@ -250,6 +253,19 @@
 	]
 ]
 
+// Gives Apply the default bridge key, F9, unless it already has a hotkey (one the user stored). Key codes are
+// the ones ZBrush keeps in ZStartup/Hotkeys: 88 is F9 there, and Shift, Ctrl and Alt add 256, 512 and 1024.
+// A hotkey in the IButton definition itself did not take in 2022. zscript_hotkey.log records what happened.
+[RoutineDef, RM_Hotkey,
+	[VarSet, rmN, [IGetHotkey, "Zplugin:Radial Menu:Apply"]]
+	[If, rmN == 0, [ISetHotkey, "Zplugin:Radial Menu:Apply", 88]]
+	[If, rmOk,
+		[VarSet, rmLogName, "zscript_hotkey.log"]
+		[VarSet, rmLogText, [StrMerge, "Apply hotkey at load: ", rmN, ", now: ", [IGetHotkey, "Zplugin:Radial Menu:Apply"]]]
+		[RoutineCall, RM_WriteLog]
+	]
+]
+
 [RoutineDef, RM_Status,
 	[RoutineCall, RM_ReadCfg]
 	[If, rmOk,
@@ -265,7 +281,7 @@
 [IButton, "Zplugin:Radial Menu:Studio", "Opens Radial Menu Studio: edit menus, browse brushes, settings.",
 	[RoutineCall, RM_Studio]
 ]
-[IButton, "Zplugin:Radial Menu:Apply", "Carries out the Radial Menu pick. Bind F9 to it natively.",
+[IButton, "Zplugin:Radial Menu:Apply", "Carries out the Radial Menu pick. The app presses the bridge key for it (F9 unless changed).",
 	[RoutineCall, RM_Apply]
 ]
 [IButton, "Zplugin:Radial Menu:Start App", "Starts the Radial Menu app if it is not running.",
@@ -275,11 +291,16 @@
 	[RoutineCall, RM_Status]
 ]
 
-// Start the app with ZBrush, as the Python bridge does. ZBrush runs this whole file again for every button
+// Drop a leftover pick, bind F9 and start the app with ZBrush, as the Python bridge does. ZBrush runs this whole file again for every button
 // press and variables start over each time, so the memory block RMStarted (kept until ZBrush quits) makes
 // this happen once per session.
 [If, [MemGetSize, RMStarted] == 0,
 	[MemCreate, RMStarted, 4, 0]
 	[RoutineCall, RM_ReadCfg]
+	[If, rmOk,                     // a pick left by a ZBrush that quit before applying it
+		[FileDelete, [StrMerge, #rmDir, "request.txt"]]
+		[FileDelete, [StrMerge, #rmDir, "request.json"]]
+	]
+	[RoutineCall, RM_Hotkey]
 	[If, rmOk && ([StrFind, "1", #rmAuto] == 0), [RoutineCall, RM_StartApp]]
 ]

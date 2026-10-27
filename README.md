@@ -6,7 +6,7 @@
 Press **Q** over ZBrush and a ring of your favourite brushes and buttons appears around the cursor. Flick toward one and let go, and ZBrush switches to it. You choose what goes on the ring in a small editor called Radial Menu Studio. It is free, open source (GPL-3.0), and runs on Windows.
 
 <p align="center">
-  <img src="docs/images/open-animation.gif" alt="The ring opening around the cursor, then hovering a brush" width="447">
+  <img src="docs/images/open-animation.gif" alt="Holding Q: the ring opens around the cursor, the cursor hovers two brushes, the More Brushes submenu opens on hover, and a flick picks ClayTubes" width="550">
 </p>
 
 ## Features
@@ -45,9 +45,8 @@ These versions load plugins only from their own `ZStartup\ZPlugs64` folder, so S
 1. Open **Radial Menu Studio** and go to **Settings > Older ZBrush**. It lists the 2022 to 2025 versions it found. If yours is missing, use **Add a ZBrush folder**.
 2. Click **Install**. A ZBrush under Program Files asks for administrator rights once.
 3. Restart that ZBrush.
-4. Bind the bridge key: Ctrl+Alt+click **Zplugin > Radial Menu > Apply**, press **F9**, then **Preferences > Hotkeys > Store**. Each ZBrush version keeps its own hotkeys, so do this once per version, and don't skip **Store**.
 
-The plugin has no listener window, so every pick in these versions goes through the bridge key. When a new Radial Menu has a newer plugin, **Settings** shows a badge and the row says **Update available**.
+The plugin has no listener window, so every pick in these versions goes through the bridge key, F9. The plugin binds F9 to **Zplugin > Radial Menu > Apply** itself, so there is nothing to set up. If you change the bridge key in Studio, bind the new key by hand in each version: Ctrl+Alt+click **Apply**, press the key, then **Preferences > Hotkeys > Store**. When a new Radial Menu has a newer plugin, **Settings** shows a badge and the row says **Update available**.
 
 ### Windows says "Windows protected your PC"
 
@@ -61,6 +60,8 @@ To continue, click **More info**, then **Run anyway**. If you would rather not r
 2. On the **Menus** screen, pick a menu on the left. The ring preview in the middle is drawn by the same code that draws it inside ZBrush.
 3. Drag brushes from the **Library** onto the ring, or use **Add item** for buttons, sliders and switches.
 4. Click **Save** (Ctrl+S). The next time you open the ring in ZBrush it uses your changes. There is no need to restart anything.
+
+![Radial Menu Studio: the menu list, the ring preview and the brush library](docs/images/studio.png)
 
 The [user guide](docs/user-guide.md) covers every setting and item type.
 
@@ -110,7 +111,7 @@ Open **Zplugin > Radial Menu > Status** and check that the listener says "verifi
 In ZBrush, Ctrl+Alt+click **Zplugin > Radial Menu > Apply**, press **F9**, then store it in **Preferences > Hotkeys > Store**. With the bridge mode on `auto` (the default), Radial Menu presses F9 when the listener does not answer.
 
 **ZBrush 2022 to 2025: the ring opens, but picks do nothing.**
-Picks there only arrive through the bridge key. Check that F9 is bound to **Zplugin > Radial Menu > Apply** and that you clicked **Preferences > Hotkeys > Store**; a binding that was not stored is gone after a restart. `zscript_bridge.log` shows what the last pick did.
+Picks there only arrive through the bridge key. Hover **Zplugin > Radial Menu > Apply**: its hotkey should match the bridge key in Studio (F9 unless you changed it). If **Settings > Older ZBrush** says **Update available**, update the plugin; older plugins don't bind F9 themselves. If you use another key, bind it to **Apply** and click **Preferences > Hotkeys > Store**; a binding that was not stored is gone after a restart. `zscript_bridge.log` shows what the last pick did.
 
 **Logs.**
 `%LOCALAPPDATA%\RadialMenu` holds `radiald.log` (the app), `bridge.log` (ZBrush side), `zscript_bridge.log` (ZBrush 2022 to 2025: the last pick), `studio.log` (how Studio started) and `app_stderr.log` (crashes at startup). Studio's **Status** screen shows the tail of the app log and has a button that opens the folder.
@@ -124,7 +125,7 @@ More is in the [user guide](docs/user-guide.md#troubleshooting).
 
 | | |
 |---|---|
-| **Licence key** | `RMZB-FREE-4EVR-NOKY-GPL3` |
+| **Licence key** | `FCKGW-RHQQ2-YXRKT-8TG6W-2B7Q8` |
 | **Status** | Activated |
 | **Seats** | All of them |
 | **Expires** | Never |

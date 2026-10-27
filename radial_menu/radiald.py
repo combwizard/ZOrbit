@@ -10,12 +10,14 @@ How it works:
     the pen/cursor tracking.
   * The same pick also goes to request.txt for the ZScript bridge of ZBrush 2022-2025 (no Python API, so no
     listener: those always get the bridge key, and brushes load from their own installation's .zbp files).
+  * Brush picks are counted in usage.json; a menu's auto slots are filled from those counts as it opens.
 
 Started through main.py (RadialMenu.exe), normally by the ZBrush bridge when ZBrush launches; it exits when
 the last ZBrush process has gone. Only one instance runs at a time.
 """
 import argparse
 import ctypes
+import dataclasses
 import json
 import os
 import subprocess
@@ -30,6 +32,7 @@ sys.path.insert(0, HERE)
 import config as C          # noqa: E402
 import installs             # noqa: E402
 import paths                # noqa: E402
+import usage                # noqa: E402
 import win32 as W           # noqa: E402
 import zscript_bridge       # noqa: E402
 
@@ -103,6 +106,7 @@ class App:
         self._seq = 0
         self._ack = None                # (seq, deadline) of a message-mode pick awaiting pickup
         self._target_misses = 0
+        self.usage = usage.Usage()
         self._refs = []                 # ctypes callbacks that must outlive their registration
 
     # --- config ----------------------------------------------------------------------------------
@@ -136,6 +140,10 @@ class App:
             for it in m.items:
                 acts = it.data["steps"] if it.kind == "steps" else [it.data]
                 names.update(a["brush"] for a in acts if "brush" in a)
+        self.usage.load()
+        for m in self.cfg.menus.values():
+            if usage.auto_count(m):
+                names.update(n for n in self.usage.slots(m) if n)
         size = THUMB_PX
         threading.Thread(target=brushes.prefetch, args=(sorted(names), size), daemon=True).start()
 
@@ -343,8 +351,38 @@ class App:
                 return                             # pressing the hotkey again closes the ring
         self.open_menu(menu, W.cursor_pos(), held=self.held_vk is not None)
 
+    def fill_auto(self, menu):
+        """The menu with its auto slots filled from usage.json (an empty slot stays as a placeholder)."""
+        if not usage.auto_count(menu):
+            return menu
+        filled = iter(self.usage.load().slots(menu))
+        items = []
+        for it in menu.items:
+            name = next(filled) if it.kind == "auto" else None
+            items.append(C.Item(label=name, kind="brush", data={"brush": name}, auto=True) if name else it)
+        return dataclasses.replace(menu, items=items)
+
+    def _record_pick(self, item):
+        """Counts a brush pick and lets the auto slots of every menu react to it."""
+        if item.kind != "brush":
+            return
+        self.usage.load().record(item.data["brush"])
+        autos = [m for m in self.cfg.menus.values() if usage.auto_count(m)]
+        for m in autos:
+            before = self.usage.slots(m)
+            self.usage.update(m)
+            after = self.usage.menus[m.id]["slots"]
+            if after != before:
+                log(f"auto slots of '{m.id}': {before} -> {after}")
+        self.usage.menus = {m.id: self.usage.menus[m.id] for m in autos}
+        try:
+            self.usage.save()
+        except OSError as e:
+            log(f"could not save usage.json: {e!r}")
+
     def open_menu(self, menu, pos, held, nested=False):
         from ring import Ring
+        menu = self.fill_auto(menu)
         ring = Ring(menu, self.cfg.ring, self.icon_for, self._on_ring_done, log, held=held, nested=nested)
         self.ring = ring
         try:
@@ -366,7 +404,14 @@ class App:
             elif sub is not None:
                 self.open_menu(sub, W.cursor_pos(), held=False)   # re-centred on the pick
             return
+        if item.kind == "auto":
+            log("empty auto slot picked; nothing sent")
+            return
         self.send(item)
+        try:
+            self._record_pick(item)
+        except Exception:
+            log("usage error:\n" + traceback.format_exc())
 
     # --- hand-off to ZBrush ----------------------------------------------------------------------
     def _actions(self, item, legacy=None):
