@@ -119,8 +119,9 @@ h1, h2, h3, p { margin: 0; }
 .rail-btn:hover { color: var(--text); background: rgba(255, 255, 255, .03); }
 .rail-btn.on { color: var(--accent); background: rgba(248, 107, 51, .08); border-left-color: var(--accent); }
 .rail-btn { position: relative; }
-.rail-btn.has-badge::after { content: ''; position: absolute; top: 9px; left: calc(50% + 7px); width: 8px; height: 8px; border-radius: 50%;
+.rail-btn.has-badge::after, .rail-btn.has-down::after { content: ''; position: absolute; top: 9px; left: calc(50% + 7px); width: 8px; height: 8px; border-radius: 50%;
   background: var(--amber); box-shadow: 0 0 0 2px var(--bg1); }
+.rail-btn.has-down::after { background: var(--danger); }
 .screens { flex: 1; min-width: 0; position: relative; }
 .screen { position: absolute; inset: 0; min-height: 0; animation: screenin .18s var(--ease); }
 @keyframes screenin { from { opacity: 0; transform: translateY(4px); } }
@@ -588,9 +589,13 @@ body.dragging .irow:hover { background: transparent; }
 .scard.ok { --c: var(--lime); border-top-color: var(--lime); }
 .scard.off { --c: var(--danger); border-top-color: var(--danger); }
 .scard.warn { --c: var(--amber); border-top-color: var(--amber); }
+.scard.neutral { --c: var(--sub); }
+.scard.neutral .sdot { box-shadow: none; opacity: .7; }
 .scard.last { border-top-color: var(--accent); }
 .sval { display: flex; align-items: center; gap: 10px; margin: 12px 0 6px; font-size: 18px; font-weight: 600; }
 .sval.small { display: block; font-size: 12px; font-weight: 500; line-height: 1.5; word-break: break-word; color: var(--text); }
+.sval.has-act { flex-wrap: wrap; row-gap: 8px; }
+.sval .start-btn { font-size: 12px; font-weight: 600; }
 .sdot { width: 10px; height: 10px; flex: none; border-radius: 50%; background: var(--c); box-shadow: 0 0 10px var(--c); }
 .ssub { color: var(--sub); font-size: 12px; line-height: 1.45; }
 .logbox { height: 270px; overflow: auto; padding: 10px 12px; background: var(--bg0); border: 1px solid var(--line); border-radius: 8px; font-size: 12px; line-height: 1.7; user-select: text; }

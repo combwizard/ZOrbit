@@ -57,15 +57,33 @@ def _mutex_exists(name) -> bool:
     if h:
         CloseHandle(h)
         return True
-    return False
+    # An app running elevated owns a mutex this process may not open: access denied still means it exists.
+    return ctypes.get_last_error() == 5          # ERROR_ACCESS_DENIED
 
 
 def _tail(path, n=40):
+    """The last n lines of a text file; only its last 64 KB are read, so a huge log costs nothing."""
     try:
-        with open(path, encoding="utf-8", errors="replace") as f:
-            return f.read().splitlines()[-n:]
+        with open(path, "rb") as f:
+            size = f.seek(0, os.SEEK_END)
+            f.seek(max(0, size - 65536))
+            data = f.read()
     except OSError:
         return []
+    lines = data.decode("utf-8", errors="replace").splitlines()
+    if size > 65536:
+        lines = lines[1:]                        # the first line may be cut in half
+    return lines[-n:] if n > 0 else []
+
+
+def _zbrush_running():
+    """(running, check_ok): whether a ZBrush.exe process exists, and whether the process check itself worked."""
+    try:
+        out = subprocess.run(["tasklist", "/FI", "IMAGENAME eq ZBrush.exe", "/NH"], capture_output=True,
+                             text=True, errors="replace", timeout=5, creationflags=0x08000000).stdout
+        return "zbrush.exe" in (out or "").lower(), True
+    except (OSError, subprocess.SubprocessError, ValueError):
+        return False, False
 
 
 def _write_atomic(path, data):
@@ -377,13 +395,36 @@ class Api:
         return sug
 
     # --- app status / control --------------------------------------------------------------------
+    _extras = (0.0, "auto", False)             # (checked at, bridge_mode, legacy_only): the slow bits, refreshed every 30 s
+
+    def _status_extras(self):
+        """bridge_mode from the saved config and whether only a ZBrush 2022 to 2025 is installed. Both need file
+        reads and an install scan, so they are cached: the status polls every 3 s and they change rarely."""
+        at, mode, legacy = self._extras
+        if time.monotonic() - at < 30:
+            return mode, legacy
+        try:
+            mode = C.load(CONFIG_FILE).bridge_mode
+        except Exception:
+            mode = "auto"
+        if mode not in ("auto", "message", "key"):
+            mode = "auto"
+        try:
+            found = installs.find_installs()
+            legacy = (not any(e["python"] for e in found)) and any(
+                e["year"] and 2022 <= e["year"] <= 2025 for e in found)
+        except Exception:
+            legacy = False
+        self._extras = (time.monotonic(), mode, legacy)
+        return mode, legacy
+
     def get_status(self):
         listener = None
         try:
             with open(os.path.join(DATA_DIR, "listener.json"), encoding="utf-8") as f:
                 info = json.load(f)
             listener = {"verified": bool(info.get("verified")), "alive": bool(IsWindow(int(info["hwnd"])))}
-        except (OSError, ValueError, KeyError):
+        except (OSError, ValueError, KeyError, TypeError):
             pass
         picks = [l for l in _tail(os.path.join(DATA_DIR, "bridge.log"), 200) if " #" in l]
         zs_log = os.path.join(DATA_DIR, "zscript_bridge.log")       # ZBrush 2022-2025: only the last pick
@@ -395,23 +436,36 @@ class Api:
                     picks.append(f"{when} {zs[0]} (ZScript bridge)")
         except OSError:
             pass
-        app_log = _tail(os.path.join(DATA_DIR, "radiald.log"), 12)
-        from_win = subprocess.run(["tasklist", "/FI", "IMAGENAME eq ZBrush.exe", "/NH"], capture_output=True,
-                                  text=True, creationflags=0x08000000).stdout
-        return {"app_running": _mutex_exists(APP_MUTEX), "zbrush_running": "zbrush.exe" in from_win.lower(),
+        app_log = _tail(os.path.join(DATA_DIR, "radiald.log"), 40)
+        zbrush_running, check_ok = _zbrush_running()
+        bridge_mode, legacy_only = self._status_extras()
+        return {"app_running": _mutex_exists(APP_MUTEX), "zbrush_running": zbrush_running,
                 "listener": listener, "last_pick": picks[-1] if picks else None, "app_log": app_log,
-                "data_dir": DATA_DIR}
+                "data_dir": DATA_DIR, "bridge_mode": bridge_mode, "legacy_only": legacy_only,
+                "checked_at": time.time(), "zbrush_check_ok": check_ok}
 
     def start_app(self):
         if _mutex_exists(APP_MUTEX):
-            return {"ok": True, "message": "The app is already running."}
-        st = self.get_status()
-        if not st["zbrush_running"]:
-            return {"ok": False, "message": "ZBrush is not running. The app starts together with ZBrush."}
-        subprocess.Popen(paths.launch_commands()["app"], cwd=os.path.dirname(paths.PKG_DIR),
-                         env=paths.clean_env(), creationflags=0x00000008 | 0x00000200, close_fds=True,
-                         stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        return {"ok": True, "message": "Started."}
+            return {"ok": True, "running": True, "message": "The app is already running."}
+        if not _zbrush_running()[0]:
+            return {"ok": False, "running": False, "reason": "zbrush",
+                    "message": "ZBrush is not running. The app starts together with ZBrush."}
+        p = subprocess.Popen(paths.launch_commands()["app"], cwd=os.path.dirname(paths.PKG_DIR),
+                             env=paths.clean_env(), creationflags=0x00000008 | 0x00000200, close_fds=True,
+                             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        deadline = time.monotonic() + 4.0
+        while time.monotonic() < deadline:
+            if _mutex_exists(APP_MUTEX):
+                return {"ok": True, "running": True, "message": "Started."}
+            if p.poll() is not None:
+                break
+            time.sleep(0.2)
+        else:
+            if _mutex_exists(APP_MUTEX):
+                return {"ok": True, "running": True, "message": "Started."}
+        return {"ok": False, "running": False, "reason": "failed",
+                "message": "The app did not start. The last lines of its log:",
+                "log": _tail(os.path.join(DATA_DIR, "radiald.log"), 8)}
 
     # --- ZScript bridge for ZBrush 2022-2025 -----------------------------------------------------
     def _legacy_installs(self):
@@ -493,7 +547,8 @@ class Api:
 
     def get_prefs(self):
         prefs = dict(self._PREFS_DEFAULTS)
-        prefs.update({k: v for k, v in _read_studio_file().items() if k in self._PREFS_DEFAULTS})
+        prefs.update({k: v for k, v in _read_studio_file().items()
+                      if k in self._PREFS_DEFAULTS and type(v) is type(self._PREFS_DEFAULTS[k])})   # a hand edit of the wrong type is ignored
         return prefs
 
     def set_pref(self, key, value):
@@ -540,7 +595,11 @@ class Api:
         return False
 
     def open_folder(self, which="data"):
-        os.startfile(DATA_DIR if which == "data" else paths.CONFIG_DIR)
+        """'data' opens the logs folder; 'config' (and the older name 'app') and anything else open the folder
+        radial.json is in."""
+        folder = DATA_DIR if which == "data" else paths.CONFIG_DIR
+        os.makedirs(folder, exist_ok=True)
+        os.startfile(folder)
         return True
 
     # --- window (custom title bar; plain Win32 so nothing touches .NET off the UI thread) ---------

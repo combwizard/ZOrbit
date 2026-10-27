@@ -1,6 +1,9 @@
 /* Browser-only stand-in for pywebview's js_api. Loaded by index.html only when the URL has ?mock.
    Backed by window.__RADIAL_MOCK__ (recorded real responses from dev/mock_data.js).
-   Extra URL switches for visual testing: ?problems (sample problems), ?status=down (app/ZBrush off),
+   Extra URL switches for visual testing: ?problems (sample problems), ?status=down (ZBrush and the app off; Start app is refused
+   with reason "zbrush"), ?status=up (the app already runs; by default ZBrush runs and the app does not until Start app succeeds),
+   ?startfail (start_app answers reason "failed" with three log lines after 1.5 s), ?legacy (legacy_only: key-bridge listener card),
+   ?nocheck (zbrush_check_ok false: the ZBrush card says "Could not check"),
    ?lag=300 (artificial latency in ms for preview calls and for the ZScript install/remove, so the busy row is visible), ?broken (get_config fails to parse: recovery screen),
    ?conflict (the first save without force reports "file changed on disk"), ?blocked (a save without force is
    refused as "no ring can open" until forced), ?nozbrush (get_library: ZBrush not found, no brushes), ?nolib (ZBrush
@@ -14,7 +17,7 @@
   var lag = +(q.get('lag') || 0);
   var sleep = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
   var clone = function (o) { return JSON.parse(JSON.stringify(o)); };
-  var ticks = 0, thumbCalls = 0, alreadyDone = false;
+  var ticks = 0, thumbCalls = 0, alreadyDone = false, appStarted = false;
   var saved = clone(M.get_config.config);
   var mtime = 1700000000000000000, conflictDone = false;
   var BROKEN_ERR = "Expecting ',' delimiter: line 12 column 5 (char 301)";
@@ -49,6 +52,23 @@
     if (!ids.some(function (id) { return menus[id].hotkey; })) out.push('no menu has a hotkey, so nothing can open the ring');
     if (q.has('problems')) out.push('menu brushes item 3: sample problem for the problems panel (?problems)', 'bridge.key must not use Ctrl or Shift (ZBrush reads them as mask/smooth); use a bare F-key',
       'ring.radius: 500 must be a number from 60 to 400', "menu tools: hotkey 'Q' already used by menu brushes");
+    return out;
+  }
+
+  // 'YYYY-MM-DD HH:MM:SS.mmm' in local time, like the app's log
+  function stamp(ms) {
+    var d = new Date(ms), p = function (n, w) { return String(n).padStart(w || 2, '0'); };
+    return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds()) + '.' + p(d.getMilliseconds(), 3);
+  }
+  // 40 lines: three from yesterday (dates show), then today's (time only), with "failed" lines to exercise the styling
+  function mockLog() {
+    var msgs = M.get_status.app_log.slice(0, 10).map(function (l) { return l.replace(/^\S+ \S+ /, ''); });
+    msgs.push('bridge message failed: listener window did not answer, using the bridge key');
+    msgs.push("pick #7 'Orb': message failed, fell back to the bridge key");
+    var now = Date.now(), y = now - 26 * 3600e3, out = [];
+    out.push(stamp(y) + ' Radial Menu started (mock)', stamp(y + 4000) + " pick #1 'hPolish': brush hPolish: selected", stamp(y + 9000) + ' ring load failed: menu tools: no usable items');
+    for (var i = 0; i < 36; i++) out.push(stamp(now - (37 - i) * 6000) + ' ' + msgs[i % msgs.length]);
+    out.push(stamp(now) + ' mock refresh #' + ticks);
     return out;
   }
 
@@ -121,14 +141,29 @@
     get_status: function () {
       ticks++;
       return sleep(40).then(function () {
-        var s = clone(M.get_status);
-        s.app_log.push(new Date().toISOString().replace('T', ' ').slice(0, 23) + " mock refresh #" + ticks);
-        s.app_log = s.app_log.slice(-12);
-        if (q.get('status') === 'down') { s.app_running = false; s.zbrush_running = false; s.listener = null; s.last_pick = null; }
+        var s = clone(M.get_status), down = q.get('status') === 'down';
+        s.zbrush_running = !down && !q.has('nocheck');
+        s.app_running = s.zbrush_running && (appStarted || q.get('status') === 'up');
+        s.listener = down ? null : { verified: true, alive: true };
+        if (down) s.last_pick = null;
+        s.bridge_mode = (saved.bridge && saved.bridge.mode) || 'auto';
+        s.legacy_only = q.has('legacy');
+        s.checked_at = Date.now() / 1000;
+        s.zbrush_check_ok = !q.has('nocheck');
+        s.app_log = mockLog();
         return s;
       });
     },
-    start_app: function () { return sleep(300).then(function () { return { ok: true, message: 'Started (mock: nothing was launched).' }; }); },
+    start_app: function () {
+      console.log('[mock] start_app');
+      if (q.get('status') === 'down') return sleep(300).then(function () { return { ok: false, running: false, reason: 'zbrush', message: 'ZBrush is not running. Start ZBrush first.' }; });
+      if (q.has('startfail')) return sleep(1500).then(function () {
+        var t = Date.now();
+        return { ok: false, running: false, reason: 'failed', message: 'The app did not start. The log below says why.',
+          log: [stamp(t) + ' Radial Menu starting', stamp(t + 120) + " error: could not register hotkey 'Q' (already taken by another program)", stamp(t + 130) + ' Radial Menu failed to start; exiting'] };
+      });
+      return sleep(1000).then(function () { appStarted = true; return { ok: true, running: true, message: 'Started (mock: nothing was launched).' }; });
+    },
     open_folder: function (which) { console.log('[mock] open_folder', which); return Promise.resolve(true); },
     get_zscript_bridge: function () {
       var z = JSON.parse(localStorage.getItem('rm_zscript') || '{}');

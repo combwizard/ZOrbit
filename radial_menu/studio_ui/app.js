@@ -696,7 +696,7 @@ function matchOpts(all, q, cap = 60) {
   const terms = q.split(/\s+/);
   const starts = [], rest = [];
   for (const o of all) {
-    const hay = o._hay || (o._hay = ((o.label || '') + ' ' + o.value + ' ' + (o.sub || '')).toLowerCase());
+    const hay = o._hay || (o._hay = ((o.label || '') + ' ' + o.value).toLowerCase());   // sub (category, source) is shown, not matched
     if (!terms.every(t => hay.includes(t))) continue;
     (o.value.toLowerCase().startsWith(terms[0]) ? starts : rest).push(o);
     if (starts.length + rest.length > 400) break;
@@ -774,8 +774,10 @@ function hotkeyField({ value, mods = { ctrl: true, alt: true, shift: true }, onC
 }
 
 /* ================================================================== mutation core */
+let validateGen = 0;                                              // a slower earlier validation must not overwrite a newer one
 const validateSoon = debounce(async () => {
-  try { const r = await call('validate', S.cfg); S.problems = (r && r.problems) || []; renderProblems(); } catch (e) { /* keep old */ }
+  const gen = ++validateGen;
+  try { const r = await call('validate', S.cfg); if (gen !== validateGen) return; S.problems = (r && r.problems) || []; renderProblems(); } catch (e) { /* keep old */ }
 }, 350);
 const previewSoon = debounce(() => { if (R.preview) R.preview(); }, 150);
 const snapSoon = debounce(() => pushSnap(), 450);
@@ -2252,6 +2254,7 @@ function buildSettingsScreen(root) {
     };
     let zgen = 0;                                              // a slower earlier listing must not replace a newer one
     const zpaint = async () => {
+      if (R.zpaint && R.zpaint !== zpaint) return R.zpaint();   // this card was rebuilt (undo, reload): paint the live one
       const gen = ++zgen;
       let r;
       try { r = await call('get_zscript_bridge'); if (gen !== zgen) return; } catch (e) { if (gen !== zgen) return; zbox.replaceChildren(h('div', { class: 'fhint bad' }, 'Could not look for ZBrush: ' + e.message)); return; }
@@ -2310,6 +2313,7 @@ function buildSettingsScreen(root) {
     };
     page.append(card('Older ZBrush', 'ZBrush 2022 to 2025. Acts straight away.', znote, zbox, h('div', { class: 'btn-row' }, addBtn)));
     paintZNote();
+    R.zpaint = zpaint;
     zpaint();
 
     /* --- studio (preferences of this window, saved immediately, not part of the menus file) */
@@ -2350,63 +2354,156 @@ function buildSettingsScreen(root) {
 }
 
 /* ================================================================== STATUS screen */
-let statusTimer = null, statusBusy = false;
+let statusTimer = null, statusBusy = false, appStarting = false;
+const LOG_LINES = 40;
+const pad2 = n => String(n).padStart(2, '0');
+const localDate = d => d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate());
+
+/* Copies text to the clipboard. Falls back to a throw-away textarea when the async API is missing or refused. */
+async function copyText(text) {
+  try { if (navigator.clipboard && navigator.clipboard.writeText) { await navigator.clipboard.writeText(text); return true; } } catch (e) { /* try the fallback */ }
+  const prev = document.activeElement;
+  const ta = h('textarea', { style: 'position:fixed;left:-9999px;top:0;opacity:0', 'aria-hidden': 'true', tabindex: '-1', readOnly: true });
+  ta.value = text;
+  document.body.append(ta); ta.select();
+  let ok = false;
+  try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+  ta.remove();
+  if (prev && prev.focus && document.contains(prev)) prev.focus();
+  return ok;
+}
+
+/* What the last get_status said, wherever it was asked from. S.appDown: true = ZBrush runs but the app does not (dot on the
+   Status rail button), false = the app runs, null = unknown or ZBrush is off. S.statusAt is when that answer was made. */
+function noteStatus(st) {
+  if (!st) return;
+  S.status = st;
+  S.statusAt = typeof st.checked_at === 'number' ? st.checked_at * 1000 : Date.now();
+  S.appDown = st.app_running ? false : (st.zbrush_running && st.zbrush_check_ok !== false ? true : null);
+  const rb = document.querySelector('.rail-btn[data-screen="status"]');
+  if (rb) {
+    rb.classList.toggle('has-down', S.appDown === true);
+    rb.title = 'Status (Alt+4)' + (S.appDown === true ? ' \u2013 The app is not running' : '');
+  }
+}
+/* One quiet look at the status for the rail dot, from outside the Status screen. */
+async function refreshAppDown() {
+  try { noteStatus(await call('get_status')); } catch (e) { /* no dot */ }
+}
+
 function buildStatusScreen(root) {
   root.replaceChildren();
   const page = h('div', { class: 'settings status' });
   const grid = h('div', { class: 'status-grid' });
   const logBox = h('div', { class: 'logbox mono', tabindex: '0', 'aria-label': 'App log' });
   const stamp = h('span', { class: 'stamp mono' });
-  const startBtn = h('button', { class: 'btn primary', type: 'button', onclick: async () => {
-    startBtn.disabled = true;
-    try { const r = await call('start_app'); toast(r.message || (r.ok ? 'Started.' : 'Could not start.'), { tone: r.ok ? 'ok' : 'warn', ms: 4500 }); } catch (e) { toast('Could not start the app: ' + e.message, { tone: 'warn' }); }
-    startBtn.disabled = false; await refresh();
-  } }, icon('play', 13), 'Start app');
+  let startLog = [];                       // lines a failed start brought back; kept (highlighted) until the app runs or Start is pressed again
+  let curLines = [];                       // the raw lines on screen now: what Copy log copies
+  let lastAsk = 0;                         // when the last get_status was asked
+
+  // The Start app button lives on the app card. One element, moved into each freshly built card.
+  const startBtn = h('button', { class: 'btn small primary start-btn', type: 'button', onclick: () => startApp() });
+  const paintStart = st => {
+    const running = !!(st && st.app_running);
+    const noZ = !!st && !st.zbrush_running && st.zbrush_check_ok !== false;
+    const off = appStarting || running || noZ || !st;
+    startBtn.disabled = off;
+    startBtn.replaceChildren(...(appStarting ? [h('span', { class: 'spin' }), 'Starting...'] : [icon('play', 12), running ? 'Running' : 'Start app']));
+    startBtn.classList.toggle('running', appStarting);
+    startBtn.title = appStarting ? 'Starting the app...' : running ? 'The app is already running' : noZ ? 'ZBrush must be running first'
+      : (st && st.zbrush_check_ok === false ? 'Could not check for ZBrush. Try anyway.' : 'Start the radial menu app');
+    if (appStarting) startBtn.setAttribute('aria-busy', 'true'); else startBtn.removeAttribute('aria-busy');
+  };
+  async function startApp() {
+    if (appStarting) return;
+    appStarting = true; startLog = []; paintStart(S.status);
+    let r = null;
+    try { r = await call('start_app'); }
+    catch (e) { toast('Could not start the app: ' + (e.message || e), { tone: 'warn', ms: 5000 }); }
+    appStarting = false; paintStart(S.status);
+    if (r && r.ok && r.running) toast('Started.', { tone: 'ok', ms: 3000 });
+    else if (r && r.reason === 'failed') {
+      toast(r.message || 'The app did not start.', { tone: 'warn', ms: 6000 });
+      startLog = Array.isArray(r.log) ? r.log.map(String) : [];
+    } else if (r) toast(r.message || (r.reason === 'zbrush' ? 'ZBrush must be running first.' : 'Could not start the app.'), { tone: 'warn', ms: 4500 });
+    while (statusBusy) await sleep(60);       // a poll already in flight may predate the launch
+    await refresh();
+    if (startLog.length) logBox.scrollTop = logBox.scrollHeight;
+  }
+
   const folder = which => async () => { try { await call('open_folder', which); } catch (e) { toast('Could not open the folder.', { tone: 'warn' }); } };
+  const copyLog = async () => {
+    if (!curLines.length) { toast('The log is empty.', { ms: 1800 }); return; }
+    const ok = await copyText(curLines.join('\n'));
+    toast(ok ? `Copied ${curLines.length} line${curLines.length === 1 ? '' : 's'}` : 'Could not copy the log.', { tone: ok ? 'ok' : 'warn', ms: 2200 });
+  };
   page.append(h('div', { class: 'page-head' }, h('h1', null, 'Status'), h('p', null, 'Whether ZBrush and the radial menu app are running, and whether the bridge between them is healthy.')),
     grid,
     card('App log', 'Last lines of radiald.log', logBox,
-      h('div', { class: 'btn-row between' }, h('div', { class: 'btn-row' }, startBtn,
-        h('button', { class: 'btn', type: 'button', onclick: folder('data') }, icon('folder', 13), 'Open logs folder'),
-        h('button', { class: 'btn', type: 'button', onclick: folder('app') }, icon('external', 13), 'Open app folder')),
+      h('div', { class: 'btn-row between' }, h('div', { class: 'btn-row' },
+        h('button', { class: 'btn', type: 'button', onclick: copyLog }, icon('copy', 13), 'Copy log'),
+        h('button', { class: 'btn', type: 'button', title: 'Where the app log is kept', onclick: folder('data') }, icon('folder', 13), 'Open logs folder'),
+        h('button', { class: 'btn', type: 'button', title: 'Where radial.json lives', onclick: folder('config') }, icon('external', 13), 'Open config folder')),
         h('span', { class: 'live' }, h('i', { class: 'livedot' }), 'Auto-refresh every 3 s ', stamp))));
   root.append(h('div', { class: 'settings-scroll' }, page));
 
-  const stat = (title, ok, text, sub, tone) => h('div', { class: 'scard ' + (tone || (ok ? 'ok' : 'off')) }, h('div', { class: 'micro' }, title),
-    h('div', { class: 'sval' }, h('i', { class: 'sdot' }), text), sub ? h('div', { class: 'ssub' }, sub) : null);
+  const stat = (title, ok, text, sub, tone, extra) => h('div', { class: 'scard ' + (tone || (ok ? 'ok' : 'off')) }, h('div', { class: 'micro' }, title),
+    h('div', { class: 'sval' + (extra ? ' has-act' : '') }, h('i', { class: 'sdot' }), text, extra || null), sub ? h('div', { class: 'ssub' }, sub) : null);
+  const tickStamp = () => {
+    if (!S.statusAt) { setText(stamp, ''); return; }
+    const s = Math.max(0, Math.floor((Date.now() - S.statusAt) / 1000));
+    setText(stamp, 'Updated ' + (s < 90 ? s + ' s' : Math.round(s / 60) + ' min') + ' ago');
+  };
   const paint = st => {
     if (!st) return;
     const l = st.listener;
-    const ltone = !l ? 'off' : (l.alive && l.verified ? 'ok' : 'warn');
-    const ltext = !l ? 'Not found' : (!l.alive ? 'Stale' : (l.verified ? 'Connected' : 'Found, unverified'));
-    const lsub = !l ? 'The ZBrush plugin has not announced a listener window. Load the Radial Menu plugin in ZBrush.' : (!l.alive ? 'The listener window no longer exists. Restart ZBrush or reload the plugin.' : (l.verified ? 'Picks are delivered by message.' : 'The window exists, but no message has been confirmed yet.'));
+    const keyOnly = st.bridge_mode === 'key' || !!st.legacy_only;      // a listener is not part of the picture
+    const ltone = keyOnly ? 'neutral' : (!l ? 'off' : (l.alive && l.verified ? 'ok' : 'warn'));
+    const ltext = keyOnly ? 'Not needed (key bridge)' : (!l ? 'Not found' : (!l.alive ? 'Stale' : (l.verified ? 'Connected' : 'Found, unverified')));
+    const lsub = keyOnly ? 'Picks arrive through the bridge key'
+      : (!l ? 'The ZBrush plugin has not announced a listener window. Load the Radial Menu plugin in ZBrush.' : (!l.alive ? 'The listener window no longer exists. Restart ZBrush or reload the plugin.' : (l.verified ? 'Picks are delivered by message.' : 'The window exists, but no message has been confirmed yet.')));
+    const unsure = st.zbrush_check_ok === false;                       // the process look-up itself failed: do not claim ZBrush is off
+    const hadFocus = document.activeElement === startBtn;
+    paintStart(st);
     grid.replaceChildren(
-      stat('ZBrush', st.zbrush_running, st.zbrush_running ? 'Running' : 'Not running', st.zbrush_running ? null : 'The app starts together with ZBrush.'),
-      stat('Radial menu app', st.app_running, st.app_running ? 'Running' : 'Not running', st.app_running ? 'Listening for your hotkeys.' : 'Press Start app (ZBrush must be open).'),
+      unsure ? stat('ZBrush', false, 'Could not check', 'Studio could not tell whether ZBrush is running.', 'neutral')
+        : stat('ZBrush', st.zbrush_running, st.zbrush_running ? 'Running' : 'Not running', st.zbrush_running ? null : 'The app starts together with ZBrush.'),
+      stat('Radial menu app', st.app_running, st.app_running ? 'Running' : 'Not running',
+        st.app_running ? 'Listening for your hotkeys.' : (st.zbrush_running || unsure ? 'Press Start app to launch it.' : 'Open ZBrush first; the app starts with it.'), null, startBtn),
       stat('Bridge listener', ltone === 'ok', ltext, lsub, ltone),
       h('div', { class: 'scard last' }, h('div', { class: 'micro' }, 'Last pick'), h('div', { class: 'sval mono small' }, st.last_pick || 'Nothing picked yet'), h('div', { class: 'ssub' }, 'The most recent item sent to ZBrush.')));
-    startBtn.disabled = !!st.app_running; startBtn.title = st.app_running ? 'The app is already running' : 'Start the radial menu app';
+    if (hadFocus && !startBtn.disabled) startBtn.focus();
+    if (st.app_running) startLog = [];
     const atBottom = logBox.scrollTop + logBox.clientHeight >= logBox.scrollHeight - 8;
-    logBox.replaceChildren(...(st.app_log && st.app_log.length ? st.app_log.map(line => {
+    const backend = (st.app_log || []).map(String);
+    const extra = startLog.filter(x => !backend.includes(x));
+    curLines = backend.concat(extra).slice(-LOG_LINES);
+    const forced = new Set(extra);
+    const today = localDate(new Date());
+    logBox.replaceChildren(...(curLines.length ? curLines.map(line => {
       const m = /^(\d{4}-\d\d-\d\d) (\d\d:\d\d:\d\d)(\.\d+)?\s+(.*)$/.exec(line);
-      const cls = /\b(error|fail|exception|traceback)\b/i.test(line) ? 'err' : (/\bpick #/.test(line) ? 'pick' : '');
-      return h('div', { class: 'logline ' + cls }, m ? [h('span', { class: 't' }, m[2]), ' ', m[4]] : line);
+      const cls = /\bpick #/.test(line) ? 'pick' : (forced.has(line) || /\b(error|errors|fail\w*|exception|traceback|warn\w*)\b/i.test(line) ? 'err' : '');
+      return h('div', { class: 'logline ' + cls }, m ? [h('span', { class: 't' }, (m[1] === today ? '' : m[1] + ' ') + m[2]), ' ', m[4]] : line);
     }) : [h('div', { class: 'logline dim' }, 'The log is empty.')]));
     if (atBottom) logBox.scrollTop = logBox.scrollHeight;
-    setText(stamp, new Date().toLocaleTimeString());
-    S.status = st;
+    tickStamp();
   };
   async function refresh() {
-    if (statusBusy) return; statusBusy = true;
-    try { paint(await call('get_status')); }
+    if (statusBusy) return; statusBusy = true; lastAsk = Date.now();
+    try { const st = await call('get_status'); noteStatus(st); paint(st); }
     catch (e) { grid.replaceChildren(h('div', { class: 'scard off' }, h('div', { class: 'micro' }, 'Status'), h('div', { class: 'sval' }, h('i', { class: 'sdot' }), 'Unavailable'), h('div', { class: 'ssub' }, String(e.message || e)))); }
     statusBusy = false;
   }
   R.status = refresh;
-  if (S.status) paint(S.status);
+  if (S.status) paint(S.status);           // from the last answer, so the stamp shows its real age
   refresh();
   clearInterval(statusTimer);
-  statusTimer = setInterval(() => { if (S.screen === 'status' && !document.hidden) refresh(); }, 3000);
+  // one beat per second: the stamp counts up, and a poll goes out once the last answer is 3 s old
+  statusTimer = setInterval(() => {
+    if (S.screen !== 'status' || document.hidden) return;
+    tickStamp();
+    if (Date.now() - lastAsk >= 2900) refresh();
+  }, 1000);
 }
 
 /* ================================================================== shell: dirty state, problems, save, screens */
@@ -2635,7 +2732,9 @@ async function doSave({ force = false, allowUnusable = false } = {}) {
       S.savedStr = snap; S.problems = r.problems || [];
       if (r.mtime_ns !== undefined) S.mtimeNs = r.mtime_ns;
       const t = r.time ? new Date(r.time * 1000).toLocaleTimeString() : '';
-      toast(S.problems.length ? `Saved at ${t} with ${S.problems.length} problem${S.problems.length === 1 ? '' : 's'}` : `Saved at ${t}. The app picks it up straight away.`, { tone: S.problems.length ? 'warn' : 'ok', ms: 3800 });
+      const tail = S.appDown === false ? '. The app picks it up straight away.' : (S.appDown === true ? '. The app is not running: start it from Status.' : '');
+      toast(S.problems.length ? `Saved at ${t} with ${S.problems.length} problem${S.problems.length === 1 ? '' : 's'}` : `Saved at ${t}${tail}`, { tone: S.problems.length ? 'warn' : 'ok', ms: tail && S.appDown === true ? 4800 : 3800 });
+      if (R.status) R.status(); else refreshAppDown();      // one quiet look, so the rail dot is right
       if (S.problems.length) { S.problemsOpen = true; }
       return 'saved';
     }
@@ -2902,7 +3001,7 @@ function recovery(res) {
     } catch (e) { toast('That failed: ' + (e.message || e), { tone: 'warn', ms: 6000 }); }
     btn.disabled = false;
   };
-  const folderBtn = h('button', { class: 'btn', type: 'button', onclick: async () => { try { await call('open_folder', 'app'); } catch (e) { toast('Could not open the folder.', { tone: 'warn' }); } } }, icon('folder', 13), 'Open folder');
+  const folderBtn = h('button', { class: 'btn', type: 'button', onclick: async () => { try { await call('open_folder', 'config'); } catch (e) { toast('Could not open the folder.', { tone: 'warn' }); } } }, icon('folder', 13), 'Open folder');
   const restoreBtn = backup ? h('button', { class: 'btn', type: 'button', onclick: () => run(restoreBtn, 'restore_backup') }, icon('undo', 13), 'Restore backup') : null;
   const resetBtn = h('button', { class: 'btn danger-ghost', type: 'button', onclick: async () => {
     const ok = await modal({ title: 'Start from defaults?',
@@ -2946,6 +3045,7 @@ async function boot() {
   rememberSel(); updateHistButtons();
   $('#saveBtn').disabled = false;
   refreshZsBadge();
+  if (S.screen !== 'status') refreshAppDown();
   if (params.has('hover')) { /* debug aid */ }
   document.documentElement.classList.add('ready');
 }

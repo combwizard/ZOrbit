@@ -60,6 +60,15 @@ All notable changes to this project are listed here. The format follows
   folder: it checks that the destination is a ZBrush `ZStartup\ZPlugs64` folder and builds the plugin,
   its config and its shortcuts from this installation's own files. The data folder written into the config
   is the user's own even when the prompt was answered with another administrator account.
+- Status: Start app sits on the app card, waits until the app is up (or says it did not start and shows
+  the last log lines), and is disabled with the reason while ZBrush is not running; the log shows 40 lines
+  with dates on lines from other days, highlights "failed" and "error" lines but not routine picks, and
+  has Copy log and an "Updated N s ago" stamp; the Bridge listener card says "Not needed (key bridge)" for
+  key-bridge and ZBrush 2022 to 2025 setups instead of a red "Not found"; a dot on the Status rail button
+  shows when the app is down while ZBrush runs, and the save toast says so instead of promising the app
+  picked the change up. "Open app folder" is now "Open config folder" (where radial.json lives).
+- The Status check no longer hangs Studio if the process list is slow, reads only the end of large logs,
+  and recognises an app running as administrator.
 - Brush thumbnails are sharp at the largest card size, a failed thumbnail batch is retried instead of
   showing initials for the rest of the session, and thumbnails start loading just before they scroll into
   view. Folder groups collapse again when you click the open one.
