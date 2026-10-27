@@ -1,0 +1,25 @@
+#!/bin/sh
+# Recompiles the ZScript bridge when its source is committed, so ZOrbitBridge.txt and ZOrbitBridge.zsc never
+# go in out of step. Needs ZBrush closed (tools/compile-zscript.ps1 starts ZBrush 2022 for the compile).
+# Install: tools/hooks/install.sh. Skip once: ZORBIT_SKIP_ZSC=1 git commit ...
+
+src=bridge/zscript/ZOrbitBridge.txt
+zsc=bridge/zscript/ZOrbitBridge.zsc
+
+git diff --cached --name-only --diff-filter=ACM | grep -qx "$src" || exit 0
+[ "$ZORBIT_SKIP_ZSC" = 1 ] && { echo "pre-commit: ZORBIT_SKIP_ZSC=1, not compiling $src"; exit 0; }
+
+# The compile reads the working copy, so it has to be what is being committed.
+if ! git diff --quiet -- "$src"; then
+	echo "pre-commit: $src has unstaged changes; stage them (or stash them) so the .zsc matches the commit." >&2
+	exit 1
+fi
+
+ps=pwsh
+command -v pwsh >/dev/null 2>&1 || ps=powershell
+echo "pre-commit: compiling $src ..."
+"$ps" -NoProfile -ExecutionPolicy Bypass -File tools/compile-zscript.ps1 || {
+	echo "pre-commit: compile failed, commit stopped. ZORBIT_SKIP_ZSC=1 commits without compiling." >&2
+	exit 1
+}
+git add -- "$zsc"

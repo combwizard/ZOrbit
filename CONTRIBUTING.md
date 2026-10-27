@@ -60,10 +60,14 @@ Those versions have no Python API, so they get `bridge\zscript\ZOrbitBridge.txt`
 loads compiled plugins, and only ZBrush can compile them, so the compiled `ZOrbitBridge.zsc` is committed
 next to the source. After changing the source:
 
-1. Open the oldest supported ZBrush (2022), choose **ZScript > Load** and pick `ZOrbitBridge.txt`. ZBrush
+1. Close ZBrush (only one version can run at a time) and run `tools\compile-zscript.ps1`. It starts the
+   oldest supported ZBrush (2022) with the source, waits for the `.zsc`, closes ZBrush and puts the result
+   in `bridge\zscript`. By hand: in ZBrush 2022 choose **ZScript > Load** and pick `ZOrbitBridge.txt`; ZBrush
    writes `ZOrbitBridge.zsc` next to it. Compiling in the oldest version is meant to keep it loadable in
    the newer ones; check it in the newest one you have too.
-2. Commit the source and the `.zsc` together.
+2. Commit the source and the `.zsc` together. The pre-commit hook does step 1 for you: run
+   `sh tools/hooks/install.sh` once (Git Bash), and every commit that includes `ZOrbitBridge.txt` compiles it
+   and adds the `.zsc`. Close ZBrush before committing; `ZORBIT_SKIP_ZSC=1 git commit ...` skips the compile.
 3. In Studio, **Settings > Older ZBrush > Update** puts the new build into each installed ZBrush.
 
 The build bundles both files, and Studio copies the `.zsc` plus a `ZOrbitData\bridge.cfg` into
