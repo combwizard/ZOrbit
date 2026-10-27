@@ -365,6 +365,8 @@
 
     var ring = new window.RadialRing.RingDemo(mount, {
       speed: initialSpeed(),
+      bounds: document.getElementById('hero'),
+      topBar: document.querySelector('.top-inner'),
       onPick: function (label) { toast('Picked ' + label); }
     });
     buildAnimRow(ring);

@@ -145,6 +145,8 @@ Steps run in order. Each step is a `brush`, `press`, `set` or `toggle`. Steps ca
 
 A submenu can open another way. Give its menu `"fan": true` (or switch on **Fan out when opened from another menu** in the menu settings in Studio) and its items spread out in an arc beyond its slot, joined to it by dashed lines, instead of a new ring opening on the slot. The ring you came from stays visible. An item of a fan can itself be a submenu of a fan, and it fans out further (up to three deep). The option only matters when the menu is opened as a submenu. A menu with a hotkey still opens as a normal ring when you press it. See [Pick modes](#pick-modes) for how to pick from a fan.
 
+![More Brushes fanned out from the Brushes ring, with ClayTubes hovered](images/fan.png)
+
 ### Labels and icons
 
 - `label`: text shown under the slot. Long labels are shortened with an ellipsis.

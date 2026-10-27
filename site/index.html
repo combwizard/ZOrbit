@@ -20,6 +20,9 @@
 </head>
 <body>
 <a class="skip" href="#main">Skip to content</a>
+<svg class="sprite" width="0" height="0" aria-hidden="true" focusable="false">
+  <symbol id="gh" viewBox="0 0 16 16"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.6 7.6 0 0 1 4 0c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></symbol>
+</svg>
 
 <header class="top">
   <div class="top-inner">
@@ -43,10 +46,11 @@
     <a href="#price">Price</a>
     <a href="#reviews">Reviews</a>
     <a href="#install">Install</a>
+    <a href="#faq">FAQ</a>
   </nav>
+  <a class="btn gh" href="https://github.com/combwizard/zorbit" aria-label="ZOrbit on GitHub"><svg class="gh-mark" width="20" height="20" aria-hidden="true"><use href="#gh"/></svg><span class="gh-label">GitHub</span></a>
   <a class="btn primary download" href="https://github.com/combwizard/zorbit/releases/latest">Download</a>
   <span class="progress" aria-hidden="true"></span>
-    <a href="#faq">FAQ</a>
   </div>
 </header>
 
@@ -80,6 +84,7 @@
         <p class="key-note"><span class="key-note-icon" aria-hidden="true">⌨</span>Q is just the default. Use any key or combination, and give each menu its own.</p>
         <div class="btn-row">
           <a class="btn primary download big" href="https://github.com/combwizard/zorbit/releases/latest">Download</a>
+          <a class="btn big gh" href="https://github.com/combwizard/zorbit"><svg class="gh-mark" width="20" height="20" aria-hidden="true"><use href="#gh"/></svg>View on GitHub</a>
           <button class="btn big" type="button" id="replayBtn">Replay open</button>
         </div>
         <ul class="compat" aria-label="Compatibility">
@@ -88,7 +93,7 @@
           <li>Free</li>
           <li>GPL-3.0</li>
         </ul>
-        <p class="fhint">Try it: click a slot, or press on the ring and drag toward one. This preview uses the starter menus; inside ZBrush the slots and keys are yours.</p>
+        <p class="fhint">Try it: click a slot, or press on the ring and drag toward one. More Brushes and Tools fan out in place, and SubDivide fans out of Tools when there is room (if not, it opens as a ring). This preview uses the starter menus with those three set to fan out; inside ZBrush the slots and keys are yours.</p>
       </div>
       <div class="anim-panel">
         <div class="anim-row" id="animRow" aria-label="Open animations"></div>
@@ -104,8 +109,8 @@
 
   <div class="marquee" aria-hidden="true">
     <div class="marquee-track">
-      <span>Free</span><i></i><span>Open source</span><i></i><span>No account</span><i></i><span>No trial</span><i></i><span>No subscription</span><i></i><span>Twelve open animations</span><i></i><span>Submenus</span><i></i><span>Any hotkey</span><i></i><span>Flick to pick</span><i></i><span>Plain JSON menus</span><i></i><span>GPL-3.0</span><i></i>
-      <span>Free</span><i></i><span>Open source</span><i></i><span>No account</span><i></i><span>No trial</span><i></i><span>No subscription</span><i></i><span>Twelve open animations</span><i></i><span>Submenus</span><i></i><span>Any hotkey</span><i></i><span>Flick to pick</span><i></i><span>Plain JSON menus</span><i></i><span>GPL-3.0</span><i></i>
+      <span>Free</span><i></i><span>Open source</span><i></i><span>No account</span><i></i><span>No trial</span><i></i><span>No subscription</span><i></i><span>Twelve open animations</span><i></i><span>Submenus</span><i></i><span>Fan-out submenus</span><i></i><span>Any hotkey</span><i></i><span>Flick to pick</span><i></i><span>Plain JSON menus</span><i></i><span>GPL-3.0</span><i></i>
+      <span>Free</span><i></i><span>Open source</span><i></i><span>No account</span><i></i><span>No trial</span><i></i><span>No subscription</span><i></i><span>Twelve open animations</span><i></i><span>Submenus</span><i></i><span>Fan-out submenus</span><i></i><span>Any hotkey</span><i></i><span>Flick to pick</span><i></i><span>Plain JSON menus</span><i></i><span>GPL-3.0</span><i></i>
     </div>
   </div>
 
@@ -147,6 +152,20 @@
 
     <article class="feature">
       <div class="feature-copy">
+        <h3>Fans that open in place.</h3>
+        <p>Switch a submenu to fan out and it opens where it is. Its items spread in an arc beyond its slot, the ring you came from stays put, and a fan item can fan out again, up to three deep. Release, click or flick to pick, just as on the ring. Near a screen edge it opens as a ring instead.</p>
+        <p class="feature-sub">One switch per menu in Studio, or <code>"fan": true</code> in the JSON. Try Tools in the ring at the top of the page.</p>
+      </div>
+      <figure class="feature-media">
+        <picture>
+          <source srcset="images/fan.png" media="(prefers-reduced-motion: reduce)">
+          <img src="images/fan-out.gif" alt="Holding Q: hovering More Brushes fans its brushes out to the left; moving to Tools fans out its switches, SubDivide fans out its sizes above that, and a flick past 1.00 picks it" width="594" height="771" loading="lazy">
+        </picture>
+      </figure>
+    </article>
+
+    <article class="feature flip">
+      <div class="feature-copy">
         <h3>Any key you like.</h3>
         <p>Q is only where it starts. Record a new hotkey in Studio by pressing it: a letter, a digit, F1 to F24 or punctuation, with any mix of Ctrl, Alt and Shift. Give every menu its own key and open them straight from the canvas.</p>
         <p class="feature-sub">By default ZBrush never sees the key, so its own shortcut for that key doesn’t fire as well. Switch that off per menu if you want both.</p>
@@ -166,7 +185,7 @@
       </figure>
     </article>
 
-    <article class="feature flip">
+    <article class="feature">
       <div class="feature-copy">
         <h3>Edit it in Studio.</h3>
         <p>ZOrbit Studio shows a live preview of the real ring. Drag brushes in from a searchable library, record hotkeys, change colours, size and animation. Twelve open animations, from instant to a swirling spiral.</p>
@@ -194,6 +213,7 @@
         <div><dt>Trial</dt><dd>None</dd></div>
       </dl>
       <a class="btn primary download" href="https://github.com/combwizard/zorbit/releases/latest">Download</a>
+      <a class="btn gh" href="https://github.com/combwizard/zorbit"><svg class="gh-mark" width="18" height="18" aria-hidden="true"><use href="#gh"/></svg>Read the source on GitHub</a>
       <p class="price-foot">Free, and the licence is <a href="https://github.com/combwizard/zorbit/blob/main/LICENSE">GPL-3.0</a>.</p>
     </div>
   </section>
@@ -583,26 +603,6 @@
     </aside>
   </section>
 
-  <section class="cta" aria-labelledby="ctaTitle">
-    <div class="cta-rings" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
-    <h2 id="ctaTitle">Hold <kbd>Q</kbd>. <span class="shine">Flick.</span> Done.</h2>
-    <p>Free, open source, and yours to keep.</p>
-    <div class="btn-row">
-      <a class="btn primary download big" href="https://github.com/combwizard/zorbit/releases/latest">Download</a>
-      <a class="btn big" href="https://github.com/combwizard/zorbit">View the source</a>
-    </div>
-  </section>
-</main>
-
-<footer class="foot">
-  <div class="foot-brand">
-    <span class="logo" aria-hidden="true">
-      <svg viewBox="0 0 32 32" width="22" height="22">
-        <circle cx="16" cy="16" r="14.5" fill="#1a1b1e" stroke="rgba(255,255,255,.10)"/>
-        <circle cx="16" cy="16" r="2.6" fill="#f86b33"/>
-      </svg>
-    </span>
-    <span>ZOrbit · a radial brush menu for ZBrush</span>
   <section class="section" id="faq">
     <header class="section-head">
       <p class="eyebrow">FAQ</p>
@@ -1007,11 +1007,31 @@
     </div>
   </section>
 
+  <section class="cta" aria-labelledby="ctaTitle">
+    <div class="cta-rings" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
+    <h2 id="ctaTitle">Hold <kbd>Q</kbd>. <span class="shine">Flick.</span> Done.</h2>
+    <p>Free, open source, and yours to keep.</p>
+    <div class="btn-row">
+      <a class="btn primary download big" href="https://github.com/combwizard/zorbit/releases/latest">Download</a>
+      <a class="btn big gh" href="https://github.com/combwizard/zorbit"><svg class="gh-mark" width="20" height="20" aria-hidden="true"><use href="#gh"/></svg>View on GitHub</a>
+    </div>
+  </section>
+</main>
+
+<footer class="foot">
+  <div class="foot-brand">
+    <span class="logo" aria-hidden="true">
+      <svg viewBox="0 0 32 32" width="22" height="22">
+        <circle cx="16" cy="16" r="14.5" fill="#1a1b1e" stroke="rgba(255,255,255,.10)"/>
+        <circle cx="16" cy="16" r="2.6" fill="#f86b33"/>
+      </svg>
+    </span>
+    <span>ZOrbit · a radial brush menu for ZBrush</span>
   </div>
   <p>Free and open source under the <a href="https://github.com/combwizard/zorbit/blob/main/LICENSE">GNU GPL-3.0</a>. No account, no trial, no expiry.</p>
   <p class="disclaimer">ZOrbit is an independent project. It is not affiliated with or endorsed by Maxon. ZBrush is a trademark of Maxon.</p>
   <nav class="foot-links" aria-label="Links">
-    <a href="https://github.com/combwizard/zorbit">Source</a>
+    <a class="foot-gh" href="https://github.com/combwizard/zorbit"><svg width="16" height="16" aria-hidden="true"><use href="#gh"/></svg>combwizard/zorbit</a>
     <a href="https://github.com/combwizard/zorbit/issues">Issues</a>
     <a href="https://github.com/combwizard/zorbit/releases">Releases</a>
     <a href="https://github.com/combwizard/zorbit/blob/main/docs/user-guide.md">User guide</a>
