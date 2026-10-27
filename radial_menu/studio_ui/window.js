@@ -30,9 +30,11 @@
     'stroke="#141416" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
   function checkUpdate() {
     var chip = document.getElementById('versionChip');
-    if (!chip) return;
-    call('check_update').then(function (u) {
-      if (!u) return;
+    if (!chip) return Promise.resolve(null);
+    // Resolves with the reply ({current, latest, url, newer}; latest is null when GitHub was not reached) so Settings can say what happened.
+    return call('check_update').then(function (u) {
+      if (!u) return null;
+      window.RadialUpdate.last = u;
       chip.dataset.url = u.url;
       chip.classList.toggle('has-update', !!u.newer);
       if (u.newer) {
@@ -42,7 +44,8 @@
         chip.textContent = 'v' + u.current;
         chip.title = 'Release notes';
       }
-    });
+      return u;
+    }, function () { return { latest: null, newer: false }; });
   }
   window.RadialUpdate = { check: checkUpdate };
   if (window.pywebview && window.pywebview.api) wire();

@@ -1,18 +1,20 @@
 /* Browser-only stand-in for pywebview's js_api. Loaded by index.html only when the URL has ?mock.
    Backed by window.__RADIAL_MOCK__ (recorded real responses from dev/mock_data.js).
    Extra URL switches for visual testing: ?problems (sample problems), ?status=down (app/ZBrush off),
-   ?lag=300 (artificial latency in ms for preview calls), ?broken (get_config fails to parse: recovery screen),
+   ?lag=300 (artificial latency in ms for preview calls and for the ZScript install/remove, so the busy row is visible), ?broken (get_config fails to parse: recovery screen),
    ?conflict (the first save without force reports "file changed on disk"), ?blocked (a save without force is
    refused as "no ring can open" until forced), ?nozbrush (get_library: ZBrush not found, no brushes), ?nolib (ZBrush
    found but no .zbp files in its folders), ?liberr (get_library reports an error), ?thumbfail (the first two get_thumbs
-   calls are rejected, then they work). */
+   calls are rejected, then they work), ?already (the first "Add a ZBrush folder" says the folder is already listed), ?busy
+   (install/remove report that another operation is running), ?update (check_update finds a newer release), ?unreach
+   (check_update cannot reach GitHub), ?prefsfail (set_pref is rejected). */
 (function () {
   var M = window.__RADIAL_MOCK__ || {};
   var q = new URLSearchParams(location.search);
   var lag = +(q.get('lag') || 0);
   var sleep = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
   var clone = function (o) { return JSON.parse(JSON.stringify(o)); };
-  var ticks = 0, thumbCalls = 0;
+  var ticks = 0, thumbCalls = 0, alreadyDone = false;
   var saved = clone(M.get_config.config);
   var mtime = 1700000000000000000, conflictDone = false;
   var BROKEN_ERR = "Expecting ',' delimiter: line 12 column 5 (char 301)";
@@ -54,6 +56,7 @@
     get_config: function () {
       return sleep(40).then(function () {
         var r = clone(M.get_config);
+        r.config = clone(saved);                                   // what the last mock save wrote, so Reload from disk is honest
         if (q.has('broken') && !sessionStorage.getItem('rm_repaired')) return { config: null, error: BROKEN_ERR, path: r.path, backup_exists: true, problems: [], mtime_ns: null };
         r.problems = q.has('problems') ? validate(r.config) : r.problems;
         r.mtime_ns = mtime; r.backup_exists = true;
@@ -129,15 +132,34 @@
     open_folder: function (which) { console.log('[mock] open_folder', which); return Promise.resolve(true); },
     get_zscript_bridge: function () {
       var z = JSON.parse(localStorage.getItem('rm_zscript') || '{}');
-      return sleep(120).then(function () { return { bundled: true, installs: [
-        { name: 'ZBrush 2022', year: 2022, path: 'C:\\Programs\\ZBrush 2022', python: false, installed: !!z.a, current: !!z.a, zplugs: 'C:\\Programs\\ZBrush 2022\\ZStartup\\ZPlugs64' },
-        { name: 'ZBrush 2024', year: 2024, path: 'C:\\Program Files\\Maxon ZBrush 2024', python: false, installed: true, current: false, zplugs: 'C:\\Program Files\\Maxon ZBrush 2024\\ZStartup\\ZPlugs64' }] }; });
+      var forgotten = JSON.parse(localStorage.getItem('rm_zforgot') || '{}');
+      return sleep(120).then(function () {
+        var installs = [
+          { name: 'ZBrush 2022', year: 2022, path: 'C:\\Programs\\ZBrush 2022', python: false, installed: !!z.a, current: !!z.a, added: true, zplugs: 'C:\\Programs\\ZBrush 2022\\ZStartup\\ZPlugs64' },
+          { name: 'ZBrush 2024', year: 2024, path: 'C:\\Program Files\\Maxon ZBrush 2024', python: false, installed: true, current: false, added: false, zplugs: 'C:\\Program Files\\Maxon ZBrush 2024\\ZStartup\\ZPlugs64' }]
+        if (q.has('nozs')) installs = [];
+        return { bundled: true, installs: installs.filter(function (i) { return !(i.added && forgotten[i.path]); }) };
+      });
     },
-    install_zscript_bridge: function () { try { localStorage.setItem('rm_zscript', '{"a":1}'); } catch (e) {} return sleep(300).then(function () { return { ok: true, message: 'Installed (mock). Restart ZBrush so it loads the plugin.' }; }); },
-    remove_zscript_bridge: function () { try { localStorage.removeItem('rm_zscript'); } catch (e) {} return sleep(200).then(function () { return { ok: true, message: 'Removed (mock).' }; }); },
-    add_zbrush_folder: function () { return Promise.resolve({ ok: false, cancelled: true }); },
+    install_zscript_bridge: function () {
+      if (q.has('busy')) return sleep(150).then(function () { return { ok: false, busy: true, message: 'Another install or removal is still running. Wait for it to finish.' }; });
+      return sleep(300 + lag).then(function () { try { localStorage.setItem('rm_zscript', '{"a":1}'); } catch (e) {} return { ok: true, message: 'Installed (mock). Restart ZBrush so it loads the plugin.' }; });
+    },
+    remove_zscript_bridge: function () {
+      if (q.has('busy')) return sleep(150).then(function () { return { ok: false, busy: true, message: 'Another install or removal is still running. Wait for it to finish.' }; });
+      return sleep(200 + lag).then(function () { try { localStorage.removeItem('rm_zscript'); } catch (e) {} return { ok: true, message: 'Removed (mock).' }; });
+    },
+    add_zbrush_folder: function () {
+      if (q.has('already') && !alreadyDone) { alreadyDone = true; return sleep(100).then(function () { return { ok: true, already: true, message: 'C:\\Programs\\ZBrush 2022 is already listed.' }; }); }
+      return Promise.resolve({ ok: false, cancelled: true });
+    },
+    forget_zbrush_folder: function (path) {
+      var f = JSON.parse(localStorage.getItem('rm_zforgot') || '{}'); f[path] = 1;
+      try { localStorage.setItem('rm_zforgot', JSON.stringify(f)); } catch (e) {}
+      return sleep(100).then(function () { return { ok: true, message: 'Forgot ' + path + '. The folder itself was not touched.' }; });
+    },
     get_prefs: function () { return Promise.resolve(Object.assign({ show_licence: true, check_updates: true, last_screen: 'menus' }, JSON.parse(localStorage.getItem('rm_prefs') || '{}'))); },
-    set_pref: function (k, v) { var p = Object.assign({ show_licence: true, check_updates: true, last_screen: 'menus' }, JSON.parse(localStorage.getItem('rm_prefs') || '{}')); p[k] = v; try { localStorage.setItem('rm_prefs', JSON.stringify(p)); } catch (e) {} return Promise.resolve(p); },
+    set_pref: function (k, v) { if (q.has('prefsfail') && k !== 'last_screen') return sleep(80).then(function () { throw new Error('disk full (mock)'); }); var p = Object.assign({ show_licence: true, check_updates: true, last_screen: 'menus' }, JSON.parse(localStorage.getItem('rm_prefs') || '{}')); p[k] = v; try { localStorage.setItem('rm_prefs', JSON.stringify(p)); } catch (e) {} return Promise.resolve(p); },
     set_dirty: function () { return Promise.resolve(true); },
     close_now: function () { console.log('[mock] close_now'); return Promise.resolve(true); },
     win_minimize: function () { return Promise.resolve(); },
@@ -145,7 +167,7 @@
     win_toggle_maximize: function () { return Promise.resolve(false); },
     win_is_maximized: function () { return Promise.resolve(false); },
     get_app_info: function () { return Promise.resolve({ version: '0.6.0' }); },
-    check_update: function () { return sleep(300).then(function () { return q.has('update') ? { newer: true, current: '0.6.0', latest: '0.7.0', url: 'https://github.com/combwizard/zbrush-radial-menu/releases' } : { newer: false, current: '0.6.0', latest: '0.6.0', url: 'https://github.com/combwizard/zbrush-radial-menu/releases' }; }); },
+    check_update: function () { return sleep(300).then(function () { if (q.has('unreach')) return { newer: false, current: '0.6.0', latest: null, url: 'https://github.com/combwizard/zbrush-radial-menu/releases' }; return q.has('update') ? { newer: true, current: '0.6.0', latest: '0.7.0', url: 'https://github.com/combwizard/zbrush-radial-menu/releases' } : { newer: false, current: '0.6.0', latest: '0.6.0', url: 'https://github.com/combwizard/zbrush-radial-menu/releases' }; }); },
     open_url: function (url) { console.log('[mock] open_url', url); return Promise.resolve(true); },
   };
   window.pywebview = { api: api };

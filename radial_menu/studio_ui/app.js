@@ -490,7 +490,7 @@ function itemThumb(it, size = 30) {
 
 /* ================================================================== ring preview + animation loaders */
 const RingLoader = {
-  cache: new Map(), ver: -1, queue: null, busy: false,
+  cache: new Map(), ver: -1, queue: null, cur: null, busy: false,
   key: (m, hv) => m + '|' + (hv === null || hv === undefined ? 'n' : hv),
   sync() { if (this.ver !== S.version) { this.cache.clear(); this.ver = S.version; } },
   peek(menuId, hover) { this.sync(); return this.cache.get(this.key(menuId, hover)) || null; },
@@ -499,15 +499,19 @@ const RingLoader = {
     const k = this.key(menuId, hover), c = this.cache.get(k);
     if (c) return Promise.resolve(c);
     return new Promise(res => {
-      if (this.queue) this.queue.res(null);                    // latest request wins
-      this.queue = { menuId, hover: hover === undefined ? null : hover, k, ver: S.version, res };
+      // the same picture asked for twice (several previews on one screen) shares one backend call
+      const same = [this.cur, this.queue].find(q => q && q.k === k && q.ver === S.version);
+      if (same) { same.waiters.push(res); return; }
+      if (this.queue) this.settle(this.queue, null);           // latest request wins
+      this.queue = { menuId, hover: hover === undefined ? null : hover, k, ver: S.version, res, waiters: [] };
       this.pump();
     });
   },
+  settle(q, out) { q.res(out); for (const w of q.waiters) w(out); },
   async pump() {
     if (this.busy || !this.queue) return;
     this.busy = true;
-    const q = this.queue; this.queue = null;
+    const q = this.queue; this.queue = null; this.cur = q;
     let out;
     try {
       out = await call('preview_ring', S.cfg, q.menuId, q.hover, 1.0);
@@ -516,8 +520,8 @@ const RingLoader = {
         if (this.cache.size > 60) this.cache.delete(this.cache.keys().next().value);
       }
     } catch (e) { out = { image: null, problems: [String(e && e.message || e)], error: true }; }
-    this.busy = false;
-    q.res(out);
+    this.busy = false; this.cur = null;
+    this.settle(q, out);
     this.pump();
   },
 };
@@ -1038,7 +1042,7 @@ function emptyState(iconName, title, text, action) {
     action ? h('button', { class: 'btn small', type: 'button', onclick: action.fn }, action.text) : null);
 }
 function toggleSwitch(checked, onChange, label) {
-  const inp = h('input', { type: 'checkbox', checked, 'aria-label': label, onchange: () => onChange(inp.checked) });
+  const inp = h('input', { type: 'checkbox', checked, 'aria-label': label, onchange: async () => { const want = inp.checked; if (await onChange(want) === false) inp.checked = !want; } });
   return h('label', { class: 'toggle' }, inp, h('span', { class: 'track' }));
 }
 function field(label, control, hint) {
@@ -2002,30 +2006,62 @@ function setRing(k, v) { ensureRing()[k] = v; commit(); }
 function setColor(k, v) { const r = ensureRing(); if (!r.colors || typeof r.colors !== 'object') r.colors = {}; r.colors[k] = v; commit(); }
 function colorVal(k) { const c = ring().colors; return (c && typeof c[k] === 'string' ? c[k] : S.defaults.colors[k]); }
 
+/* '#fff', 'fff', '#FFAA00' and 'ffaa00' all become '#rrggbb' in lower case; anything else is null. */
+function normHex(v) {
+  let t = String(v).trim().replace(/^#/, '');
+  if (/^[0-9a-f]{3}$/i.test(t)) t = t.replace(/./g, c => c + c);
+  return /^[0-9a-f]{6}$/i.test(t) ? '#' + t.toLowerCase() : null;
+}
 function sliderRow({ label, hint, key, step = 1, unit = '', onLive }) {
   const [min, max] = ranges()[key] || [0, 100];
   const range = h('input', { type: 'range', min, max, step, value: ringNum(key), 'aria-label': label });
   const num = h('input', { class: 'inp mono num', type: 'number', min, max, step, value: ringNum(key), 'aria-label': label + ' value' });
   const reset = iconBtn('undo', 'Reset to default (' + S.defaults[key] + ')', () => { delete ensureRing()[key]; commit(); sync(ringNum(key)); onLive && onLive(); }, 'reset');
+  const note = h('span', { class: 'num-hint', role: 'status' });
+  let noteT = 0;
+  const say = t => { clearTimeout(noteT); note.textContent = t; if (t) noteT = setTimeout(() => { note.textContent = ''; }, 2000); };
   const sync = v => { range.value = v; num.value = v; range.style.setProperty('--pct', ((v - min) / (max - min)) * 100 + '%'); reset.style.visibility = key in ring() && ring()[key] !== S.defaults[key] ? 'visible' : 'hidden'; };
   range.addEventListener('input', () => { const v = Number(range.value); setRing(key, v); sync(v); onLive && onLive(); });
-  num.addEventListener('change', () => { const v = clamp(Number(num.value) || min, min, max); setRing(key, v); sync(v); onLive && onLive(); });
+  num.addEventListener('change', () => {
+    const raw = num.value.trim(), n = Number(raw);
+    if (raw === '' || !Number.isFinite(n)) { sync(ringNum(key)); say(''); return; }     // nothing usable typed: keep what was there
+    const snapped = Number((min + Math.round((n - min) / step) * step).toFixed(6)), v = clamp(snapped, min, max);
+    say(n < min || n > max ? 'Kept within ' + min + ' to ' + max : '');
+    if (v !== ringNum(key)) { setRing(key, v); onLive && onLive(); }
+    sync(v);
+  });
   sync(ringNum(key));
-  return h('div', { class: 'srow' }, h('div', { class: 'slabel' }, h('span', null, label), h('small', null, hint)), h('div', { class: 'sctl' }, range, h('span', { class: 'nwrap' }, num, unit ? h('em', null, unit) : null), reset));
+  return h('div', { class: 'srow' }, h('div', { class: 'slabel' }, h('span', null, label), h('small', null, hint)), h('div', { class: 'sctl' }, range, h('span', { class: 'nwrap' }, num, unit ? h('em', null, unit) : null, note), reset));
 }
 function switchRow({ label, hint, key }) {
   const v = ring()[key];
   return h('div', { class: 'srow' }, h('div', { class: 'slabel' }, h('span', null, label), h('small', null, hint)),
     h('div', { class: 'sctl switch' }, toggleSwitch(typeof v === 'boolean' ? v : S.defaults[key], on => { if (on === S.defaults[key]) { delete ensureRing()[key]; commit(); } else setRing(key, on); }, label)));
 }
-function choiceCards(items, current, onPick, cls = '') {
-  const wrap = h('div', { class: 'choices ' + cls, role: 'radiogroup' });
-  items.forEach(([v, title, desc, extra]) => {
-    const b = h('button', { class: 'choice' + (v === current ? ' on' : ''), type: 'button', role: 'radio', 'aria-checked': v === current ? 'true' : 'false', dataset: { v },
-      onclick: () => { onPick(v); $$('.choice', wrap).forEach(c => { const on = c.dataset.v === v; c.classList.toggle('on', on); c.setAttribute('aria-checked', on ? 'true' : 'false'); }); } },
-      extra || null, h('b', null, title), h('span', null, desc));
-    wrap.append(b);
+/* A radio group: only the chosen card is a Tab stop; the arrow keys move and choose, Home and End jump to the ends. */
+function choiceCards(items, current, onPick, cls = '', label = '') {
+  const wrap = h('div', { class: 'choices ' + cls, role: 'radiogroup', 'aria-label': label || null });
+  const has = items.some(it => it[0] === current);
+  const btns = items.map(([v, title, desc, extra], i) => h('button', { class: 'choice' + (v === current ? ' on' : ''), type: 'button', role: 'radio',
+    'aria-checked': v === current ? 'true' : 'false', tabindex: (has ? v === current : i === 0) ? '0' : '-1', dataset: { v },
+    onclick: () => pick(i) }, extra || null, h('b', null, title), h('span', null, desc)));
+  const pick = (i, focus) => {
+    const v = items[i][0];
+    btns.forEach((c, j) => { const on = j === i; c.classList.toggle('on', on); c.setAttribute('aria-checked', on ? 'true' : 'false'); c.tabIndex = on ? 0 : -1; });
+    if (focus) btns[i].focus();
+    onPick(v);
+  };
+  wrap.addEventListener('keydown', e => {
+    if (e.ctrlKey || e.altKey || e.metaKey || e.shiftKey) return;
+    const at = btns.indexOf(document.activeElement);
+    if (at < 0) return;
+    const n = btns.length;
+    const to = { ArrowRight: (at + 1) % n, ArrowDown: (at + 1) % n, ArrowLeft: (at + n - 1) % n, ArrowUp: (at + n - 1) % n, Home: 0, End: n - 1 }[e.key];
+    if (to === undefined) return;
+    e.preventDefault();
+    if (to !== at) pick(to, true);
   });
+  wrap.append(...btns);
   return wrap;
 }
 /* Badge on the Settings rail button and the "Older ZBrush" contents entry while an installed ZScript plugin
@@ -2112,11 +2148,13 @@ function buildSettingsScreen(root) {
         sliderRow({ label: 'Dead zone', hint: 'No slot is picked this close to the centre (dashed circle)', key: 'dead_zone', unit: 'px', onLive: live })),
       pbox)));
     R.preview = async () => {
-      if (!curMenu() || !usableIdx(S.menuId).length) { pbox.classList.add('none'); return; }
-      pbox.classList.remove('none');
+      const none = !curMenu() || !usableIdx(S.menuId).length;
+      pbox.classList.toggle('none', none); cbox.classList.toggle('none', none);
+      if (none) return;
       const ver = S.version;
-      const res = await RingLoader.get(S.menuId, null);
+      const res = await RingLoader.get(S.menuId, null);       // one request feeds the geometry, animation and colour previews
       if (!res || ver !== S.version || !res.image) return;
+      cimg.src = res.image;
       if (settingsPlayer.state === 'idle') { pimg.src = res.image; aimg.src = res.image; }
       msize = res.size || msize; paintDZ();
     };
@@ -2137,7 +2175,7 @@ function buildSettingsScreen(root) {
     const cur = ring().animation || S.defaults.animation;
     const own = Object.entries(S.cfg.menus).filter(([, m]) => m.animation).map(([id, m]) => m.title || id);
     page.append(card('Open animation', 'Pick one to see it play', h('div', { class: 'split anim-split' }, astage,
-      choiceCards(anims.map(a => [a, a[0].toUpperCase() + a.slice(1), ANIM_INFO[a] || '']), cur, v => { settingsPlayer.stop(); setRing('animation', v); setTimeout(() => abtn.onclick(), 0); }, 'anim-cards')),
+      choiceCards(anims.map(a => [a, a[0].toUpperCase() + a.slice(1), ANIM_INFO[a] || '']), cur, v => { settingsPlayer.stop(); setRing('animation', v); setTimeout(() => abtn.onclick(), 0); }, 'anim-cards', 'Open animation')),
       h('div', { class: 'fhint' }, own.length
         ? 'Used by every menu except ' + own.map(t => '\u201c' + t + '\u201d').join(', ') + ', which ' + (own.length === 1 ? 'has its own' : 'have their own') + ' (set on the Menus screen).'
         : 'Used by every menu. A menu can have its own instead: pick it on the Menus screen.')));
@@ -2145,22 +2183,34 @@ function buildSettingsScreen(root) {
     /* --- labels */
     const labelOpts = (S.opts && S.opts.labels) || ['name', 'none'];
     const LAB = { name: ['Icon and name', 'Each slot shows its label underneath.'], none: ['Icon only', 'A cleaner ring. Names appear only in this Studio.'] };
-    page.append(card('Labels', null, choiceCards(labelOpts.map(l => [l, (LAB[l] || [l, ''])[0], (LAB[l] || [l, ''])[1]]), ring().labels || S.defaults.labels, v => setRing('labels', v), 'two')));
+    page.append(card('Labels', null, choiceCards(labelOpts.map(l => [l, (LAB[l] || [l, ''])[0], (LAB[l] || [l, ''])[1]]), ring().labels || S.defaults.labels, v => setRing('labels', v), 'two', 'Labels')));
 
-    /* --- colours */
+    /* --- colours (the preview is the same picture as the geometry card's: one request per edit) */
+    const colorPaints = [];
     const colorRows = Object.keys(COLOR_INFO).map(k => {
       const sw = h('input', { type: 'color', class: 'swatch', value: colorVal(k), 'aria-label': COLOR_INFO[k][0] + ' colour' });
       const hex = h('input', { class: 'inp mono hex', type: 'text', value: colorVal(k), maxlength: '7', spellcheck: 'false', 'aria-label': COLOR_INFO[k][0] + ' hex value' });
+      const hmsg = h('span', { class: 'hex-msg', role: 'status' });
       const rs = iconBtn('undo', 'Reset to default (' + S.defaults.colors[k] + ')', () => { const c = ring().colors; if (c) { delete c[k]; if (!Object.keys(c).length) delete ring().colors; } commit(); paint(); }, 'reset');
-      const paint = () => { const v = colorVal(k); sw.value = v; hex.value = v; hex.classList.remove('bad'); rs.style.visibility = v.toLowerCase() !== S.defaults.colors[k].toLowerCase() ? 'visible' : 'hidden'; };
+      const showReset = v => { rs.style.visibility = v.toLowerCase() !== S.defaults.colors[k].toLowerCase() ? 'visible' : 'hidden'; };
+      const paint = () => { const v = colorVal(k); sw.value = v; hex.value = v; hex.classList.remove('bad'); hmsg.textContent = ''; showReset(v); };
       sw.addEventListener('input', () => { setColor(k, sw.value); paint(); });
-      hex.addEventListener('input', () => { let v = hex.value.trim(); if (v && v[0] !== '#') v = '#' + v; const ok = /^#[0-9a-fA-F]{6}$/.test(v); hex.classList.toggle('bad', !ok); if (ok) { setColor(k, v.toLowerCase()); sw.value = v.toLowerCase(); rs.style.visibility = v.toLowerCase() !== S.defaults.colors[k].toLowerCase() ? 'visible' : 'hidden'; } });
-      hex.addEventListener('blur', paint);
+      hex.addEventListener('input', () => {
+        const n = normHex(hex.value), bad = !n;
+        hex.classList.toggle('bad', bad); hmsg.textContent = bad ? 'Use #rrggbb' : '';
+        if (n && hex.value.trim().replace('#', '').length === 6) { setColor(k, n); sw.value = n; showReset(n); }   // short forms wait for Enter or blur
+      });
+      const apply = () => { const n = normHex(hex.value); if (n && n !== colorVal(k).toLowerCase()) setColor(k, n); paint(); };
+      hex.addEventListener('blur', apply);
+      hex.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); apply(); } });
+      colorPaints.push(paint);
       paint();
-      return h('div', { class: 'crow' }, sw, h('div', { class: 'slabel' }, h('span', null, COLOR_INFO[k][0]), h('small', null, COLOR_INFO[k][1])), hex, rs);
+      return h('div', { class: 'crow' }, sw, h('div', { class: 'slabel' }, h('span', null, COLOR_INFO[k][0]), h('small', null, COLOR_INFO[k][1])), h('div', { class: 'hexwrap' }, hex, hmsg), rs);
     });
-    page.append(card('Colours', 'Applied to the ring in the app', h('div', { class: 'colors' }, colorRows),
-      h('div', { class: 'btn-row' }, h('button', { class: 'btn small', type: 'button', onclick: () => { delete ensureRing().colors; commit(); build(); } }, icon('undo', 12), 'Reset all colours'))));
+    const cimg = h('img', { class: 'ring-img', alt: 'Ring preview with the current colours', draggable: false });
+    const cbox = h('div', { class: 'mini-stage' }, h('div', { class: 'stage-rings', 'aria-hidden': 'true' }), h('div', { class: 'mini-wrap' }, cimg), h('div', { class: 'mini-cap micro' }, 'Preview: ' + ((curMenu() && curMenu().title) || '')));
+    page.append(card('Colours', 'Applied to the ring in the app', h('div', { class: 'split' }, h('div', { class: 'split-main' }, h('div', { class: 'colors' }, colorRows)), cbox),
+      h('div', { class: 'btn-row' }, h('button', { class: 'btn small', type: 'button', onclick: () => { delete ensureRing().colors; commit(); colorPaints.forEach(f => f()); } }, icon('undo', 12), 'Reset all colours'))));
 
     /* --- behaviour */
     page.append(card('Behaviour', null,
@@ -2173,71 +2223,125 @@ function buildSettingsScreen(root) {
     const bridge = () => { if (!S.cfg.bridge || typeof S.cfg.bridge !== 'object') S.cfg.bridge = {}; return S.cfg.bridge; };
     const bmode = (S.cfg.bridge && S.cfg.bridge.mode) || 'auto';
     const keyWrap = h('div', { class: 'bridge-key' });
+    let paintZNote = () => {};      // the Older ZBrush card's paragraph about binding the key; set further down
     const paintKey = () => {
       const mode = (S.cfg.bridge && S.cfg.bridge.mode) || 'auto';
       keyWrap.classList.toggle('dim', mode === 'message');
       keyWrap.replaceChildren(field('Bridge key', hotkeyField({ value: (S.cfg.bridge && S.cfg.bridge.key) || '', mods: { ctrl: false, alt: true, shift: false }, placeholder: 'Not set (F9 is the usual choice)',
-        onChange: v => { if (v) bridge().key = v; else delete bridge().key; commit(); } }),
+        onChange: v => { if (v) bridge().key = v; else delete bridge().key; commit(); paintZNote(); } }),
         mode === 'message' ? 'Not used in Message mode, but kept in case you switch back.' : 'Must be bound in ZBrush to Zplugin > Radial Menu > Apply. Ctrl and Shift are rejected because ZBrush reads them as mask and smooth. A bare F-key is best.'));
     };
     page.append(card('ZBrush bridge', 'How a pick reaches ZBrush',
-      choiceCards(['auto', 'message', 'key'].map(m => [m, BRIDGE_INFO[m][0], BRIDGE_INFO[m][1]]), bmode, v => { bridge().mode = v; commit(); paintKey(); }, 'bridge-cards'),
+      choiceCards(['auto', 'message', 'key'].map(m => [m, BRIDGE_INFO[m][0], BRIDGE_INFO[m][1]]), bmode, v => { bridge().mode = v; commit(); paintKey(); }, 'bridge-cards', 'How a pick reaches ZBrush'),
       keyWrap));
     paintKey();
 
     /* --- ZScript bridge for ZBrush 2022-2025 (acts straight away, not part of the menus) */
     const zbox = h('div', { class: 'zrows' }, h('div', { class: 'fhint' }, 'Looking for ZBrush...'));
+    let zCount = null;          // installs found by the last look; null until the first answer
+    const znote = h('div', { class: 'fhint', hidden: true });
+    // The plugin's Apply button brings F9 as its own hotkey (RadialMenuBridge.txt); any other key is bound by hand.
+    // Derived from the key chosen above every time, and compared as a whole chord: "Alt+F9" is not "F9".
+    paintZNote = () => {
+      const zkey = ((S.cfg.bridge && S.cfg.bridge.key) || 'F9').trim();
+      const bind = zkey.toLowerCase() === 'f9'
+        ? ['After installing, restart ZBrush. Apply comes with ', h('b', null, 'F9'), ' as its hotkey, so there is nothing to bind.']
+        : ['After installing, restart ZBrush, Ctrl+Alt+click Zplugin > Radial Menu > Apply, press ', h('b', null, zkey), ' and choose Preferences > Hotkeys > Store. (Only F9 works without this step.)'];
+      znote.hidden = !zCount;
+      znote.replaceChildren('These versions have no Python API, so they get a ZScript plugin with the same Zplugin > Radial Menu palette. It has no listener, so every pick there uses the bridge key, whatever the mode above. ', ...bind, ' A ZBrush under Program Files asks for administrator rights to install.');
+    };
+    let zgen = 0;                                              // a slower earlier listing must not replace a newer one
     const zpaint = async () => {
+      const gen = ++zgen;
       let r;
-      try { r = await call('get_zscript_bridge'); } catch (e) { zbox.replaceChildren(h('div', { class: 'fhint bad' }, 'Could not look for ZBrush: ' + e.message)); return; }
+      try { r = await call('get_zscript_bridge'); if (gen !== zgen) return; } catch (e) { if (gen !== zgen) return; zbox.replaceChildren(h('div', { class: 'fhint bad' }, 'Could not look for ZBrush: ' + e.message)); return; }
       setZsBadge(zsOutdated(r));
-      const act = (name, path, btn) => async () => {
-        btn.disabled = true;
-        try { const res = await call(name, path); toast(res.message || (res.ok ? 'Done.' : 'That did not work.'), { tone: res.ok ? 'ok' : 'warn', ms: 5000 }); }
+      // Runs one install or remove. The whole row is locked while it runs (the elevation prompt can sit open for minutes).
+      const act = (name, path, btn, rowBtns, busyText) => async () => {
+        const was = rowBtns.map(b => b.disabled), label = [...btn.childNodes];
+        rowBtns.forEach(b => { b.disabled = true; });
+        btn.classList.add('running'); btn.replaceChildren(h('span', { class: 'spin' }), busyText);
+        let res = null;
+        try { res = await call(name, path); }
         catch (e) { toast('That did not work: ' + e.message, { tone: 'warn' }); }
+        if (res && res.busy) {                               // another operation is running: say so, leave the row as it was
+          toast(res.message || 'Another install or removal is still running.', { tone: 'warn', ms: 5000 });
+          btn.classList.remove('running'); btn.replaceChildren(...label); rowBtns.forEach((b, i) => { b.disabled = was[i]; });
+          return;
+        }
+        if (res) toast(res.message || (res.ok ? 'Done.' : 'That did not work.'), { tone: res.ok ? 'ok' : 'warn', ms: 5000 });
         zpaint();
       };
       const rows = r.installs.map(z => {
         const [stext, scls] = !z.installed ? ['Not installed', 'tag dim'] : (z.current ? ['Installed', 'tag cyan'] : ['Update available', 'tag amber']);
         const main = h('button', { class: 'btn small' + (z.installed && z.current ? '' : ' primary'), type: 'button', disabled: !r.bundled }, z.installed ? (z.current ? 'Reinstall' : 'Update') : 'Install');
-        main.onclick = act('install_zscript_bridge', z.path, main);
         const rm = z.installed ? h('button', { class: 'btn small danger-ghost', type: 'button' }, icon('trash', 12), 'Remove') : null;
+        const forget = z.added ? iconBtn('x', 'Forget this folder', async () => {
+          forget.disabled = true;
+          try { const res = await call('forget_zbrush_folder', z.path); toast(res.message || (res.ok ? 'Forgot that folder.' : 'That did not work.'), { tone: res.ok ? 'ok' : 'warn', ms: 4000 }); }
+          catch (e) { toast('Could not forget the folder: ' + e.message, { tone: 'warn' }); }
+          zpaint();
+        }) : null;
+        const rowBtns = [main, rm, forget].filter(Boolean);
+        main.onclick = act('install_zscript_bridge', z.path, main, rowBtns, 'Installing... approve the prompt');
         if (rm) rm.onclick = async () => {
           const ok = await modal({ title: `Remove the plugin from ${z.name}?`,
             body: [h('p', null, 'This deletes the Radial Menu plugin files from this ZBrush install:'), h('p', { class: 'modal-path mono' }, z.path)],
             actions: [{ text: 'Cancel', value: false, focus: true }, { text: 'Remove', value: true, kind: 'danger' }] });
-          if (ok) act('remove_zscript_bridge', z.path, rm)();
+          if (ok) act('remove_zscript_bridge', z.path, rm, rowBtns, 'Removing...')();
         };
         return h('div', { class: 'zrow' }, h('div', { class: 'grow' }, h('div', { class: 'zname' }, z.name, h('span', { class: scls }, stext)), h('div', { class: 'zpath mono', title: z.zplugs }, z.path)),
-          h('div', { class: 'btn-row' }, main, rm));
+          h('div', { class: 'btn-row' }, main, rm, forget));
       });
-      if (!rows.length) rows.push(h('div', { class: 'fhint' }, 'No ZBrush 2022 to 2025 found. If yours is somewhere unusual, add its folder.'));
-      if (!r.bundled) rows.push(h('div', { class: 'fhint warn' }, 'This build has no compiled ZScript plugin (RadialMenuBridge.zsc), so there is nothing to install yet.'));
+      zCount = rows.length;
+      if (!rows.length) rows.push(h('div', { class: 'fhint' }, 'No ZBrush 2022 to 2025 was found. Add a ZBrush folder if you have one.'));
+      else if (!r.bundled) rows.push(h('div', { class: 'fhint warn' }, 'This build has no compiled ZScript plugin (RadialMenuBridge.zsc), so there is nothing to install yet.'));
       zbox.replaceChildren(...rows);
+      paintZNote();
     };
     const addBtn = h('button', { class: 'btn small', type: 'button' }, icon('folder', 12), 'Add a ZBrush folder...');
     addBtn.onclick = async () => {
-      try { const r = await call('add_zbrush_folder'); if (!r.cancelled) toast(r.message, { tone: r.ok ? 'ok' : 'warn', ms: 5000 }); } catch (e) { toast('Could not add the folder: ' + e.message, { tone: 'warn' }); }
+      try {
+        const r = await call('add_zbrush_folder');
+        if (r.already) toast(r.message || 'That folder is already listed.', { ms: 4000 });
+        else if (!r.cancelled) toast(r.message, { tone: r.ok ? 'ok' : 'warn', ms: 5000 });
+      } catch (e) { toast('Could not add the folder: ' + e.message, { tone: 'warn' }); }
       zpaint();
     };
-    const zkey = (S.cfg.bridge && S.cfg.bridge.key) || 'F9';
-    // The plugin's Apply button brings F9 as its own hotkey (RadialMenuBridge.txt); any other key is bound by hand.
-    const zbind = zkey.toUpperCase() === 'F9'
-      ? ['After installing, restart ZBrush. Apply comes with ', h('b', null, 'F9'), ' as its hotkey, so there is nothing to bind.']
-      : ['After installing, restart ZBrush, Ctrl+Alt+click Zplugin > Radial Menu > Apply, press ', h('b', null, zkey), ' and choose Preferences > Hotkeys > Store. (Only F9 works without this step.)'];
-    page.append(card('Older ZBrush', 'ZBrush 2022 to 2025. Acts straight away.',
-      h('div', { class: 'fhint' }, 'These versions have no Python API, so they get a ZScript plugin with the same Zplugin > Radial Menu palette. It has no listener, so every pick there uses the bridge key, whatever the mode above. ', ...zbind, ' A ZBrush under Program Files asks for administrator rights to install.'),
-      zbox, h('div', { class: 'btn-row' }, addBtn)));
+    page.append(card('Older ZBrush', 'ZBrush 2022 to 2025. Acts straight away.', znote, zbox, h('div', { class: 'btn-row' }, addBtn)));
+    paintZNote();
     zpaint();
 
     /* --- studio (preferences of this window, saved immediately, not part of the menus file) */
+    const updNote = h('div', { class: 'fhint upd-status', role: 'status' });
+    let updTok = 0;
+    const paintUpdate = u => {
+      if (!u || S.prefs.check_updates === false) { updNote.textContent = ''; return; }
+      const newer = !!(u.newer && u.latest);
+      updNote.textContent = newer ? 'Version ' + u.latest + ' available' : (u.latest ? 'Up to date' : 'Could not reach GitHub');
+      updNote.className = 'fhint upd-status' + (newer ? ' new' : (u.latest ? '' : ' warn'));
+    };
+    const checkNow = async () => {
+      const tok = ++updTok;
+      updNote.textContent = 'Checking...'; updNote.className = 'fhint upd-status';
+      let u = null;
+      try { u = window.RadialUpdate && await window.RadialUpdate.check(); } catch (e) { u = { latest: null }; }
+      if (tok !== updTok) return;
+      if (u) paintUpdate(u); else updNote.textContent = '';
+    };
+    if (window.RadialUpdate && window.RadialUpdate.last) paintUpdate(window.RadialUpdate.last);
     page.append(card('Studio', 'Preferences for this window. Saved straight away.',
       h('div', { class: 'field row' }, h('div', { class: 'grow' }, h('span', { class: 'flabel' }, 'Show the Licence button'),
         h('div', { class: 'fhint' }, 'The Licence screen is a joke: Radial Menu is free software and needs no licence. Turn this off to hide its button.')),
-        toggleSwitch(licenceVisible(), v => { setPref('show_licence', v); toast(v ? 'The Licence button is back. It missed you.' : 'Licence button hidden.', { ms: 2800 }); }, 'Show the Licence button')),
+        toggleSwitch(licenceVisible(), async v => { const ok = await setPref('show_licence', v); if (ok) toast(v ? 'The Licence button is back. It missed you.' : 'Licence button hidden.', { ms: 2800 }); return ok; }, 'Show the Licence button')),
       h('div', { class: 'field row' }, h('div', { class: 'grow' }, h('span', { class: 'flabel' }, 'Check for updates'),
-        h('div', { class: 'fhint' }, 'When Studio opens, it asks GitHub for the newest release and shows it next to the version at the top. Nothing about you or your menus is sent.')),
-        toggleSwitch(S.prefs.check_updates !== false, async v => { await setPref('check_updates', v); if (window.RadialUpdate) window.RadialUpdate.check(); }, 'Check for updates'))));
+        h('div', { class: 'fhint' }, 'When Studio opens, it asks GitHub for the newest release and shows it next to the version at the top. Nothing about you or your menus is sent.'), updNote),
+        toggleSwitch(S.prefs.check_updates !== false, async v => {
+          const ok = await setPref('check_updates', v);
+          if (!ok) return false;
+          if (v) checkNow(); else { updTok++; updNote.textContent = ''; if (window.RadialUpdate) window.RadialUpdate.check(); }
+          return true;
+        }, 'Check for updates'))));
     R.preview();
   };
   R.settings = () => { build(); buildToc(); };
@@ -2542,8 +2646,8 @@ async function doSave({ force = false, allowUnusable = false } = {}) {
       if (v === 'reload') return (await reloadFromDisk()) ? 'reloaded' : 'failed';
       if (v === 'overwrite') {
         // adopt the file's current stamp so this is a plain save of what the user saw; the no-usable-ring check still applies
-        if (r.mtime_ns !== undefined && r.mtime_ns !== null) { S.mtimeNs = r.mtime_ns; return doSave({ allowUnusable }); }
-        return doSave({ force: true, allowUnusable });
+        if (r.mtime_ns !== undefined && r.mtime_ns !== null) S.mtimeNs = r.mtime_ns;
+        return doSave({ force: true, allowUnusable });   // force only skips the changed-on-disk check, so Overwrite cannot loop
       }
       return 'cancelled';
     }
@@ -2711,10 +2815,22 @@ function applyPrefs() {
   const btn = document.querySelector('.rail-btn[data-screen="licence"]');
   if (btn) btn.hidden = !licenceVisible();
 }
+/* Resolves true when the backend stored it. On a failed write the old value comes back, a toast says so, and false lets
+   a toggleSwitch put itself back. */
 async function setPref(key, value) {
+  const prev = S.prefs[key];
   S.prefs[key] = value;
   applyPrefs();
-  try { const p = await call('set_pref', key, value); if (p) S.prefs = Object.assign(S.prefs, p); } catch (e) { /* kept for this session */ }
+  try {
+    const p = await call('set_pref', key, value);
+    if (p && key in p && p[key] !== value) throw new Error('not stored');
+    if (p) S.prefs = Object.assign(S.prefs, p);
+    return true;
+  } catch (e) {
+    S.prefs[key] = prev; applyPrefs();
+    toast('Could not save that preference', { tone: 'warn' });
+    return false;
+  }
 }
 
 const SCREENS = { menus: buildMenusScreen, library: buildLibraryScreen, settings: buildSettingsScreen, status: buildStatusScreen, licence: buildLicenceScreen };

@@ -666,7 +666,29 @@ body.dragging .irow:hover { background: transparent; }
   background: var(--amber); vertical-align: 1px; }
 .card.flash { animation: cardflash .9s ease-out; }
 @keyframes cardflash { 0% { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(248, 107, 51, .18); } 100% { border-color: var(--line); box-shadow: none; } }
-@media (max-width: 1180px) { .settings-layout { grid-template-columns: minmax(0, 940px); } .toc { display: none; } }
+/* Below 1180 px the contents column gets narrower instead of going away: the window is never narrower than 980 px, and
+   the bridge cards at the bottom are what people come here for. */
+@media (max-width: 1180px) {
+  .settings-layout { grid-template-columns: 132px minmax(0, 940px); column-gap: 0; }
+  .toc { padding-left: 12px; }
+  .toc-head { margin-left: 8px; }
+  .toc-item { font-size: 12px; padding: 6px 8px; }
+  .settings { padding-left: 20px; padding-right: 20px; }
+}
+@media (max-width: 899px) { .settings-layout { grid-template-columns: minmax(0, 940px); } .toc { display: none; } }
+
+/* Settings: field feedback */
+.nwrap { position: relative; }
+.num-hint, .hex-msg { position: absolute; right: 0; top: calc(100% + 1px); white-space: nowrap; font: 11px/1.2 var(--font); color: var(--amber); pointer-events: none; }
+.num-hint:empty, .hex-msg:empty { display: none; }
+.hexwrap { position: relative; }
+.hex-msg { left: 0; right: auto; color: #ee7b7b; }
+.upd-status { margin-top: 6px; font-style: normal; min-height: 0; }
+.upd-status:empty { display: none; }
+.upd-status.new { color: var(--cyan); }
+.btn.running:disabled { opacity: .85; }
+.btn .spin { flex: none; }
+.choice:focus-visible { outline-offset: 1px; }
 
 /* Close guard: pending changes */
 .changes p { margin: 0; }

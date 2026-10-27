@@ -418,11 +418,12 @@ class Api:
         """ZBrush installations without the Python API: found ones plus folders the user added."""
         found = installs.find_installs()
         seen = {os.path.normcase(e["path"]) for e in found}
+        found = [dict(e, added=False) for e in found]
         for p in _read_studio_file().get("zbrush_folders", []):
             e = installs.entry(p) if isinstance(p, str) else None
             if e and os.path.normcase(e["path"]) not in seen:
                 seen.add(os.path.normcase(e["path"]))
-                found.append(e)
+                found.append(dict(e, added=True))        # added by hand: the page offers to forget these
         return [e for e in found if not e["python"]]
 
     def get_zscript_bridge(self):
@@ -462,13 +463,30 @@ class Api:
         if e["python"]:
             return {"ok": False, "message": f"{e['name']} has the Python API: it uses the regular bridge, "
                                            "which the installer already set up."}
-        data = _read_studio_file()
-        folders = [p for p in data.get("zbrush_folders", []) if isinstance(p, str)]
-        if os.path.normcase(e["path"]) not in {os.path.normcase(p) for p in folders}:
-            folders.append(e["path"])
-        data["zbrush_folders"] = folders
-        _write_studio_file(data)
+        if os.path.normcase(e["path"]) in {os.path.normcase(x["path"]) for x in self._legacy_installs()}:
+            return {"ok": True, "message": f"{e['name']} is already listed.", "already": True}
+        with _studio_lock:                     # read, change and write as one step
+            data = _read_studio_file()
+            folders = [p for p in data.get("zbrush_folders", []) if isinstance(p, str)]
+            if os.path.normcase(e["path"]) not in {os.path.normcase(p) for p in folders}:
+                folders.append(e["path"])
+            data["zbrush_folders"] = folders
+            _write_studio_file(data)
         return {"ok": True, "message": f"Added {e['name']}."}
+
+    def forget_zbrush_folder(self, path):
+        """Drops a folder added by hand from studio.json (never an automatically found one)."""
+        key = os.path.normcase(os.path.normpath(str(path)))
+        with _studio_lock:                     # read, change and write as one step
+            data = _read_studio_file()
+            folders = [p for p in data.get("zbrush_folders", []) if isinstance(p, str)]
+            kept = [p for p in folders if os.path.normcase(os.path.normpath(p)) != key]
+            if len(kept) == len(folders):
+                return {"ok": False, "message": "That folder was not added by hand, so it cannot be forgotten."}
+            data["zbrush_folders"] = kept
+            _write_studio_file(data)
+        e = installs.entry(path)
+        return {"ok": True, "message": f"Forgot {e['name'] if e else os.path.basename(os.path.normpath(str(path)))}."}
 
     # --- Studio preferences (not part of the menus; saved straight away) --------------------------
     _PREFS_DEFAULTS = {"show_licence": True, "check_updates": True, "last_screen": "menus"}
@@ -481,9 +499,10 @@ class Api:
     def set_pref(self, key, value):
         if key not in self._PREFS_DEFAULTS or type(value) is not type(self._PREFS_DEFAULTS[key]):
             return self.get_prefs()
-        data = _read_studio_file()             # keeps the other keys (window placement)
-        data[key] = value
-        _write_studio_file(data)
+        with _studio_lock:                     # read, change and write as one step
+            data = _read_studio_file()             # keeps the other keys (window placement)
+            data[key] = value
+            _write_studio_file(data)
         return self.get_prefs()
 
     def check_update(self):
@@ -595,21 +614,23 @@ def _startup(msg):
         pass
 
 
+_studio_lock = threading.RLock()        # prefs, added folders and window placement all read-modify-write this file
+
+
 def _read_studio_file() -> dict:
-    try:
-        with open(STUDIO_FILE, encoding="utf-8") as f:
-            data = json.load(f)
-        return data if isinstance(data, dict) else {}
-    except (OSError, ValueError):
-        return {}
+    with _studio_lock:
+        try:
+            with open(STUDIO_FILE, encoding="utf-8-sig") as f:
+                data = json.load(f)
+            return data if isinstance(data, dict) else {}
+        except (OSError, ValueError):
+            return {}
 
 
 def _write_studio_file(data: dict):
-    os.makedirs(paths.CONFIG_DIR, exist_ok=True)
-    tmp = STUDIO_FILE + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2)
-    os.replace(tmp, STUDIO_FILE)
+    with _studio_lock:
+        os.makedirs(paths.CONFIG_DIR, exist_ok=True)
+        _write_atomic(STUDIO_FILE, json.dumps(data, indent=2))
 
 
 class _WINDOWPLACEMENT(ctypes.Structure):
@@ -692,10 +713,11 @@ def _remember_window(hwnd):
         if not st or not st["normal"]:
             return
         left, top, right, bottom = st["normal"]
-        data = _read_studio_file()
-        data["window"] = {"x": left, "y": top, "width": right - left, "height": bottom - top,
-                          "maximized": st["zoomed"]}
-        _write_studio_file(data)
+        with _studio_lock:                     # read, change and write as one step
+            data = _read_studio_file()
+            data["window"] = {"x": left, "y": top, "width": right - left, "height": bottom - top,
+                              "maximized": st["zoomed"]}
+            _write_studio_file(data)
     except Exception:
         pass
 

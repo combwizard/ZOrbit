@@ -46,6 +46,20 @@ All notable changes to this project are listed here. The format follows
   new item scrolls into view and flashes.
 - Library search matches brush names only (searching "zbrush" no longer matches every brush), and a search
   with no results inside a folder offers to search all folders.
+- Settings: the Colours card has its own live ring preview; number boxes keep the current value when you
+  clear them and say when a typed value was kept within range; hex fields accept `#fff`; the animation,
+  labels and bridge choice cards are one Tab stop with arrow keys; the "On this page" list stays visible
+  down to the smallest window; a preference that could not be saved says so and flips back; "Check for
+  updates" shows what the last check found.
+- Settings > Older ZBrush: Install and Remove disable the whole row and say "approve the prompt" while the
+  administrator prompt is open, which may now stay open for five minutes instead of being reported as a
+  failure after one; a declined prompt says so; one install or removal runs at a time; a folder you added
+  by hand can be forgotten, and adding one that is already listed says so; the card is one line when no
+  ZBrush 2022 to 2025 exists; the F9 note follows the bridge key as you change it.
+- The elevated copy of the ZBrush 2022 to 2025 plugin no longer trusts the files staged in the user's data
+  folder: it checks that the destination is a ZBrush `ZStartup\ZPlugs64` folder and builds the plugin,
+  its config and its shortcuts from this installation's own files. The data folder written into the config
+  is the user's own even when the prompt was answered with another administrator account.
 - Brush thumbnails are sharp at the largest card size, a failed thumbnail batch is retried instead of
   showing initials for the rest of the session, and thumbnails start loading just before they scroll into
   view. Folder groups collapse again when you click the open one.

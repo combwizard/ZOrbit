@@ -10,8 +10,11 @@ ZScript cannot read environment variables or JSON, and its strings stop at 255 c
 one value per line, and paths are absolute, in their 8.3 short form when the long form is not plain ASCII.
 
 ZBrush 2022-2025 load plugins only from ZStartup\\ZPlugs64 inside the installation, usually under Program
-Files. install()/remove() try a plain copy first and fall back to a copy by this program run as administrator
-(one UAC prompt): RadialMenu.exe --zscript-copy|--zscript-remove <staging folder> <ZPlugs64>.
+Files. install()/remove() try a plain copy first and fall back to this program run as administrator
+(one UAC prompt): RadialMenu.exe --zscript-copy|--zscript-remove <staging folder> <ZPlugs64>. The elevated run
+trusts nothing in the staging folder (the user can write there): it checks that <ZPlugs64> is a ZBrush plugin
+folder, builds the plugin files itself from this build's own sources and uses the staging folder only to report
+an error.
 """
 from __future__ import annotations
 
@@ -22,6 +25,8 @@ import os
 import shutil
 import subprocess
 import sys
+import threading
+import time
 
 import paths
 
@@ -33,6 +38,9 @@ MAGIC = "RADIALMENU 1"
 MAX_LINE = 255                          # longest string ZScript reads in one go
 REQUEST_TXT = os.path.join(paths.DATA_DIR, "request.txt")
 STAGE_DIR = os.path.join(paths.DATA_DIR, "zscript_stage")
+ELEVATED_WAIT = 300                     # seconds the Studio waits for the administrator prompt and the copy
+BUSY = {"ok": False, "busy": True, "message": "Another install or removal is still running."}
+_busy = threading.Lock()                # one install or removal at a time
 
 
 # --- text ZScript can read -----------------------------------------------------------------------
@@ -105,12 +113,16 @@ def _command(argv) -> str:
     return " ".join(parts)
 
 
-def cfg_lines() -> list[str]:
+def cfg_lines(data_dir=None) -> list[str]:
     """bridge.cfg: magic, the folder picks arrive in (with a trailing backslash), the command lines that
-    start the app and the Studio, and whether the plugin starts the app when ZBrush loads it (1/0)."""
-    os.makedirs(paths.DATA_DIR, exist_ok=True)
+    start the app and the Studio, and whether the plugin starts the app when ZBrush loads it (1/0).
+    data_dir: the user's data folder when this runs elevated as another account (whose own LOCALAPPDATA
+    would be the wrong place for picks to arrive)."""
+    if data_dir is None:
+        data_dir = paths.DATA_DIR
+        os.makedirs(data_dir, exist_ok=True)
     cmds = paths.launch_commands()
-    return [MAGIC, ascii_path(paths.DATA_DIR).rstrip("\\") + "\\", _command(cmds["app"]), _command(cmds["studio"]),
+    return [MAGIC, ascii_path(data_dir).rstrip("\\") + "\\", _command(cmds["app"]), _command(cmds["studio"]),
             "1"]
 
 
@@ -158,21 +170,32 @@ def _make_shortcut(path, argv) -> None:
                    timeout=60, creationflags=0x08000000, capture_output=True)          # CREATE_NO_WINDOW
 
 
-def _stage() -> str:
-    shutil.rmtree(STAGE_DIR, ignore_errors=True)
-    os.makedirs(os.path.join(STAGE_DIR, DATA))
-    shutil.copyfile(bundled(), os.path.join(STAGE_DIR, PLUGIN))
-    data, _ = encode(cfg_lines())
-    with open(os.path.join(STAGE_DIR, DATA, CFG), "wb") as f:
+def build_plugin_files(folder, user_data=None) -> None:
+    """Writes the plugin and its data folder (bridge.cfg, shortcuts) into folder, from this build's own sources:
+    the bundled .zsc, cfg_lines() and launch_commands(). The data folder goes first, the plugin last."""
+    src = bundled()
+    if not src:
+        raise FileNotFoundError(f"This build has no compiled ZScript bridge ({PLUGIN}).")
+    data_dir = os.path.join(folder, DATA)
+    os.makedirs(data_dir, exist_ok=True)
+    data, _ = encode(cfg_lines(user_data))           # user_data: the account's data folder when run elevated
+    with open(os.path.join(data_dir, CFG), "wb") as f:
         f.write(data)
     cmds = paths.launch_commands()
     for name, which in SHORTCUTS.items():
-        _make_shortcut(os.path.join(STAGE_DIR, DATA, name), cmds[which])
+        _make_shortcut(os.path.join(data_dir, name), cmds[which])
+    shutil.copyfile(src, os.path.join(folder, PLUGIN))
+
+
+def _stage() -> str:
+    shutil.rmtree(STAGE_DIR, ignore_errors=True)
+    os.makedirs(STAGE_DIR)
+    build_plugin_files(STAGE_DIR)
     return STAGE_DIR
 
 
 def copy_staged(stage, dest) -> None:
-    """Puts the staged plugin and its data folder into ZPlugs64 (also run elevated, see the module doc)."""
+    """Puts the staged plugin and its data folder into ZPlugs64 (the plain copy; never run elevated)."""
     os.makedirs(os.path.join(dest, DATA), exist_ok=True)
     shutil.copyfile(os.path.join(stage, PLUGIN), os.path.join(dest, PLUGIN))
     for name in (CFG, *SHORTCUTS):
@@ -180,7 +203,7 @@ def copy_staged(stage, dest) -> None:
 
 
 def remove_from(dest) -> None:
-    """Deletes only what copy_staged() puts there."""
+    """Deletes only what build_plugin_files() puts there."""
     for p in (os.path.join(dest, PLUGIN), *(os.path.join(dest, DATA, n) for n in (CFG, *SHORTCUTS))):
         if os.path.exists(p):
             os.remove(p)
@@ -198,7 +221,7 @@ class _SHELLEXECUTEINFOW(ctypes.Structure):
 
 
 def _run_elevated(args) -> tuple[bool, str]:
-    """Runs this program with args as administrator and waits. (ok, message)."""
+    """Runs this program with args as administrator and waits up to ELEVATED_WAIT seconds. (ok, message)."""
     if paths.FROZEN:
         exe, params = sys.executable, args
     else:
@@ -213,9 +236,20 @@ def _run_elevated(args) -> tuple[bool, str]:
     shell32 = ctypes.WinDLL("shell32", use_last_error=True)
     if not shell32.ShellExecuteExW(ctypes.byref(sei)):
         err = ctypes.get_last_error()
-        return False, "Cancelled." if err == 1223 else f"Could not ask for administrator rights (error {err})."
-    k32 = ctypes.windll.kernel32
-    k32.WaitForSingleObject(sei.hProcess, 60000)
+        if err == 1223:                                   # ERROR_CANCELLED
+            return False, "Administrator approval was declined. Nothing was changed."
+        return False, f"Could not ask for administrator rights (error {err})."
+    k32 = ctypes.WinDLL("kernel32")
+    k32.WaitForSingleObject.argtypes, k32.WaitForSingleObject.restype = [w.HANDLE, w.DWORD], w.DWORD
+    k32.GetExitCodeProcess.argtypes, k32.GetExitCodeProcess.restype = [w.HANDLE, ctypes.POINTER(w.DWORD)], w.BOOL
+    k32.CloseHandle.argtypes = [w.HANDLE]
+    deadline = time.monotonic() + ELEVATED_WAIT
+    waited = 0x102                                        # WAIT_TIMEOUT
+    while waited == 0x102 and time.monotonic() < deadline:
+        waited = k32.WaitForSingleObject(sei.hProcess, 500)
+    if waited == 0x102:
+        k32.CloseHandle(sei.hProcess)                     # leave the process alone: it may still finish
+        return False, "The administrator prompt was not answered within five minutes. Nothing was changed."
     code = w.DWORD(1)
     k32.GetExitCodeProcess(sei.hProcess, ctypes.byref(code))
     k32.CloseHandle(sei.hProcess)
@@ -229,6 +263,15 @@ def _run_elevated(args) -> tuple[bool, str]:
 
 
 def install(install_path) -> dict:
+    if not _busy.acquire(blocking=False):
+        return dict(BUSY)
+    try:
+        return _install(install_path)
+    finally:
+        _busy.release()
+
+
+def _install(install_path) -> dict:
     if not bundled():
         return {"ok": False, "message": "This build has no compiled ZScript bridge (RadialMenuBridge.zsc)."}
     dest = zplugs(install_path)
@@ -243,11 +286,23 @@ def install(install_path) -> dict:
         pass
     except OSError as e:
         return {"ok": False, "message": f"Could not copy the plugin: {e}"}
-    ok, msg = _run_elevated(["--zscript-copy", stage, dest])
+    # The helper builds the files itself; the staged copy is not trusted, so it does not stay around.
+    shutil.rmtree(STAGE_DIR, ignore_errors=True)
+    os.makedirs(STAGE_DIR, exist_ok=True)
+    ok, msg = _run_elevated(["--zscript-copy", STAGE_DIR, dest])
     return {"ok": ok, "elevated": True, "message": "Installed. Restart ZBrush so it loads the plugin." if ok else msg}
 
 
 def remove(install_path) -> dict:
+    if not _busy.acquire(blocking=False):
+        return dict(BUSY)
+    try:
+        return _remove(install_path)
+    finally:
+        _busy.release()
+
+
+def _remove(install_path) -> dict:
     dest = zplugs(install_path)
     try:
         remove_from(dest)
@@ -262,19 +317,48 @@ def remove(install_path) -> dict:
     return {"ok": ok, "elevated": True, "message": "Removed. Restart ZBrush to unload it." if ok else msg}
 
 
+def check_dest(dest) -> str | None:
+    """Why dest is not a ZBrush plugin folder (<ZBrush>\\ZStartup\\ZPlugs64, with ZBrush.exe in <ZBrush>), or None."""
+    d = os.path.normpath(str(dest))
+    parts = d.replace("/", "\\").split("\\")
+    if not os.path.isabs(d) or len(parts) < 3 or [x.lower() for x in parts[-2:]] != ["zstartup", "zplugs64"]:
+        return f"{dest} is not a ZBrush ZStartup\\ZPlugs64 folder."
+    if not os.path.isfile(os.path.join(os.path.dirname(os.path.dirname(d)), "ZBrush.exe")):
+        return f"There is no ZBrush.exe next to the ZStartup folder of {dest}."
+    return None
+
+
 def elevated_main(args) -> int:
-    """Entry for the elevated copy: --zscript-copy|--zscript-remove <stage> <dest>. Errors go to the staging
-    folder, which the caller reads (this process may run as another user, with another LOCALAPPDATA)."""
+    """Entry for the elevated run: --zscript-copy|--zscript-remove <stage> <dest>. It trusts neither argument:
+    dest must be a ZBrush plugin folder, and the files are built here from this build's own sources, never read
+    from the stage (the user can write there). The stage only receives error.txt, which the caller reads (this
+    process may run as another user, with another LOCALAPPDATA)."""
+    stage = args[1] if len(args) > 1 else ""
     try:
+        if len(args) != 3 or args[0] not in ("--zscript-copy", "--zscript-remove"):
+            raise ValueError("Usage: --zscript-copy|--zscript-remove <stage> <dest>")
+        problem = check_dest(args[2])
+        if problem:
+            raise ValueError(problem)
+        dest = os.path.normpath(args[2])
         if args[0] == "--zscript-copy":
-            copy_staged(args[1], args[2])
+            # The stage sits in the user's data folder (<LOCALAPPDATA>\RadialMenu\zscript_stage), so its parent
+            # is where picks must arrive even when UAC ran this as another account.
+            st = os.path.normpath(stage)
+            user_data = os.path.dirname(st) if os.path.basename(st).lower() == "zscript_stage" and os.path.isdir(st) else None
+            build_plugin_files(dest, user_data)
         else:
-            remove_from(args[2])
+            remove_from(dest)
         return 0
     except Exception as e:
+        if isinstance(e, subprocess.CalledProcessError):
+            msg = f"Could not create the shortcuts: {(e.stderr or b'').decode('utf-8', 'replace').strip() or e}"
+        else:
+            msg = str(e) if isinstance(e, ValueError) else f"{type(e).__name__}: {e}"
         try:
-            with open(os.path.join(args[1], "error.txt"), "w", encoding="utf-8") as f:
-                f.write(f"{type(e).__name__}: {e}")
+            if os.path.basename(os.path.normpath(stage)).lower() == "zscript_stage" and os.path.isdir(stage):
+                with open(os.path.join(stage, "error.txt"), "w", encoding="utf-8") as f:
+                    f.write(msg)
         except OSError:
             pass
         return 1
