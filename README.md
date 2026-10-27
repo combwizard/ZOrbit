@@ -17,6 +17,7 @@ If you know pie menus from Blender or marking menus from Maya, ZOrbit brings tha
 - **More than brushes.** A slot can select a brush, press any ZBrush button, set a slider, flip a switch, run several of those in a row, or open another ring.
 - **Submenus.** Rings can open other rings, so a handful of hotkeys can reach a lot. Hover a submenu and it opens on the spot, so one stroke can reach an item two rings deep.
 - **Fan-out submenus.** Switch a menu to fan out and it opens in place: its items spread in an arc beyond its slot while the ring you came from stays put. Fans can open fans, up to three deep.
+- **Tags and a brush browser.** Tag your brushes in Studio, colour their slots by tag, and give a slot a tag to open a fan of every brush that carries it, most used first. A hotkey (Alt+B) opens a browser over ZBrush with search, folders, tag chips and thumbnails; Enter picks the brush.
 - **ZOrbit Studio.** Edit menus with a live preview of the real ring. Drag brushes in from a searchable library with thumbnails, record hotkeys, change colours, size and animation.
 - **Twelve open animations**, from instant to a swirling spiral, plus ring size, dead zone and label options.
 - **Starts and stops with ZBrush.** There is nothing to launch by hand.
@@ -128,6 +129,9 @@ Make sure ZBrush is the front window. Then in ZBrush open **Zplugin > ZOrbit > S
 **The ring opens but picks do nothing.**
 Open **Zplugin > ZOrbit > Status** and check that the listener says "verified". Look at `bridge.log`, which shows exactly what ZBrush did with each pick. Failed items are listed there, for example a button path that does not exist.
 
+**The brush browser does not open.**
+It needs ZBrush (or the browser itself, to close it) in front, and a hotkey set under **Settings > Brush browser** (new installs have Alt+B) or a **Browser** slot. In ZBrush 2022 to 2025 a pick is dropped if ZBrush does not get the focus back within 2 seconds. `popout.log` and the `browser` lines of `radiald.log` say what happened.
+
 **Use the fallback key.**
 In ZBrush, Ctrl+Alt+click **Zplugin > ZOrbit > Apply**, press **F9**, then store it in **Preferences > Hotkeys > Store**. With the bridge mode on `auto` (the default), ZOrbit presses F9 when the listener does not answer.
 
@@ -135,7 +139,7 @@ In ZBrush, Ctrl+Alt+click **Zplugin > ZOrbit > Apply**, press **F9**, then store
 Picks there only arrive through the bridge key. Hover **Zplugin > ZOrbit > Apply**: its hotkey should match the bridge key in Studio (F9 unless you changed it). If **Settings > Older ZBrush** says **Update available**, update the plugin; older plugins don't bind F9 themselves. If you use another key, bind it to **Apply** and click **Preferences > Hotkeys > Store**; a binding that was not stored is gone after a restart. `zscript_bridge.log` shows what the last pick did.
 
 **Logs.**
-`%LOCALAPPDATA%\ZOrbit` holds `radiald.log` (the app), `bridge.log` (ZBrush side), `zscript_bridge.log` (ZBrush 2022 to 2025: the last pick), `studio.log` (how Studio started) and `app_stderr.log` (crashes at startup). Studio's **Status** screen shows the tail of the app log and has a button that opens the folder.
+`%LOCALAPPDATA%\ZOrbit` holds `radiald.log` (the app), `bridge.log` (ZBrush side), `zscript_bridge.log` (ZBrush 2022 to 2025: the last pick), `studio.log` (how Studio started), `popout.log` (the brush browser) and `app_stderr.log` (crashes at startup). Studio's **Status** screen shows the tail of the app log and has a button that opens the folder.
 
 **Windows protected your PC.**
 See [above](#windows-says-windows-protected-your-pc).

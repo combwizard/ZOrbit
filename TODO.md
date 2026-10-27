@@ -69,6 +69,17 @@
 - [ ] Match ZBrush's interface colours: read `Preferences:IColors:*` in the bridge and offer them as a ring theme
 - [ ] Per-slot glow colour; slot shapes (circle, rounded square); hub size; a "ring is full" message in Studio
 
+### Tags and the browser
+
+- [ ] Alphas, materials and textures in the browser: `alpha:<path>` style item keys in `tags.json` (the store and
+      keys already take other kinds), tabs in the browser and the Library, and the matching bridge actions
+      (`Alpha:Import`, `Material:Load`, `Texture:Import`)
+- [ ] Any / All toggle for the tag chips (they match any chosen tag today)
+- [ ] A segmented slot border when a brush has several tags (only the first colours it now)
+- [ ] Idle exit for the browser process: quit after a while unused and start again on the next press
+- [ ] `ring.tag_limit`: change the 12-slot cap of a tag fan
+- [ ] Import and export tags (share a tag set or merge another `tags.json`)
+
 ### Studio
 
 - [ ] First-run wizard: find ZBrush, pick eight brushes, try the ring once

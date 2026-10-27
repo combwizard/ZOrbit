@@ -14,6 +14,37 @@ All notable changes to this project are listed here. The format follows
   deep. Moving out of a fan closes it. Near a screen edge, or when a fan would lead back to a menu that is
   already open, it opens as a normal ring instead. A menu's hotkey still opens a ring.
 - Studio shows an open fan in the ring preview when you hover or select the submenu's slot.
+- Tags for brushes. A tag is a label with a colour, and a brush can carry several; the first is its colour cue.
+  Select brushes in the Library (or in the brush list on the Menus screen), press **Tag...** or right-click, and
+  tick tags in the picker or type a new one. The Library filters by tag chips (a brush shows when it has any
+  chosen tag) and by **Untagged**, and cards show up to three colour dots. **Manage tags...** (also
+  **Settings > Tags**) renames, recolours from eight presets or any `#rrggbb`, merges a rename that clashes
+  with another tag, and deletes with a count of the brushes and ring items affected. Tags save as you go, not
+  with Save and Undo, in `%APPDATA%\ZOrbit\tags.json`; new installs start with Blocking and Detailing.
+- Tag slots. `{"tag": "blocking"}` opens a fan of every installed brush with that tag, most used first, up to 12
+  with a **More...** slot that opens the brush browser on that tag. A tag with no installed brushes, or that no
+  longer exists, is a faint slot and a problem is listed for a missing one. Menu ids starting with `tag:` are
+  reserved.
+- Browser slots. `{"browser": ""}` opens the brush browser; a tag key opens it on that tag.
+- Tag colours on the ring. `ring.tag_colors` (`none`, `tint`, `glow` or `both`, default `tint`; Settings > Tag
+  colours) shows a brush's first tag on its slot as a coloured rim and tinted disc, a soft halo, or both. The
+  hover border, spoke and label take the colour, and a tag slot and its fan always use the tag's colour.
+- The brush browser: a window over ZBrush with search, folders, tag chips and thumbnails. `browser.hotkey`
+  (Alt+B on new installs; Settings > Brush browser) shows and hides it while ZBrush or the browser is in
+  front. Type to search, arrows to move, Enter or a double-click to pick, Esc to close, and a pin button to keep
+  it open. A pick reaches ZBrush through the app like a ring pick and counts towards auto slots; in ZBrush 2022
+  to 2025 it is dropped if ZBrush has not got the focus back within 2 seconds. The app starts it hidden in the
+  background when the config has a browser hotkey or a Browser slot. Its placement is kept in `popout.json`
+  and its log is `popout.log`.
+- Tag warnings in the problems panel: a tag or browser filter that does not exist, an unknown `tag_colors`, a
+  browser hotkey that a menu already uses (the menu wins) or cannot be read.
+
+### Changed
+- In the Library and the brush list on the Menus screen, Ctrl-click and Shift-click now select several brushes,
+  and Enter or the add button adds all of them. A plain click still selects one.
+- The starter menus ship with `"browser": {"hotkey": "Alt+B"}` and a **Browser** slot in **Tools**. An
+  existing `radial.json` is not touched: add the `browser` section or set the hotkey in Settings.
+- A tag fan's order can shift after you pick, because the most used brushes come first.
 
 ## [0.7.1] - 2026-10-27
 
