@@ -294,25 +294,32 @@ function toast(msg, o = {}) {
   while (root.children.length > 4) root.firstChild.remove();
 }
 
+let activeModal = null;                                       // { close }: at most one dialog at a time
 function modal({ title, body, actions }) {
   if (typeof openPopover === 'function') openPopover();      // a dialog always closes any open dropdown first
+  if (activeModal) activeModal.close(undefined);             // a newer dialog replaces the open one (e.g. the window X over a Revert confirm)
   return new Promise(resolve => {
     const prev = document.activeElement;
+    const me = { close: v => close(v) };
+    let closed = false;
     const box = h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-label': title },
       h('h2', null, title), h('div', { class: 'modal-body' }, body),
       h('div', { class: 'modal-actions' }, actions.map(a => h('button', { class: 'btn ' + (a.kind || ''), type: 'button', dataset: { v: a.value }, 'data-focus': a.focus, onclick: () => close(a.value) }, a.text))));
     const scrim = h('div', { class: 'scrim', onmousedown: e => { if (e.target === scrim) close(undefined); } }, box);
     function close(v) {
+      if (closed) return;
+      closed = true;
       document.removeEventListener('keydown', onKey, true);
       scrim.classList.remove('in');
       setTimeout(() => scrim.remove(), 160);
-      if (prev && prev.focus) prev.focus();
+      if (activeModal === me) { activeModal = null; const app = $('#app'); if (app) app.inert = false; }
+      if (prev && prev.focus && document.contains(prev)) prev.focus();
       resolve(v);
     }
     function onKey(e) {
       if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(undefined); }
       else if (e.key === 'Tab') {
-        const f = $$('button, input, select, [tabindex="0"]', box).filter(x => !x.disabled);
+        const f = $$('button, input, select, textarea, a[href], [tabindex="0"]', box).filter(x => !x.disabled);
         if (!f.length) return;
         const first = f[0], last = f[f.length - 1];
         if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
@@ -320,9 +327,11 @@ function modal({ title, body, actions }) {
       }
     }
     document.addEventListener('keydown', onKey, true);
+    activeModal = me;
+    const appEl = $('#app'); if (appEl) appEl.inert = true;    // Tab and screen readers cannot reach the page behind
     $('#overlay-root').append(scrim);
     requestAnimationFrame(() => scrim.classList.add('in'));
-    const primary = $('.btn[data-focus]', box) || $('.btn.primary, .btn.danger', box) || $('.btn:last-child', box);
+    const primary = $('.btn[data-focus]', box) || $('.btn.primary', box) || $('.btn:last-child', box);
     if (primary) primary.focus();
   });
 }
@@ -631,8 +640,11 @@ const menuOpts = () => Object.entries(S.cfg.menus).map(([id, m]) => ({ value: id
 const CODE_KEYS = { Backquote: '`', Minus: '-', Equal: '=', BracketLeft: '[', BracketRight: ']', Backslash: '\\',
   Semicolon: ';', Quote: "'", Comma: ',', Period: '.', Slash: '/' };
 function keyFromEvent(e) {
+  if (e.key === 'Dead' || e.key === 'Process' || e.key === 'Unidentified') return null;   // dead keys and IME composition
   const c = e.code;
-  if (/^Key[A-Z]$/.test(c)) return c[3];
+  if (/^[a-z]$/i.test(e.key)) return e.key.toUpperCase();     // the typed character, so Dvorak/AZERTY record what the user pressed
+  if (/^[0-9]$/.test(e.key)) return e.key;
+  if (/^Key[A-Z]$/.test(c)) return c[3];                      // other layouts (Cyrillic, Greek...): fall back to the physical key
   if (/^Digit[0-9]$/.test(c)) return c[5];
   if (/^F([1-9]|1\d|2[0-4])$/.test(c)) return c;
   return CODE_KEYS[c] || null;
@@ -774,9 +786,15 @@ async function deleteMenu(id) {
     body.push(h('p', { class: 'warn-text' }, `It is opened as a submenu from ${refs.length} item${refs.length === 1 ? '' : 's'}. Those items will be removed too:`));
     body.push(h('ul', { class: 'ref-list' }, refs.map(r => h('li', null, h('b', null, S.cfg.menus[r.menuId].title || r.menuId), ' / item ' + (r.index + 1) + ' ', h('span', { class: 'mono' }, '"' + itemLabel(r.item) + '"')))));
   }
-  const ok = await modal({ title: 'Delete menu', body, actions: [{ text: 'Cancel', value: false }, { text: refs.length ? 'Delete menu and links' : 'Delete menu', kind: 'danger', value: true }] });
+  const ok = await modal({ title: 'Delete menu', body, actions: [{ text: 'Cancel', value: false, focus: true }, { text: refs.length ? 'Delete menu and links' : 'Delete menu', kind: 'danger', value: true }] });
   if (!ok) return;
-  refs.sort((a, b) => b.index - a.index).forEach(r => { const mm = S.cfg.menus[r.menuId]; if (mm) mm.items.splice(r.index, 1); });
+  if (!S.cfg.menus[id]) return;
+  const fresh = referrers(id).filter(r => r.menuId !== id);     // the config may have changed while the dialog was open
+  if (S.itemIdx !== null && S.menuId !== id) {
+    const here = fresh.filter(r => r.menuId === S.menuId).map(r => r.index);
+    S.itemIdx = here.includes(S.itemIdx) ? null : S.itemIdx - here.filter(x => x < S.itemIdx).length;
+  }
+  fresh.sort((a, b) => b.index - a.index).forEach(r => { const mm = S.cfg.menus[r.menuId]; if (mm) mm.items.splice(r.index, 1); });
   const ids = Object.keys(S.cfg.menus), pos = ids.indexOf(id);
   delete S.cfg.menus[id];
   if (S.menuId === id) { const rest = Object.keys(S.cfg.menus); S.menuId = rest[Math.min(pos, rest.length - 1)] || null; S.itemIdx = null; }
@@ -1243,7 +1261,7 @@ function buildItemInspector() {
   }
   const i = S.itemIdx, k = kindOf(it);
   box.append(h('div', { class: 'insp-head' }, itemThumb(it, 36), h('div', { class: 'insp-title' }, h('b', null, itemLabel(it)), h('span', null, `Item ${i + 1} of ${m.items.length}`)),
-    h('div', { class: 'spacer' }), iconBtn('copy', 'Duplicate item', () => dupItem(i)), iconBtn('trash', 'Delete item', () => delItem(i), 'danger')));
+    h('div', { class: 'spacer' }), iconBtn('copy', 'Duplicate item', () => dupItem(i)), iconBtn('trash', 'Delete item', e => { if (e.detail > 1) return; delItem(i); selectItem(null); }, 'danger')));
 
   /* action type */
   const seg = h('div', { class: 'kinds', role: 'radiogroup', 'aria-label': 'Action type' }, Object.keys(KIND).map(kk =>
@@ -1781,7 +1799,12 @@ function buildSettingsScreen(root) {
         const main = h('button', { class: 'btn small' + (z.installed && z.current ? '' : ' primary'), type: 'button', disabled: !r.bundled }, z.installed ? (z.current ? 'Reinstall' : 'Update') : 'Install');
         main.onclick = act('install_zscript_bridge', z.path, main);
         const rm = z.installed ? h('button', { class: 'btn small danger-ghost', type: 'button' }, icon('trash', 12), 'Remove') : null;
-        if (rm) rm.onclick = act('remove_zscript_bridge', z.path, rm);
+        if (rm) rm.onclick = async () => {
+          const ok = await modal({ title: `Remove the plugin from ${z.name}?`,
+            body: [h('p', null, 'This deletes the Radial Menu plugin files from this ZBrush install:'), h('p', { class: 'modal-path mono' }, z.path)],
+            actions: [{ text: 'Cancel', value: false, focus: true }, { text: 'Remove', value: true, kind: 'danger' }] });
+          if (ok) act('remove_zscript_bridge', z.path, rm)();
+        };
         return h('div', { class: 'zrow' }, h('div', { class: 'grow' }, h('div', { class: 'zname' }, z.name, h('span', { class: scls }, stext)), h('div', { class: 'zpath mono', title: z.zplugs }, z.path)),
           h('div', { class: 'btn-row' }, main, rm));
       });
@@ -1979,7 +2002,7 @@ async function doSave({ force = false, allowUnusable = false } = {}) {
         body: h('div', { class: 'changes' }, h('p', null, r.message || 'Saving this would leave no ring that can open.'),
           probs.length ? h('div', { class: 'changes-list' }, h('div', { class: 'chg-group' }, h('ul', null, probs.map(p => h('li', null, p))))) : null),
         actions: [{ text: 'Keep editing', value: 'keep', kind: 'primary', focus: true }, { text: 'Save anyway', value: 'force', kind: 'danger-ghost' }] });
-      return v === 'force' ? doSave({ force, allowUnusable: true }) : 'cancelled';
+      return v === 'force' ? doSave({ allowUnusable: true }) : 'cancelled';   // never carries force: a new disk change still warns
     }
     toast((r && r.message) || 'The config could not be saved.', { tone: 'warn', ms: 5000 });
     return 'failed';
@@ -1987,7 +2010,7 @@ async function doSave({ force = false, allowUnusable = false } = {}) {
 }
 async function revert() {
   if (!dirtyNow()) return;
-  const ok = await modal({ title: 'Revert changes', body: h('p', null, 'Discard all unsaved changes and go back to the last saved config?'), actions: [{ text: 'Keep editing', value: false }, { text: 'Revert', kind: 'danger', value: true }] });
+  const ok = await modal({ title: 'Revert changes', body: h('p', null, 'Discard all unsaved changes and go back to the last saved config?'), actions: [{ text: 'Keep editing', value: false, focus: true }, { text: 'Revert', kind: 'danger', value: true }] });
   if (!ok) return;
   S.cfg = JSON.parse(S.savedStr);
   if (!S.cfg.menus[S.menuId]) S.menuId = Object.keys(S.cfg.menus)[0] || null;
@@ -2249,6 +2272,7 @@ function init() {
   $('#problemsBtn').addEventListener('click', () => { S.problemsOpen = !S.problemsOpen; renderProblems(); });
   $('#problemsHead').addEventListener('click', () => { S.problemsOpen = !S.problemsOpen; renderProblems(); });
   window.addEventListener('keydown', e => {
+    if ($('#overlay-root').firstElementChild) return;      // a dialog is open: Ctrl+S, undo/redo and Alt+1..5 stay quiet
     const ed = e.target && e.target.closest && e.target.closest('input, textarea, select, [contenteditable]');
     if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === 's') { e.preventDefault(); if (S.ready && !S.fatal) save(); }
     else if (!S.ready || S.fatal) return;

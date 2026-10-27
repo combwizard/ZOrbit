@@ -168,7 +168,7 @@ class Api:
 
     def save_config(self, cfg, mtime_ns=None, force=False, allow_unusable=False):
         """Writes radial.json. The app notices the change within half a second. Saves even with problems (the
-        loader skips bad items) and reports them, but refuses a config no ring can open from unless force.
+        loader skips bad items) and reports them, but refuses a config no ring can open from unless allow_unusable.
         mtime_ns is the file's time when the page loaded it: if the file has changed since, nothing is written
         (conflict) unless force. allow_unusable saves a config no ring can open from. The two flags are separate
         so confirming one warning never skips the other. The previous version is kept as radial.json.bak, only
@@ -594,9 +594,15 @@ def _write_studio_file(data: dict):
     os.replace(tmp, STUDIO_FILE)
 
 
+class _WINDOWPLACEMENT(ctypes.Structure):
+    _fields_ = [("length", w.UINT), ("flags", w.UINT), ("showCmd", w.UINT), ("ptMinPosition", w.POINT),
+                ("ptMaxPosition", w.POINT), ("rcNormalPosition", w.RECT)]
+
+
 def _main_window(title=TITLE, pid=None):
     """The largest visible top-level window with this exact title (optionally in process pid).
-    pywebview also creates a tiny helper window with the same title, so FindWindow alone picks wrongly."""
+    pywebview also creates a tiny helper window with the same title, so FindWindow alone picks wrongly.
+    Size comes from the window's normal (restored) rectangle, so a minimised Studio still counts."""
     best, best_area = None, 0
     EnumProc = ctypes.WINFUNCTYPE(w.BOOL, w.HWND, w.LPARAM)
     user32.EnumWindows.argtypes = [EnumProc, w.LPARAM]
@@ -614,8 +620,13 @@ def _main_window(title=TITLE, pid=None):
             user32.GetWindowThreadProcessId(h, ctypes.byref(p))
             if p.value != pid:
                 return True
-        r = w.RECT()
-        user32.GetWindowRect(h, ctypes.byref(r))
+        wp = _WINDOWPLACEMENT()
+        wp.length = ctypes.sizeof(wp)
+        if user32.GetWindowPlacement(h, ctypes.byref(wp)):
+            r = wp.rcNormalPosition
+        else:
+            r = w.RECT()
+            user32.GetWindowRect(h, ctypes.byref(r))
         area = (r.right - r.left) * (r.bottom - r.top)
         if area > best_area:
             best, best_area = h, area
@@ -840,16 +851,19 @@ def _enable_drag_regions():
 
 def main():
     _startup(f"Studio {VERSION} main()")
-    import webview
-    _startup("pywebview imported")
-    mutex = CreateMutexW(None, False, STUDIO_MUTEX)
+    mutex = CreateMutexW(None, False, STUDIO_MUTEX)       # before the slow import: a second launch exits fast
     if ctypes.get_last_error() == 183:                     # already open: bring it forward
         _startup("already open: bringing it forward")
         hwnd = _main_window(TITLE)
         if hwnd:
-            user32.ShowWindow(hwnd, 9)
+            if user32.IsIconic(hwnd):
+                user32.ShowWindow(hwnd, 9)                                             # SW_RESTORE
+            else:
+                user32.ShowWindow(hwnd, 5)                 # SW_SHOW: keeps a maximised window maximised
             user32.SetForegroundWindow(hwnd)
         return 0
+    import webview
+    _startup("pywebview imported")
     try:                                                    # own taskbar identity and icon, not Python's
         ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(APP_ID)
     except Exception:

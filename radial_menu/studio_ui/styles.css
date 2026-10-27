@@ -283,6 +283,7 @@ body.dragging, body.dragging * { cursor: grabbing !important; }
 .scrim.in .modal { transform: none; }
 .modal h2 { font-size: 16px; font-weight: 600; margin-bottom: 10px; }
 .modal-body { display: flex; flex-direction: column; gap: 10px; color: #d6d7db; line-height: 1.5; }
+.modal-path { font-size: 12px; color: var(--sub); word-break: break-all; }
 .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
 .warn-text { color: var(--amber); }
 .ref-list { margin: 0; padding: 8px 12px 8px 26px; background: var(--bg1); border-radius: 6px; max-height: 140px; overflow: auto; font-size: 12px; }

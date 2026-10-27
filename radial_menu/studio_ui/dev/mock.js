@@ -50,7 +50,7 @@
     get_config: function () {
       return sleep(40).then(function () {
         var r = clone(M.get_config);
-        if (q.has('broken')) return { config: null, error: BROKEN_ERR, path: r.path, backup_exists: true, problems: [], mtime_ns: null };
+        if (q.has('broken') && !sessionStorage.getItem('rm_repaired')) return { config: null, error: BROKEN_ERR, path: r.path, backup_exists: true, problems: [], mtime_ns: null };
         r.problems = q.has('problems') ? validate(r.config) : r.problems;
         r.mtime_ns = mtime; r.backup_exists = true;
         return r;
@@ -71,8 +71,9 @@
         return { saved: true, problems: validate(cfg), time: Date.now() / 1000, mtime_ns: mtime };
       });
     },
-    restore_backup: function () { return sleep(200).then(function () { return { ok: true, message: 'Restored the last good backup (mock).' }; }); },
-    reset_config: function () { return sleep(200).then(function () { return { ok: true, message: 'Reset to the default menus (mock).' }; }); },
+    // Both mark the file as repaired for this tab, so the reload after them boots normally even with ?broken.
+    restore_backup: function () { try { sessionStorage.setItem('rm_repaired', '1'); } catch (e) {} return sleep(200).then(function () { return { ok: true, message: 'Restored the last good backup (mock).' }; }); },
+    reset_config: function () { try { sessionStorage.setItem('rm_repaired', '1'); } catch (e) {} return sleep(200).then(function () { return { ok: true, message: 'Reset to the default menus (mock).' }; }); },
     preview_ring: function (cfg, menuId, hover) {
       return sleep(60 + lag).then(function () {
         var m = cfg && cfg.menus && cfg.menus[menuId];

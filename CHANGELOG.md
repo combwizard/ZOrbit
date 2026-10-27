@@ -29,6 +29,17 @@ All notable changes to this project are listed here. The format follows
   the first Apply of a new session can't carry out an old pick.
 
 ### Fixed
+- Studio dialogs: Ctrl+S, undo and the Alt+number screen shortcuts no longer act behind an open dialog, two
+  dialogs can no longer stack, and the safe button (Keep editing, Cancel) has focus in Revert, Delete menu
+  and Remove plugin, so a stray Enter cannot confirm them.
+- Deleting a menu that other menus open as a submenu now removes those links from the state as it is when
+  you confirm, and keeps the right item selected afterwards.
+- A double-click on the item inspector's delete button removed two items.
+- Hotkeys recorded in Studio now use the character you typed rather than the key's position, so Dvorak and
+  AZERTY layouts record the key you pressed.
+- Removing the ZBrush 2022 to 2025 plugin from Settings > Older ZBrush asks first.
+- Starting Studio while it is already open now restores a minimised window and leaves a maximised one
+  maximised, and the second launch exits at once instead of loading the web view first.
 - Pressing Ctrl+S in Studio before the menus had loaded, or on the error screen, could write `null` over
   `radial.json`.
 - ZBrush 2026 and newer: loading the plugin ended in a Python error (`BRIDGE_DIR` is not defined) after
