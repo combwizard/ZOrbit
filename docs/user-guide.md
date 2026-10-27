@@ -60,6 +60,8 @@ On the Menus screen you can:
 
 - add, duplicate and delete menus (a duplicate has no hotkey, so it starts out as a submenu);
 - add items with **Add item**, drag brushes from the Library onto the ring or the list, reorder items, and remove them;
+- drag an item onto another menu in the list to move it there (hold **Ctrl** to copy it instead);
+- open a submenu by double-clicking its item or pressing **Open** in the inspector; a **Back** chip above the item list returns to the parent menu;
 - edit each item's action, label and icon in the inspector;
 - record a hotkey by clicking the hotkey field and pressing the keys;
 - press the play button to preview the open animation.

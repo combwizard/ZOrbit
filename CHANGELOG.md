@@ -29,6 +29,17 @@ All notable changes to this project are listed here. The format follows
   instead of sending text to ZBrush.
 - The ring preview no longer selects a slot when you click or drop on the empty side of a ring with one to
   three slots, matching the app's quarter-circle cap on a slot.
+- Items can be dragged onto another menu in the list to move them there (hold Ctrl to copy). Dropping an
+  item on a ring slot now lands on that slot in both directions.
+- A submenu item's target is a list of your menus with an Open button, and opening a submenu (double-click,
+  Open it, or the button) shows a Back chip that returns to the parent menu and its item.
+- Picking an open animation in a menu's settings plays it straight away.
+- The menu Id field validates as you type and says why a value is refused; it also warns that renaming
+  resets that menu's learned auto slots.
+- Brush names are matched ignoring case and spaces in the item inspector and the Library's "used" badges, as
+  the guide says. The brush picker closes after Enter.
+- The inspector's third tab is called Library (it clashed with the default "Brushes" menu), and row tooltips
+  list the keyboard shortcuts.
 
 ### Changed
 - The Settings screen is called Settings everywhere (it was "Appearance & Behaviour" on the page itself), and

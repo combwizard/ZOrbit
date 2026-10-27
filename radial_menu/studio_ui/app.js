@@ -61,6 +61,7 @@ const ICONS = {
   grip: '<g fill="currentColor" stroke="none"><circle cx="9" cy="6" r="1.4"/><circle cx="15" cy="6" r="1.4"/><circle cx="9" cy="12" r="1.4"/><circle cx="15" cy="12" r="1.4"/><circle cx="9" cy="18" r="1.4"/><circle cx="15" cy="18" r="1.4"/></g>',
   chevD: '<path d="M6 9l6 6 6-6"/>',
   chevR: '<path d="M9 6l6 6-6 6"/>',
+  chevL: '<path d="M15 6l-6 6 6 6"/>',
   up: '<path d="M12 19V5M6 11l6-6 6 6"/>',
   down: '<path d="M12 5v14M6 13l6 6 6-6"/>',
   play: '<path d="M8 5.5l11 6.5-11 6.5z" fill="currentColor"/>',
@@ -140,6 +141,7 @@ const S = {
   problems: [], problemsOpen: false, problemMenus: new Set(), problemItems: new Map(), problemTips: new Map(),
   scroll: {}, shown: false,
   screen: 'menus', menuId: null, itemIdx: null, tab: 'item',
+  cameFrom: null,                              // { menuId, itemIdx }: where a submenu was opened from (drives the Back chip)
   library: [], libSorted: [], libByName: new Map(), libState: 'loading', suggestions: [],
   version: 0, hist: [], histI: 0,
   lib: { cat: 'All', q: '', size: 112 },
@@ -208,6 +210,8 @@ function makeItem(kind, target, extra = {}) {
    Switching kind keeps a target only inside its own namespace, so a brush name never lands in a path field. */
 const nsOf = k => (k === 'brush' ? 'brush' : k === 'menu' ? 'menu' : 'path');
 const TARGET_NOUN = { brush: 'brush', press: 'button path', set: 'value path', toggle: 'switch path', menu: 'submenu' };
+/* Brush names are compared ignoring case and spaces (the guide says neither matters). */
+const nameKey = s => String(s === undefined || s === null ? '' : s).toLowerCase().replace(/\s+/g, '');
 const hasText = v => String(v === undefined || v === null ? '' : v).trim() !== '';
 const joinList = a => (a.length < 2 ? a.join('') : a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1]);
 /* Returns { item, lost }: lost lists, in words, what the switch could not carry over (empty when nothing was lost). */
@@ -257,7 +261,7 @@ function usageMap() {
       if (it && it.brush) names.push(it.brush);
       if (it && Array.isArray(it.steps)) it.steps.forEach(s => s && s.brush && names.push(s.brush));
       for (const n of names) {
-        const k = String(n).toLowerCase();
+        const k = nameKey(n);
         if (!m.has(k)) m.set(k, []);
         m.get(k).push({ menuId: id, index: i });
       }
@@ -573,7 +577,7 @@ const DnD = {
     a.ghost.style.transform = `translate(${ev.clientX + 14}px, ${ev.clientY + 14}px)`;
     const z = this.findZone(ev.clientX, ev.clientY, a.payload);
     if (z !== a.zone) { if (a.zone) a.zone._dz.leave && a.zone._dz.leave(); a.zone = z; }
-    if (z) z._dz.over(a.payload, ev.clientX, ev.clientY);
+    if (z) z._dz.over(a.payload, ev.clientX, ev.clientY, ev);
     a.ghost.classList.toggle('ok', !!z);
   },
   end(ev, drop) {
@@ -581,7 +585,7 @@ const DnD = {
     this.active = null;
     document.removeEventListener('keydown', a.onKey, true);
     if (a.zone) a.zone._dz.leave && a.zone._dz.leave();
-    if (drop && ev && a.zone) a.zone._dz.drop(a.payload, ev.clientX, ev.clientY);
+    if (drop && ev && a.zone) a.zone._dz.drop(a.payload, ev.clientX, ev.clientY, ev);
     a.ghost.remove();
     document.body.classList.remove('dragging');
     this.recent = true; setTimeout(() => { this.recent = false; }, 60);
@@ -592,7 +596,7 @@ window.addEventListener('click', e => { if (DnD.recent) { e.stopPropagation(); e
 /* ================================================================== combobox (autocomplete) */
 let comboClose = null;
 function combo(input, getOpts, o = {}) {
-  let list = null, items = [], active = -1, typed = false;
+  let list = null, items = [], active = -1, typed = false, picking = false;
   const close = () => {
     if (list) list.remove();
     list = null; active = -1;
@@ -629,18 +633,21 @@ function combo(input, getOpts, o = {}) {
   const pick = i => {
     const it = items[i]; if (!it) return;
     input.value = it.value; close();
-    input.dispatchEvent(new Event('input', { bubbles: true }));
-    input.dispatchEvent(new Event('change', { bubbles: true }));
+    picking = true;                                           // our own input listener would re-render the list and reopen it
+    try {
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    } finally { picking = false; }
     o.onPick && o.onPick(it);
   };
   input.addEventListener('focus', () => { typed = false; render(); });
-  input.addEventListener('input', () => { typed = true; active = -1; render(); });
+  input.addEventListener('input', () => { if (picking) return; typed = true; active = -1; render(); });
   input.addEventListener('blur', () => close());
   input.addEventListener('keydown', e => {
     if (!list) { if (e.key === 'ArrowDown') { typed = typed || false; render(); } return; }
     if (e.key === 'ArrowDown') { e.preventDefault(); setActive((active + 1) % items.length); }
     else if (e.key === 'ArrowUp') { e.preventDefault(); setActive((active - 1 + items.length) % items.length); }
-    else if (e.key === 'Enter' && active >= 0) { e.preventDefault(); pick(active); }
+    else if (e.key === 'Enter') { if (active >= 0) { e.preventDefault(); pick(active); } else close(); }
     else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(); }
   });
 }
@@ -796,15 +803,29 @@ function undo() { snapSoon.cancel(); pushSnap(); if (S.histI > 0) { S.histI--; a
 function redo() { snapSoon.cancel(); pushSnap(); if (S.histI < S.hist.length - 1) { S.histI++; applySnap(S.hist[S.histI]); toast('Redone', { ms: 1400 }); } }
 
 /* ---------- menu operations */
-function selectMenu(id, { keepItem = false } = {}) {
+/* from: where this menu was opened from (a submenu item or an Open button), which the Back chip returns to. Any other way of
+   picking a menu leaves the trail. */
+function selectMenu(id, { keepItem = false, from = null } = {}) {
   if (!S.cfg.menus[id]) return;
   S.menuId = id;
+  S.cameFrom = from;
   if (!keepItem) S.itemIdx = null;
   if (S.tab === 'item' && S.itemIdx === null) S.tab = 'menu';
   rememberSel();
   renderAllMenus();
   if (R.preview) R.preview();
   if (R.libTarget) R.libTarget();
+}
+function openSubmenu(targetId, itemIdx = S.itemIdx) {
+  if (!S.cfg.menus[targetId] || targetId === S.menuId) return;
+  selectMenu(targetId, { from: { menuId: S.menuId, itemIdx: Number.isInteger(itemIdx) ? itemIdx : null } });
+}
+function goBack() {
+  const c = S.cameFrom;
+  if (!c || !S.cfg.menus[c.menuId]) { S.cameFrom = null; if (R.itemList) R.itemList(); return; }
+  selectMenu(c.menuId);
+  const m = curMenu();
+  if (c.itemIdx !== null && m && m.items[c.itemIdx]) selectItem(c.itemIdx);
 }
 function selectItem(i, { focusTarget = false } = {}) {
   S.itemIdx = i;
@@ -861,12 +882,21 @@ async function deleteMenu(id) {
   commit({ inspector: true }); if (R.head) R.head(); if (R.preview) R.preview();
   undoToast(`Deleted "${m.title || id}"`);
 }
-function renameMenuId(oldId, newId) {
+/* What is wrong with newId as the id of menu oldId, in words, or null when it is fine (or unchanged). */
+function menuIdProblem(oldId, newId) {
   newId = newId.trim();
   if (newId === oldId) return null;
+  if (!newId) return 'The id cannot be empty.';
   if (!/^[A-Za-z0-9_-]+$/.test(newId)) return 'Use letters, digits, - and _ only.';
   if (/^\d+$/.test(newId)) return 'The id cannot be only digits.';
   if (S.cfg.menus[newId]) return 'Another menu already uses that id.';
+  return null;
+}
+function renameMenuId(oldId, newId) {
+  newId = newId.trim();
+  if (newId === oldId) return null;
+  const bad = menuIdProblem(oldId, newId);
+  if (bad) return bad;
   const out = {};
   for (const [k, v] of Object.entries(S.cfg.menus)) out[k === oldId ? newId : k] = v;
   S.cfg.menus = out;
@@ -893,7 +923,6 @@ function addItem(kind, at = null) {
   m.items.splice(i, 0, it);
   S.itemIdx = i; S.tab = 'item';
   commit({ inspector: true }); if (R.head) R.head();
-  if (R.right) R.right();
   const row = $('.irow.sel'); if (row) row.scrollIntoView({ block: 'nearest' });
   const t = $('[data-focus="target"]'); if (t) t.focus();
 }
@@ -911,7 +940,7 @@ function dupItem(i) {
   const m = curMenu(); if (!m || !m.items[i]) return;
   m.items.splice(i + 1, 0, clone(m.items[i]));
   S.itemIdx = i + 1; S.tab = 'item';
-  commit({ inspector: true }); if (R.head) R.head(); if (R.right) R.right();
+  commit({ inspector: true }); if (R.head) R.head();
 }
 function delItem(i, menuId = S.menuId) {
   const m = S.cfg.menus[menuId]; if (!m || !m.items[i]) return;
@@ -921,7 +950,7 @@ function delItem(i, menuId = S.menuId) {
     if (S.itemIdx === i) S.itemIdx = m.items.length ? Math.min(i, m.items.length - 1) : null;
     else if (S.itemIdx !== null && S.itemIdx > i) S.itemIdx--;
   }
-  commit({ inspector: true }); if (R.head) R.head(); if (R.right) R.right();
+  commit({ inspector: true }); if (R.head) R.head();
   undoToast(`Removed "${itemLabel(removed)}"`, { ms: 3800 });
 }
 function moveItem(menuId, from, to) {
@@ -931,7 +960,26 @@ function moveItem(menuId, from, to) {
   const t = to > from ? to - 1 : to;
   m.items.splice(clamp(t, 0, m.items.length), 0, it);
   if (sel) S.itemIdx = m.items.indexOf(sel);
-  commit({ inspector: true }); if (R.right) R.right();
+  commit({ inspector: true });
+}
+/* Moves item `index` of menu fromId to the end of menu toId, or copies it there (a deep copy) when `copy` is set. */
+function transferItem(fromId, index, toId, copy) {
+  const src = S.cfg.menus[fromId], dst = S.cfg.menus[toId];
+  if (!src || !dst || fromId === toId || !src.items[index]) return;
+  const it = src.items[index];
+  if (it.menu === toId) { toast('A menu cannot open itself, so that item stays where it is.', { tone: 'warn' }); return; }
+  sealSnap();
+  const label = itemLabel(it), dstName = dst.title || toId;
+  if (copy) dst.items.push(clone(it));
+  else {
+    src.items.splice(index, 1); dst.items.push(it);
+    if (S.menuId === fromId) { S.menuId = toId; S.itemIdx = dst.items.length - 1; S.tab = 'item'; S.cameFrom = null; }   // follow the item to its new menu
+    else if (S.menuId === toId) S.itemIdx = dst.items.length - 1;
+  }
+  commit({ inspector: true }); if (R.head) R.head();
+  if (!copy && R.preview) R.preview();
+  if (!copy) { const row = $('.irow.sel'); if (row) row.scrollIntoView({ block: 'nearest' }); }
+  undoToast(`${copy ? 'Copied' : 'Moved'} "${label}" to "${dstName}"`);
 }
 function dropOnMenu(menuId, payload, at) {
   if (payload.type === 'brush') insertBrush(menuId, payload.name, at);
@@ -972,7 +1020,7 @@ function buildMenusScreen(root) {
     h('button', { class: 'dashed', type: 'button', onclick: () => addMenu() }, icon('plus', 14), 'Add menu'));
   const head = h('div', { class: 'center-head' });
   const stageBox = buildStage();
-  const itemsEl = h('div', { class: 'ilist', role: 'listbox', 'aria-label': 'Items in this menu' });
+  const itemsEl = h('div', { class: 'ilist', role: 'listbox', 'aria-label': 'Items in this menu', title: 'Alt+Up/Down moves the selected item' });
   const itemsHead = h('div', { class: 'col-head slim' });
   const itemsPanel = h('div', { class: 'items-panel' }, itemsHead, itemsEl);
   const center = h('section', { class: 'col center-col' }, head, stageBox.el, itemsPanel);
@@ -1015,9 +1063,9 @@ function buildMenusScreen(root) {
           m.hotkey ? hkChips(m.hotkey, 'sm') : h('span', { class: 'tag cyan', title: 'No hotkey: this menu can only be opened from another menu' }, 'submenu'),
           h('span', { class: 'pill-n', title: (m.items || []).length + ' items' }, String((m.items || []).length))),
         h('div', { class: 'mrow-actions' },
-          iconBtn('edit', 'Rename', e => { e.stopPropagation(); R.renameMenu(id); }),
+          iconBtn('edit', 'Rename (F2)', e => { e.stopPropagation(); R.renameMenu(id); }),
           iconBtn('copy', 'Duplicate', e => { e.stopPropagation(); dupMenu(id); }),
-          iconBtn('trash', 'Delete', e => { e.stopPropagation(); deleteMenu(id); }, 'danger')));
+          iconBtn('trash', 'Delete (Delete)', e => { e.stopPropagation(); deleteMenu(id); }, 'danger')));
       row.addEventListener('click', () => { if (id !== S.menuId) selectMenu(id); });
       title.addEventListener('dblclick', () => R.renameMenu(id));
       row.addEventListener('keydown', e => {
@@ -1031,15 +1079,18 @@ function buildMenusScreen(root) {
       });
       DnD.source(row, () => ({ type: 'menu', id }), () => h('span', { class: 'ghost-chip' }, icon('menus', 14), m.title || id));
       DnD.zone(row, {
-        accept: p => p.type === 'brush' || (p.type === 'menu' && p.id !== id),
-        over: (p, x, y) => {
+        accept: p => p.type === 'brush' || (p.type === 'menu' && p.id !== id) || (p.type === 'item' && p.menuId !== id),
+        over: (p, x, y, ev) => {
           const r = row.getBoundingClientRect();
-          row.classList.remove('drop-brush', 'ins-before', 'ins-after');
-          if (p.type === 'brush') row.classList.add('drop-brush'); else row.classList.add(y < r.top + r.height / 2 ? 'ins-before' : 'ins-after');
+          row.classList.remove('drop-brush', 'drop-copy', 'ins-before', 'ins-after');
+          if (p.type === 'brush') row.classList.add('drop-brush');
+          else if (p.type === 'item') { row.classList.add('drop-brush'); if (ev && ev.ctrlKey) row.classList.add('drop-copy'); }   // Ctrl copies instead of moving
+          else row.classList.add(y < r.top + r.height / 2 ? 'ins-before' : 'ins-after');
         },
-        leave: () => row.classList.remove('drop-brush', 'ins-before', 'ins-after'),
-        drop: (p, x, y) => {
+        leave: () => row.classList.remove('drop-brush', 'drop-copy', 'ins-before', 'ins-after'),
+        drop: (p, x, y, ev) => {
           if (p.type === 'brush') insertBrush(id, p.name, null);
+          else if (p.type === 'item') transferItem(p.menuId, p.index, id, !!(ev && ev.ctrlKey));
           else { const r = row.getBoundingClientRect(); const ids2 = Object.keys(S.cfg.menus); const before = y < r.top + r.height / 2 ? id : ids2[ids2.indexOf(id) + 1]; moveMenu(p.id, before || null); }
         },
       });
@@ -1080,7 +1131,10 @@ function buildMenusScreen(root) {
   const addBtn = h('button', { class: 'btn small', type: 'button', onclick: e => popover(e.currentTarget, Object.keys(KIND).map(k => ({ icon: KIND[k].icon, label: KIND[k].label, hint: KIND[k].hint, fn: () => addItem(k) }))) }, icon('plus', 13), 'Add item');
   R.itemList = () => {
     const m = curMenu();
-    itemsHead.replaceChildren(h('span', { class: 'micro' }, 'Items'), h('span', { class: 'count' }, m ? String(m.items.length) : '0'), h('span', { class: 'spacer' }), m ? addBtn : null);
+    const back = S.cameFrom && S.cameFrom.menuId !== S.menuId ? S.cfg.menus[S.cameFrom.menuId] : null;
+    if (!back && S.cameFrom) S.cameFrom = null;
+    itemsHead.replaceChildren(...[back ? h('button', { class: 'chip back', type: 'button', title: 'Back to ' + (back.title || S.cameFrom.menuId), onclick: goBack }, icon('chevL', 12), h('span', { class: 'back-txt' }, 'Back to ' + (back.title || S.cameFrom.menuId))) : null,
+      h('span', { class: 'micro' }, 'Items'), h('span', { class: 'count' }, m ? String(m.items.length) : '0'), h('span', { class: 'spacer' }), m ? addBtn : null].filter(Boolean));
     renderItemList(itemsEl, S.menuId, false);
   };
 
@@ -1091,7 +1145,7 @@ function buildMenusScreen(root) {
   let dock = null, dockScroll = 0;
   R.right = () => {
     if (S.tab === 'brushes') { /* keep the dock alive */ } else if (dock) { dockScroll = dock.scroller().scrollTop; }
-    tabs.replaceChildren(...[['item', 'Item'], ['menu', 'Menu'], ['brushes', 'Brushes']].map(([k, label]) =>
+    tabs.replaceChildren(...[['item', 'Item'], ['menu', 'Menu'], ['brushes', 'Library']].map(([k, label]) =>
       h('button', { class: 'tab' + (S.tab === k ? ' on' : ''), role: 'tab', type: 'button', 'aria-selected': S.tab === k ? 'true' : 'false',
         onclick: () => { S.tab = k; R.right(); } }, label)));
     body.replaceChildren();
@@ -1132,7 +1186,7 @@ function renderItemList(box, menuId, compact) {
   box.replaceChildren();
   if (!m) { box.append(emptyState('menus', 'No menu selected', '')); return; }
   if (!m.items.length) {
-    box.append(emptyState('plus', 'No items yet', compact ? 'Drag a brush here or press + on a card.' : 'Drag a brush here from the Brushes tab, or use Add item.'));
+    box.append(emptyState('plus', 'No items yet', compact ? 'Drag a brush here or press + on a card.' : 'Drag a brush here from the Library tab, or use Add item.'));
   }
   m.items.forEach((it, i) => {
     const k = kindOf(it), ok = itemUsable(it);
@@ -1147,10 +1201,10 @@ function renderItemList(box, menuId, compact) {
       itemWarn(menuId, i, ok),
       h('span', { class: 'iacts' },
         compact ? null : iconBtn('copy', 'Duplicate item', e => { e.stopPropagation(); S.itemIdx = i; dupItem(i); }),
-        iconBtn('trash', 'Delete item', e => { e.stopPropagation(); if (e.detail > 1) return; delItem(i, menuId); }, 'danger')));
+        iconBtn('trash', compact ? 'Delete item' : 'Delete (Delete)', e => { e.stopPropagation(); if (e.detail > 1) return; delItem(i, menuId); }, 'danger')));
     if (!compact) {
       row.addEventListener('click', () => selectItem(i));
-      row.addEventListener('dblclick', () => { if (k === 'menu' && S.cfg.menus[it.menu]) selectMenu(it.menu); });
+      row.addEventListener('dblclick', () => { if (k === 'menu' && S.cfg.menus[it.menu]) openSubmenu(it.menu, i); });
       row.addEventListener('keydown', e => {
         if (e.target !== row) return;
         const rows = $$('.irow', box);
@@ -1318,7 +1372,7 @@ function buildStage() {
     if (!has) {
       emptyEl.append(m.items.length
         ? emptyState('alert', 'No usable items yet', 'Fill in the target of each item (see the problems panel). Incomplete items are skipped by the app.')
-        : emptyState('plus', 'This menu is empty', 'Add a brush from the Brushes tab or create an item. The ring appears as soon as it has one.', { text: 'Add item', fn: () => addItem('brush') }));
+        : emptyState('plus', 'This menu is empty', 'Add a brush from the Library tab or create an item. The ring appears as soon as it has one.', { text: 'Add item', fn: () => addItem('brush') }));
       return;
     }
     buildMarks();
@@ -1351,6 +1405,8 @@ function buildStage() {
     drop: (p, x, y) => {
       const j = idxs.length ? hitTest(x, y) : null;
       const at = j === null ? null : idxs[j];
+      // An item dropped on a slot takes that slot's position, whichever way it came from (moveItem counts an insertion point)
+      if (p.type === 'item' && at !== null) { if (at !== p.index) moveItem(S.menuId, p.index, at > p.index ? at + 1 : at); return; }
       dropOnMenu(S.menuId, p, at);
     },
   });
@@ -1401,29 +1457,45 @@ function buildItemInspector() {
   if (k !== 'steps') {
     const placeholders = { brush: 'Search brushes, e.g. ClayBuildup', press: 'Item path, e.g. Tool:Masking:Clear', set: 'Item path, e.g. Draw:Draw Size', toggle: 'Item path, e.g. Transform:Activate Symmetry', menu: 'Pick a menu' };
     let touched = false;                                   // "required" hints wait until the field has been edited or left once
-    const inp = textInput(targetOf(it), v => { touched = true; it[k] = v; commit(); updateHint(); updateHead(); }, { mono: k !== 'brush', placeholder: placeholders[k], focus: 'target', label: 'Target' });
-    inp.addEventListener('change', () => { it[k] = inp.value.trim(); inp.value = it[k]; commit(); updateHint(); });
-    inp.addEventListener('blur', () => { touched = true; updateHint(); });
-    combo(inp, q => matchOpts(k === 'brush' ? brushOpts() : (k === 'menu' ? menuOpts() : pathOpts()), q), { brush: k === 'brush', mono: k !== 'brush' });
+    let inp, openBtn = null;
+    if (k === 'menu') {
+      // A pick list rather than free text: only real menus, never this one (a menu cannot open itself).
+      const cur = String(it.menu ?? '');
+      const others = Object.entries(S.cfg.menus).filter(([mid]) => mid !== S.menuId);
+      const menuName = (mid, mm) => (mm.title && mm.title !== mid ? `${mm.title} (${mid})` : mid);
+      const known = others.some(([mid]) => mid === cur);
+      inp = h('select', { class: 'inp sel', 'aria-label': 'Submenu', dataset: { focus: 'target' }, onchange: () => { touched = true; it.menu = inp.value; commit(); updateHint(); updateHead(); } },
+        h('option', { value: '', selected: !cur }, 'Pick a menu...'),
+        others.map(([mid, mm]) => h('option', { value: mid, selected: mid === cur }, menuName(mid, mm))),
+        cur && !known ? h('option', { value: cur, selected: true }, cur === S.menuId ? cur + ' (this menu)' : cur + ' (missing)') : null);
+      inp.addEventListener('blur', () => { touched = true; updateHint(); });
+      openBtn = iconBtn('chevR', 'Open this submenu', () => openSubmenu(it.menu, S.itemIdx));
+    } else {
+      inp = textInput(targetOf(it), v => { touched = true; it[k] = v.trim(); commit(); updateHint(); updateHead(); }, { mono: k !== 'brush', placeholder: placeholders[k], focus: 'target', label: 'Target' });
+      inp.addEventListener('change', () => { it[k] = inp.value.trim(); inp.value = it[k]; commit(); updateHint(); });
+      inp.addEventListener('blur', () => { touched = true; updateHint(); });
+      combo(inp, q => matchOpts(k === 'brush' ? brushOpts() : pathOpts(), q), { brush: k === 'brush', mono: k !== 'brush' });
+    }
     const tlabel = { brush: 'Brush', press: 'Button path', set: 'Slider or value path', toggle: 'Switch path', menu: 'Submenu' }[k];
-    const wrap = h('div', { class: 'target-row' }, k === 'brush' ? h('span', { class: 'tthumb' }) : null, inp);
+    const wrap = h('div', { class: 'target-row' }, k === 'brush' ? h('span', { class: 'tthumb' }) : null, inp, openBtn);
     box.append(field(tlabel, wrap, hintEl));
     function updateHint() {
       const v = targetOf(it).trim(); hintEl.className = 'fhint'; hintEl.replaceChildren();
       if (!v && touched) { hintEl.classList.add('bad'); hintEl.append('A target is required. '); }
       if (k === 'brush') {
         const tt = $('.tthumb', wrap); if (tt) tt.replaceChildren(thumb(v || null, { size: 30 }));
-        if (v && S.libState === 'ready' && !S.libByName.has(v.toLowerCase())) { hintEl.classList.add('warn'); hintEl.append('Not found in your brush library. ZBrush needs a .zbp with this name.'); }
+        if (v && S.libState === 'ready' && !S.libByName.has(nameKey(v))) { hintEl.classList.add('warn'); hintEl.append('Not found in your brush library. ZBrush needs a .zbp with this name.'); }
         else if (!v) hintEl.append('Type to search your library.');
       } else if (k === 'menu') {
         const t = S.cfg.menus[v];
-        if (t) hintEl.append('Opens ', h('b', null, t.title || v), ` (${t.items.length} items). `, h('button', { class: 'link', type: 'button', onmousedown: e => e.preventDefault(), onclick: () => selectMenu(v) }, 'Open it'));
+        if (openBtn) openBtn.disabled = !t || v === S.menuId;
+        if (t) hintEl.append('Opens ', h('b', null, t.title || v), ` (${t.items.length} items). `, h('button', { class: 'link', type: 'button', onmousedown: e => e.preventDefault(), onclick: () => openSubmenu(v) }, 'Open it'));
         else {
           if (v) { hintEl.classList.add('bad'); hintEl.append('No menu with this id. '); }
           hintEl.append(h('button', { class: 'link', type: 'button', onmousedown: e => e.preventDefault(), onclick: () => {
             const nid = uniqueId(it.label || v || 'submenu'), keep = S.menuId, mi = S.itemIdx;
             S.cfg.menus[nid] = { title: it.label || (v ? v : 'Submenu'), items: [] };
-            it.menu = nid; S.menuId = keep; S.itemIdx = mi; commit({ inspector: true }); toast('Created an empty submenu. Open it to add items.', { action: { text: 'Open', fn: () => selectMenu(nid) } });
+            it.menu = nid; S.menuId = keep; S.itemIdx = mi; commit({ inspector: true }); toast('Created an empty submenu. Open it to add items.', { action: { text: 'Open', fn: () => { if (S.menuId === keep) openSubmenu(nid, mi); else selectMenu(nid); } } });
           } }, 'Create a new submenu'));
         }
       } else {
@@ -1532,10 +1604,22 @@ function buildMenuProps() {
   if (!m) return emptyState('menus', 'No menu selected', '');
   const titleInp = textInput(m.title || '', v => { m.title = v; commit(); if (R.head) R.head(); }, { placeholder: id, label: 'Menu title' });
   box.append(sectionTitle('Menu', 'Shown in the list and at the ring centre'), field('Title', titleInp));
-  const idErr = h('div', { class: 'fhint bad' });
+  const idErr = h('div', { class: 'fhint bad id-err', role: 'alert', hidden: true });
   const idInp = textInput(id, () => {}, { mono: true, label: 'Menu id' });
-  idInp.addEventListener('change', () => { const err = renameMenuId(id, idInp.value); if (err) { idErr.textContent = err; idInp.value = id; } else if (idInp.value.trim() !== id) { /* re-rendered by rename */ } });
-  box.append(field('Id', idInp, 'Used to link submenus. Renaming updates the items that open this menu.'), idErr);
+  let idTimer = null;
+  const idShow = msg => { clearTimeout(idTimer); idTimer = null; idErr.textContent = msg || ''; idErr.hidden = !msg; idInp.classList.toggle('bad', !!msg); };
+  idInp.addEventListener('input', () => idShow(menuIdProblem(id, idInp.value)));          // live: red as soon as it is wrong, clear as soon as it is right
+  const idCommit = () => {
+    const bad = renameMenuId(id, idInp.value);                                             // null: renamed (the panel is rebuilt) or unchanged
+    if (!bad) { idShow(''); if (idInp.value !== id && idInp.isConnected) idInp.value = id; return; }
+    idInp.value = id; idShow(bad); idInp.classList.remove('bad');                          // back to the old id; the reason stays for a moment
+    idTimer = setTimeout(() => idShow(''), 3000);
+  };
+  idInp.addEventListener('change', idCommit);
+  idInp.addEventListener('keydown', e => { if (e.key === 'Escape') { e.stopPropagation(); idInp.value = id; idShow(''); } });
+  const idNotes = [h('div', { class: 'fhint' }, 'Used to link submenus. Renaming updates the items that open this menu.')];
+  if (m.items.some(x => kindOf(x) === 'auto')) idNotes.push(h('div', { class: 'fhint' }, 'Renaming resets the learned auto slots for this menu.'));
+  box.append(field('Id', idInp, h('div', { class: 'id-notes' }, idErr, ...idNotes)));
 
   const owner0 = m.hotkey ? hotkeyOwner(m.hotkey, id) : null;
   const hk = hotkeyField({ value: m.hotkey || '', placeholder: 'No hotkey (submenu only)', onChange: str => {
@@ -1566,7 +1650,9 @@ function buildMenuProps() {
     : 'Uses the open animation set in Settings (' + animTitle(ringAnim()) + '). Pick one to give this menu its own.');
   const animSel = h('select', { class: 'inp sel', 'aria-label': 'Open animation for this menu', onchange: () => {
     if (animSel.value) m.animation = animSel.value; else delete m.animation;
-    paintAnimHint(); commit(); setTimeout(() => R.playAnim && R.playAnim(), 0);
+    paintAnimHint(); commit();
+    previewSoon.flush();                       // the debounced preview would stop the player a moment after it started
+    if (R.playAnim) R.playAnim();
   } }, h('option', { value: '', selected: !m.animation }, 'Same as Settings (' + animTitle(ringAnim()) + ')'),
     anims.map(a => h('option', { value: a, selected: m.animation === a }, animTitle(a))));
   paintAnimHint();
@@ -1597,10 +1683,10 @@ function catTree() {
 }
 function catMatch(b, cat) {
   if (cat === 'All') return true;
-  if (cat === '@used') return usageMap().has(b.name.toLowerCase());
+  if (cat === '@used') return usageMap().has(nameKey(b.name));
   return b.category === cat || b.category.startsWith(cat + '/');
 }
-function usedCount() { const u = usageMap(); let n = 0; for (const b of S.library) if (u.has(b.name.toLowerCase())) n++; return n; }
+function usedCount() { const u = usageMap(); let n = 0; for (const b of S.library) if (u.has(nameKey(b.name))) n++; return n; }
 function addBrushToCurrent(name) {
   if (!curMenu()) { toast('Create or select a menu first.', { tone: 'warn' }); return; }
   insertBrush(S.menuId, name, null);
@@ -1642,7 +1728,7 @@ function makeBrowser({ compact, st }) {
   };
 
   function paintBadge(card) {
-    const u = usageMap().get(card.dataset.name.toLowerCase());
+    const u = usageMap().get(nameKey(card.dataset.name));
     card.classList.toggle('used', !!u);
     let bd = $('.bbadge', card);
     if (!u) { if (bd) bd.remove(); return; }
@@ -2473,7 +2559,8 @@ const SCREENS = { menus: buildMenusScreen, library: buildLibraryScreen, settings
 // the element that scrolls on each screen (its position is remembered when you leave and put back when you return)
 const SCREEN_SCROLLER = { menus: '.ilist', library: '.b-scroll', settings: '.settings-scroll', status: '.settings-scroll', licence: '.settings-scroll' };
 const scrollerOf = name => { const root = $('#screen-' + name); return root ? $(SCREEN_SCROLLER[name] || '.settings-scroll', root) : null; };
-const saveLastScreen = name => { call('set_pref', 'last_screen', name).catch(() => {}); };   // at once: a debounce could be lost on a quick close
+let lastScreenChain = Promise.resolve();   // writes run one after another, so two quick switches cannot land out of order
+const saveLastScreen = name => { lastScreenChain = lastScreenChain.then(() => call('set_pref', 'last_screen', name)).catch(() => {}); };
 function showScreen(name, { fresh = false } = {}) {
   if (!SCREENS[name] || (name === 'licence' && !licenceVisible())) name = 'menus';
   if (openPopover) openPopover();
@@ -2499,7 +2586,7 @@ async function loadLibrary() {
     const lib = await call('get_library');
     S.library = (lib && lib.brushes) || [];
     S.libSorted = S.library.slice().sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base', numeric: true }));
-    S.libByName = new Map(S.library.map(b => [b.name.toLowerCase(), b]));
+    S.libByName = new Map(S.library.map(b => [nameKey(b.name), b]));
     S.libState = 'ready';
   } catch (e) { S.libState = 'error'; }
   if (R.libRefresh) R.libRefresh();
