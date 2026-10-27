@@ -21,7 +21,9 @@ Press **Q** over ZBrush and a ring of your favourite brushes and buttons appears
 - **High-DPI and multi-monitor aware.** The ring stays on screen, even at the screen edge.
 - **Plain JSON menus** in `%APPDATA%\RadialMenu\radial.json`, so you can back them up, share them and keep them in version control.
 
-![Brushes menu with ClayBuildup hovered](docs/images/ring.png)
+<p align="center">
+  <img src="docs/images/ring.png" alt="Brushes menu with ClayBuildup hovered" width="600">
+</p>
 
 ## Requirements
 
@@ -61,7 +63,9 @@ To continue, click **More info**, then **Run anyway**. If you would rather not r
 3. Drag brushes from the **Library** onto the ring, or use **Add item** for buttons, sliders and switches.
 4. Click **Save** (Ctrl+S). The next time you open the ring in ZBrush it uses your changes. There is no need to restart anything.
 
-![Radial Menu Studio: the menu list, the ring preview and the brush library](docs/images/studio.png)
+<p align="center">
+  <img src="docs/images/studio.png" alt="Radial Menu Studio: the menu list, the ring preview and the brush library">
+</p>
 
 The [user guide](docs/user-guide.md) covers every setting and item type.
 

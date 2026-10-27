@@ -259,8 +259,15 @@ input[type=color].swatch::-webkit-color-swatch { border: 0; border-radius: 5px; 
 .ghost-chip .ico { margin-left: 6px; color: var(--accent); }
 body.dragging, body.dragging * { cursor: grabbing !important; }
 .fatal { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; color: var(--sub); text-align: center; padding: 40px; }
+.screen > .fatal { position: absolute; inset: 0; height: auto; overflow: auto; }   /* the menus screen is a grid; the recovery panel ignores it */
 .fatal h2 { color: var(--text); }
 .fatal p { max-width: 560px; font-size: 12px; color: #ee7b7b; }
+.fatal .fatal-path { color: var(--sub); word-break: break-all; user-select: text; }
+.fatal .fatal-err { max-width: 620px; width: 100%; max-height: 160px; overflow: auto; margin: 0; padding: 10px 12px; text-align: left; background: var(--bg0); border: 1px solid var(--line);
+  border-radius: 8px; color: #ee7b7b; font-size: 12px; line-height: 1.6; white-space: pre-wrap; word-break: break-word; user-select: text; cursor: text; }
+.fatal .fatal-lead { max-width: 480px; color: var(--sub); font-size: 12.5px; }
+.fatal .btn-row { justify-content: center; }
+.screens > .loading { position: absolute; inset: 0; display: grid; place-items: center; color: var(--sub); font-size: 12.5px; }
 .errbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 500; background: #5a1d1d; color: #ffd0d0; font: 12px var(--mono); padding: 6px 12px; user-select: text; }
 
 /* toast, modal, popover, combobox */

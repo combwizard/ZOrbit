@@ -33,7 +33,7 @@
     <div class="spacer"></div>
     <div class="dirty" id="dirty" hidden role="status"><i class="dot"></i>Unsaved changes</div>
     <button class="btn" id="revertBtn" type="button" disabled>Revert</button>
-    <button class="btn primary" id="saveBtn" type="button">Save <kbd>Ctrl+S</kbd></button>
+    <button class="btn primary" id="saveBtn" type="button" disabled>Save <kbd>Ctrl+S</kbd></button>
     <div class="winctl" role="group" aria-label="Window">
       <button class="winbtn" id="winMin" type="button" title="Minimise" aria-label="Minimise">
         <svg viewBox="0 0 12 12" width="12" height="12"><path d="M2 6.5h8" stroke="currentColor" stroke-width="1.2"/></svg>
@@ -67,6 +67,7 @@
       <button class="rail-btn rail-bottom" type="button" data-screen="licence" title="Licence (Alt+5)"><span class="ri" data-i="licence"></span><span>Licence</span></button>
     </nav>
     <main class="screens" id="screens">
+      <div class="loading" role="status">Loading...</div>
       <section class="screen menus-screen" id="screen-menus" hidden></section>
       <section class="screen library-screen" id="screen-library" hidden></section>
       <section class="screen settings-screen" id="screen-settings" hidden></section>

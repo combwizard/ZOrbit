@@ -1,7 +1,9 @@
 /* Browser-only stand-in for pywebview's js_api. Loaded by index.html only when the URL has ?mock.
    Backed by window.__RADIAL_MOCK__ (recorded real responses from dev/mock_data.js).
    Extra URL switches for visual testing: ?problems (sample problems), ?status=down (app/ZBrush off),
-   ?lag=300 (artificial latency in ms for preview calls). */
+   ?lag=300 (artificial latency in ms for preview calls), ?broken (get_config fails to parse: recovery screen),
+   ?conflict (the first save without force reports "file changed on disk"), ?blocked (a save without force is
+   refused as "no ring can open" until forced). */
 (function () {
   var M = window.__RADIAL_MOCK__ || {};
   var q = new URLSearchParams(location.search);
@@ -10,6 +12,8 @@
   var clone = function (o) { return JSON.parse(JSON.stringify(o)); };
   var ticks = 0;
   var saved = clone(M.get_config.config);
+  var mtime = 1700000000000000000, conflictDone = false;
+  var BROKEN_ERR = "Expecting ',' delimiter: line 12 column 5 (char 301)";
 
   function validate(cfg) {
     var out = [];
@@ -46,14 +50,29 @@
     get_config: function () {
       return sleep(40).then(function () {
         var r = clone(M.get_config);
+        if (q.has('broken')) return { config: null, error: BROKEN_ERR, path: r.path, backup_exists: true, problems: [], mtime_ns: null };
         r.problems = q.has('problems') ? validate(r.config) : r.problems;
+        r.mtime_ns = mtime; r.backup_exists = true;
         return r;
       });
     },
     validate: function (cfg) { return sleep(30).then(function () { return { problems: validate(cfg) }; }); },
-    save_config: function (cfg) {
-      return sleep(180).then(function () { saved = clone(cfg); return { saved: true, problems: validate(cfg), time: Date.now() / 1000 }; });
+    save_config: function (cfg, mtime_ns, force, allow_unusable) {
+      return sleep(180).then(function () {
+        if (q.has('conflict') && !force && !conflictDone) {
+          conflictDone = true; mtime += 1000000;
+          return { saved: false, conflict: true, message: 'radial.json was changed on disk after Studio loaded it (mock).', mtime_ns: mtime };
+        }
+        if (q.has('blocked') && !allow_unusable) {
+          return { saved: false, blocked: true, problems: ['menu brushes: no usable items', 'no menu has a hotkey, so nothing can open the ring'],
+            message: 'Saving this would leave no ring that can open, so the radial menu would stop working.' };
+        }
+        saved = clone(cfg); mtime += 1000000;
+        return { saved: true, problems: validate(cfg), time: Date.now() / 1000, mtime_ns: mtime };
+      });
     },
+    restore_backup: function () { return sleep(200).then(function () { return { ok: true, message: 'Restored the last good backup (mock).' }; }); },
+    reset_config: function () { return sleep(200).then(function () { return { ok: true, message: 'Reset to the default menus (mock).' }; }); },
     preview_ring: function (cfg, menuId, hover) {
       return sleep(60 + lag).then(function () {
         var m = cfg && cfg.menus && cfg.menus[menuId];
@@ -105,6 +124,11 @@
     close_now: function () { console.log('[mock] close_now'); return Promise.resolve(true); },
     win_minimize: function () { return Promise.resolve(); },
     win_close: function () { return Promise.resolve(); },
+    win_toggle_maximize: function () { return Promise.resolve(false); },
+    win_is_maximized: function () { return Promise.resolve(false); },
+    get_app_info: function () { return Promise.resolve({ version: '0.6.0' }); },
+    check_update: function () { return sleep(300).then(function () { return q.has('update') ? { newer: true, current: '0.6.0', latest: '0.7.0', url: 'https://github.com/combwizard/zbrush-radial-menu/releases' } : { newer: false, current: '0.6.0', latest: '0.6.0', url: 'https://github.com/combwizard/zbrush-radial-menu/releases' }; }); },
+    open_url: function (url) { console.log('[mock] open_url', url); return Promise.resolve(true); },
   };
   window.pywebview = { api: api };
   setTimeout(function () { window.dispatchEvent(new Event('pywebviewready')); }, 0);

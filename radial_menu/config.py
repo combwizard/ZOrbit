@@ -177,7 +177,7 @@ def _default_label(a: dict, menus_raw: dict) -> str:
 
 def load(path: str) -> Config:
     st = os.stat(path)
-    with open(path, encoding="utf-8") as f:
+    with open(path, encoding="utf-8-sig") as f:         # -sig: an editor's byte-order mark is accepted
         raw = json.load(f)
     cfg = Config(path=path, mtime=st.st_mtime)
     errors = cfg.errors

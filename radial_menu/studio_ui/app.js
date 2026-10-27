@@ -144,6 +144,9 @@ const S = {
   dock: { cat: 'All', q: '' },
   status: null,
   prefs: { show_licence: true },
+  ready: false, fatal: false,                 // ready after the first screen is up; fatal when the recovery screen is showing
+  saving: false, savePromise: null, mtimeNs: null,
+  dirtySent: undefined, dirtySeq: 0, dirtyFlight: null,
 };
 const R = {};               // region renderers registered by the visible screen
 
@@ -297,7 +300,7 @@ function modal({ title, body, actions }) {
     const prev = document.activeElement;
     const box = h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-label': title },
       h('h2', null, title), h('div', { class: 'modal-body' }, body),
-      h('div', { class: 'modal-actions' }, actions.map(a => h('button', { class: 'btn ' + (a.kind || ''), type: 'button', dataset: { v: a.value }, onclick: () => close(a.value) }, a.text))));
+      h('div', { class: 'modal-actions' }, actions.map(a => h('button', { class: 'btn ' + (a.kind || ''), type: 'button', dataset: { v: a.value }, 'data-focus': a.focus, onclick: () => close(a.value) }, a.text))));
     const scrim = h('div', { class: 'scrim', onmousedown: e => { if (e.target === scrim) close(undefined); } }, box);
     function close(v) {
       document.removeEventListener('keydown', onKey, true);
@@ -319,7 +322,7 @@ function modal({ title, body, actions }) {
     document.addEventListener('keydown', onKey, true);
     $('#overlay-root').append(scrim);
     requestAnimationFrame(() => scrim.classList.add('in'));
-    const primary = $('.btn.primary, .btn.danger', box) || $('.btn:last-child', box);
+    const primary = $('.btn[data-focus]', box) || $('.btn.primary, .btn.danger', box) || $('.btn:last-child', box);
     if (primary) primary.focus();
   });
 }
@@ -1880,7 +1883,14 @@ function buildStatusScreen(root) {
 const dirtyNow = () => !!S.cfg && JSON.stringify(S.cfg) !== S.savedStr;
 function updateDirty() {
   const d = dirtyNow();
-  if (d !== S.dirtySent) { S.dirtySent = d; call('set_dirty', d).catch(() => {}); }
+  if (d !== S.dirtySent && !(S.dirtyFlight && S.dirtyFlight.d === d)) {
+    // dirtySent only moves once the backend has acknowledged; a failed call leaves it alone so the next change retries
+    const seq = ++S.dirtySeq;
+    S.dirtyFlight = { d, seq };
+    call('set_dirty', d)
+      .then(() => { if (seq === S.dirtySeq) S.dirtySent = d; }, () => {})
+      .then(() => { if (S.dirtyFlight && S.dirtyFlight.seq === seq) S.dirtyFlight = null; });
+  }
   $('#dirty').hidden = !d;
   $('#revertBtn').disabled = !d;
   $('#saveBtn').classList.toggle('pending', d);
@@ -1900,28 +1910,86 @@ function renderProblems() {
   }));
   setText($('#problemsFirst'), p[0] + (p.length > 1 ? `  (+${p.length - 1} more)` : ''));
 }
-async function save() {
-  if (S.saving) return;
+/* Takes a freshly loaded get_config result (boot, or "reload from disk") and makes it the current and saved config. */
+function adoptConfig(res) {
+  S.cfg = res.config;
+  if (!S.cfg.menus || typeof S.cfg.menus !== 'object') S.cfg.menus = {};
+  S.path = res.path || S.path || ''; S.problems = res.problems || [];
+  S.mtimeNs = res.mtime_ns !== undefined ? res.mtime_ns : null;
+  S.savedStr = JSON.stringify(S.cfg); S.hist = [S.savedStr]; S.histI = 0;
+}
+async function reloadFromDisk() {
+  let res;
+  try { res = await call('get_config'); } catch (e) { toast('Could not reload: ' + (e.message || e), { tone: 'warn', ms: 6000 }); return false; }
+  if (!res || !res.config) { toast('Could not reload: ' + ((res && res.error) || 'the file cannot be read'), { tone: 'warn', ms: 6000 }); return false; }
+  validateSoon.cancel(); snapSoon.cancel();
+  adoptConfig(res);
+  if (!S.cfg.menus[S.menuId]) S.menuId = Object.keys(S.cfg.menus)[0] || null;
+  const m = curMenu();
+  if (!m || S.itemIdx === null || S.itemIdx >= (m.items || []).length) S.itemIdx = null;
+  S.version++; updateDirty(); renderProblems(); previewSoon();
+  renderAllMenus(); if (R.settings) R.settings(); if (R.libTarget) R.libTarget();
+  toast('Reloaded the file from disk.', { tone: 'ok', ms: 2600 });
+  return true;
+}
+function save() {
+  if (!S.cfg || S.fatal || !S.ready) return Promise.resolve('skipped');
+  if (S.saving) return S.savePromise;
+  if (!dirtyNow()) { toast('Nothing to save', { ms: 1400 }); return Promise.resolve('clean'); }
   S.saving = true;
-  const btn = $('#saveBtn'); btn.disabled = true;
+  const btn = $('#saveBtn'); btn.disabled = true; btn.setAttribute('aria-busy', 'true');
+  S.savePromise = doSave().then(out => out, () => 'failed').then(out => {
+    S.saving = false; S.savePromise = null;
+    btn.disabled = false; btn.removeAttribute('aria-busy');
+    updateDirty(); renderProblems();
+    return out;
+  });
+  return S.savePromise;
+}
+/* One save attempt. Resolves to 'saved', 'reloaded' (the user chose the file on disk over their edit), 'cancelled' or
+   'failed'. force skips the changed-on-disk check; allowUnusable skips the "no ring can open" check. They stay
+   separate so confirming one warning never skips the other. */
+async function doSave({ force = false, allowUnusable = false } = {}) {
   const snap = JSON.stringify(S.cfg);
   try {
-    const r = await call('save_config', S.cfg);
+    const r = await call('save_config', S.cfg, S.mtimeNs, !!force, !!allowUnusable);
     if (r && r.saved) {
       S.savedStr = snap; S.problems = r.problems || [];
+      if (r.mtime_ns !== undefined) S.mtimeNs = r.mtime_ns;
       const t = r.time ? new Date(r.time * 1000).toLocaleTimeString() : '';
       toast(S.problems.length ? `Saved at ${t} with ${S.problems.length} problem${S.problems.length === 1 ? '' : 's'}` : `Saved at ${t}. The app picks it up straight away.`, { tone: S.problems.length ? 'warn' : 'ok', ms: 3800 });
       if (S.problems.length) { S.problemsOpen = true; }
-    } else toast('The config could not be saved.', { tone: 'warn' });
-  } catch (e) { toast('Save failed: ' + (e.message || e), { tone: 'warn', ms: 6000 }); }
-  S.saving = false; btn.disabled = false;
-  updateDirty(); renderProblems();
+      return 'saved';
+    }
+    if (r && r.conflict) {
+      const v = await modal({ title: 'The file changed on disk',
+        body: h('p', null, r.message || 'The menus file was changed by something else after Studio loaded it. Saving now would overwrite those changes.'),
+        actions: [{ text: 'Cancel', value: 'cancel' }, { text: 'Overwrite', value: 'overwrite', kind: 'danger-ghost' }, { text: 'Reload from disk', value: 'reload', kind: 'primary', focus: true }] });
+      if (v === 'reload') return (await reloadFromDisk()) ? 'reloaded' : 'failed';
+      if (v === 'overwrite') {
+        // adopt the file's current stamp so this is a plain save of what the user saw; the no-usable-ring check still applies
+        if (r.mtime_ns !== undefined && r.mtime_ns !== null) { S.mtimeNs = r.mtime_ns; return doSave({ allowUnusable }); }
+        return doSave({ force: true, allowUnusable });
+      }
+      return 'cancelled';
+    }
+    if (r && r.blocked) {
+      const probs = r.problems || [];
+      const v = await modal({ title: 'Save anyway?',
+        body: h('div', { class: 'changes' }, h('p', null, r.message || 'Saving this would leave no ring that can open.'),
+          probs.length ? h('div', { class: 'changes-list' }, h('div', { class: 'chg-group' }, h('ul', null, probs.map(p => h('li', null, p))))) : null),
+        actions: [{ text: 'Keep editing', value: 'keep', kind: 'primary', focus: true }, { text: 'Save anyway', value: 'force', kind: 'danger-ghost' }] });
+      return v === 'force' ? doSave({ force, allowUnusable: true }) : 'cancelled';
+    }
+    toast((r && r.message) || 'The config could not be saved.', { tone: 'warn', ms: 5000 });
+    return 'failed';
+  } catch (e) { toast('Save failed: ' + (e.message || e), { tone: 'warn', ms: 6000 }); return 'failed'; }
 }
 async function revert() {
   if (!dirtyNow()) return;
   const ok = await modal({ title: 'Revert changes', body: h('p', null, 'Discard all unsaved changes and go back to the last saved config?'), actions: [{ text: 'Keep editing', value: false }, { text: 'Revert', kind: 'danger', value: true }] });
   if (!ok) return;
-  const old = S.cfg; S.cfg = JSON.parse(S.savedStr);
+  S.cfg = JSON.parse(S.savedStr);
   if (!S.cfg.menus[S.menuId]) S.menuId = Object.keys(S.cfg.menus)[0] || null;
   S.itemIdx = null; S.version++; updateDirty(); validateSoon(); previewSoon(); pushSnap();
   renderAllMenus(); if (R.settings) R.settings(); if (R.libTarget) R.libTarget();
@@ -2058,7 +2126,7 @@ async function openCloseDialog() {
     { text: 'Close without saving', value: 'discard', kind: 'danger-ghost' },
     { text: 'Save and close', value: 'save', kind: 'primary' }] });
   S.closeDialogOpen = false;
-  if (v === 'save') { await save(); if (!dirtyNow()) call('close_now').catch(() => {}); }
+  if (v === 'save') { const out = await save(); if (out === 'saved' && !dirtyNow()) call('close_now').catch(() => {}); }
   else if (v === 'discard') call('close_now').catch(() => {});
 }
 // Called by studio.py when the window is about to close and the page has unsaved changes.
@@ -2083,6 +2151,7 @@ function showScreen(name) {
   for (const k of Object.keys(R)) delete R[k];
   clearInterval(statusTimer);
   S.screen = name;
+  const loading = $('#screens > .loading'); if (loading) loading.remove();
   $$('.rail-btn').forEach(b => { const on = b.dataset.screen === name; b.classList.toggle('on', on); b.setAttribute('aria-current', on ? 'page' : 'false'); });
   $$('.screen').forEach(s => { s.hidden = s.id !== 'screen-' + name; });
   SCREENS[name]($('#screen-' + name));
@@ -2106,23 +2175,52 @@ async function loadSuggestions() {
   if (S.screen === 'menus' && S.tab === 'item' && R.right && !document.activeElement.closest('.insp')) R.right();
 }
 
-function fatal(msg) {
-  $$('.screen').forEach(s => { s.hidden = true; });
-  const s = $('#screen-menus'); s.hidden = false;
-  s.replaceChildren(h('div', { class: 'fatal' }, icon('alert', 36), h('h2', null, 'Could not load the config'), h('p', { class: 'mono' }, msg),
-    h('button', { class: 'btn primary', type: 'button', onclick: () => { location.reload(); } }, 'Try again')));
+/* Shown instead of the app when the menus file cannot be read. `res` is the get_config result (config null, error set) or an Error. */
+function recovery(res) {
+  S.fatal = true; S.ready = false;
+  const isErr = res instanceof Error;
+  const msg = isErr ? (res.message || String(res)) : ((res && res.error) || 'The file could not be read.');
+  const path = isErr ? '' : String((res && res.path) || '');
+  const backup = !isErr && !!(res && res.backup_exists);
+  const loading = $('#screens > .loading'); if (loading) loading.remove();
+  $$('.rail-btn').forEach(b => { b.classList.remove('on'); b.setAttribute('aria-current', 'false'); });
+  $('#saveBtn').disabled = true; $('#revertBtn').disabled = true;
+  if (path) { $('#pathHint').textContent = path; $('#pathHint').title = path; }
+  const run = async (btn, method) => {
+    btn.disabled = true;
+    try {
+      const r = await call(method);
+      toast((r && r.message) || (r && r.ok ? 'Done.' : 'That did not work.'), { tone: r && r.ok ? 'ok' : 'warn', ms: 4000 });
+      if (r && r.ok) { setTimeout(() => location.reload(), 700); return; }
+    } catch (e) { toast('That failed: ' + (e.message || e), { tone: 'warn', ms: 6000 }); }
+    btn.disabled = false;
+  };
+  const folderBtn = h('button', { class: 'btn', type: 'button', onclick: async () => { try { await call('open_folder', 'app'); } catch (e) { toast('Could not open the folder.', { tone: 'warn' }); } } }, icon('folder', 13), 'Open folder');
+  const restoreBtn = backup ? h('button', { class: 'btn', type: 'button', onclick: () => run(restoreBtn, 'restore_backup') }, icon('undo', 13), 'Restore backup') : null;
+  const resetBtn = h('button', { class: 'btn danger-ghost', type: 'button', onclick: async () => {
+    const ok = await modal({ title: 'Start from defaults?',
+      body: h('p', null, 'This replaces your menus file with the built-in default menus. Anything in the current file is lost, so use Open folder first if you want to keep a copy.'),
+      actions: [{ text: 'Cancel', value: false, focus: true }, { text: 'Start from defaults', value: true, kind: 'danger' }] });
+    if (ok) run(resetBtn, 'reset_config');
+  } }, 'Start from defaults');
+  $$('.screen').forEach(sc => { sc.hidden = sc.id !== 'screen-menus'; });
+  $('#screen-menus').replaceChildren(h('div', { class: 'fatal' }, icon('alert', 36), h('h2', null, 'Could not read your menus file'),
+    path ? h('p', { class: 'fatal-path mono' }, path) : null,
+    h('pre', { class: 'fatal-err mono' }, msg),
+    h('p', { class: 'fatal-lead' }, backup ? 'Nothing has been changed. You can fix the file yourself, restore the last good backup, or start again from the defaults.' : 'Nothing has been changed. You can fix the file yourself or start again from the defaults.'),
+    h('div', { class: 'btn-row' }, folderBtn, restoreBtn, resetBtn, h('button', { class: 'btn primary', type: 'button', onclick: () => location.reload() }, 'Try again'))));
 }
 
 async function boot() {
-  let cfgRes, opts;
-  try { [cfgRes, opts] = await Promise.all([call('get_config'), call('get_options')]); }
-  catch (e) { fatal(String(e && e.message || e)); return; }
-  S.cfg = cfgRes.config || {};
-  if (!S.cfg.menus || typeof S.cfg.menus !== 'object') S.cfg.menus = {};
+  const [cfgR, optR, prefR] = await Promise.allSettled([call('get_config'), call('get_options'), call('get_prefs')]);
+  if (cfgR.status === 'rejected') { recovery(cfgR.reason instanceof Error ? cfgR.reason : new Error(String(cfgR.reason))); return; }
+  const cfgRes = cfgR.value;
+  if (!cfgRes || !cfgRes.config || typeof cfgRes.config !== 'object' || Array.isArray(cfgRes.config)) { recovery(cfgRes || new Error('The backend returned no config.')); return; }
+  const opts = optR.status === 'fulfilled' ? optR.value : null;     // a failed get_options just means the FALLBACK_* lists are used
+  if (prefR.status === 'fulfilled' && prefR.value) S.prefs = Object.assign(S.prefs, prefR.value);
+  adoptConfig(cfgRes);
   S.opts = opts; S.defaults = Object.assign({}, FALLBACK_DEFAULTS, cfgRes.defaults || (opts && opts.ring_defaults) || {});
   S.defaults.colors = Object.assign({}, FALLBACK_DEFAULTS.colors, S.defaults.colors || {});
-  S.path = cfgRes.path || ''; S.problems = cfgRes.problems || [];
-  S.savedStr = JSON.stringify(S.cfg); S.hist = [S.savedStr]; S.histI = 0;
   const ids = Object.keys(S.cfg.menus);
   S.menuId = params.get('menu') && S.cfg.menus[params.get('menu')] ? params.get('menu') : (ids.find(id => S.cfg.menus[id].hotkey) || ids[0] || null);
   const m0 = curMenu();
@@ -2134,24 +2232,26 @@ async function boot() {
   $('#pathHint').textContent = S.path;
   $('#pathHint').title = S.path;
   updateDirty(); renderProblems();
-  try { S.prefs = Object.assign(S.prefs, await call('get_prefs')); } catch (e) { /* defaults */ }
   applyPrefs();
   loadLibrary(); loadSuggestions();
   showScreen(params.get('screen') || 'menus');
+  S.ready = true;
+  $('#saveBtn').disabled = false;
   refreshZsBadge();
   if (params.has('hover')) { /* debug aid */ }
   document.documentElement.classList.add('ready');
 }
 
 function init() {
-  $$('.rail-btn').forEach(b => b.addEventListener('click', () => showScreen(b.dataset.screen)));
-  $('#saveBtn').addEventListener('click', save);
+  $$('.rail-btn').forEach(b => b.addEventListener('click', () => { if (S.ready && !S.fatal) showScreen(b.dataset.screen); }));
+  $('#saveBtn').addEventListener('click', () => save());
   $('#revertBtn').addEventListener('click', revert);
   $('#problemsBtn').addEventListener('click', () => { S.problemsOpen = !S.problemsOpen; renderProblems(); });
   $('#problemsHead').addEventListener('click', () => { S.problemsOpen = !S.problemsOpen; renderProblems(); });
   window.addEventListener('keydown', e => {
     const ed = e.target && e.target.closest && e.target.closest('input, textarea, select, [contenteditable]');
-    if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === 's') { e.preventDefault(); save(); }
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === 's') { e.preventDefault(); if (S.ready && !S.fatal) save(); }
+    else if (!S.ready || S.fatal) return;
     else if ((e.ctrlKey || e.metaKey) && !e.altKey && !ed && e.key.toLowerCase() === 'z') { e.preventDefault(); e.shiftKey ? redo() : undo(); }
     else if ((e.ctrlKey || e.metaKey) && !e.altKey && !ed && e.key.toLowerCase() === 'y') { e.preventDefault(); redo(); }
     else if (e.altKey && !e.ctrlKey && !e.shiftKey && /^[1-5]$/.test(e.key)) { e.preventDefault(); const scr = ['menus', 'library', 'settings', 'status', 'licence'][+e.key - 1]; if (scr !== 'licence' || licenceVisible()) showScreen(scr); }

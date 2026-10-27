@@ -6,7 +6,20 @@ All notable changes to this project are listed here. The format follows
 
 ## [Unreleased]
 
+### Added
+- Studio opens on a recovery screen when `radial.json` cannot be read: it shows the error with its line and column
+  and offers Open folder, Restore backup and Start from defaults (the unreadable file is kept as
+  `radial.json.broken`).
+- Studio notices when `radial.json` changed on disk after it was loaded and asks whether to overwrite or reload,
+  instead of silently replacing a hand edit.
+- Studio asks before saving a config that no ring can open from (no menus, or no menu with a hotkey).
+
 ### Changed
+- Save does nothing when there is nothing to save, and `radial.json.bak` is only replaced when the previous file
+  was readable and differs, so saving twice cannot overwrite a good backup with a bad one.
+- A `radial.json` with a byte-order mark (left by some editors) is accepted by the app and by Studio.
+- Closing Studio always asks the page whether anything is unsaved, instead of trusting a flag that could lag
+  behind an edit.
 - ZBrush 2022 to 2025: the plugin binds F9 to Zplugin > Radial Menu > Apply itself, so the default bridge key
   works without Ctrl+Alt+click and Preferences > Hotkeys > Store. A key you bound and stored yourself keeps
   working. Settings > Older ZBrush offers Update for plugins installed before this.
@@ -16,6 +29,8 @@ All notable changes to this project are listed here. The format follows
   the first Apply of a new session can't carry out an old pick.
 
 ### Fixed
+- Pressing Ctrl+S in Studio before the menus had loaded, or on the error screen, could write `null` over
+  `radial.json`.
 - ZBrush 2026 and newer: loading the plugin ended in a Python error (`BRIDGE_DIR` is not defined) after
   everything else had started. Nothing stopped working, but `bridge.log` never said "bridge loaded".
 

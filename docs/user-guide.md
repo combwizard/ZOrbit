@@ -46,7 +46,12 @@ The version at the top links to its release notes. When Studio opens, it asks Gi
 
 How saving works:
 
-- **Save** writes `radial.json` and keeps the previous version as `radial.json.bak`.
+- **Save** writes `radial.json` and keeps the previous version as `radial.json.bak`. The backup is only replaced when the
+  file was readable and actually differs, so saving twice cannot swap a good backup for a bad one. When nothing has
+  changed, Save says so and writes nothing.
+- If the file changed on disk after Studio loaded it (you edited it by hand, say), Save asks whether to overwrite
+  it or reload from disk.
+- A config that no ring can open from (no menus, or no menu with a hotkey) is not saved until you confirm.
 - **Revert** goes back to what is saved on disk.
 - The app re-reads the file as soon as it changes, so saved changes apply immediately, new hotkeys included. You do not need to restart ZBrush or the app.
 - If something in the file is wrong, a **problems** pill appears at the top with the details. Studio saves anyway, and the app skips the bad items and logs what it skipped.
@@ -307,7 +312,8 @@ When this version of Radial Menu has a newer plugin than one you installed, **Se
 | Path | What |
 |---|---|
 | `%APPDATA%\RadialMenu\radial.json` | Your menus and settings. Created from the starter menus on first run. |
-| `%APPDATA%\RadialMenu\radial.json.bak` | The version before your last save in Studio. |
+| `%APPDATA%\RadialMenu\radial.json.bak` | The version before your last save in Studio (only replaced when the file was readable and changed). |
+| `%APPDATA%\RadialMenu\radial.json.broken` | The file Studio could not read, kept when you chose **Start from defaults** on the recovery screen. |
 | `%APPDATA%\RadialMenu\launch.json` | Tells the plugin how to start the app and Studio. Rewritten on each start. |
 | `%LOCALAPPDATA%\RadialMenu\radiald.log` | The app: config loads, hotkeys, rings, hand-offs. Trimmed automatically. |
 | `%LOCALAPPDATA%\RadialMenu\bridge.log` | The plugin inside ZBrush: what each pick actually did. |
@@ -354,7 +360,7 @@ Set `"mode": "key"` temporarily, pick something, and check `bridge.log` for the 
 The installer is not code-signed yet. Click **More info**, then **Run anyway**. The README explains why.
 
 **I broke my menus file.**
-Studio keeps the last version as `radial.json.bak`. If you edit the file by hand and the app cannot read it, it keeps using the last good version and logs the error. Deleting `radial.json` makes the app create a fresh one from the starter menus.
+Studio keeps the last version as `radial.json.bak`. If you edit the file by hand and the app cannot read it, it keeps using the last good version and logs the error. When Studio cannot read it either, it opens on a recovery screen that shows the error with its line and column, and offers **Open folder**, **Restore backup** and **Start from defaults** (the unreadable file is kept as `radial.json.broken`). A byte-order mark left by an editor is accepted. Deleting `radial.json` makes the app create a fresh one from the starter menus.
 
 **Checking a file from a source checkout.**
 `python radial_menu\main.py --check` prints every menu and lists problems without starting anything.

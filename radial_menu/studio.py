@@ -68,6 +68,28 @@ def _tail(path, n=40):
         return []
 
 
+def _write_atomic(path, data):
+    """Writes str (as UTF-8 text) or bytes to path.tmp, flushes it to disk, then swaps it in, so a crash or a
+    power cut leaves either the old file or the new one, never half of one."""
+    tmp = path + ".tmp"
+    try:
+        if isinstance(data, bytes):
+            f = open(tmp, "wb")
+        else:
+            f = open(tmp, "w", encoding="utf-8")
+        with f:
+            f.write(data)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, path)
+    except OSError:
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
+        raise
+
+
 def _version_key(v):
     """'v0.5.1' or '0.5.1' -> (0, 5, 1); None for anything else."""
     m = re.fullmatch(r"v?(\d+)\.(\d+)\.(\d+)", str(v or "").strip())
@@ -88,7 +110,7 @@ def _title_path(p: str) -> str:
 class Api:
     def __init__(self):
         self._window = None    # underscore: pywebview must not expose (and crawl) it to JS
-        self._dirty = False            # the page has unsaved changes (reported by set_dirty)
+        self._dirty = False            # the page's last report of unsaved changes (set_dirty); informational
         self._allow_close = False      # set by close_now(): the next close goes through
         self._ask_sent = 0.0           # when we last asked the page to show the close dialog
         self._ask_acked = True         # whether the page answered that request
@@ -112,30 +134,124 @@ class Api:
                 pass
 
     def get_config(self):
-        with open(CONFIG_FILE, encoding="utf-8") as f:
-            raw = json.load(f)
+        """radial.json as the page edits it, with the loader's problems. When the file cannot be read or is
+        not a JSON object, config is None and error says why (with line and column when the parser knows),
+        so the page can offer to restore the backup or start again instead of failing to open."""
+        out = {"config": None, "problems": [], "path": CONFIG_FILE, "defaults": C.DEFAULT_RING,
+               "mtime_ns": None, "backup_exists": os.path.isfile(CONFIG_FILE + ".bak")}
+        try:
+            mtime_ns = os.stat(CONFIG_FILE).st_mtime_ns       # before reading: a later change shows as a conflict
+            with open(CONFIG_FILE, encoding="utf-8-sig") as f:
+                raw = json.load(f)
+        except json.JSONDecodeError as e:
+            out["error"] = f"{e.msg} at line {e.lineno}, column {e.colno}"
+            return out
+        except UnicodeDecodeError as e:
+            out["error"] = f"the file is not valid UTF-8 text (bad byte at position {e.start})"
+            return out
+        except FileNotFoundError:
+            out["error"] = "radial.json does not exist"
+            return out
+        except (OSError, ValueError, RecursionError) as e:
+            out["error"] = getattr(e, "strerror", None) or str(e) or "the file could not be read"
+            return out
+        if not isinstance(raw, dict):
+            out["error"] = "the file is not a JSON object"
+            return out
         _, problems = self._load_dict(raw)
-        return {"config": raw, "problems": problems, "path": CONFIG_FILE, "defaults": C.DEFAULT_RING}
+        out.update(config=raw, problems=problems, mtime_ns=mtime_ns)
+        return out
 
     def validate(self, cfg):
         _, problems = self._load_dict(cfg)
         return {"problems": problems}
 
-    def save_config(self, cfg):
-        """Writes radial.json (previous version kept as radial.json.bak). The app notices the change within
-        half a second. Saves even with problems (the loader skips bad items) and reports them."""
-        _, problems = self._load_dict(cfg)
+    def save_config(self, cfg, mtime_ns=None, force=False, allow_unusable=False):
+        """Writes radial.json. The app notices the change within half a second. Saves even with problems (the
+        loader skips bad items) and reports them, but refuses a config no ring can open from unless force.
+        mtime_ns is the file's time when the page loaded it: if the file has changed since, nothing is written
+        (conflict) unless force. allow_unusable saves a config no ring can open from. The two flags are separate
+        so confirming one warning never skips the other. The previous version is kept as radial.json.bak, only
+        when it was valid JSON and differs, so a corrupt or unchanged file never replaces a good backup."""
+        if not isinstance(cfg, dict) or not isinstance(cfg.get("menus"), dict):
+            return {"saved": False, "message": "The config is not an object with a menus section."}
+        exists = os.path.isfile(CONFIG_FILE)
+        if mtime_ns is not None and exists and not force:
+            try:
+                now_ns = os.stat(CONFIG_FILE).st_mtime_ns
+            except OSError:
+                now_ns = None
+            try:
+                # The page holds this as a JS double (53 bits), which rounds a 1.7e18 ns value by up to ~128 ns,
+                # so compare with a 1 microsecond slack. A real edit is never that close to the loaded time.
+                changed = now_ns is not None and abs(now_ns - int(mtime_ns)) > 1000
+            except (TypeError, ValueError, OverflowError):
+                changed = now_ns is not None
+            if changed:
+                return {"saved": False, "conflict": True, "mtime_ns": now_ns,
+                        "message": "radial.json changed on disk since Studio loaded it."}
+        loaded, problems = self._load_dict(cfg)
+        if not allow_unusable and (loaded is None or not loaded.menus
+                                   or not any(m.hotkey for m in loaded.menus.values())):
+            return {"saved": False, "blocked": True, "problems": problems,
+                    "message": "Saving this would leave the app with no ring that can open."}
         text = json.dumps(cfg, indent=2, ensure_ascii=False) + "\n"
-        if os.path.exists(CONFIG_FILE):
-            with open(CONFIG_FILE, encoding="utf-8") as f:
-                old = f.read()
-            with open(CONFIG_FILE + ".bak", "w", encoding="utf-8") as f:
-                f.write(old)
-        tmp = CONFIG_FILE + ".tmp"
-        with open(tmp, "w", encoding="utf-8") as f:
-            f.write(text)
-        os.replace(tmp, CONFIG_FILE)
-        return {"saved": True, "problems": problems, "time": time.time()}
+        try:
+            if exists:
+                with open(CONFIG_FILE, "rb") as f:
+                    old_bytes = f.read()
+                try:
+                    old = old_bytes.decode("utf-8-sig")
+                    json.loads(old)
+                    if old.replace("\r\n", "\n") != text:
+                        _write_atomic(CONFIG_FILE + ".bak", old_bytes)
+                except ValueError:
+                    pass                                   # corrupt: not worth keeping as the backup
+            _write_atomic(CONFIG_FILE, text)
+            st = os.stat(CONFIG_FILE)
+        except OSError as e:
+            return {"saved": False, "message": f"radial.json could not be written: {e.strerror or e}"}
+        return {"saved": True, "problems": problems, "time": time.time(), "mtime_ns": st.st_mtime_ns}
+
+    def restore_backup(self):
+        """Puts radial.json.bak back as radial.json, if the backup is readable JSON. The backup stays."""
+        bak = CONFIG_FILE + ".bak"
+        try:
+            with open(bak, "rb") as f:
+                data = f.read()
+        except FileNotFoundError:
+            return {"ok": False, "message": "There is no radial.json.bak to restore."}
+        except OSError as e:
+            return {"ok": False, "message": f"radial.json.bak could not be read: {e.strerror or e}"}
+        try:
+            if not isinstance(json.loads(data.decode("utf-8-sig")), dict):
+                return {"ok": False, "message": "radial.json.bak is not a JSON object, so it was not restored."}
+        except ValueError as e:
+            return {"ok": False, "message": f"radial.json.bak is not valid JSON ({e}), so it was not restored."}
+        try:
+            _write_atomic(CONFIG_FILE, data)
+        except OSError as e:
+            return {"ok": False, "message": f"radial.json could not be written: {e.strerror or e}"}
+        return {"ok": True, "message": "Restored radial.json from radial.json.bak."}
+
+    def reset_config(self):
+        """Starts again from the shipped default menus. The file being replaced is first kept as
+        radial.json.broken (a previous .broken is overwritten), so nothing is lost."""
+        try:
+            with open(paths.DEFAULT_MENUS, "rb") as f:
+                default = f.read()
+            if os.path.isfile(CONFIG_FILE):
+                with open(CONFIG_FILE, "rb") as f:
+                    current = f.read()
+                if current != default:
+                    _write_atomic(CONFIG_FILE + ".broken", current)
+            else:
+                os.makedirs(paths.CONFIG_DIR, exist_ok=True)
+            _write_atomic(CONFIG_FILE, default)
+        except OSError as e:
+            return {"ok": False, "message": f"Could not start again from the defaults: {e.strerror or e}"}
+        return {"ok": True, "message": "Started again from the default menus. The old file is kept as "
+                                       "radial.json.broken."}
 
     # --- ring preview ----------------------------------------------------------------------------
     def preview_ring(self, cfg, menu_id, hover=None, scale=1.0):
@@ -380,7 +496,8 @@ class Api:
     def open_url(self, url):
         """Opens one of the project's own links in the default browser (nothing else is allowed)."""
         allowed = ("https://github.com/combwizard/zbrush-radial-menu", "https://www.gnu.org/licenses/gpl-3.0.html")
-        if isinstance(url, str) and url.startswith(allowed):
+        ok = isinstance(url, str) and any(url == a or url.startswith(a + c) for a in allowed for c in "/?#")
+        if ok:
             os.startfile(url)
             return True
         return False
@@ -418,7 +535,8 @@ class Api:
         return bool(h and user32.IsZoomed(h))
 
     def set_dirty(self, dirty):
-        """The page reports whether it has unsaved changes (only when that flips)."""
+        """The page reports whether it has unsaved changes (only when that flips). Informational only: closing
+        does not trust it, the page is always asked (see _on_closing)."""
         self._dirty = bool(dirty)
         return True
 
@@ -508,10 +626,11 @@ def _main_window(title=TITLE, pid=None):
 
 def _on_closing(api):
     """pywebview 'closing' handler (runs synchronously on the UI thread; returning False cancels).
-    Every way of closing (our button, Alt+F4, taskbar, WM_CLOSE) arrives here. With unsaved changes the
-    close is cancelled and the page is asked to show its dialog. That request must run on another thread:
-    calling into the page from inside this handler would deadlock the UI thread."""
-    if api._allow_close or not api._dirty:
+    Every way of closing (our button, Alt+F4, taskbar, WM_CLOSE) arrives here. The close is cancelled and the
+    page is always asked, whatever set_dirty last said: the page closes at once when it has nothing unsaved,
+    and shows its dialog when it has. That request must run on another thread: calling into the page from
+    inside this handler would deadlock the UI thread."""
+    if api._allow_close:
         _remember_window(api._hwnd())
         return None
     now = time.time()
