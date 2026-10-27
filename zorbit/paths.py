@@ -12,7 +12,7 @@ import shutil
 import sys
 
 APP_NAME = "ZOrbit"
-VERSION = "0.7.0"
+VERSION = "0.7.1"
 FROZEN = bool(getattr(sys, "frozen", False))
 PKG_DIR = os.path.dirname(os.path.abspath(__file__))
 RESOURCE_DIR = getattr(sys, "_MEIPASS", PKG_DIR) if FROZEN else PKG_DIR
