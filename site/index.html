@@ -1,0 +1,388 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ZOrbit — a radial brush menu for ZBrush, free and open source</title>
+<meta name="description" content="Press Q over ZBrush and a ring of your favourite brushes appears around the cursor. Free, open source (GPL-3.0), for Windows.">
+<meta name="theme-color" content="#141416">
+<meta property="og:title" content="ZOrbit — a radial brush menu for ZBrush">
+<meta property="og:description" content="Press Q over ZBrush and a ring of your favourite brushes appears around the cursor. Free, open source (GPL-3.0).">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://combwizard.github.io/zorbit/">
+<meta property="og:image" content="https://combwizard.github.io/zorbit/images/ring.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="ZOrbit — a radial brush menu for ZBrush">
+<meta name="twitter:description" content="Press Q over ZBrush and a ring of your favourite brushes appears around the cursor. Free, open source (GPL-3.0).">
+<meta name="twitter:image" content="https://combwizard.github.io/zorbit/images/ring.png">
+<link rel="icon" type="image/png" href="favicon.png">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="top">
+  <div class="top-inner">
+  <a class="brand" href="#">
+    <span class="logo" aria-hidden="true">
+      <svg viewBox="0 0 32 32" width="32" height="32">
+        <circle cx="16" cy="16" r="14.5" fill="#1a1b1e" stroke="rgba(255,255,255,.10)"/>
+        <circle cx="16" cy="16" r="9.5" fill="none" stroke="rgba(248,107,51,.28)" stroke-width="1"/>
+        <g fill="none" stroke-width="1.6">
+          <circle cx="16" cy="6.6" r="2.3" stroke="#f86b33"/><circle cx="24.1" cy="11.3" r="2.3" stroke="#f86b33"/>
+          <circle cx="24.1" cy="20.7" r="2.3" stroke="#4dc8e9"/><circle cx="16" cy="25.4" r="2.3" stroke="#f86b33"/>
+          <circle cx="7.9" cy="20.7" r="2.3" stroke="#f86b33"/><circle cx="7.9" cy="11.3" r="2.3" stroke="#f86b33"/>
+        </g>
+        <circle cx="16" cy="16" r="2.6" fill="#f86b33"/>
+      </svg>
+    </span>
+    <span class="wordmark"><span class="wordmark-z">Z</span>Orbit</span>
+  </a>
+  <nav class="nav" aria-label="Page">
+    <a href="#features">Features</a>
+    <a href="#price">Price</a>
+    <a href="#reviews">Reviews</a>
+    <a href="#install">Install</a>
+  </nav>
+  <a class="btn primary download" href="https://github.com/combwizard/zorbit/releases/latest">Download</a>
+  <span class="progress" aria-hidden="true"></span>
+  </div>
+</header>
+
+<main id="main">
+  <section class="hero-wrap" id="hero">
+    <div class="hero-bg" aria-hidden="true">
+      <span class="orb orb-a"></span>
+      <span class="orb orb-b"></span>
+      <span class="orb orb-c"></span>
+      <span class="hero-grid"></span>
+      <span class="hero-spot"></span>
+    </div>
+    <div class="hero">
+      <div class="hero-ring">
+        <div class="orbits" aria-hidden="true">
+          <span class="orbit o1"></span>
+          <span class="orbit o2"></span>
+          <span class="orbit o3"></span>
+        </div>
+        <div class="ring-mount" id="ringMount">
+          <noscript>
+            <img src="images/ring.png" alt="The Brushes radial menu with ClayBuildup hovered" width="550" height="550">
+          </noscript>
+        </div>
+      </div>
+      <div class="hero-copy">
+        <p class="badge"><span class="badge-dot" aria-hidden="true"></span>Free forever · Open source</p>
+        <h1><span class="shine">ZOrbit</span></h1>
+        <p class="tagline">A radial brush menu for ZBrush</p>
+        <p class="lede">Press <kbd>Q</kbd> over ZBrush and a ring of your favourite brushes and buttons appears around the cursor. Flick toward one and let go.</p>
+        <p class="key-note"><span class="key-note-icon" aria-hidden="true">⌨</span>Q is just the default. Use any key or combination, and give each menu its own.</p>
+        <div class="btn-row">
+          <a class="btn primary download big" href="https://github.com/combwizard/zorbit/releases/latest">Download</a>
+          <button class="btn big" type="button" id="replayBtn">Replay open</button>
+        </div>
+        <ul class="compat" aria-label="Compatibility">
+          <li>ZBrush 2022 or newer</li>
+          <li>Windows 10 or 11</li>
+          <li>Free</li>
+          <li>GPL-3.0</li>
+        </ul>
+        <p class="fhint">Try it: click a slot, or press on the ring and drag toward one. This preview uses the starter menus; inside ZBrush the slots and keys are yours.</p>
+      </div>
+      <div class="anim-panel">
+        <div class="anim-row" id="animRow" aria-label="Open animations"></div>
+        <label class="speed" for="speedRange">
+          <span class="speed-l">Speed</span>
+          <input type="range" id="speedRange" min="0.1" max="1" step="0.05" value="0.6" aria-describedby="speedNote">
+          <output id="speedOut" for="speedRange">0.6×</output>
+          <span class="speed-note" id="speedNote">1× is the real speed</span>
+        </label>
+      </div>
+    </div>
+  </section>
+
+  <div class="marquee" aria-hidden="true">
+    <div class="marquee-track">
+      <span>Free</span><i></i><span>Open source</span><i></i><span>No account</span><i></i><span>No trial</span><i></i><span>No subscription</span><i></i><span>Twelve open animations</span><i></i><span>Submenus</span><i></i><span>Any hotkey</span><i></i><span>Flick to pick</span><i></i><span>Plain JSON menus</span><i></i><span>GPL-3.0</span><i></i>
+      <span>Free</span><i></i><span>Open source</span><i></i><span>No account</span><i></i><span>No trial</span><i></i><span>No subscription</span><i></i><span>Twelve open animations</span><i></i><span>Submenus</span><i></i><span>Any hotkey</span><i></i><span>Flick to pick</span><i></i><span>Plain JSON menus</span><i></i><span>GPL-3.0</span><i></i>
+    </div>
+  </div>
+
+  <section class="stats" aria-label="At a glance">
+    <div class="stat"><span class="stat-n" data-count="12">12</span><span class="stat-l">open animations</span></div>
+    <div class="stat"><span class="stat-n" data-count="2">2</span><span class="stat-l">rings deep in one stroke</span></div>
+    <div class="stat"><span class="stat-n">0</span><span class="stat-l">accounts to make</span></div>
+    <div class="stat"><span class="stat-n" data-count="0" data-from="99.99" data-prefix="$" data-decimals="2">$0.00</span><span class="stat-l">forever</span></div>
+  </section>
+
+  <section class="section" id="features">
+    <header class="section-head">
+      <p class="eyebrow">Features</p>
+      <h2>Stay in the <span class="grad">canvas</span>.</h2>
+    </header>
+
+    <article class="feature">
+      <div class="feature-copy">
+        <h3>Flick, release, or click.</h3>
+        <p>Hold the hotkey and flick past a slot, or move toward it and release. Or tap the hotkey and click. A pick that arrives mid-stroke waits until you lift the pen.</p>
+      </div>
+      <figure class="feature-media">
+        <picture>
+          <source srcset="images/ring.png" media="(prefers-reduced-motion: reduce)">
+          <img src="images/open-animation.gif" alt="Holding Q: the ring opens around the cursor, a submenu opens on hover, and a flick picks ClayTubes" width="550" height="412" loading="lazy">
+        </picture>
+      </figure>
+    </article>
+
+    <article class="feature flip">
+      <div class="feature-copy">
+        <h3>More than brushes.</h3>
+        <p>A slot can select a brush, press any ZBrush button, set a slider, flip a switch, run several of those in a row, or open another ring. Hover a submenu and one stroke reaches an item two rings deep.</p>
+      </div>
+      <figure class="feature-media">
+        <img src="images/ring.png" alt="Brushes menu with ClayBuildup hovered" width="600" height="450" loading="lazy">
+      </figure>
+    </article>
+
+    <article class="feature">
+      <div class="feature-copy">
+        <h3>Any key you like.</h3>
+        <p>Q is only where it starts. Record a new hotkey in Studio by pressing it: a letter, a digit, F1 to F24 or punctuation, with any mix of Ctrl, Alt and Shift. Give every menu its own key and open them straight from the canvas.</p>
+        <p class="feature-sub">By default ZBrush never sees the key, so its own shortcut for that key doesn’t fire as well. Switch that off per menu if you want both.</p>
+      </div>
+      <figure class="feature-media keys-media" aria-hidden="true">
+        <div class="keys-panel">
+          <div class="keys-head">Hotkeys</div>
+          <div class="keys-row default"><span class="keys-menu">Brushes</span><span class="keys"><kbd>Q</kbd></span></div>
+          <div class="keys-row"><span class="keys-menu">Tools</span><span class="keys"><kbd>Alt</kbd><i>+</i><kbd>G</kbd></span></div>
+          <div class="keys-row"><span class="keys-menu">Masking</span><span class="keys"><kbd>F5</kbd></span></div>
+          <div class="keys-row"><span class="keys-menu">Materials</span><span class="keys"><kbd>Ctrl</kbd><i>+</i><kbd>Shift</kbd><i>+</i><kbd>1</kbd></span></div>
+          <div class="keys-row rec">
+            <span class="keys-menu">Your next menu</span>
+            <span class="keys" id="keysRec" data-cycle="`|Alt+W|F9|Shift+Space|Ctrl+E"><span class="rec-dot"></span><kbd>`</kbd></span>
+          </div>
+        </div>
+      </figure>
+    </article>
+
+    <article class="feature flip">
+      <div class="feature-copy">
+        <h3>Edit it in Studio.</h3>
+        <p>ZOrbit Studio shows a live preview of the real ring. Drag brushes in from a searchable library, record hotkeys, change colours, size and animation. Twelve open animations, from instant to a swirling spiral.</p>
+      </div>
+      <figure class="feature-media">
+        <img src="images/studio.png" alt="ZOrbit Studio: the menu list, the ring preview and the brush library" width="800" height="500" loading="lazy">
+      </figure>
+    </article>
+
+    <p class="under-note">It starts and stops with ZBrush. Your menus live in plain JSON, so you can back them up, share them and keep them in version control.</p>
+  </section>
+
+  <section class="section" id="price">
+    <header class="section-head">
+      <p class="eyebrow">Price</p>
+      <h2>One payment. <span class="grad">Zero of them.</span></h2>
+    </header>
+    <div class="price-card glow-card">
+      <div class="price-amount"><span class="currency">$</span>0.00</div>
+      <p class="price-sub">Forever. Per machine. Per sculptor.</p>
+      <dl class="price-rows">
+        <div><dt>Seats</dt><dd>All of them</dd></div>
+        <div><dt>Expires</dt><dd>Never</dd></div>
+        <div><dt>Account</dt><dd>None</dd></div>
+        <div><dt>Trial</dt><dd>None</dd></div>
+      </dl>
+      <a class="btn primary download" href="https://github.com/combwizard/zorbit/releases/latest">Download</a>
+      <p class="price-foot">Free, and the licence is <a href="https://github.com/combwizard/zorbit/blob/main/LICENSE">GPL-3.0</a>.</p>
+    </div>
+  </section>
+
+  <section class="section" id="reviews">
+    <header class="section-head">
+      <p class="eyebrow">Reviews</p>
+      <h2>Loved by these <span class="grad">people who do not exist</span>.</h2>
+    </header>
+    <article class="spotlight">
+      <div class="spotlight-copy">
+        <p class="spotlight-eyebrow">AI-generated persona</p>
+        <blockquote>
+          <p class="pull">“I stopped digging through palettes. Then I noticed I never paid for it.”</p>
+          <p class="pull-long">I hold Q, flick, and I’m on ClayBuildup before I lose the form I was chasing. I keep two menus, one for blockout and one for detail. I went looking for a checkout to say thanks properly. There isn’t one, so I’m saying it here.</p>
+        </blockquote>
+        <div class="spotlight-who">
+          <img class="spotlight-face" src="personas/persona-1.jpg" alt="" width="48" height="48" loading="lazy">
+          <div>
+            <p class="review-name">Rafa Subdivido</p>
+            <p class="spotlight-role">Stylized props</p>
+          </div>
+        </div>
+        <ul class="chips" aria-label="About this reviewer">
+          <li>AI-generated</li>
+          <li>Not a real person</li>
+          <li>Paid $0.00</li>
+        </ul>
+      </div>
+      <figure class="spotlight-media">
+        <img src="personas/persona-1-wide.jpg" alt="AI-generated image of a fictional artist at his desk, holding up a pen" width="760" height="570" loading="lazy">
+        <span class="media-tag">AI-generated image</span>
+      </figure>
+    </article>
+
+    <article class="spotlight flip">
+      <div class="spotlight-copy">
+        <p class="spotlight-eyebrow">AI-generated persona</p>
+        <blockquote>
+          <p class="pull">“Chat asked for a discount code. I told them it’s free. They asked again anyway.”</p>
+          <p class="pull-long">I sculpt live most nights. With the ring I stay on the canvas instead of digging through palettes on stream. I keep a menu per session: blockout, details, and one that only holds Move, because chat kept asking where Move was.</p>
+        </blockquote>
+        <div class="spotlight-who">
+          <img class="spotlight-face" src="personas/persona-2.jpg" alt="" width="48" height="48" loading="lazy">
+          <div>
+            <p class="review-name">Jun Polyloop</p>
+            <p class="spotlight-role">Streams sculpting sessions</p>
+          </div>
+        </div>
+        <ul class="chips" aria-label="About this reviewer">
+          <li>AI-generated</li>
+          <li>Not a real person</li>
+          <li>Paid $0.00</li>
+        </ul>
+      </div>
+      <figure class="spotlight-media">
+        <img src="personas/persona-2-wide.jpg" alt="AI-generated image of a fictional streamer smiling beside a microphone" width="438" height="548" loading="lazy">
+        <span class="media-tag">AI-generated image</span>
+      </figure>
+    </article>
+
+    <article class="spotlight">
+      <div class="spotlight-copy">
+        <p class="spotlight-eyebrow">AI-generated persona</p>
+        <blockquote>
+          <p class="pull">“I came to ZBrush from 2D. The ring is the one part that didn’t need a tutorial.”</p>
+          <p class="pull-long">My brushes live on Q and my masking tools on Alt+M, which is a sentence I never expected to say on my podcast. I did record a whole episode on what it costs. It was a short episode.</p>
+        </blockquote>
+        <div class="spotlight-who">
+          <img class="spotlight-face" src="personas/persona-3.jpg" alt="" width="48" height="48" loading="lazy">
+          <div>
+            <p class="review-name">Mara Dynamesh</p>
+            <p class="spotlight-role">Illustrator, new to 3D</p>
+          </div>
+        </div>
+        <ul class="chips" aria-label="About this reviewer">
+          <li>AI-generated</li>
+          <li>Not a real person</li>
+          <li>Paid $0.00</li>
+        </ul>
+      </div>
+      <figure class="spotlight-media">
+        <img src="personas/persona-3-wide.jpg" alt="AI-generated image of a fictional illustrator with headphones, smiling at a studio microphone and holding a stylus" width="760" height="570" loading="lazy">
+        <span class="media-tag">AI-generated image</span>
+      </figure>
+    </article>
+
+    <div class="reviews">
+      <figure class="review">
+        <div class="review-who">
+          <span class="review-face review-dot" aria-hidden="true"></span>
+          <div>
+            <p class="review-name">The Centre Dot</p>
+            <p class="review-role">Present at every open</p>
+          </div>
+        </div>
+        <p class="stars" aria-label="Five out of five stars">★★★★★</p>
+        <blockquote><p>“Every menu opens around me. I have no notes.”</p></blockquote>
+      </figure>
+      <figure class="review">
+        <div class="review-who">
+          <span class="review-face review-zero" aria-hidden="true">#0</span>
+          <div>
+            <p class="review-name">Satisfied Customer #0</p>
+            <p class="review-role">Has paid nothing</p>
+          </div>
+        </div>
+        <p class="stars" aria-label="Five out of five stars">★★★★★</p>
+        <blockquote><p>“Tried to buy it. There was nothing to pay for. Five stars.”</p></blockquote>
+      </figure>
+    </div>
+  </section>
+
+  <section class="section" id="install">
+    <header class="section-head">
+      <p class="eyebrow">Install</p>
+      <h2>Four steps. Then <span class="grad">press Q</span>.</h2>
+    </header>
+    <ol class="steps">
+      <li>
+        <span class="step-n">1</span>
+        <div>
+          <h3>Download the installer.</h3>
+          <p>From the <a class="download" href="https://github.com/combwizard/zorbit/releases/latest">Releases page</a>.</p>
+        </div>
+      </li>
+      <li>
+        <span class="step-n">2</span>
+        <div>
+          <h3>Run it.</h3>
+          <p>It installs for your user only and does not need administrator rights. It adds a Start menu shortcut called ZOrbit Studio.</p>
+        </div>
+      </li>
+      <li>
+        <span class="step-n">3</span>
+        <div>
+          <h3>Restart ZBrush once.</h3>
+          <p>ZBrush reads the plugin path only when it starts.</p>
+        </div>
+      </li>
+      <li>
+        <span class="step-n">4</span>
+        <div>
+          <h3>Open a canvas and press Q.</h3>
+          <p>Hover over the canvas and hold the hotkey. The ring appears around the cursor. Q is the default; change it, or add more menus with their own keys, in Studio.</p>
+        </div>
+      </li>
+    </ol>
+    <p class="fhint">ZBrush 2022 to 2025: after installing, open Studio, go to Settings &gt; Older ZBrush, and click Install. Then restart that ZBrush.</p>
+    <p class="fhint">Needs Windows 10 or 11 and the Microsoft Edge WebView2 runtime (part of Windows 11 and of up-to-date Windows 10).</p>
+    <div class="note">
+      <strong>Windows says “Windows protected your PC”.</strong>
+      The installer is not code-signed yet. Click More info, then Run anyway. Or build from the source in the repository.
+    </div>
+  </section>
+
+  <section class="cta" aria-labelledby="ctaTitle">
+    <div class="cta-rings" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
+    <h2 id="ctaTitle">Hold <kbd>Q</kbd>. <span class="shine">Flick.</span> Done.</h2>
+    <p>Free, open source, and yours to keep.</p>
+    <div class="btn-row">
+      <a class="btn primary download big" href="https://github.com/combwizard/zorbit/releases/latest">Download</a>
+      <a class="btn big" href="https://github.com/combwizard/zorbit">View the source</a>
+    </div>
+  </section>
+</main>
+
+<footer class="foot">
+  <div class="foot-brand">
+    <span class="logo" aria-hidden="true">
+      <svg viewBox="0 0 32 32" width="22" height="22">
+        <circle cx="16" cy="16" r="14.5" fill="#1a1b1e" stroke="rgba(255,255,255,.10)"/>
+        <circle cx="16" cy="16" r="2.6" fill="#f86b33"/>
+      </svg>
+    </span>
+    <span>ZOrbit · a radial brush menu for ZBrush</span>
+  </div>
+  <p>Free and open source under the <a href="https://github.com/combwizard/zorbit/blob/main/LICENSE">GNU GPL-3.0</a>. No account, no trial, no expiry.</p>
+  <p class="disclaimer">ZOrbit is an independent project. It is not affiliated with or endorsed by Maxon. ZBrush is a trademark of Maxon.</p>
+  <nav class="foot-links" aria-label="Links">
+    <a href="https://github.com/combwizard/zorbit">Source</a>
+    <a href="https://github.com/combwizard/zorbit/issues">Issues</a>
+    <a href="https://github.com/combwizard/zorbit/releases">Releases</a>
+    <a href="https://github.com/combwizard/zorbit/blob/main/docs/user-guide.md">User guide</a>
+  </nav>
+</footer>
+
+<div id="toasts" aria-live="polite"></div>
+
+<script src="ring.js"></script>
+<script src="site.js"></script>
+</body>
+</html>

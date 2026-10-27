@@ -13,6 +13,9 @@ packaging/Output/
 # Recorded responses from a developer's own machine (personal paths, hotkeys, logs): never commit.
 zorbit/studio_ui/dev/mock_data.js
 
+# Local staging folder for site/preview.ps1 (copies of docs/images): never commit.
+site/.preview/
+
 # Editors / OS
 .vscode/
 .idea/
