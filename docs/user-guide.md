@@ -31,7 +31,7 @@ Slots are laid out clockwise starting at the top. A slot with a small arrow badg
 
 ## Radial Menu Studio
 
-Studio is where you edit everything. Open it from the Start menu (**Radial Menu Studio**) or from ZBrush with **Zplugin > Radial Menu > Studio**. Only one Studio window opens at a time; starting it again brings the open one forward.
+Studio is where you edit everything. Open it from the Start menu (**Radial Menu Studio**) or from ZBrush with **Zplugin > Radial Menu > Studio**. Only one Studio window opens at a time; starting it again brings the open one forward. Studio reopens on the screen you left, and each screen keeps its scroll position while Studio is open.
 
 | Screen | Shortcut | What it does |
 |---|---|---|
@@ -54,7 +54,7 @@ How saving works:
 - A config that no ring can open from (no menus, or no menu with a hotkey) is not saved until you confirm.
 - **Revert** goes back to what is saved on disk.
 - The app re-reads the file as soon as it changes, so saved changes apply immediately, new hotkeys included. You do not need to restart ZBrush or the app.
-- If something in the file is wrong, a **problems** pill appears at the top with the details. Studio saves anyway, and the app skips the bad items and logs what it skipped.
+- If something in the file is wrong, a **problems** pill appears at the top. Click it for the list: each entry says what is wrong in plain words and jumps to the menu, item or setting to fix, and the menu and item rows concerned carry an amber marker. Studio saves anyway, and the app skips the bad items and logs what it skipped.
 
 On the Menus screen you can:
 

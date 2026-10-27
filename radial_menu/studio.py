@@ -453,7 +453,7 @@ class Api:
         return {"ok": True, "message": f"Added {e['name']}."}
 
     # --- Studio preferences (not part of the menus; saved straight away) --------------------------
-    _PREFS_DEFAULTS = {"show_licence": True, "check_updates": True}
+    _PREFS_DEFAULTS = {"show_licence": True, "check_updates": True, "last_screen": "menus"}
 
     def get_prefs(self):
         prefs = dict(self._PREFS_DEFAULTS)

@@ -26,7 +26,7 @@
       <button class="version-chip mono" id="versionChip" type="button" title="Release notes">v0.6.0</button>
     </div>
     <span class="path-hint mono" id="pathHint"></span>
-    <button class="problems-pill" id="problemsBtn" type="button" hidden aria-expanded="false" aria-controls="problems">
+    <button class="problems-pill" id="problemsBtn" type="button" hidden aria-expanded="false" aria-controls="problemsPanel" aria-haspopup="dialog">
       <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4l9 16H3z"/><path d="M12 10v4M12 17v.4"/></svg>
       <span id="problemsCount">0 problems</span>
     </button>
@@ -48,13 +48,8 @@
     </div>
   </header>
 
-  <div class="problems" id="problems" hidden>
-    <div class="problems-head" id="problemsHead" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
-      <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4l9 16H3z"/><path d="M12 10v4M12 17v.4"/></svg>
-      <b>The config has problems</b>
-      <span class="problems-first" id="problemsFirst"></span>
-      <svg class="chev" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
-    </div>
+  <div class="problems-panel" id="problemsPanel" role="dialog" aria-label="Problems in the config" hidden>
+    <div class="problems-note">Click a problem to go to where it can be fixed.</div>
     <div class="problems-list" id="problemsList"></div>
   </div>
 
@@ -62,7 +57,7 @@
     <nav class="rail" aria-label="Screens">
       <button class="rail-btn" type="button" data-screen="menus" title="Menus (Alt+1)"><span class="ri" data-i="menus"></span><span>Menus</span></button>
       <button class="rail-btn" type="button" data-screen="library" title="Library (Alt+2)"><span class="ri" data-i="library"></span><span>Library</span></button>
-      <button class="rail-btn" type="button" data-screen="settings" title="Appearance &amp; Behaviour (Alt+3)"><span class="ri" data-i="settings"></span><span>Settings</span></button>
+      <button class="rail-btn" type="button" data-screen="settings" title="Settings (Alt+3)"><span class="ri" data-i="settings"></span><span>Settings</span></button>
       <button class="rail-btn" type="button" data-screen="status" title="Status (Alt+4)"><span class="ri" data-i="status"></span><span>Status</span></button>
       <button class="rail-btn rail-bottom" type="button" data-screen="licence" title="Licence (Alt+5)"><span class="ri" data-i="licence"></span><span>Licence</span></button>
     </nav>

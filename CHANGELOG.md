@@ -13,8 +13,15 @@ All notable changes to this project are listed here. The format follows
 - Studio notices when `radial.json` changed on disk after it was loaded and asks whether to overwrite or reload,
   instead of silently replacing a hand edit.
 - Studio asks before saving a config that no ring can open from (no menus, or no menu with a hotkey).
+- The problems pill opens a panel instead of a bar that pushed the page down: every problem is now in plain
+  words, every entry jumps to the menu, item or Settings card to fix, and the menu and item rows concerned
+  carry an amber marker.
+- Studio reopens on the screen you left and keeps each screen's scroll position while it is open. Clicking the
+  screen you are already on no longer rebuilds it.
 
 ### Changed
+- The Settings screen is called Settings everywhere (it was "Appearance & Behaviour" on the page itself), and
+  the ring preview on the Menus screen gives up height to the item list on short windows.
 - Save does nothing when there is nothing to save, and `radial.json.bak` is only replaced when the previous file
   was readable and differs, so saving twice cannot overwrite a good backup with a bad one.
 - A `radial.json` with a byte-order mark (left by some editors) is accepted by the app and by Studio.

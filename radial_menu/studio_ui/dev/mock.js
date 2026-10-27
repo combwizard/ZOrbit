@@ -42,7 +42,8 @@
       }
     });
     if (!ids.some(function (id) { return menus[id].hotkey; })) out.push('no menu has a hotkey, so nothing can open the ring');
-    if (q.has('problems')) out.push('menu brushes item 3: sample problem for the problems bar (?problems)', 'bridge.key must not use Ctrl or Shift (ZBrush reads them as mask/smooth); use a bare F-key');
+    if (q.has('problems')) out.push('menu brushes item 3: sample problem for the problems panel (?problems)', 'bridge.key must not use Ctrl or Shift (ZBrush reads them as mask/smooth); use a bare F-key',
+      'ring.radius: 500 must be a number from 60 to 400', "menu tools: hotkey 'Q' already used by menu brushes");
     return out;
   }
 
@@ -119,8 +120,8 @@
     install_zscript_bridge: function () { try { localStorage.setItem('rm_zscript', '{"a":1}'); } catch (e) {} return sleep(300).then(function () { return { ok: true, message: 'Installed (mock). Restart ZBrush so it loads the plugin.' }; }); },
     remove_zscript_bridge: function () { try { localStorage.removeItem('rm_zscript'); } catch (e) {} return sleep(200).then(function () { return { ok: true, message: 'Removed (mock).' }; }); },
     add_zbrush_folder: function () { return Promise.resolve({ ok: false, cancelled: true }); },
-    get_prefs: function () { return Promise.resolve(JSON.parse(localStorage.getItem('rm_prefs') || '{"show_licence": true}')); },
-    set_pref: function (k, v) { var p = JSON.parse(localStorage.getItem('rm_prefs') || '{"show_licence": true}'); p[k] = v; try { localStorage.setItem('rm_prefs', JSON.stringify(p)); } catch (e) {} return Promise.resolve(p); },
+    get_prefs: function () { return Promise.resolve(Object.assign({ show_licence: true, check_updates: true, last_screen: 'menus' }, JSON.parse(localStorage.getItem('rm_prefs') || '{}'))); },
+    set_pref: function (k, v) { var p = Object.assign({ show_licence: true, check_updates: true, last_screen: 'menus' }, JSON.parse(localStorage.getItem('rm_prefs') || '{}')); p[k] = v; try { localStorage.setItem('rm_prefs', JSON.stringify(p)); } catch (e) {} return Promise.resolve(p); },
     set_dirty: function () { return Promise.resolve(true); },
     close_now: function () { console.log('[mock] close_now'); return Promise.resolve(true); },
     win_minimize: function () { return Promise.resolve(); },

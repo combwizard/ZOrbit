@@ -136,7 +136,8 @@ const FALLBACK_RANGES = { radius: [60, 400], slot: [32, 160], dead_zone: [10, 12
 const params = new URLSearchParams(location.search);
 const S = {
   cfg: null, savedStr: '', path: '', defaults: FALLBACK_DEFAULTS, opts: null,
-  problems: [], problemsOpen: false,
+  problems: [], problemsOpen: false, problemMenus: new Set(), problemItems: new Map(), problemTips: new Map(),
+  scroll: {}, shown: false,
   screen: 'menus', menuId: null, itemIdx: null, tab: 'item',
   library: [], libSorted: [], libByName: new Map(), libState: 'loading', suggestions: [],
   version: 0, hist: [], histI: 0,
@@ -938,6 +939,7 @@ function buildMenusScreen(root) {
       row.append(
         h('div', { class: 'mrow-main' }, title, h('div', { class: 'mrow-meta' }, h('span', { class: 'mono' }, id))),
         h('div', { class: 'mrow-side' },
+          menuWarn(id),
           m.hotkey ? hkChips(m.hotkey, 'sm') : h('span', { class: 'tag cyan', title: 'No hotkey: this menu can only be opened from another menu' }, 'submenu'),
           h('span', { class: 'pill-n', title: (m.items || []).length + ' items' }, String((m.items || []).length))),
         h('div', { class: 'mrow-actions' },
@@ -1038,7 +1040,7 @@ function renderItemList(box, menuId, compact) {
   }
   m.items.forEach((it, i) => {
     const k = kindOf(it), ok = itemUsable(it);
-    const row = h('div', { class: 'irow k-' + k + (!compact && i === S.itemIdx ? ' sel' : '') + (ok ? '' : ' bad'), role: 'option', tabindex: '0', dataset: { i },
+    const row = h('div', { class: 'irow k-' + k + (!compact && i === S.itemIdx ? ' sel' : '') + (ok ? '' : ' bad'), role: 'option', tabindex: '0', dataset: { i, menu: menuId },
       'aria-selected': !compact && i === S.itemIdx ? 'true' : 'false' },
       compact ? null : h('span', { class: 'grip', 'aria-hidden': 'true' }, icon('grip', 14)),
       h('span', { class: 'inum mono' }, String(i + 1)),
@@ -1046,7 +1048,7 @@ function renderItemList(box, menuId, compact) {
       h('span', { class: 'imain' }, h('span', { class: 'iname' }, itemLabel(it)),
         compact ? null : h('span', { class: 'isub mono' }, k === 'auto' ? 'filled from your picks' : k === 'steps' ? `${(it.steps || []).length} step${(it.steps || []).length === 1 ? '' : 's'}` : (k === 'set' ? `${targetOf(it)} = ${it.value}` : targetOf(it) || '(not set)'))),
       h('span', { class: 'ikind', title: KIND[k].hint }, icon(KIND[k].icon, 13), compact ? null : KIND[k].label),
-      ok ? null : h('span', { class: 'iwarn', title: 'This item is incomplete and will be skipped' }, icon('alert', 14)),
+      itemWarn(menuId, i, ok),
       h('span', { class: 'iacts' },
         compact ? null : iconBtn('copy', 'Duplicate item', e => { e.stopPropagation(); S.itemIdx = i; dupItem(i); }),
         iconBtn('trash', 'Delete item', e => { e.stopPropagation(); delItem(i, menuId); }, 'danger')));
@@ -1204,7 +1206,7 @@ function buildStage() {
     if (!m) { emptyEl.append(emptyState('menus', 'No menu selected', 'Pick or create a menu on the left.')); return; }
     if (!has) {
       emptyEl.append(m.items.length
-        ? emptyState('alert', 'No usable items yet', 'Fill in the target of each item (see the problems bar). Incomplete items are skipped by the app.')
+        ? emptyState('alert', 'No usable items yet', 'Fill in the target of each item (see the problems panel). Incomplete items are skipped by the app.')
         : emptyState('plus', 'This menu is empty', 'Add a brush from the Brushes tab or create an item. The ring appears as soon as it has one.', { text: 'Add item', fn: () => addItem('brush') }));
       return;
     }
@@ -1633,7 +1635,7 @@ function setZsBadge(n) {
   const rb = document.querySelector('.rail-btn[data-screen="settings"]');
   if (rb) {
     rb.classList.toggle('has-badge', n > 0);
-    rb.title = 'Appearance & Behaviour (Alt+3)' + (n ? ' – ' + (n === 1 ? 'a ZBrush plugin needs' : n + ' ZBrush plugins need') + ' updating' : '');
+    rb.title = 'Settings (Alt+3)' + (n ? ' – ' + (n === 1 ? 'a ZBrush plugin needs' : n + ' ZBrush plugins need') + ' updating' : '');
   }
   const tb = document.querySelector('.toc-item[data-card="set-older-zbrush"]');
   if (tb) { tb.classList.toggle('has-badge', n > 0); tb.title = n ? 'Update available' : ''; }
@@ -1685,6 +1687,7 @@ function buildSettingsScreen(root) {
     toc.replaceChildren(h('div', { class: 'micro toc-head' }, 'On this page'), ...tocItems.map(it => it.btn));
     markActive();
   };
+  R.gotoCard = id => { const it = tocItems.find(t => t.card.id === id); if (it) it.btn.click(); };
   let tocRaf = 0;
   const unpin = () => { if (pinned) { pinned = null; markActive(); } };
   for (const ev of ['wheel', 'keydown', 'pointerdown', 'touchstart']) scroll.addEventListener(ev, unpin, { passive: true });
@@ -1692,7 +1695,7 @@ function buildSettingsScreen(root) {
 
   const build = () => {
     page.replaceChildren();
-    page.append(h('div', { class: 'page-head' }, h('h1', null, 'Appearance & Behaviour'), h('p', null, 'How the ring looks, how it opens, and how the app talks to ZBrush. Changes show in the previews straight away and are saved with the Save button.')));
+    page.append(h('div', { class: 'page-head' }, h('h1', null, 'Settings', h('em', null, 'Appearance and behaviour')), h('p', null, 'How the ring looks, how it opens, and how the app talks to ZBrush. Changes show in the previews straight away and are saved with the Save button.')));
 
     /* --- geometry with live preview */
     const pimg = h('img', { class: 'ring-img', alt: 'Ring preview', draggable: false });
@@ -1918,20 +1921,167 @@ function updateDirty() {
   $('#revertBtn').disabled = !d;
   $('#saveBtn').classList.toggle('pending', d);
 }
+/* Turns one message from the loader (config.py) into plain words plus where to go to fix it.
+   Returns { text, raw, target }; target is null when the format is not recognised. */
+const RING_CARD = { radius: 'set-ring-geometry', slot: 'set-ring-geometry', dead_zone: 'set-ring-geometry', animation: 'set-open-animation',
+  labels: 'set-labels', colors: 'set-colours', tap_ms: 'set-behaviour', timeout_s: 'set-behaviour', flick: 'set-behaviour', hover_submenus: 'set-behaviour' };
+const RING_NAME = { radius: 'Ring radius', slot: 'Slot size', dead_zone: 'Dead zone', tap_ms: 'Tap time', timeout_s: 'Auto-close', flick: 'Flick to pick',
+  hover_submenus: 'Open submenus on hover', animation: 'Open animation', labels: 'Labels' };
+const unq = s => String(s).replace(/^(['"])(.*)\1$/, '$2');
+function describeProblem(raw) {
+  const out = (text, target) => ({ text, raw, target: target || null });
+  const cfgMenus = (S.cfg && S.cfg.menus) || {};
+  const titleOf = id => '\u201c' + ((cfgMenus[id] && cfgMenus[id].title) || id) + '\u201d';
+  const known = id => !!cfgMenus[id] && typeof cfgMenus[id] === 'object';
+  let m;
+  // "menu <id> item <n><rest>": the id is matched against the real menus first, so an id with spaces still resolves
+  const ids = Object.keys(cfgMenus).sort((x, y) => y.length - x.length);
+  const own = ids.find(id => raw.startsWith('menu ' + id + ' item ') || raw.startsWith('menu ' + id + ': '));
+  const mid = own !== undefined ? own : ((m = /^menu (\S+)(?: item |: )/.exec(raw)) ? m[1] : null);
+  if (mid !== null) {
+    const rest = raw.slice(('menu ' + mid).length);
+    if ((m = /^ item (\d+)(.*)$/s.exec(rest))) {
+      const n = +m[1];
+      return out(titleOf(mid) + ' item ' + n + m[2], known(mid) ? { kind: 'item', menuId: mid, index: n - 1 } : null);
+    }
+    const tgt = field => (known(mid) ? { kind: 'menu', menuId: mid, field } : null);
+    if (rest === ': no usable items') return out(titleOf(mid) + ' has no usable items', tgt());
+    if (rest === ': not an object') return out(titleOf(mid) + ' is not a valid menu', tgt());
+    if ((m = /^: hotkey (.+) already used by menu (.+)$/s.exec(rest))) {
+      const other = m[2];
+      return out(`${titleOf(mid)} and ${titleOf(other)} both use the hotkey ${unq(m[1])}; only ${titleOf(other)} (the first) will open it`, tgt('hotkey'));
+    }
+    if ((m = /^: hotkey (.+) not understood$/s.exec(rest))) return out(`The hotkey ${unq(m[1])} on ${titleOf(mid)} is not understood`, tgt('hotkey'));
+    if ((m = /^: animation (.+) unknown; using ring\.animation$/s.exec(rest))) return out(`${titleOf(mid)} has an unknown animation (${unq(m[1])}); the one from Settings is used instead`, tgt('animation'));
+    return out(titleOf(mid) + rest, tgt());
+  }
+  if ((m = /^ring\.colors\.(\w+): (.+) is not a #rrggbb colour$/s.exec(raw))) {
+    const nm = COLOR_INFO[m[1]] ? COLOR_INFO[m[1]][0] : m[1];
+    return out(`${nm} colour ${unq(m[2])} is not a #rrggbb value`, { kind: 'settings', card: 'set-colours' });
+  }
+  if ((m = /^ring\.(\w+): (.*)$/s.exec(raw))) {
+    const key = m[1], body = m[2], nm = RING_NAME[key] || key, card = RING_CARD[key];
+    const target = card ? { kind: 'settings', card } : null;
+    let r;
+    if ((r = /^(.+) must be a number from (\S+) to (\S+)$/s.exec(body))) return out(`${nm} ${unq(r[1])} is outside ${r[2]} to ${r[3]}`, target);
+    if ((r = /^(.+) must be true or false$/s.exec(body))) return out(`${nm} must be on or off, not ${unq(r[1])}`, target);
+    if ((r = /^(.+) unknown; one of /s.exec(body))) return out(`${nm} ${unq(r[1])} is not one of the available choices`, target);
+    return out(`${nm}: ${body}`, target);
+  }
+  const bridge = { kind: 'settings', card: 'set-zbrush-bridge' };
+  if ((m = /^bridge\.mode (.+) unknown; using auto$/s.exec(raw))) return out(`Bridge mode ${unq(m[1])} is unknown; Auto is used instead`, bridge);
+  if ((m = /^bridge\.key (.+) not understood$/s.exec(raw))) return out(`The bridge key ${unq(m[1])} is not understood`, bridge);
+  if (raw.startsWith('bridge.key ')) return out('The bridge key ' + raw.slice('bridge.key '.length), bridge);
+  if (raw.startsWith('menus: must be a non-empty object')) return out('There are no menus yet; add one', { kind: 'screen', screen: 'menus' });
+  if (raw.startsWith('no menu has a hotkey')) {
+    const first = Object.keys(cfgMenus).find(known);
+    return out('No menu has a hotkey, so nothing can open the ring', first ? { kind: 'menu', menuId: first, field: 'hotkey', global: true } : { kind: 'screen', screen: 'menus' });
+  }
+  return out(raw, null);
+}
+
+/* Amber markers on menu and item rows. Built with the row, and patched in place when the problems change. */
+function menuWarn(id) {
+  const tips = S.problemTips.get(id);
+  return tips ? h('span', { class: 'mwarn', title: tips.join('\n') }, icon('alert', 13)) : null;
+}
+function itemWarn(menuId, i, ok) {
+  const tips = S.problemTips.get(menuId + '#' + i);
+  if (ok && !tips) return null;
+  return h('span', { class: 'iwarn', title: tips ? tips.join('\n') : 'This item is incomplete and will be skipped' }, icon('alert', 14));
+}
+function paintMarkers() {
+  $$('.mrow').forEach(row => {
+    const want = S.problemTips.get(row.dataset.id), cur = $('.mwarn', row);
+    if (!want) { if (cur) cur.remove(); return; }
+    if (cur) { cur.title = want.join('\n'); return; }
+    const side = $('.mrow-side', row); if (side) side.prepend(menuWarn(row.dataset.id));
+  });
+  $$('.irow').forEach(row => {
+    const menuId = row.dataset.menu, i = +row.dataset.i, want = S.problemTips.get(menuId + '#' + i), cur = $('.iwarn', row);
+    const m = S.cfg.menus[menuId], bad = !m || !m.items[i] || !itemUsable(m.items[i]);
+    if (!want && !bad) { if (cur) cur.remove(); return; }
+    const title = want ? want.join('\n') : 'This item is incomplete and will be skipped';
+    if (cur) { cur.title = title; return; }
+    const acts = $('.iacts', row), el = itemWarn(menuId, i, !bad);
+    if (el) row.insertBefore(el, acts);
+  });
+}
+
+function goToProblem(t) {
+  S.problemsOpen = false; renderProblems();
+  if (!t) return;
+  if (t.kind === 'settings') {
+    const same = S.screen === 'settings';
+    showScreen('settings', { fresh: true });
+    const go = () => { if (R.gotoCard) R.gotoCard(t.card); };
+    if (same) go(); else requestAnimationFrame(go);
+    return;
+  }
+  showScreen('menus', { fresh: true });
+  if (t.kind === 'item') {
+    const m = S.cfg.menus[t.menuId]; if (!m) return;
+    selectMenu(t.menuId);
+    if (t.index >= 0 && t.index < (m.items || []).length) selectItem(t.index);
+    return;
+  }
+  if (t.kind === 'menu') {
+    if (!S.cfg.menus[t.menuId]) return;
+    selectMenu(t.menuId); S.tab = 'menu'; if (R.right) R.right();
+    const mr = $('.mrow.sel'); if (mr) mr.scrollIntoView({ block: 'nearest' });
+    const el = t.field === 'hotkey' ? $('.insp .hk-field') : t.field === 'animation' ? $('.insp select[aria-label="Open animation for this menu"]') : null;
+    if (el) { el.focus(); el.scrollIntoView({ block: 'nearest' }); }
+  }
+}
+
 function renderProblems() {
-  const p = S.problems || [], bar = $('#problems'), pill = $('#problemsBtn');
-  pill.hidden = !p.length; bar.hidden = !p.length;
-  if (!p.length) return;
+  const p = S.problems || [], pill = $('#problemsBtn'), panel = $('#problemsPanel');
+  pill.hidden = !p.length;
+  if (!p.length) S.problemsOpen = false;
+  const open = S.problemsOpen && p.length > 0;
+  panel.hidden = !open;
+  pill.setAttribute('aria-expanded', open ? 'true' : 'false');
+  if (!p.length) { S.problemMenus = new Set(); S.problemItems = new Map(); S.problemTips = new Map(); S._probSig = ''; S._markSig = ''; paintMarkers(); return; }
   setText($('#problemsCount'), p.length + (p.length === 1 ? ' problem' : ' problems'));
-  pill.setAttribute('aria-expanded', S.problemsOpen ? 'true' : 'false');
-  bar.classList.toggle('open', S.problemsOpen);
-  const list = $('#problemsList');
-  list.replaceChildren(...p.map(t => {
-    const m = /^menu (\S+) item (\d+)/.exec(t);
-    const go = m && S.cfg.menus[m[1]] ? () => { showScreen('menus'); selectMenu(m[1]); selectItem(+m[2] - 1); } : null;
-    return h(go ? 'button' : 'div', { class: 'problem' + (go ? ' link' : ''), type: go ? 'button' : null, title: go ? 'Go to this item' : null, onclick: go }, icon('alert', 13), h('span', { class: 'ptext' }, t), go ? icon('chevR', 12) : null);
-  }));
-  setText($('#problemsFirst'), p[0] + (p.length > 1 ? `  (+${p.length - 1} more)` : ''));
+  const entries = p.map(describeProblem);
+  // row markers: which menus / items carry a problem, with the plain-words text as their tooltip
+  const menusWith = new Set(), itemsWith = new Map(), tips = new Map();
+  const tip = (k, t) => { if (!tips.has(k)) tips.set(k, []); tips.get(k).push(t); };
+  for (const e of entries) {
+    const t = e.target;
+    if (!t || !t.menuId || t.global) continue;
+    menusWith.add(t.menuId); tip(t.menuId, e.text);
+    if (t.kind === 'item') {
+      if (!itemsWith.has(t.menuId)) itemsWith.set(t.menuId, new Set());
+      itemsWith.get(t.menuId).add(t.index); tip(t.menuId + '#' + t.index, e.text);
+    }
+  }
+  S.problemMenus = menusWith; S.problemItems = itemsWith; S.problemTips = tips;
+  const markSig = JSON.stringify([...tips]);
+  if (markSig !== S._markSig) { S._markSig = markSig; paintMarkers(); }
+  // the list is rebuilt only when its content changed, so a click is never swallowed by a re-render
+  const sig = entries.map(e => e.text + '\u0001' + e.raw + '\u0001' + JSON.stringify(e.target)).join('\u0002');
+  if (sig !== S._probSig) {
+    S._probSig = sig;
+    $('#problemsList').replaceChildren(...entries.map(e => {
+      const go = !!e.target;
+      return h(go ? 'button' : 'div', { class: 'problem' + (go ? ' go' : ''), type: go ? 'button' : null, title: e.raw, onclick: go ? () => goToProblem(e.target) : null },
+        icon('alert', 13), h('span', { class: 'ptext' }, e.text), go ? icon('chevR', 12) : null);
+    }));
+  }
+  if (open) placeProblemsPanel();
+}
+function placeProblemsPanel() {
+  const pill = $('#problemsBtn'), panel = $('#problemsPanel'), app = $('#app');
+  if (!pill || pill.hidden) return;
+  const r = pill.getBoundingClientRect(), a = app.getBoundingClientRect(), w = Math.min(560, a.width - 16);
+  panel.style.width = w + 'px';
+  panel.style.left = clamp(r.left - a.left, 8, Math.max(8, a.width - w - 8)) + 'px';
+}
+function closeProblems(refocus) {
+  if (!S.problemsOpen) return;
+  S.problemsOpen = false; renderProblems();
+  if (refocus) $('#problemsBtn').focus();
 }
 /* Takes a freshly loaded get_config result (boot, or "reload from disk") and makes it the current and saved config. */
 function adoptConfig(res) {
@@ -2121,7 +2271,7 @@ function describeChanges() {
   for (const k of new Set([...Object.keys(bc), ...Object.keys(ac)])) {
     if (bc[k] !== ac[k]) ringLines.push('Colour ' + k + ': ' + (bc[k] || 'default') + ' \u2192 ' + (ac[k] || 'default'));
   }
-  if (ringLines.length) groups.push({ area: 'Appearance & behaviour', lines: ringLines });
+  if (ringLines.length) groups.push({ area: 'Settings', lines: ringLines });
   const bb = before.bridge || {}, ab = after.bridge || {};
   const bridgeLines = [];
   if ((bb.mode || 'auto') !== (ab.mode || 'auto')) bridgeLines.push('Mode: ' + (bb.mode || 'auto') + ' \u2192 ' + (ab.mode || 'auto'));
@@ -2167,17 +2317,26 @@ async function setPref(key, value) {
 }
 
 const SCREENS = { menus: buildMenusScreen, library: buildLibraryScreen, settings: buildSettingsScreen, status: buildStatusScreen, licence: buildLicenceScreen };
-function showScreen(name) {
+// the element that scrolls on each screen (its position is remembered when you leave and put back when you return)
+const SCREEN_SCROLLER = { menus: '.ilist', library: '.b-scroll', settings: '.settings-scroll', status: '.settings-scroll', licence: '.settings-scroll' };
+const scrollerOf = name => { const root = $('#screen-' + name); return root ? $(SCREEN_SCROLLER[name] || '.settings-scroll', root) : null; };
+const saveLastScreen = name => { call('set_pref', 'last_screen', name).catch(() => {}); };   // at once: a debounce could be lost on a quick close
+function showScreen(name, { fresh = false } = {}) {
   if (!SCREENS[name] || (name === 'licence' && !licenceVisible())) name = 'menus';
   if (openPopover) openPopover();
   if (comboClose) comboClose();
+  if (S.shown && name === S.screen) return;
+  if (S.shown) { const old = scrollerOf(S.screen); if (old) S.scroll[S.screen] = old.scrollTop; }
   for (const k of Object.keys(R)) delete R[k];
   clearInterval(statusTimer);
-  S.screen = name;
+  S.screen = name; S.shown = true;
+  if (S.ready) { S.prefs.last_screen = name; saveLastScreen(name); }
   const loading = $('#screens > .loading'); if (loading) loading.remove();
   $$('.rail-btn').forEach(b => { const on = b.dataset.screen === name; b.classList.toggle('on', on); b.setAttribute('aria-current', on ? 'page' : 'false'); });
   $$('.screen').forEach(s => { s.hidden = s.id !== 'screen-' + name; });
   SCREENS[name]($('#screen-' + name));
+  const top = S.scroll[name];
+  if (!fresh && top) requestAnimationFrame(() => { if (S.screen !== name) return; const el = scrollerOf(name); if (el) el.scrollTop = top; });
 }
 
 /* ================================================================== boot */
@@ -2257,7 +2416,7 @@ async function boot() {
   updateDirty(); renderProblems();
   applyPrefs();
   loadLibrary(); loadSuggestions();
-  showScreen(params.get('screen') || 'menus');
+  showScreen(params.get('screen') || S.prefs.last_screen || 'menus');
   S.ready = true;
   $('#saveBtn').disabled = false;
   refreshZsBadge();
@@ -2270,7 +2429,12 @@ function init() {
   $('#saveBtn').addEventListener('click', () => save());
   $('#revertBtn').addEventListener('click', revert);
   $('#problemsBtn').addEventListener('click', () => { S.problemsOpen = !S.problemsOpen; renderProblems(); });
-  $('#problemsHead').addEventListener('click', () => { S.problemsOpen = !S.problemsOpen; renderProblems(); });
+  document.addEventListener('mousedown', e => { if (S.problemsOpen && !e.target.closest('#problemsPanel, #problemsBtn')) closeProblems(false); }, true);
+  window.addEventListener('keydown', e => {
+    if (e.key !== 'Escape' || !S.problemsOpen || e.defaultPrevented || $('#overlay-root').firstElementChild) return;
+    e.preventDefault(); closeProblems(true);
+  });
+  window.addEventListener('resize', () => { if (S.problemsOpen) placeProblemsPanel(); });
   window.addEventListener('keydown', e => {
     if ($('#overlay-root').firstElementChild) return;      // a dialog is open: Ctrl+S, undo/redo and Alt+1..5 stay quiet
     const ed = e.target && e.target.closest && e.target.closest('input, textarea, select, [contenteditable]');
