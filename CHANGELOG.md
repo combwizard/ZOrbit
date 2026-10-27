@@ -4,6 +4,17 @@ All notable changes to this project are listed here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+- Fan-out submenus. Give a menu `"fan": true`, or switch on **Fan out when opened from another menu** in the
+  menu settings in Studio, and it opens as a fan when you reach it from another ring. Its items spread out in
+  an arc beyond the submenu's slot, with dashed lines to each one, and the ring you came from stays visible.
+  Release over an item, click it or flick past it to pick it. A fan item can be a fan submenu too, up to three
+  deep. Moving out of a fan closes it. Near a screen edge, or when a fan would lead back to a menu that is
+  already open, it opens as a normal ring instead. A menu's hotkey still opens a ring.
+- Studio shows an open fan in the ring preview when you hover or select the submenu's slot.
+
 ## [0.7.1] - 2026-10-27
 
 ### Changed

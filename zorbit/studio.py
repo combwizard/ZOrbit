@@ -272,8 +272,10 @@ class Api:
                                        "radial.json.broken."}
 
     # --- ring preview ----------------------------------------------------------------------------
-    def preview_ring(self, cfg, menu_id, hover=None, scale=1.0):
-        """PNG data URL of the ring exactly as the app draws it. hover: item index or None."""
+    def preview_ring(self, cfg, menu_id, hover=None, scale=1.0, open_path=None):
+        """PNG data URL of the ring exactly as the app draws it. hover: item index or None. open_path: item
+        indices of the fan submenus to show open ([2], or [2, 1] for a fan inside it). With a fan open the
+        image is not square around the ring: width, height and centre (x, y) place the ring in it."""
         loaded, problems = self._load_dict(cfg)
         if loaded is None or menu_id not in loaded.menus:
             return {"image": None, "problems": problems or [f"menu {menu_id!r} has no usable items"]}
@@ -282,8 +284,12 @@ class Api:
         app = radiald.App(CONFIG_FILE)
         app.cfg = loaded
         menu = app.fill_auto(loaded.menus[menu_id])       # as the app would fill it now; nothing is saved
-        im = Ring.preview(menu, loaded.ring, app.icon_for, hover=hover, scale=float(scale))
-        return {"image": _png_data_url(im), "size": im.size[0], "problems": problems}
+        im = Ring.preview(menu, loaded.ring, app.icon_for, hover=hover, scale=float(scale),
+                          submenus=lambda mid: app.fill_auto(loaded.menus[mid]) if mid in loaded.menus else None,
+                          open_path=[int(i) for i in open_path] if open_path else None)
+        cx, cy = im.info.get("centre", (im.size[0] / 2, im.size[1] / 2))
+        return {"image": _png_data_url(im), "size": im.size[0], "width": im.size[0], "height": im.size[1],
+                "centre": [cx, cy], "problems": problems}
 
     def preview_animation(self, cfg, menu_id, fps=30, ring_anim=False):
         """Open-animation frames as PNG data URLs (played back by the Studio), plus the frame interval.

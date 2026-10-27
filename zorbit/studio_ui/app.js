@@ -531,19 +531,19 @@ function itemThumb(it, size = 30) {
 /* ================================================================== ring preview + animation loaders */
 const RingLoader = {
   cache: new Map(), ver: -1, queue: null, cur: null, busy: false,
-  key: (m, hv) => m + '|' + (hv === null || hv === undefined ? 'n' : hv),
+  key: (m, hv, path) => m + '|' + (hv === null || hv === undefined ? 'n' : hv) + '|' + (path && path.length ? path.join('.') : ''),
   sync() { if (this.ver !== S.version) { this.cache.clear(); this.ver = S.version; } },
-  peek(menuId, hover) { this.sync(); return this.cache.get(this.key(menuId, hover)) || null; },
-  get(menuId, hover) {
+  peek(menuId, hover, path) { this.sync(); return this.cache.get(this.key(menuId, hover, path)) || null; },
+  get(menuId, hover, path) {                     // path: item indices of the fan submenus to show open (null: none)
     this.sync();
-    const k = this.key(menuId, hover), c = this.cache.get(k);
+    const k = this.key(menuId, hover, path), c = this.cache.get(k);
     if (c) return Promise.resolve(c);
     return new Promise(res => {
       // the same picture asked for twice (several previews on one screen) shares one backend call
       const same = [this.cur, this.queue].find(q => q && q.k === k && q.ver === S.version);
       if (same) { same.waiters.push(res); return; }
       if (this.queue) this.settle(this.queue, null);           // latest request wins
-      this.queue = { menuId, hover: hover === undefined ? null : hover, k, ver: S.version, res, waiters: [] };
+      this.queue = { menuId, hover: hover === undefined ? null : hover, path: path && path.length ? path : null, k, ver: S.version, res, waiters: [] };
       this.pump();
     });
   },
@@ -554,7 +554,7 @@ const RingLoader = {
     const q = this.queue; this.queue = null; this.cur = q;
     let out;
     try {
-      out = await call('preview_ring', S.cfg, q.menuId, q.hover, 1.0);
+      out = await call('preview_ring', S.cfg, q.menuId, q.hover, 1.0, q.path);
       if (out && out.image && q.ver === this.ver) {
         this.cache.set(q.k, out);
         if (this.cache.size > 60) this.cache.delete(this.cache.keys().next().value);
@@ -1372,9 +1372,11 @@ function buildStage() {
     h('div', { class: 'stage-rings', 'aria-hidden': 'true' }), wrap, emptyEl, errEl, info, tip, busy, playBtn);
   el.classList.add('loading');
   let curSize = 447, hoverRing = null, dropRing = null, idxs = [], marks = [], haveImage = false;
+  let box = null, baseVer = -1, shownPath = '';     // box: size and ring centre of the image while a fan is open (null: square, ring in the middle); baseVer: the version curSize was read at
 
   const geom = () => ({ R: ringNum('radius'), slot: ringNum('slot'), dead: ringNum('dead_zone') });
   const player = makePlayer(() => img, () => requestImage(), st => {
+    if (st === 'playing') { box = null; placeImg(); }          // the animation frames are the plain square ring
     el.classList.toggle('playing', st === 'playing');
     playBtn.replaceChildren(st === 'loading' ? h('span', { class: 'spin' }) : icon(st === 'playing' ? 'stop' : 'play', 12), st === 'loading' ? 'Rendering...' : (st === 'playing' ? 'Stop' : 'Preview animation'));
     playBtn.disabled = st === 'loading';
@@ -1387,7 +1389,23 @@ function buildStage() {
     const avail = Math.min(cw - 24, ch - 56);
     const D = Math.max(120, Math.min(curSize, avail));
     wrap.style.width = wrap.style.height = D + 'px';
+    placeImg();
     buildMarks();
+  }
+  /* With a fan open the image is bigger than the ring and not centred on it: it is laid out so its ring centre sits in the middle of wrap. */
+  function placeImg() {
+    const st = img.style;
+    if (!box) { st.position = st.left = st.top = st.width = st.height = st.maxWidth = ''; return; }
+    const D = wrap.clientWidth || curSize, k = D / curSize;
+    st.position = 'absolute'; st.maxWidth = 'none';
+    st.left = D / 2 - box.cx * k + 'px'; st.top = D / 2 - box.cy * k + 'px'; st.width = box.w * k + 'px'; st.height = box.h * k + 'px';
+  }
+  /* Item indices (in the ring's own order) of the fan to show open: the hovered slot, else the selected one, when it is a submenu whose menu has "fan". */
+  function fanPath() {
+    const m = curMenu(); if (!m) return null;
+    const at = hoverRing !== null ? idxs[hoverRing] : S.itemIdx, j = idxs.indexOf(at);
+    const it = j >= 0 ? m.items[at] : null, t = it && 'menu' in it ? S.cfg.menus[it.menu] : null;
+    return t && t.fan === true && it.menu !== S.menuId ? [j] : null;
   }
   function buildMarks() {
     ov.replaceChildren(); marks = [];
@@ -1432,23 +1450,25 @@ function buildStage() {
   }
   let wantedUrl = '';
   const reveal = () => { img.classList.remove('pending'); el.classList.remove('loading'); };   // the shimmer stays until a decoded image can take its place
-  function setImg(url) {
-    if (img.getAttribute('src') === url) { wantedUrl = url; return; }
+  function setImg(url, nextBox) {
+    if (img.getAttribute('src') === url) { wantedUrl = url; box = nextBox; placeImg(); return; }
     wantedUrl = url;
     if (!img.getAttribute('src')) {
-      img.src = url;
+      img.src = url; box = nextBox; placeImg();
       img.decode().catch(() => {}).then(() => { if (wantedUrl === url || img.getAttribute('src') === url) reveal(); });
       return;
     }
     const pre = new Image(); pre.src = url;
-    pre.decode().catch(() => {}).then(() => { if (wantedUrl === url) { img.src = url; reveal(); } });
+    pre.decode().catch(() => {}).then(() => { if (wantedUrl === url) { img.src = url; box = nextBox; placeImg(); reveal(); } });   // picture and placement change together
   }
-  function showRes(res) {
+  function showRes(res, path) {
     el.classList.remove('busy');
     if (res && res.image) {
       el.classList.remove('err'); haveImage = true;
-      if (res.size && res.size !== curSize) curSize = res.size;
-      setImg(res.image);
+      const w = res.width || res.size, ht = res.height || res.size, cx = res.centre ? res.centre[0] : w / 2, cy = res.centre ? res.centre[1] : ht / 2;
+      const fanned = !!path && (Math.abs(w - ht) > 1.5 || Math.abs(cx - w / 2) > 1.5 || Math.abs(cy - ht / 2) > 1.5);
+      if (!fanned) { if (res.size && res.size !== curSize) curSize = res.size; baseVer = S.version; }     // only the plain ring says how big the ring is
+      setImg(res.image, fanned ? { w, h: ht, cx, cy } : null);
       layout();
     } else if (res) {
       el.classList.add('err'); el.classList.remove('loading');
@@ -1457,13 +1477,21 @@ function buildStage() {
   }
   function requestImage() {
     if (!idxs.length) return;
-    const mid = S.menuId, want = hoverRing, ver = S.version;
-    const hit = RingLoader.peek(mid, want);
-    if (hit) { showRes(hit); return; }
+    const mid = S.menuId, want = hoverRing, ver = S.version, path = fanPath(), pk = path ? path.join() : '';
+    shownPath = pk;
+    const hit = RingLoader.peek(mid, want, path);
+    if (hit && (!path || baseVer === ver)) { showRes(hit, path); return; }
     el.classList.add('busy');
-    RingLoader.get(mid, want).then(res => {
-      if (!res || mid !== S.menuId || ver !== S.version || want !== hoverRing || player.state !== 'idle') { if (res && !res.image) showRes(res); return; }
-      showRes(res);
+    const load = async () => {
+      if (path && baseVer !== ver) {                 // a fan picture cannot say how big the ring is: read that from the plain ring first
+        const base = await RingLoader.get(mid, null, null);
+        if (base && base.image && mid === S.menuId && ver === S.version) { curSize = base.size; baseVer = ver; }
+      }
+      return RingLoader.get(mid, want, path);
+    };
+    load().then(res => {
+      if (!res || mid !== S.menuId || ver !== S.version || want !== hoverRing || pk !== shownPath || player.state !== 'idle') { if (res && !res.image) showRes(res); return; }
+      showRes(res, path);
     });
   }
   function setHover(j) {
@@ -1488,7 +1516,7 @@ function buildStage() {
     buildMarks();
   }
 
-  R.overlay = () => { buildMarks(); };
+  R.overlay = () => { buildMarks(); if (idxs.length && player.state === 'idle' && (fanPath() || []).join() !== shownPath) requestImage(); };      // a new selection may open or close a fan
   R.preview = () => { player.stop(); refresh(); if (idxs.length) requestImage(); };
   el.addEventListener('keydown', e => {
     const m = curMenu(); if (!m || !idxs.length || e.target !== el) return;
@@ -1768,6 +1796,9 @@ function buildMenuProps() {
   paintAnimHint();
   box.append(sectionTitle('Open animation'), h('div', { class: 'field' }, animSel, animHint), h('div', { class: 'btn-row' },
     h('button', { class: 'btn', type: 'button', onclick: () => R.playAnim && R.playAnim() }, icon('play', 13), 'Preview animation')));
+  box.append(sectionTitle('As a submenu'), h('div', { class: 'field row' }, h('div', { class: 'grow' }, h('span', { class: 'flabel' }, 'Fan out when opened from another menu'),
+    h('div', { class: 'fhint' }, 'Instead of a new ring, the items spread out around this menu\'s slot and the ring stays in view.' + (m.hotkey ? ' This only applies when it is opened as a submenu; its hotkey still opens a ring.' : ''))),
+    toggleSwitch(m.fan === true, v => { if (v) m.fan = true; else delete m.fan; commit(); }, 'Fan out when opened from another menu')));
   box.append(sectionTitle('Manage'), h('div', { class: 'btn-row' },
     h('button', { class: 'btn', type: 'button', onclick: () => dupMenu(id) }, icon('copy', 13), 'Duplicate'),
     h('button', { class: 'btn danger-o', type: 'button', onclick: () => deleteMenu(id) }, icon('trash', 13), 'Delete menu')));
@@ -2902,6 +2933,7 @@ function describeChanges() {
     if ((a.title || '') !== (b.title || '')) lines.push('Renamed from ' + q(b.title || id));
     if ((a.hotkey || '') !== (b.hotkey || '')) lines.push('Hotkey: ' + (b.hotkey || 'none') + ' \u2192 ' + (a.hotkey || 'none'));
     if ((a.animation || '') !== (b.animation || '')) lines.push('Open animation: ' + (b.animation || 'same as Settings') + ' \u2192 ' + (a.animation || 'same as Settings'));
+    if ((a.fan === true) !== (b.fan === true)) lines.push('Fan out as a submenu: ' + (b.fan === true ? 'on' : 'off') + ' \u2192 ' + (a.fan === true ? 'on' : 'off'));
     if ((a.swallow !== false) !== (b.swallow !== false)) lines.push('Swallow hotkey: ' + (b.swallow !== false ? 'on' : 'off') + ' \u2192 ' + (a.swallow !== false ? 'on' : 'off'));
     const bi = b.items || [], ai = a.items || [];
     const key = it => JSON.stringify(it);

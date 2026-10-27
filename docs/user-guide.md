@@ -76,6 +76,7 @@ A menu is a named list of items shown as one ring. Menus live in one file, `%APP
 - Rings work best with 4 to 12 items. They are spread evenly around the circle.
 - At least one menu needs a hotkey, otherwise nothing can open the ring.
 - A menu can have its own open animation (`"animation": "spiral"`, or pick one in the menu settings in Studio). Without one it uses `ring.animation`. See [Open animations](#open-animations).
+- A menu can **fan out** when it is opened as a submenu (`"fan": true`, or switch on **Fan out when opened from another menu** in the menu settings in Studio). See [Submenu](#submenu).
 
 Starter menus ship with ZOrbit: **Brushes** (Q), with submenus **More Brushes**, **Tools** (masking, symmetry, PolyFrame, LazyMouse and other switches) and **SubDivide** (a row of stroke subdivide sizes). They use only brushes that come with ZBrush.
 
@@ -142,6 +143,8 @@ Steps run in order. Each step is a `brush`, `press`, `set` or `toggle`. Steps ca
 
 `"more"` is the id of another menu in the file. Moving the cursor onto the submenu's slot (or flicking past it) opens the new ring centred on that slot. If you are still holding the hotkey, it stays in hold-and-release mode. Releasing or clicking on the submenu's direction before you reach the slot opens it centred on your cursor, in tap-and-click mode. See [Pick modes](#pick-modes).
 
+A submenu can open another way. Give its menu `"fan": true` (or switch on **Fan out when opened from another menu** in the menu settings in Studio) and its items spread out in an arc beyond its slot, joined to it by dashed lines, instead of a new ring opening on the slot. The ring you came from stays visible. An item of a fan can itself be a submenu of a fan, and it fans out further (up to three deep). The option only matters when the menu is opened as a submenu. A menu with a hotkey still opens as a normal ring when you press it. See [Pick modes](#pick-modes) for how to pick from a fan.
+
 ### Labels and icons
 
 - `label`: text shown under the slot. Long labels are shortened with an ellipsis.
@@ -180,6 +183,14 @@ There are two ways to pick, and the same hotkey does both.
 - Release in the middle (where the submenu slot was) to keep the submenu open and click an item.
 
 Turn this off with **Open submenus on hover** in Settings (`"hover_submenus": false`). Submenus then open when you release or click on them, as before.
+
+**Fans.** A submenu whose menu has `"fan": true` opens as a fan instead of a new ring: its items spread out beyond the submenu's slot with dashed lines to each one, and the ring you came from stays where it is. The rules are the same as above:
+
+- Release over a fan item, click it, or flick past it to pick it.
+- Release on the fan's own slot to keep the fan open and click an item.
+- A fan item that is itself a fan submenu fans out further, up to three deep, and the earlier fans stay visible.
+- Moving the cursor out of a fan closes it.
+- If there is no room for the fan (the ring is near a screen edge), or the fan would lead back to a menu that is already open, the submenu opens as a normal ring instead.
 
 Notes:
 

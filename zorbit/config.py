@@ -24,6 +24,8 @@ Schema (all keys optional except menus):
       "hotkey": "Q",                   # optional; menus without one are submenus only
       "swallow": true,                 # hide the hotkey from ZBrush (default true)
       "animation": "spiral",           # optional; this menu's open animation instead of ring.animation
+      "fan": true,                     # optional; opened as a submenu, its items fan out from that slot
+                                       # and the ring stays (default false: a new ring centred on the slot)
       "items": [ <item>, ... ]         # drawn clockwise from the top
     }
   }
@@ -92,6 +94,7 @@ class Menu:
     hotkey: Hotkey | None = None
     swallow: bool = True
     animation: str = ""       # one of ANIMATIONS, or "" for ring.animation
+    fan: bool = False         # opened as a submenu: fan out in place instead of a new ring
 
 
 @dataclass
@@ -267,7 +270,8 @@ def load(path: str) -> Config:
             errors.append(f"menu {mid}: animation {anim!r} unknown; using ring.animation")
             anim = ""
         cfg.menus[mid] = Menu(id=mid, title=str(m.get("title") or mid), items=items, hotkey=hk,
-                              swallow=bool(m.get("swallow", True)), animation=anim)
+                              swallow=bool(m.get("swallow", True)), animation=anim,
+                              fan=bool(m.get("fan", False)))
     if not any(m.hotkey for m in cfg.menus.values()):
         errors.append("no menu has a hotkey, so nothing can open the ring")
     return cfg

@@ -383,7 +383,9 @@ class App:
     def open_menu(self, menu, pos, held, nested=False):
         from ring import Ring
         menu = self.fill_auto(menu)
-        ring = Ring(menu, self.cfg.ring, self.icon_for, self._on_ring_done, log, held=held, nested=nested)
+        menus = self.cfg.menus
+        ring = Ring(menu, self.cfg.ring, self.icon_for, self._on_ring_done, log, held=held, nested=nested,
+                    submenus=lambda mid: self.fill_auto(menus[mid]) if mid in menus else None)
         self.ring = ring
         try:
             ring.show(*pos)

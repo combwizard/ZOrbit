@@ -22,6 +22,13 @@
   var mtime = 1700000000000000000, conflictDone = false;
   var BROKEN_ERR = "Expecting ',' delimiter: line 12 column 5 (char 301)";
 
+  // The items the ring would draw: one action each, submenu targets that exist (the order preview_ring's indices count in)
+  function usable(m) {
+    return (m.items || []).filter(function (it) {
+      return ['brush', 'press', 'set', 'toggle', 'steps', 'menu', 'auto'].filter(function (k) { return k in it; }).length === 1;
+    });
+  }
+
   function validate(cfg) {
     var out = [];
     var menus = (cfg && cfg.menus) || {};
@@ -101,12 +108,34 @@
     // Both mark the file as repaired for this tab, so the reload after them boots normally even with ?broken.
     restore_backup: function () { try { sessionStorage.setItem('rm_repaired', '1'); } catch (e) {} return sleep(200).then(function () { return { ok: true, message: 'Restored the last good backup (mock).' }; }); },
     reset_config: function () { try { sessionStorage.setItem('rm_repaired', '1'); } catch (e) {} return sleep(200).then(function () { return { ok: true, message: 'Reset to the default menus (mock).' }; }); },
-    preview_ring: function (cfg, menuId, hover) {
+    preview_ring: function (cfg, menuId, hover, scale, openPath) {
       return sleep(60 + lag).then(function () {
         var m = cfg && cfg.menus && cfg.menus[menuId];
         if (!m || !(m.items || []).length) return { image: null, problems: ['menu ' + menuId + ' has no usable items'] };
-        if (hover === 0 && menuId === 'brushes' && M.preview_ring_hover0) return M.preview_ring_hover0;
-        return M.preview_ring[menuId] || M.preview_ring.brushes;
+        var res = clone((hover === 0 && menuId === 'brushes' && M.preview_ring_hover0) || M.preview_ring[menuId] || M.preview_ring.brushes);
+        res.width = res.height = res.size; res.centre = [res.size / 2, res.size / 2];
+        var it = openPath && openPath.length ? usable(m)[openPath[0]] : null, sub = it && it.menu ? cfg.menus[it.menu] : null;
+        if (!(sub && sub.fan === true && it.menu !== menuId)) return res;
+        // No Python here: a fan is faked as a wider canvas with the ring on the left and dashed lines to a few discs on the right
+        return new Promise(function (resolve) {
+          var base = new Image();
+          base.onload = function () {
+            var s = res.size, w = Math.round(s * 1.5), c = document.createElement('canvas'), g;
+            c.width = w; c.height = s; g = c.getContext('2d');
+            g.drawImage(base, 0, 0);
+            var n = Math.min(Math.max((sub.items || []).length, 1), 5), ax = s / 2, ay = s / 2;
+            g.strokeStyle = 'rgba(255,255,255,.35)'; g.fillStyle = '#2b2c31'; g.setLineDash([4, 4]); g.lineWidth = 1.5;
+            for (var i = 0; i < n; i++) {
+              var a = (n === 1 ? 0 : -0.9 + (1.8 * i) / (n - 1)), x = s * 0.95 + Math.cos(a) * s * 0.3, y = ay + Math.sin(a) * s * 0.34;
+              g.beginPath(); g.moveTo(ax, ay); g.lineTo(x, y); g.stroke();
+              g.beginPath(); g.arc(x, y, 24, 0, 6.2832); g.fill(); g.setLineDash([]); g.stroke(); g.setLineDash([4, 4]);
+            }
+            res.image = c.toDataURL('image/png'); res.size = w; res.width = w; res.height = s; res.centre = [s / 2, s / 2];
+            resolve(res);
+          };
+          base.onerror = function () { resolve(res); };
+          base.src = res.image;
+        });
       });
     },
     preview_animation: function (cfg, menuId) {
