@@ -10,7 +10,7 @@ import shutil
 import sys
 
 APP_NAME = "Radial Menu"
-VERSION = "0.4.0"
+VERSION = "0.5.0"
 FROZEN = bool(getattr(sys, "frozen", False))
 PKG_DIR = os.path.dirname(os.path.abspath(__file__))
 RESOURCE_DIR = getattr(sys, "_MEIPASS", PKG_DIR) if FROZEN else PKG_DIR
