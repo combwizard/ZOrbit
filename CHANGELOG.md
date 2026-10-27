@@ -4,7 +4,7 @@ All notable changes to this project are listed here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.6.0] - 2026-10-27
 
 ### Added
 - Studio checks GitHub for a newer release when it opens and shows it at the top, next to the current
@@ -88,6 +88,7 @@ First public release.
   only brushes included with ZBrush.
 - Documentation: README, user guide, third-party notices and contributing guide.
 
+[0.6.0]: https://github.com/combwizard/zbrush-radial-menu/releases/tag/v0.6.0
 [0.5.1]: https://github.com/combwizard/zbrush-radial-menu/releases/tag/v0.5.1
 [0.5.0]: https://github.com/combwizard/zbrush-radial-menu/releases/tag/v0.5.0
 [0.4.0]: https://github.com/combwizard/zbrush-radial-menu/releases/tag/v0.4.0
