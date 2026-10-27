@@ -62,7 +62,7 @@ How saving works:
 On the Menus screen you can:
 
 - add, duplicate and delete menus (a duplicate has no hotkey, so it starts out as a submenu);
-- add items with **Add item**, drag brushes from the Library onto the ring or the list, reorder items, and remove them;
+- add items with **Add item**, drag brushes from the Library onto the ring or the list, reorder items, and remove them (you can also drag a brush from the [brush browser](#brush-browser) window onto a menu in the list, the ring or the item list);
 - drag an item onto another menu in the list to move it there (hold **Ctrl** to copy it instead);
 - open a submenu by double-clicking its item or pressing **Open** in the inspector; a **Back** chip above the item list returns to the parent menu;
 - edit each item's action, label and icon in the inspector;
@@ -225,6 +225,8 @@ A brush is `brush:` plus its name in lower case without spaces. The first tag in
 ## Brush browser
 
 The brush browser is a window with all your brushes in it: search, folders, tag chips and thumbnails. Pick a brush and ZBrush selects it, without going through the ring. It is a window like any other: it has a taskbar button, you can move, resize, minimise and maximise it, and snap or dock it to a screen edge (drag its header to an edge, or press Win+Arrow). It does not close by itself. It stays up until you close it with the **X** button or Alt+F4, so you can keep it beside ZBrush all day.
+
+While Studio is open you can drag a brush from the browser onto a menu in Studio's menu list, onto the ring or onto the item list. It is added exactly as when you drag it from the Library, and you can undo it. A drag carries only the brush you pick up, even when several are selected.
 
 ### Opening it
 

@@ -42,6 +42,8 @@ All notable changes to this project are listed here. The format follows
   `popout.log`.
 - Tag warnings in the problems panel: a tag or browser filter that does not exist, an unknown `tag_colors`, a
   browser hotkey that a menu already uses (the menu wins) or cannot be read.
+- Drag a brush from the brush browser window onto a menu, the ring or the item list in Studio. It is added like a
+  drag from the Library, with the same undo step. A drag carries the one brush you pick up, even in a multi-selection.
 
 ### Changed
 - In the Library and the brush list on the Menus screen, Ctrl-click and Shift-click now select several brushes,

@@ -526,7 +526,7 @@ function thumb(name, { size = 28, lazy = null, cls = '', res = 128 } = {}) {
   el._res = res;
   const done = (url, failed) => {
     el.classList.remove('loading');
-    if (url) { el.classList.remove('fallback'); el.replaceChildren(h('img', { src: url, alt: '', draggable: false })); }
+    if (url) { el.classList.remove('fallback'); el.replaceChildren(h('img', { src: url, alt: '', draggable: 'false' })); }
     else if (!el.querySelector('img')) { el.classList.add('fallback'); el.textContent = initials(name); }
     if (failed && el._io) setTimeout(() => {                       // look again in a while, or when it scrolls back into view
       const root = el._io.root;
@@ -703,6 +703,79 @@ const DnD = {
   },
 };
 window.addEventListener('click', e => { if (DnD.recent) { e.stopPropagation(); e.preventDefault(); } }, true);
+
+/* ---------- drag and drop between windows (HTML5)
+   The brush browser popout is a window of another process, so its drags cannot be pointer events. Its cards are draggable the
+   native way and carry the name as BRUSH_MIME (and as "zorbit:brush:<name>" in text/plain, for a drag that loses custom types). The
+   Studio takes them in here and hands them to the same zones the pointer drags use, so a brush from the popout lands exactly like one
+   from the Library. While a drag is over the page only the types can be read, not the data. */
+const BRUSH_MIME = 'application/x-zorbit-brush', BRUSH_TEXT = 'zorbit:brush:';
+DnD.native = {
+  zone: null, idle: 0,
+  mine: dt => !!dt && Array.from(dt.types || []).includes(BRUSH_MIME),
+  name(dt) {                                                 // only at drop time; anything that is not ours gives null
+    let n = '';
+    try {
+      n = dt.getData(BRUSH_MIME);
+      if (!n) { const t = dt.getData('text/plain'); if (t && t.startsWith(BRUSH_TEXT)) n = t.slice(BRUSH_TEXT.length); }
+    } catch (e) { n = ''; }
+    n = String(n || '').trim();
+    return n && n.length <= 260 && !/[\x00-\x1f]/.test(n) ? n : null;
+  },
+  over(x, y, ev) {                                           // true when a zone would take the brush
+    const z = DnD.findZone(x, y, { type: 'brush', name: '' });
+    if (z !== this.zone) { this.leave(); this.zone = z; }
+    if (z) z._dz.over({ type: 'brush', name: '' }, x, y, ev);
+    clearTimeout(this.idle); this.idle = setTimeout(() => this.leave(), 2500);  // a drag that ends away from us sends nothing more (long: a still cursor may get no dragover)
+    return !!z;
+  },
+  leave() {
+    clearTimeout(this.idle);
+    const z = this.zone; this.zone = null;
+    if (z && z._dz.leave) z._dz.leave();
+  },
+  drop(name, x, y, ev) {
+    const z = DnD.findZone(x, y, { type: 'brush', name });
+    this.leave();
+    if (z && name) z._dz.drop({ type: 'brush', name }, x, y, ev);
+    return !!z;
+  },
+};
+(function bindNativeDrop() {
+  const editable = t => !!(t && t.closest && t.closest('input, textarea, [contenteditable]'));
+  const files = dt => !!dt && Array.from(dt.types || []).includes('Files');
+  const ours = dt => !POPOUT && DnD.native.mine(dt) && S.ready && !S.fatal;
+  const onOver = e => {
+    const dt = e.dataTransfer;
+    if (ours(dt)) {
+      const ok = DnD.native.over(e.clientX, e.clientY, e);
+      e.preventDefault();
+      if (dt) dt.dropEffect = ok ? 'copy' : 'none';
+      return;
+    }
+    if (!files(dt) && editable(e.target)) return;            // text dragged within a text box keeps working
+    e.preventDefault();                                      // nothing else is dropped here: no file or link may navigate the page
+    if (dt) dt.dropEffect = 'none';
+  };
+  document.addEventListener('dragenter', onOver, true);
+  document.addEventListener('dragover', onOver, true);
+  document.addEventListener('dragleave', e => {
+    if (!DnD.native.zone || e.relatedTarget) return;
+    const x = e.clientX, y = e.clientY;
+    if ((x === 0 && y === 0) || x < 0 || y < 0 || x >= innerWidth || y >= innerHeight) DnD.native.leave();   // truly outside: an edge pixel is still ours
+  }, true);
+  document.addEventListener('drop', e => {
+    const dt = e.dataTransfer, name = !POPOUT && S.ready && !S.fatal && dt ? DnD.native.name(dt) : null;   // the plain text form counts too
+    if (name || ours(dt)) {
+      e.preventDefault();
+      if (name) DnD.native.drop(name, e.clientX, e.clientY, e); else DnD.native.leave();
+      return;
+    }
+    DnD.native.leave();
+    if (!files(dt) && editable(e.target)) return;
+    e.preventDefault();
+  }, true);
+})();
 
 /* ================================================================== combobox (autocomplete) */
 let comboClose = null, comboSeq = 0;
@@ -2494,6 +2567,20 @@ function makeBrowser({ compact, st, host = STUDIO_HOST }) {
       }
     });
     if (host.dnd) DnD.source(card, () => ({ type: 'brush', name: b.name }), () => h('span', { class: 'ghost-chip' }, thumb(b.name, { size: 26 }), b.name));
+    if (host.nativeDrag) {                                                   // the popout: a drag the other window can take (see BRUSH_MIME)
+      card.setAttribute('draggable', 'true');
+      let downOnButton = false;                                              // a press on the card's own button picks, it never drags
+      card.addEventListener('pointerdown', e => { downOnButton = !!(e.target.closest && e.target.closest('button')); });
+      card.addEventListener('dragstart', e => {
+        if (downOnButton) { e.preventDefault(); return; }
+        if (e.target !== card || !e.dataTransfer) return;
+        const dt = e.dataTransfer, t = $('.thumb', card);
+        dt.effectAllowed = 'copy';
+        dt.setData(BRUSH_MIME, b.name);
+        dt.setData('text/plain', BRUSH_TEXT + b.name);
+        if (t) { const r = t.getBoundingClientRect(); dt.setDragImage(t, Math.round(r.width / 2), Math.round(r.height / 2)); }
+      });
+    }
     paintBadge(card);
     paintTags(card);
     return card;
@@ -3824,6 +3911,7 @@ let popBrowser = null, popWant, popPicking = false;
 const popHide = () => { call('popout_hide').catch(() => {}); };
 const POP_HOST = {
   dnd: false,
+  nativeDrag: true,                                  // cards drag out to the Studio window, the OS way
   firstMatch: true,                                  // after a search, the first match is highlighted
   primaryIcon: 'k_brush',
   primaryLabel: () => 'Select in ZBrush',
