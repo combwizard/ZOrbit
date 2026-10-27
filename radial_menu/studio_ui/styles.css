@@ -493,6 +493,7 @@ body.dragging .irow:hover { background: transparent; }
 .slabel span { font-weight: 500; }
 .slabel small { color: var(--sub); font-size: 12px; line-height: 1.4; }
 .sctl { display: flex; align-items: center; gap: 10px; }
+.sctl.switch { justify-content: flex-end; }
 .nwrap { display: inline-flex; align-items: center; gap: 4px; }
 .nwrap em { font: normal 11px var(--mono); color: var(--sub); width: 18px; }
 .sctl .nwrap input { color: var(--accent); }

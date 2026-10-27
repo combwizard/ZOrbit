@@ -4,6 +4,16 @@ All notable changes to this project are listed here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+- Flick to pick: moving the cursor out past a slot picks it at once, without releasing the hotkey or clicking.
+  On by default; `ring.flick` or Settings > Behaviour > Flick to pick.
+- Submenus open as soon as the cursor reaches their slot, centred on that slot. While the hotkey is still held
+  they stay in hold-and-release mode, so releasing over an item or flicking past it picks it, and releasing
+  in the middle keeps the submenu open for a click. On by default; `ring.hover_submenus` or Settings >
+  Behaviour > Open submenus on hover.
+
 ## [0.4.0] - 2026-10-27
 
 ### Added

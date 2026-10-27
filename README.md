@@ -11,9 +11,9 @@ Press **Q** over ZBrush and a ring of your favourite brushes and buttons appears
 
 ## Features
 
-- **Fast picking.** Hold the hotkey, move toward a slot, release. Or tap the hotkey and click.
+- **Fast picking.** Hold the hotkey and flick past a slot, or move toward it and release. Or tap the hotkey and click.
 - **More than brushes.** A slot can select a brush, press any ZBrush button, set a slider, flip a switch, run several of those in a row, or open another ring.
-- **Submenus.** Rings can open other rings, so a handful of hotkeys can reach a lot.
+- **Submenus.** Rings can open other rings, so a handful of hotkeys can reach a lot. Hover a submenu and it opens on the spot, so one stroke can reach an item two rings deep.
 - **Radial Menu Studio.** Edit menus with a live preview of the real ring. Drag brushes in from a searchable library with thumbnails, record hotkeys, change colours, size and animation.
 - **Twelve open animations**, from instant to a swirling spiral, plus ring size, dead zone and label options.
 - **Starts and stops with ZBrush.** There is nothing to launch by hand.

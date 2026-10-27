@@ -14,6 +14,8 @@ Schema (all keys optional except menus):
            "animation": "smooth",            # smooth bounce pop zoom fade drift fancy spiral ripple breath
                                              # mist snappy
            "labels": "name",                 # name | none
+           "flick": true,                    # moving out past a slot picks it without releasing the hotkey
+           "hover_submenus": true,           # reaching a submenu slot opens that submenu, centred on it
            "colors": {"bg": "#222327", "accent": "#f86b33", "highlight": "#4dc8e9", "text": "#f0f0f0",
                       "lines": "#f86b33"}},
   "menus": {
@@ -46,9 +48,10 @@ ANIMATIONS = ("smooth", "bounce", "pop", "zoom", "fade", "drift", "fancy", "spir
 LABEL_MODES = ("name", "none")
 
 DEFAULT_RING = {"radius": 145, "slot": 72, "dead_zone": 38, "tap_ms": 250, "timeout_s": 20,
-                "animation": "smooth", "labels": "name",
+                "animation": "smooth", "labels": "name", "flick": True, "hover_submenus": True,
                 "colors": {"bg": "#222327", "accent": "#f86b33", "highlight": "#4dc8e9", "text": "#f0f0f0",
                            "lines": "#f86b33"}}
+_RING_SWITCHES = ("flick", "hover_submenus")
 _RING_RANGES = {"radius": (60, 400), "slot": (32, 160), "dead_zone": (10, 120), "tap_ms": (0, 1000),
                 "timeout_s": (2, 120)}
 
@@ -198,6 +201,11 @@ def load(path: str) -> Config:
                 cfg.ring[k] = v
             else:
                 errors.append(f"ring.{k}: {v!r} must be a number from {lo} to {hi}")
+        elif k in _RING_SWITCHES:
+            if isinstance(v, bool):
+                cfg.ring[k] = v
+            else:
+                errors.append(f"ring.{k}: {v!r} must be true or false")
         elif k == "animation":
             if v in ANIMATIONS:
                 cfg.ring[k] = v

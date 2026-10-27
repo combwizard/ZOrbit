@@ -336,9 +336,9 @@ class App:
                 return                             # pressing the hotkey again closes the ring
         self.open_menu(menu, W.cursor_pos(), held=self.held_vk is not None)
 
-    def open_menu(self, menu, pos, held):
+    def open_menu(self, menu, pos, held, nested=False):
         from ring import Ring
-        ring = Ring(menu, self.cfg.ring, self.icon_for, self._on_ring_done, log, held=held)
+        ring = Ring(menu, self.cfg.ring, self.icon_for, self._on_ring_done, log, held=held, nested=nested)
         self.ring = ring
         try:
             ring.show(*pos)
@@ -348,13 +348,15 @@ class App:
             return
         self._ring_centre = pos
 
-    def _on_ring_done(self, item, reason):
+    def _on_ring_done(self, item, reason, at=None):
         self.ring = None
         if item is None:
             return
         if item.kind == "menu":
             sub = self.cfg.menus.get(item.data["menu"])
-            if sub is not None:
+            if sub is not None and at is not None:  # flicked or hovered: centred on its slot, still held if so
+                self.open_menu(sub, at, held=self.held_vk is not None, nested=True)
+            elif sub is not None:
                 self.open_menu(sub, W.cursor_pos(), held=False)   # re-centred on the pick
             return
         self.send(item)

@@ -130,7 +130,7 @@ Steps run in order. Each step is a `brush`, `press`, `set` or `toggle`. Steps ca
 {"menu": "more", "label": "More Brushes"}
 ```
 
-`"more"` is the id of another menu in the file. The new ring opens centred on your cursor, in tap-and-click mode (see below).
+`"more"` is the id of another menu in the file. Moving the cursor onto the submenu's slot (or flicking past it) opens the new ring centred on that slot. If you are still holding the hotkey, it stays in hold-and-release mode. Releasing or clicking on the submenu's direction before you reach the slot opens it centred on your cursor, in tap-and-click mode. See [Pick modes](#pick-modes).
 
 ### Labels and icons
 
@@ -162,11 +162,19 @@ There are two ways to pick, and the same hotkey does both.
 
 **Tap and click.** Tap the hotkey quickly (shorter than the **tap time**, 250 ms by default). The ring stays open. Move to a slot and click it. The middle of the ring, a right-click, **Esc**, a click outside the ring, or the auto-close timer all cancel without picking.
 
+**Flick.** In either mode, move the cursor out past a slot's outer edge and that slot is picked straight away. You don't have to release the hotkey or click. Press the hotkey, flick toward a slot, and it's done. Turn this off with **Flick to pick** in Settings (`"flick": false`). With flicking on, moving out of the ring always picks something, so a click outside the ring can no longer cancel. Use the middle of the ring, a right-click or **Esc** instead.
+
+**Submenus.** Move the cursor onto a submenu's slot and the submenu opens right away, centred on that slot. If you are still holding the hotkey, you stay in hold-and-release mode, so one movement can go into a submenu and on to one of its items:
+
+- Release over an item, or flick past it, to pick it.
+- Release in the middle (where the submenu slot was) to keep the submenu open and click an item.
+
+Turn this off with **Open submenus on hover** in Settings (`"hover_submenus": false`). Submenus then open when you release or click on them, as before.
+
 Notes:
 
-- A slot is chosen by the *direction* of the cursor from the centre, not by hitting the icon. You can flick toward a slot without moving far. Within the **dead zone** radius no slot is chosen.
+- A slot is chosen by the *direction* of the cursor from the centre, not by hitting the icon. You can point toward a slot and release without moving far. Within the **dead zone** radius no slot is chosen.
 - The slot under the cursor grows slightly, gets an accent ring, and its label changes colour.
-- Submenus always open in tap-and-click mode, centred on where you clicked.
 - The ring never takes keyboard focus, so ZBrush keeps working normally behind it.
 - If the cursor is near a screen edge, the ring is moved to stay fully on screen.
 
@@ -183,6 +191,8 @@ These are on the Settings screen in Studio, and under `"ring"` in `radial.json`.
 | `timeout_s` | 20 | 2 to 120 | An open ring closes itself after this many seconds. |
 | `animation` | `smooth` | see below | The open animation. |
 | `labels` | `name` | `name`, `none` | Show names under the slots, or icons only. |
+| `flick` | `true` | `true`, `false` | Moving out past a slot picks it without releasing or clicking. |
+| `hover_submenus` | `true` | `true`, `false` | Reaching a submenu slot opens the submenu, centred on that slot. |
 
 Sizes are scaled for high-DPI screens automatically.
 

@@ -4,6 +4,10 @@ Look: slots of round icons around a glowing accent centre dot,
 hairline spokes and faint guide rings; hover = accent border, soft ring, glow, 1.12x scale and accent label;
 submenus use the highlight colour and a small badge. Selection is by angle outside a dead zone.
 
+Flicking: moving the cursor out past a slot's outer edge picks it straight away (ring.flick), and reaching a
+submenu's disc opens it (ring.hover_submenus). Either way a submenu opens centred on that slot, still in hold
+mode while the hotkey is down, so one stroke can run through a submenu into its items.
+
 Motion: every slot is a pre-rendered sprite (idle and hover look). Each frame only scales, fades, moves,
 rotates or blurs sprites and composites them, so a frame costs a few milliseconds. Open animations are
 staggered per slot (modes below); hover eases over 120 ms; closing is instant so picks never wait.
@@ -12,7 +16,8 @@ The window never takes focus (WS_EX_NOACTIVATE from creation, MA_NOACTIVATE on c
 keeps keyboard focus and sees every key-up.
 
 Lifecycle: Ring(...).show(x, y) -> owner calls key_released() when the hotkey goes up -> the ring calls
-on_done(item_or_None, reason) exactly once and destroys itself.
+on_done(item_or_None, reason, at) exactly once and destroys itself. at: screen position of the picked slot
+for a flick or submenu hover (where a submenu should open), else None.
 """
 import ctypes
 import math
@@ -150,9 +155,11 @@ def _register_class():
 
 
 class Ring:
-    def __init__(self, menu, ring_cfg: dict, icon_for, on_done, log, held: bool):
-        """menu: config.Menu. icon_for(item) -> PIL RGBA image or None. on_done(item|None, reason).
-        held: True when opened by a hotkey that is still down (enables hold-and-release picking)."""
+    def __init__(self, menu, ring_cfg: dict, icon_for, on_done, log, held: bool, nested=False):
+        """menu: config.Menu. icon_for(item) -> PIL RGBA image or None. on_done(item|None, reason, at).
+        held: True when opened by a hotkey that is still down (enables hold-and-release picking).
+        nested: opened by flicking or hovering onto a submenu slot of another ring: the dead zone covers that
+        slot's disc, and releasing the hotkey in the centre keeps the ring open for a click."""
         self.menu = menu
         self.items = menu.items
         self.cfg = ring_cfg
@@ -160,6 +167,7 @@ class Ring:
         self.on_done = on_done
         self._log = log
         self.mode = "hold" if held else "click"
+        self.nested = nested
         self.anim_name = getattr(menu, "animation", "") or ring_cfg.get("animation", "smooth")
         self.anim = MODES.get(self.anim_name, MODES["smooth"])
         self.curve = cubic_bezier(*self.anim["curve"])
@@ -227,12 +235,18 @@ class Ring:
     def key_released(self) -> None:
         if self.done or self.mode != "hold":
             return
-        if (time.time() - self.t0) * 1000 < self.cfg["tap_ms"]:
-            self.mode = "click"                    # quick tap: stay open, wait for a click
-            self._static_cache = None              # hint text changes
-            self._log("tap: ring stays open for a click")
+        hover = self._current_hover()
+        if self.nested and hover is None:
+            self._stay_open("released in the centre of a submenu")
+        elif not self.nested and (time.time() - self.t0) * 1000 < self.cfg["tap_ms"]:
+            self._stay_open("tap")
         else:
-            self._finish(self._current_hover(), "released")
+            self._finish(hover, "released")
+
+    def _stay_open(self, why):
+        self.mode = "click"                        # wait for a click
+        self._static_cache = None                  # hint text changes
+        self._log(f"{why}: ring stays open for a click")
 
     def cancel(self, reason="cancelled") -> None:
         self._finish(None, reason)
@@ -246,6 +260,9 @@ class Ring:
         self.R = c["radius"] * scale
         self.slot = c["slot"] * scale
         self.dead = c["dead_zone"] * scale
+        if self.nested:                            # entered on the parent's slot disc: no instant pick there
+            self.dead = max(self.dead, self.slot / 2 + 4 * scale)
+        self.flick_r = self.R + self.slot * 0.56   # just past the hovered (1.12x) disc
         reach = self.R * (1.0 + max(0.0, -self.anim.get("travel", 0.0)))
         self.pad = self.slot * 0.62 + 34 * scale    # half slot at 1.12x + glow + label
         self.size = int(2 * (reach + self.pad))
@@ -265,6 +282,14 @@ class Ring:
         x, y = W.cursor_pos()
         i = self._index_at(x - self.origin[0], y - self.origin[1])
         return None if i is None else self.items[i]
+
+    def _seat_xy(self, i):
+        ux, uy = self.seats[i]
+        return self.centre[0] + ux * self.R, self.centre[1] + uy * self.R
+
+    def _seat_screen(self, i):
+        x, y = self._seat_xy(i)
+        return int(round(self.origin[0] + x)), int(round(self.origin[1] + y))
 
     # --- sprites ---------------------------------------------------------------------------------
     def _prepare(self):
@@ -597,6 +622,16 @@ class Ring:
             self._finish(None, "clicked outside")
             return
         i = self._index_at(lx, ly)
+        if i is not None:
+            it = self.items[i]
+            if self.cfg.get("flick", True) and math.hypot(lx - self.centre[0], ly - self.centre[1]) >= self.flick_r:
+                self._finish(it, "flick", self._seat_screen(i))
+                return
+            sx, sy = self._seat_xy(i)
+            on_slot = math.hypot(lx - sx, ly - sy) <= self.slot / 2
+            if it.kind == "menu" and on_slot and self.cfg.get("hover_submenus", True):
+                self._finish(it, "hover", self._seat_screen(i))
+                return
         if i != self.hover:
             self.hover = i
             self._set_hover(i, now)
@@ -605,7 +640,7 @@ class Ring:
             self._last_key = key
             self._render(now)
 
-    def _finish(self, item, reason):
+    def _finish(self, item, reason, at=None):
         if self.done:
             return
         self.done = True
@@ -623,4 +658,4 @@ class Ring:
             W.DeleteObject(hbmp)
             W.DeleteDC(mem)
             self._dib = None
-        self.on_done(item, reason)
+        self.on_done(item, reason, at)
