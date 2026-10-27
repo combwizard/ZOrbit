@@ -64,16 +64,38 @@ jobs:
           path: dist/RadialMenu-${{ steps.ver.outputs.version }}-portable.zip
           if-no-files-found: error
 
-      - name: Create GitHub Release
+      - name: Release notes from CHANGELOG.md
+        if: github.ref_type == 'tag'
+        shell: pwsh
+        run: |
+          $v = "${{ steps.ver.outputs.version }}"
+          $lines = Get-Content CHANGELOG.md
+          $hit = $lines | Select-String -Pattern "^## \[$([regex]::Escape($v))\]" | Select-Object -First 1
+          if (-not $hit) { throw "CHANGELOG.md has no '## [$v]' section" }
+          $body = foreach ($l in $lines[$hit.LineNumber..($lines.Count - 1)]) {
+            if ($l -match '^## \[' -or $l -match '^\[[^\]]+\]: ') { break }
+            $l
+          }
+          ($body -join "`n").Trim() | Set-Content -Encoding utf8 release-notes.md
+          Get-Content release-notes.md
+
+      - name: Create or update the GitHub Release
         if: github.ref_type == 'tag'
         shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           $v = "${{ steps.ver.outputs.version }}"
-          gh release create "$env:GITHUB_REF_NAME" `
-            "packaging\Output\RadialMenuSetup-$v.exe" `
-            "dist\RadialMenu-$v-portable.zip" `
-            --repo "$env:GITHUB_REPOSITORY" `
-            --title "Radial Menu for ZBrush $v" `
-            --generate-notes
+          $assets = "packaging\Output\RadialMenuSetup-$v.exe", "dist\RadialMenu-$v-portable.zip"
+          gh release view "$env:GITHUB_REF_NAME" --repo "$env:GITHUB_REPOSITORY" *> $null
+          if ($LASTEXITCODE -eq 0) {
+            # The tag was pushed again (for example after a history rewrite): refresh files and notes.
+            gh release upload "$env:GITHUB_REF_NAME" @assets --clobber --repo "$env:GITHUB_REPOSITORY"
+            gh release edit "$env:GITHUB_REF_NAME" --notes-file release-notes.md --repo "$env:GITHUB_REPOSITORY"
+          } else {
+            gh release create "$env:GITHUB_REF_NAME" @assets `
+              --repo "$env:GITHUB_REPOSITORY" `
+              --title "Radial Menu for ZBrush $v" `
+              --notes-file release-notes.md
+          }
+          if ($LASTEXITCODE -ne 0) { throw "gh release failed with exit code $LASTEXITCODE" }
