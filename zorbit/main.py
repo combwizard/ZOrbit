@@ -21,11 +21,27 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import paths  # noqa: E402
 
 
+def unblock_bundle() -> None:
+    """Remove the Mark of the Web that Windows copies onto every file unzipped from the downloaded portable zip.
+    .NET Framework refuses a marked Python.Runtime.dll, so pythonnet (and with it the Studio and the brush
+    browser) fails at startup with "Failed to resolve Python.Runtime.Loader.Initialize"."""
+    if not getattr(sys, "frozen", False) or sys.platform != "win32":
+        return
+    for dirpath, _, filenames in os.walk(sys._MEIPASS):
+        for name in filenames:
+            if name.lower().endswith(".dll"):
+                try:
+                    os.remove(os.path.join(dirpath, name) + ":Zone.Identifier")
+                except OSError:           # not marked, or a folder we cannot write to
+                    pass
+
+
 def main() -> int:
     args = sys.argv[1:]
     if args and args[0] in ("--zscript-copy", "--zscript-remove"):
         import zscript_bridge             # elevated helper: touches nothing but those files
         return zscript_bridge.elevated_main(args)
+    unblock_bundle()
     paths.write_launch_file()
     if "--studio" in args:
         import studio

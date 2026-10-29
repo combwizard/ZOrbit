@@ -58,6 +58,9 @@ All notable changes to this project are listed here. The format follows
 
 - ZBrush 2026: a brush that ZBrush had not loaded yet, picked from the ring or the brush browser, is now selected
   as well as loaded. Before, it only became the current brush on a second pick.
+- The portable zip failed at startup on some PCs with "Failed to resolve Python.Runtime.Loader.Initialize".
+  Windows marks files unzipped from a download as coming from the internet, and .NET Framework would not load
+  the marked DLLs. ZOrbit now removes that mark from its own DLLs when it starts.
 
 
 ## [0.7.1] - 2026-10-27

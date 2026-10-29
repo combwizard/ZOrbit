@@ -530,6 +530,9 @@ Set `"mode": "key"` temporarily, pick something, and check `bridge.log` for the 
 **Windows protected your PC (SmartScreen).**
 The installer is not code-signed yet. Click **More info**, then **Run anyway**. The README explains why.
 
+**The portable version stops at startup with "Failed to resolve Python.Runtime.Loader.Initialize".**
+Windows marked the unzipped files as downloaded, and ZOrbit could not remove the mark, usually because it is in a folder it cannot write to. Close ZOrbit, right-click the zip, choose **Properties**, tick **Unblock**, and unzip it again into a folder of your own, such as one under `Documents`.
+
 **I broke my menus file.**
 Studio keeps the last version as `radial.json.bak`. If you edit the file by hand and the app cannot read it, it keeps using the last good version and logs the error. When Studio cannot read it either, it opens on a recovery screen that shows the error with its line and column, and offers **Open folder**, **Restore backup** and **Start from defaults** (the unreadable file is kept as `radial.json.broken`). A byte-order mark left by an editor is accepted. Deleting `radial.json` makes the app create a fresh one from the starter menus.
 
