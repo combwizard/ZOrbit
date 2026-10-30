@@ -12,7 +12,7 @@ $OutFull = if ([System.IO.Path]::IsPathRooted($Out)) { $Out } else { Join-Path (
 if (Test-Path $OutFull) { Remove-Item -Recurse -Force $OutFull }
 New-Item -ItemType Directory -Path $OutFull | Out-Null
 
-$pages = @('index.html', 'styles.css', 'ring.js', 'site.js', 'favicon.png')
+$pages = @('index.html', 'styles.css', 'ring.js', 'site.js', 'favicon.png', 'CNAME')
 foreach ($f in $pages) {
     $src = Join-Path $Site $f
     if (-not (Test-Path $src)) { throw "Missing page file: $src" }
