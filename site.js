@@ -373,9 +373,6 @@
     buildAnimRow(ring);
     speedControl(ring);
 
-    var replay = document.getElementById('replayBtn');
-    if (replay) replay.addEventListener('click', function () { ring.replay(); });
-
     window.__radialRing = ring;
   }
 
