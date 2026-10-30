@@ -51,3 +51,5 @@ Notes:
 - The slot under the cursor grows slightly, gets an accent ring, and its label changes colour.
 - The ring never takes keyboard focus, so ZBrush keeps working normally behind it.
 - If the cursor is near a screen edge, the ring is moved to stay fully on screen.
+- With **Flick to pick** off, a click outside the ring cancels it, but that click also reaches ZBrush underneath, so it can land a stroke or press a button. **Esc** or a right-click is the safer way to cancel.
+- A menu hotkey is swallowed in ZBrush's own text fields too, so a plain letter such as **Q** cannot be typed there while a menu uses it. Pick a key you do not type in ZBrush (see [Pressing the hotkey does nothing](troubleshooting.md#pressing-the-hotkey-does-nothing)).

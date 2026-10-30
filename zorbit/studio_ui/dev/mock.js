@@ -567,6 +567,13 @@
         return out;
       });
     },
+    get_tag_uses: function () {           // the popout's tag manager: ring items that use each tag, from radial.json
+      var uses = {};
+      Object.keys(saved.menus || {}).forEach(function (id) { (saved.menus[id].items || []).forEach(function (it) {
+        var k = typeof it.tag === 'string' && it.tag ? it.tag : typeof it.browser === 'string' && it.browser ? it.browser : null;
+        if (k) uses[k] = (uses[k] || 0) + 1; }); });
+      return sleep(30).then(function () { return { ok: true, uses: uses }; });
+    },
     get_tags: function (since) {
       return sleep(40).then(function () {
         if (since !== null && since !== undefined && since === tagMtime) return { unchanged: true, mtime_ns: tagMtime };

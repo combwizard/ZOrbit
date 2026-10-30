@@ -2600,7 +2600,7 @@ function addManyToCurrent(kind, names) {
      onKind(kind)    optional: the browser switched to another kind */
 const STUDIO_HOST = {
   dnd: true,
-  tools: () => h('button', { class: 'btn small', type: 'button', title: 'Open the browser in its own window', onclick: openBrowserWindow }, icon('k_browser', 13), 'Browser'),
+  tools: () => h('button', { class: 'btn small', type: 'button', title: 'Open the browser in its own window', onclick: openBrowserFromButton }, icon('k_browser', 13), 'Browser'),
   primaryIcon: () => 'plus',
   primaryLabel() { const m = curMenu(); return m ? 'Add to ' + (m.title || S.menuId) : 'No menu to add to'; },
   canPrimary() { return !!curMenu(); },
@@ -4695,6 +4695,10 @@ async function loadLibrary(kind = 'brush', refresh = false) {
   let r = null;
   try { r = await call('get_library', !!refresh, kind); } catch (e) { r = { error: String((e && e.message) || e) }; }
   r = r || {};
+  if (refresh && r.error && L.loaded && L.state === 'ready' && L.items.length) {   // a rescan that failed: keep what is on show, report the error
+    L.error = String(r.error); L.busy = false; paintRescan();
+    return;
+  }
   L.items = Array.isArray(r.items) ? r.items : Array.isArray(r.brushes) ? r.brushes : [];
   L.sources = Array.isArray(r.sources) ? r.sources : [];
   L.zbrushFound = r.zbrush_found !== false;

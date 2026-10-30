@@ -14,6 +14,16 @@ Studio is where you edit everything. Open it from the Start menu (**ZOrbit Studi
 
 ![The Library screen on the Brushes tab: folders and tags on the left, a grid of brush thumbnails, and the Add to Brushes panel on the right](images/studio-library.png)
 
+## The tray icon
+
+While the app runs, ZOrbit has an icon in the notification area. Left-click it to open Studio. Right-click it for these commands:
+
+- **Browser** opens the [browser](browser.md).
+- **Open Studio** opens this window.
+- **Reload menus** reads `radial.json` again. The result is logged in `radiald.log`: "tray: menus reloaded", or "tray: reload failed" with the reason.
+- **Open logs folder** opens `%LOCALAPPDATA%\ZOrbit`.
+- **Quit ZOrbit** stops the app. The ring stays off until ZBrush is restarted or **Start app** is pressed on **Status**.
+
 Setup sits between Status and Licence in the rail, but it is Alt+6. Licence stays on Alt+5.
 
 The first time Studio runs (a fresh install, with no Studio preferences yet), it opens on **Setup**. Work down the steps, then press **Finish**, or **Skip for now**; either one marks Setup as done and takes you to Menus. If you close Studio without pressing either, Setup comes back the next time. People who upgrade from an earlier version are not sent to it. Once Setup is done, the bottom of the screen has a **Show Setup on next start** switch that brings it back.

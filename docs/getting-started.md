@@ -7,7 +7,7 @@ ZOrbit is two things that work together:
 - a small **app** that watches for your hotkeys and draws the ring, and
 - a **plugin inside ZBrush** (the bridge, see [How ZOrbit talks to ZBrush](bridge.md)) that carries out what you picked.
 
-You do not start either by hand. ZBrush loads the plugin when it starts, the plugin starts the app, and the app quits when ZBrush closes.
+You do not start either by hand. ZBrush loads the plugin when it starts, the plugin starts the app, and the app quits when ZBrush closes. The app has an icon in the notification area: left-click it to open Studio ([The tray icon](studio.md#the-tray-icon) lists its other commands).
 
 With ZBrush in front, press **Q**. The ring opens centred on your cursor. Pick a slot (see [Pick modes](hotkeys.md#pick-modes)) and ZBrush does what the slot says.
 

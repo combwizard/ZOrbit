@@ -50,7 +50,7 @@ The name is the brush's name in ZBrush (the file name without `.zbp`). Spaces an
 ```
 
 The name is the file's name without its extension. Spaces and capitals do not matter when ZOrbit looks the file up. If
-two folders hold a file with the same name, the first folder searched wins. ZOrbit searches these folders, in order:
+two folders hold a file with the same name (capitals and spaces in the name are ignored), the first folder searched wins. ZOrbit searches these folders, in order:
 
 - **ZBrush 2026 and newer:** `ZStartup\Alphas`, `ZStartup\Materials` and `ZStartup\Textures` in your user folder (shown
   as **My Alphas**, **My Materials** and **My Textures**), then the installation's `ZData\Alphas`, `ZData\Materials` and

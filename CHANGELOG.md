@@ -6,26 +6,114 @@ All notable changes to this project are listed here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Browser: when the folders and tags column is collapsed, a tag or folder filter that is on shows as a chip in the
+  toolbar ("Filtered: Blocking", "Folder: My Brushes") with an x that clears it.
+- Browser: it checks for tag changes made in Studio every 5 seconds while it is open, not only when it gets focus.
+- Browser: deleting a tag in its tag manager now says how many ring items use it, and the warning about Tag and Browser
+  slots is correct ("Tag slots that use it go empty; Browser slots open unfiltered.").
+
 ### Changed
 
-- The documentation moved to <https://zorbit.lol/docs/>: the user guide and the longer parts of the README are now
+- Studio: Ctrl+Z and Ctrl+Y now work after you have moved a slider or flipped a switch, a select or a colour swatch.
+  Only a text box keeps its own undo. After an undo the Settings screen is rebuilt only when something it shows changed,
+  and the control you were on keeps focus.
+- Studio: the hotkey field can record `space`, `tab`, `enter`, `backspace`, `insert`, `delete`, `home`, `end`, `pageup`
+  and `pagedown`, which the app already understood. The "not supported" message lists what is allowed.
+- Studio: the "Not found in your library" hint names the files ZBrush needs for that kind (a .zbp file, a .zmt file, and
+  the image types for alphas and textures). When the library could not be read, or ZBrush was not found, the hint says
+  that and links to Library or Setup.
+- Studio: the "file changed on disk" dialog says that reloading discards your unsaved changes, and Cancel has focus
+  instead of Reload from disk.
+- Studio: the top bar keeps the window buttons in view at the minimum width with an update chip, a problems pill and
+  "Unsaved changes" showing. The pill and the label no longer wrap, the copy-path button goes with the path, and below
+  1100 px the word Studio and the Ctrl+S hint on Save are hidden.
+- Studio: when two menus share a hotkey, the warning says which one comes first and wins.
+- Studio: long menu hotkeys are cut with an ellipsis instead of squeezing the title away; a menu without a hotkey shows
+  a small submenu icon instead of the word. Menu and item rows have a tooltip with the full title, hotkey and target.
+- Studio: step buttons (move up, move down, remove), the step type, the action type and the inspector's Delete leave the
+  keyboard on a nearby control instead of dropping it. The inspector's Delete behaves like the button on the row.
+- Studio: each list (menus, items) is one stop for the Tab key. Up, Down, Home and End move through it, and the Library
+  tab's item list does the same. The buttons on the rows are reached with the mouse or the Delete, F2 and Alt+Up/Down
+  keys.
+- Studio: the problems panel opens after a save or an import only when there is a problem that was not there before.
+- Studio: the Status log is not redrawn when its lines have not changed, so a selection in it survives the refresh.
+- Studio: the Setup hint for a pick the plugin did not act on shows the failure from the bridge log when there is one,
+  and otherwise says to open the logs folder from Status. It has an Open Status button.
+- Studio: a slider put back to its default is taken out of the file again, so Save does not light up and the close
+  dialog does not list "default -> 145". A switch does the same, and an empty `ring` object that the file did not have
+  is not left behind.
+- Studio: clicking empty space in the ring clears the selection but stays on the Item tab.
+- Studio: moving an item to another menu keeps you on the menu you were editing, flashes the target menu's row, and the
+  Ctrl copy cue follows the Ctrl key during a drag, not only the pointer.
+- Studio: the Swallow hotkey switch is off and says "Set a hotkey first" while the menu has no hotkey.
+- Studio: a note above the item list says rings work best with 4 to 12 items when a menu has more than 12.
+- Studio: the recovery screen has an Open logs folder button, and the rail is dimmed with a tooltip ("Fix or reset the
+  menus file first") while the menus file cannot be read.
+- Studio: the Browser buttons show "Opening the browser..." at once, because a cold start takes a moment.
+- Studio: wording. "1 item" instead of "1 items", "Delete (Del key)", the Accent colour hint says "Centre dot, hover and
+  title", Setup's user guide row says it is at zorbit.lol/docs, the Message bridge mode says a pick is dropped and
+  logged when no listener is live, and the problem markers on rows have a text for screen readers. The Install button
+  says "Installing..." and adds "approve the prompt if Windows asks" only after four seconds of waiting.
+- Browser: the toast after a pick now says "Sent Anchors to ZBrush" instead of "Selected Anchors", because it only means
+  the app took the pick. When the app is not running it says "ZOrbit is not running. It starts and stops with ZBrush.";
+  when it is running but does not answer in time, "ZOrbit did not answer. Try again in a moment."
+- Browser: a Rescan keeps the highlighted item and the scroll position, says what changed ("Found 12 brushes, 2 new, 1
+  gone", or "no changes"), and when the folders cannot be read it keeps the list you had and shows the error.
+- Browser: when it appears, or when you open a tab, the list is read again if the last read is more than a minute old,
+  so a brush saved in ZBrush meanwhile shows up without pressing Rescan.
+- Browser and Library: the tag chips say they count the current tab; the tag picker and the tag manager say they count
+  every item across all four tabs.
+- Browser: the "ZBrush was not found" message says "ZOrbit Studio", and the Library's version has a "Find ZBrush in
+  Studio" button that opens the Setup screen.
+- Tags: merging a tag into another one now asks for confirmation first, with Cancel as the default.
+- Docs: the documentation moved to <https://zorbit.lol/docs/>: the user guide and the longer parts of the README are now
   separate pages with search. Studio's **Setup** screen opens it there.
+- Docs: the browser page now says correctly that the folder and the selection reset when you switch tab, and that the
+  search text, tag filter and thumbnail size stay.
+- Docs: menus and items: the Auto item type is documented, and the 12-item advice says why. Studio: the Menu and Item
+  tabs, renaming a menu id, the Used by list, the item-type toast, the arrow keys in the lists and the way saving, undo
+  and the problems panel behave.
 
 ### Fixed
 
-- A pick made during a stroke no longer applies in the middle of it in ZBrush 2026 and newer: while the mouse button is down the app waits instead of falling back to the bridge key, and the plugin's **Apply** waits too. ZBrush 2022 to 2025 still cannot wait.
-- A ring opened near a screen edge is moved in so the whole ring is on screen, instead of being cut off. Nothing is picked or opened by hover until the cursor has moved inside it.
-- With no `bridge.key` in `radial.json`, the bridge key is F9, as Studio says. A key with Ctrl or Shift, or one that cannot be read, is reported and F9 is used.
-- A `radial.json` that cannot be read when the app starts no longer stops the app: it starts without menus, logs "cannot load radial.json" and picks the file up as soon as it is fixed.
-- A brush, alpha, material or texture saved after the app started is found on the next pick instead of failing with "NOT loaded in ZBrush and no file known" until a restart. Tag fans notice new files too.
-- A submenu slot that points at a menu with no usable items is reported ("submenu 'x' has no usable items") and skipped, instead of closing the ring without a word.
-- "Remove from Recent" and the use counts now treat `Clay Buildup` and `ClayBuildup` as one brush. Older `usage.json` entries are merged when the file is read.
-- A setting name that is misspelt in `radial.json` (for example `ring.raduis` or a menu's `itmes`) is now listed as a problem, with a suggestion. A `swallow` that is not `true` or `false` is listed too.
+- A pick made during a stroke no longer applies in the middle of it in ZBrush 2026 and newer: while the mouse button is
+  down the app waits instead of falling back to the bridge key, and the plugin's **Apply** waits too. ZBrush 2022 to
+  2025 still cannot wait.
+- A ring opened near a screen edge is moved in so the whole ring is on screen, instead of being cut off. Nothing is
+  picked or opened by hover until the cursor has moved inside it.
+- With no `bridge.key` in `radial.json`, the bridge key is F9, as Studio says. A key with Ctrl or Shift, or one that
+  cannot be read, is reported and F9 is used.
+- A `radial.json` that cannot be read when the app starts no longer stops the app: it starts without menus, logs "cannot
+  load radial.json" and picks the file up as soon as it is fixed.
+- A brush, alpha, material or texture saved after the app started is found on the next pick instead of failing with "NOT
+  loaded in ZBrush and no file known" until a restart. Tag fans notice new files too.
+- A submenu slot that points at a menu with no usable items is reported ("submenu 'x' has no usable items") and skipped,
+  instead of closing the ring without a word.
+- "Remove from Recent" and the use counts now treat `Clay Buildup` and `ClayBuildup` as one brush. Older `usage.json`
+  entries are merged when the file is read.
+- A setting name that is misspelt in `radial.json` (for example `ring.raduis` or a menu's `itmes`) is now listed as a
+  problem, with a suggestion. A `swallow` that is not `true` or `false` is listed too.
 - **Reload menus** in the tray no longer logs "menus reloaded" after a file that could not be read.
 - The app logs a line when ZBrush runs as administrator and its hotkeys are ignored for that reason.
 - `request.txt` is only written, and its code page warning only logged, when a ZBrush 2022 to 2025 is installed.
-- ZBrush 2022 to 2025: the plugin's log says "NOT loaded in ZBrush and no file known" like the rest of ZOrbit, and a pick with several steps logs the result of every step, not only the last.
-- Studio: the "your hotkeys ()" hint in the suggestions has no empty brackets. **Add a ZBrush folder** with a ZBrush 2026 or newer explains when it appears on Setup. Status shows a changed bridge mode as soon as you save (it lagged by up to 30 seconds), and Status and Setup use less CPU (no `tasklist` every three seconds, the install scan is kept for five seconds).
+- ZBrush 2022 to 2025: the plugin's log says "NOT loaded in ZBrush and no file known" like the rest of ZOrbit, and a
+  pick with several steps logs the result of every step, not only the last.
+- Studio: the "your hotkeys ()" hint in the suggestions has no empty brackets. **Add a ZBrush folder** with a ZBrush
+  2026 or newer explains when it appears on Setup. Status shows a changed bridge mode as soon as you save (it lagged by
+  up to 30 seconds), and Status and Setup use less CPU (no `tasklist` every three seconds, the install scan is kept for
+  five seconds).
+- Browser: after clicking a tag chip, a folder, a tab, Rescan or the pin, Enter picks the highlighted item again (it
+  used to press the control you had clicked), and a focused size slider no longer swallows typed letters. The cursor
+  goes back to the search box after a mouse click on any of them.
+- Browser: Enter and the arrow keys pressed straight after typing in the search box act on the new results, not on the
+  ones from before the last keystroke.
+- Tags and Recent: a tags.json or usage.json that was deleted or put back from an older copy is picked up straight away
+  instead of being ignored until restart.
+- Library: two files whose names differ only by spaces now count as one item (the first folder wins), as they already
+  did for tags and favourites.
+- Studio: a Rescan that fails keeps the list it had and shows the error.
 
 ## [0.10.2] - 2026-10-30
 
