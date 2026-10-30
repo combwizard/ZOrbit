@@ -588,16 +588,10 @@ class Popout:
             if self.hwnd:
                 winframe.user32.SetWindowPos(self.hwnd, self._z_order(), 0, 0, 0, 0,
                                              W.SWP_NOMOVE | W.SWP_NOSIZE | W.SWP_NOACTIVATE)
-        # The form keeps its own TopMost (set once at creation) and puts it back when it is shown. pywebview
-        # marshals the property to the UI thread; set it from a thread of ours, never inside the js_api call.
-        threading.Thread(target=self._sync_form_on_top, args=(flag,), daemon=True).start()
+        # The form keeps its own TopMost (set once at creation) and may put it back when it is shown; show() sets
+        # ours again after that. Never window.on_top: pywebview sets the form's TopMost on the calling thread, which
+        # holds the GIL while the UI thread needs it for winframe's window procedure, and both hang.
         _log(f"keep on top: {flag}")
-
-    def _sync_form_on_top(self, flag):
-        try:
-            self.window.on_top = flag
-        except Exception as e:
-            _log(f"could not set the form's TopMost: {e!r}")
 
     def pick(self, name) -> dict:
         """The page picked a brush. The window stays where it is; the focus goes back to ZBrush, because the app

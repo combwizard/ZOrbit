@@ -4,6 +4,13 @@ All notable changes to this project are listed here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+
+- Clicking the pin (**Keep on top**) in the brush browser froze its window, and it stayed frozen until ZOrbit
+  was restarted.
+
 ## [0.8.0] - 2026-10-30
 
 ### Added
