@@ -43,6 +43,7 @@ TITLE = "ZOrbit Studio"
 VERSION = paths.VERSION
 APP_ID = "ZOrbit.Studio"           # taskbar identity, so the Studio groups under its own icon
 STUDIO_FILE = os.path.join(paths.CONFIG_DIR, "studio.json")   # Studio preferences and window placement
+SAMPLE_SLOTS = 8            # brushes on the tag colours sample ring (preview_tags)
 RELEASES_API = "https://api.github.com/repos/combwizard/zorbit/releases/latest"
 RELEASES_URL = "https://github.com/combwizard/zorbit/releases"
 
@@ -275,6 +276,43 @@ class Api(webapi.LibraryApi, webapi.TagApi):
         return {"image": _png_data_url(im), "size": im.size[0], "width": im.size[0], "height": im.size[1],
                 "centre": [cx, cy], "problems": problems}
 
+    def preview_tags(self, cfg, hover=None, scale=1.0):
+        """preview_ring of a sample ring for the tag colour settings: SAMPLE_SLOTS installed brushes, the
+        user's tagged ones first, coloured with the user's tags (two slots per tag, one slot left plain) so
+        every tag setting shows even when no menu has a tagged brush."""
+        loaded, problems = self._load_dict(cfg)
+        if loaded is None:
+            return {"image": None, "problems": problems}
+        from ring import Ring
+        app = radiald.App(CONFIG_FILE)
+        app.cfg = loaded
+        store = app.tags.load()
+        index = {k.replace(" ", ""): p for k, p in brushes.brush_index().items()}
+        names = []
+        for ik in store.tagged("brush"):
+            if ik.split(":", 1)[1] in index:
+                names.append(index[ik.split(":", 1)[1]].stem)
+        for p in index.values():
+            if len(names) >= SAMPLE_SLOTS:
+                break
+            if p.stem not in names:
+                names.append(p.stem)
+        if not names:
+            return {"image": None, "problems": problems + ["no brushes found to draw a sample ring"]}
+        names = names[:SAMPLE_SLOTS]
+        colors = [t["color"] for t in store.tags()] or [tags.PALETTE[0]]
+        on = loaded.ring.get("tag_colors", "tint") != "none" or loaded.ring.get("tag_band", "medium") != "none"
+        items = []
+        for i, n in enumerate(names):
+            color = store.color_of_item(tags.item_key("brush", n)) or (
+                "" if i == len(names) - 1 else colors[(i // 2) % len(colors)])
+            items.append(C.Item(label=n, kind="brush", data={"brush": n}, color=color if on else ""))
+        menu = C.Menu(id="sample", title="Sample", items=items)
+        im = Ring.preview(menu, loaded.ring, app.icon_for, hover=hover, scale=float(scale))
+        cx, cy = im.info.get("centre", (im.size[0] / 2, im.size[1] / 2))
+        return {"image": _png_data_url(im), "size": im.size[0], "width": im.size[0], "height": im.size[1],
+                "centre": [cx, cy], "problems": problems}
+
     def preview_animation(self, cfg, menu_id, fps=30, ring_anim=False):
         """Open-animation frames as PNG data URLs (played back by the Studio), plus the frame interval.
         ring_anim: play ring.animation even if the menu has its own (the Settings screen)."""
@@ -304,7 +342,8 @@ class Api(webapi.LibraryApi, webapi.TagApi):
     def get_options(self):
         """Choices the UI offers: animation modes, label modes, action kinds, defaults."""
         return {"animations": list(C.ANIMATIONS), "labels": list(C.LABEL_MODES), "actions": list(C.ACTION_KEYS),
-                "tag_colors": list(C.TAG_COLOR_MODES), "ring_defaults": C.DEFAULT_RING, "ring_ranges": C._RING_RANGES}
+                "tag_colors": list(C.TAG_COLOR_MODES), "tag_bands": list(C.TAG_BANDS),
+                "tint_styles": list(C.TINT_STYLES), "tint_blends": list(C.TINT_BLENDS), "ring_defaults": C.DEFAULT_RING, "ring_ranges": C._RING_RANGES}
 
     # --- suggestions for press/set/toggle targets ------------------------------------------------
     def get_suggestions(self):

@@ -26,6 +26,7 @@
   var clone = function (o) { return JSON.parse(JSON.stringify(o)); };
   var ticks = 0, thumbCalls = 0, alreadyDone = false, appStarted = false;
   var saved = clone(M.get_config.config);
+  var TAG_DEFAULTS = { tag_colors: 'tint', tag_band: 'medium', tag_band_opacity: 0.45, tag_glow_opacity: 0.4, tag_tint_opacity: 0.3, tag_tint_style: 'gradient', tag_tint_blend: 'multiply' };
   var KINDS = ['brush', 'press', 'set', 'toggle', 'steps', 'menu', 'auto', 'tag', 'browser'];
   if (q.has('kinds') && saved.menus && saved.menus.tools) saved.menus.tools.items.push({ tag: 'blocking' }, { browser: '' });
   var mtime = 1700000000000000000, conflictDone = false;
@@ -201,6 +202,7 @@
       return sleep(40).then(function () {
         var r = clone(M.get_config);
         r.config = clone(saved);                                   // what the last mock save wrote, so Reload from disk is honest
+        r.defaults = Object.assign({}, r.defaults, TAG_DEFAULTS);
         if (q.has('broken') && !sessionStorage.getItem('rm_repaired')) return { config: null, error: BROKEN_ERR, path: r.path, backup_exists: true, problems: [], mtime_ns: null };
         r.problems = q.has('problems') ? validate(r.config) : r.problems;
         r.mtime_ns = mtime; r.backup_exists = true;
@@ -225,6 +227,13 @@
     // Both mark the file as repaired for this tab, so the reload after them boots normally even with ?broken.
     restore_backup: function () { try { sessionStorage.setItem('rm_repaired', '1'); } catch (e) {} return sleep(200).then(function () { return { ok: true, message: 'Restored the last good backup (mock).' }; }); },
     reset_config: function () { try { sessionStorage.setItem('rm_repaired', '1'); } catch (e) {} return sleep(200).then(function () { return { ok: true, message: 'Reset to the default menus (mock).' }; }); },
+    preview_tags: function () {                                      // the backend's sample ring; the recorded data has it once regenerated
+      return sleep(60 + lag).then(function () {
+        var res = clone(M.preview_tags || M.preview_ring[Object.keys(M.preview_ring)[0]]);
+        res.width = res.height = res.size; res.centre = [res.size / 2, res.size / 2];
+        return res;
+      });
+    },
     preview_ring: function (cfg, menuId, hover, scale, openPath) {
       return sleep(60 + lag).then(function () {
         var m = cfg && cfg.menus && cfg.menus[menuId];
@@ -266,7 +275,9 @@
       return sleep(10).then(function () {
         var o = clone(M.get_options);
         o.actions = KINDS.slice(); o.tag_colors = ['none', 'tint', 'glow', 'both'];
-        o.ring_defaults = Object.assign({}, o.ring_defaults, { tag_colors: 'tint' });
+        o.tag_bands = ['none', 'hairline', 'narrow', 'medium', 'wide']; o.tint_styles = ['flat', 'gradient']; o.tint_blends = ['multiply', 'overlay'];
+        o.ring_defaults = Object.assign({}, o.ring_defaults, TAG_DEFAULTS);
+        o.ring_ranges = Object.assign({}, o.ring_ranges, { tag_band_opacity: [0, 1], tag_glow_opacity: [0, 1], tag_tint_opacity: [0, 1] });
         return o;
       });
     },

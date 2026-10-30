@@ -15,6 +15,13 @@ Schema (all keys optional except menus):
                                              # mist snappy
            "labels": "name",                 # name | none
            "tag_colors": "tint",             # none | tint | glow | both: how a brush's first tag shows on its slot
+           "tag_band": "medium",             # none | hairline | narrow | medium | wide: a band through the slots,
+                                             # coloured per slot by its tag
+           "tag_band_opacity": 0.45,         # 0 to 1
+           "tag_glow_opacity": 0.4,          # 0 to 1: the halo of glow and both
+           "tag_tint_opacity": 0.3,          # 0 to 1: the tag colour over a slot's icon, for tint and both
+           "tag_tint_style": "gradient",     # flat | gradient (stronger towards the rim)
+           "tag_tint_blend": "multiply",     # multiply | overlay
            "flick": true,                    # moving out past a slot picks it without releasing the hotkey
            "hover_submenus": true,           # reaching a submenu slot opens that submenu, centred on it
            "colors": {"bg": "#222327", "accent": "#f86b33", "highlight": "#4dc8e9", "text": "#f0f0f0",
@@ -57,14 +64,22 @@ ANIMATIONS = ("smooth", "bounce", "pop", "zoom", "fade", "drift", "fancy", "spir
               "snappy")
 LABEL_MODES = ("name", "none")
 TAG_COLOR_MODES = ("none", "tint", "glow", "both")
+TAG_BANDS = ("none", "hairline", "narrow", "medium", "wide")
+TINT_STYLES = ("flat", "gradient")
+TINT_BLENDS = ("multiply", "overlay")
 
 DEFAULT_RING = {"radius": 145, "slot": 72, "dead_zone": 38, "tap_ms": 250, "timeout_s": 20,
                 "animation": "smooth", "labels": "name", "tag_colors": "tint", "flick": True, "hover_submenus": True,
+                "tag_band": "medium", "tag_band_opacity": 0.45, "tag_glow_opacity": 0.4, "tag_tint_opacity": 0.3,
+                "tag_tint_style": "gradient", "tag_tint_blend": "multiply",
                 "colors": {"bg": "#222327", "accent": "#f86b33", "highlight": "#4dc8e9", "text": "#f0f0f0",
                            "lines": "#f86b33"}}
 _RING_SWITCHES = ("flick", "hover_submenus")
+_RING_CHOICES = {"tag_colors": TAG_COLOR_MODES, "tag_band": TAG_BANDS, "tag_tint_style": TINT_STYLES,
+                 "tag_tint_blend": TINT_BLENDS}
 _RING_RANGES = {"radius": (60, 400), "slot": (32, 160), "dead_zone": (10, 120), "tap_ms": (0, 1000),
-                "timeout_s": (2, 120)}
+                "timeout_s": (2, 120), "tag_band_opacity": (0, 1), "tag_glow_opacity": (0, 1),
+                "tag_tint_opacity": (0, 1)}
 
 _NAMED_VK = {
     "space": 0x20, "tab": 0x09, "enter": 0x0D, "backspace": 0x08, "insert": 0x2D, "delete": 0x2E,
@@ -250,11 +265,11 @@ def load(path: str, tags=None) -> Config:
                 cfg.ring[k] = v
             else:
                 errors.append(f"ring.labels: {v!r} unknown; one of {', '.join(LABEL_MODES)}")
-        elif k == "tag_colors":
-            if v in TAG_COLOR_MODES:
+        elif k in _RING_CHOICES:
+            if v in _RING_CHOICES[k]:
                 cfg.ring[k] = v
             else:
-                errors.append(f"ring.tag_colors: {v!r} unknown; one of {', '.join(TAG_COLOR_MODES)}")
+                errors.append(f"ring.{k}: {v!r} unknown; one of {', '.join(_RING_CHOICES[k])}")
     menus_raw = raw.get("menus") or {}
     if not isinstance(menus_raw, dict) or not menus_raw:
         errors.append("menus: must be a non-empty object of id -> menu")

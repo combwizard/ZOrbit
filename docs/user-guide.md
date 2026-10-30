@@ -324,7 +324,13 @@ These are on the Settings screen in Studio, and under `"ring"` in `radial.json`.
 | `labels` | `name` | `name`, `none` | Show names under the slots, or icons only. |
 | `flick` | `true` | `true`, `false` | Moving out past a slot picks it without releasing or clicking. |
 | `hover_submenus` | `true` | `true`, `false` | Reaching a submenu slot opens the submenu, centred on that slot. |
-| `tag_colors` | `tint` | `none`, `tint`, `glow`, `both` | How a brush's first tag shows on its slot. See below. |
+| `tag_colors` | `tint` | `none`, `tint`, `glow`, `both` | Whether a brush's first tag tints its icon, glows, or both. See [Tag colours](#tag-colours). |
+| `tag_band` | `medium` | `none`, `hairline`, `narrow`, `medium`, `wide` | Thickness of the band through the slot centres. `none` turns it off. |
+| `tag_band_opacity` | 0.45 | 0 to 1 | How solid the band is. |
+| `tag_glow_opacity` | 0.4 | 0 to 1 | Strength of the halo. |
+| `tag_tint_opacity` | 0.3 | 0 to 1 | Strength of the tag colour laid over the icon. |
+| `tag_tint_style` | `gradient` | `flat`, `gradient` | `gradient` is stronger towards the rim. |
+| `tag_tint_blend` | `multiply` | `multiply`, `overlay` | `multiply` darkens the icon. `overlay` keeps its light and shade. |
 
 Sizes are scaled for high-DPI screens automatically.
 
@@ -352,16 +358,33 @@ Anything you leave out keeps its default. Values outside the allowed range are r
 
 ### Tag colours
 
-`ring.tag_colors` sets how the colour of a brush's first tag (see [Tags](#tags)) shows on its slot. In Studio it is the **Tag colours** card on the Settings screen, with a choice of four.
+The colour of a brush's first tag (see [Tags](#tags)) can show on its slot in three ways: an icon tint, a glow and a band. In Studio they are the three groups of the **Tag colours** card on the Settings screen, each with its own switch. Beside them is a preview. It shows the current menu if it has a tagged brush, and otherwise a sample ring of your brushes coloured with your tags, so every change is visible.
 
-| Mode | What you see |
+- **Icon tint** is a rim in the tag colour, and the tag colour laid over the brush icon. **Opacity** (`tag_tint_opacity`, 0 to 1, default 0.3) sets how strong it is. **Style** (`tag_tint_style`) is `flat`, or `gradient` (the default), which is stronger towards the rim. **Blend** (`tag_tint_blend`) is `multiply` (the default, **Darken** in Studio), which darkens the icon, or `overlay` (**Keep highlights**), which keeps its light and shade.
+- **Glow** is a soft halo in the tag colour around the slot. **Opacity** (`tag_glow_opacity`, 0 to 1, default 0.4) sets how strong it is.
+- **Band** is a strip through the slot centres. Each slot's stretch of it is in its tag colour, an untagged slot gets a faint grey stretch, and a ring with no tagged slots has no band. **Thickness** (`tag_band`) is `hairline`, `narrow`, `medium` (the default) or `wide`, or `none` to turn the band off. **Opacity** (`tag_band_opacity`, 0 to 1, default 0.45) sets how solid it is.
+
+The tint and glow switches together set `ring.tag_colors`. The band switch sets `tag_band` to `none`, or back to its thickness.
+
+| `tag_colors` | What you see |
 |---|---|
-| `none` | Brush slots are not coloured. |
-| `tint` | A rim in the tag colour and a disc tinted towards it. The default. |
-| `glow` | A soft halo in the tag colour around the slot. |
-| `both` | The tint and the halo together. |
+| `none` | Neither tint nor glow. |
+| `tint` | The icon tint. The default. |
+| `glow` | The glow. |
+| `both` | The tint and the glow together. |
 
-Except in `none`, the hovered slot's border, its spoke and its label take the tag colour too, and the fan of a `tag` slot is drawn in that tag's colour. A `tag` slot always shows its tag's colour, whatever the mode. Brushes without a tag look as before. The colours are drawn when the ring opens, so they cost no speed.
+The band does not depend on `tag_colors`. Slot colours are dropped entirely, hover border, spoke, label and band included, only when `tag_colors` is `none` and `tag_band` is `none`. The fan of a `tag` slot is always drawn in that tag's colour, and so is the slot itself. Brushes without a tag look as before. The colours are drawn when the ring opens, so they cost no speed.
+
+In Studio, opacities show as percentages (45%) but are 0 to 1 in the file. Controls under a switch that is off are dimmed.
+
+```json
+"ring": {
+  "tag_colors": "both",
+  "tag_band": "narrow",
+  "tag_tint_opacity": 0.4,
+  "tag_tint_style": "flat"
+}
+```
 
 ### Brush browser hotkey
 
@@ -516,7 +539,7 @@ Look in `radiald.log` for `pick from browser`. If the line is there, the pick re
 No installed brush carries that tag, or the tag no longer exists (the problems pill says which). Tag some brushes in the Library, or point the slot at another tag.
 
 **My slots are not coloured by tag.**
-Check **Settings > Tag colours**: **None** turns the colour off. Only a brush's first tag colours its slot, and a brush with no tag is not coloured. A change made by hand to `tags.json` shows within a moment.
+Check **Settings > Tag colours**: the **Icon tint**, **Glow** and **Band** switches may all be off. Only a brush's first tag colours its slot, and a brush with no tag is not coloured. A change made by hand to `tags.json` shows within a moment.
 
 **A slot shows letters instead of a picture.**
 There is no thumbnail for it. For brushes, that means no `.zbp` was found. For other items it is the normal placeholder; set an `icon` to change it.

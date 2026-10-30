@@ -650,8 +650,21 @@ body.dragging .irow:hover { background: transparent; }
 .choices.two { grid-template-columns: repeat(2, 1fr); }
 .choices.anim-cards { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
 .choices.bridge-cards { grid-template-columns: repeat(3, 1fr); }
-.choices.tag-cards { grid-template-columns: repeat(4, 1fr); }
-@media (max-width: 1180px) { .choices.tag-cards { grid-template-columns: repeat(2, 1fr); } }
+.choices.seg { grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); gap: 4px; }
+.choices.seg .choice { align-items: center; padding: 6px 4px; }
+.choices.seg .choice b { font-size: 12px; }
+.choices.seg .choice span { display: none; }
+.choices.seg .choice:hover { transform: none; box-shadow: none; }
+.split.tag-split { grid-template-columns: minmax(0, 1fr) 340px; align-items: start; }
+.tag-prev { position: sticky; top: 16px; }
+.tag-prev .mini-cap { right: 12px; line-height: 1.5; }
+.tgroup { padding: 14px 0; border-top: 1px solid var(--line); }
+.tgroup:first-child { border-top: 0; padding-top: 2px; }
+.tg-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; }
+.tg-body { margin: 6px 0 0 6px; padding-left: 16px; border-left: 2px solid var(--line); }
+.tg-body .srow { border-top: 0; padding: 8px 0; }
+.srow.off { opacity: .45; }
+.srow.off .choice, .srow.off .reset { pointer-events: none; }
 .choice { display: flex; flex-direction: column; gap: 4px; padding: 11px 12px; text-align: left; background: var(--bg2); border: 1px solid var(--line); border-radius: 8px; transition: transform .14s var(--ease), border-color .14s, background .14s, box-shadow .14s; }
 .choice b { font-size: 13px; font-weight: 600; transition: color .12s; }
 .choice span { font-size: 11.5px; color: var(--sub); line-height: 1.4; }
@@ -710,7 +723,8 @@ body.dragging .irow:hover { background: transparent; }
   .status-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 900px) {
-  .split, .split.anim-split { grid-template-columns: 1fr; }
+  .split, .split.anim-split, .split.tag-split { grid-template-columns: 1fr; }
+  .tag-prev { position: static; }
   .mini-stage { max-width: 280px; }
   .browser.full { grid-template-columns: 190px minmax(0, 1fr); }
   .library-screen { grid-template-columns: minmax(0, 1fr) 240px; }

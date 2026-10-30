@@ -4,6 +4,32 @@ All notable changes to this project are listed here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- A tag band on the ring. `ring.tag_band` (`none`, `hairline`, `narrow`, `medium` or `wide`, default `medium`)
+  draws a strip through the slot centres, each slot's stretch in its tag colour and a faint grey one for an
+  untagged slot. A ring with no tagged slots has no band. `ring.tag_band_opacity` (0 to 1, default 0.45) sets
+  how solid it is. The band does not depend on `tag_colors`. Slot colours are now dropped entirely only when
+  both `tag_colors` and `tag_band` are `none`.
+- Opacity for the glow and the tint: `ring.tag_glow_opacity` (default 0.4) and `ring.tag_tint_opacity` (default
+  0.3), both 0 to 1.
+- Tint style and blend. `ring.tag_tint_style` (`flat` or `gradient`, default `gradient`, which is stronger
+  towards the rim) and `ring.tag_tint_blend` (`multiply` or `overlay`, default `multiply`).
+- A reworked **Settings > Tag colours** card with three groups, **Icon tint**, **Glow** and **Band**, each with
+  a switch. The tint and glow switches together set `tag_colors`, and the band switch sets `tag_band`.
+  Opacities show as percentages, and controls under a switch that is off are dimmed. The preview beside them
+  shows the current menu if it has a tagged brush, and otherwise a sample ring of your brushes coloured with
+  your tags.
+
+### Changed
+
+- `tint` now lays the tag colour over the brush icon, with a rim in the same colour, instead of only colouring
+  the disc behind the icon. The old disc tint is gone. By default it multiplies at 0.3 and is stronger towards
+  the rim, so tagged slots read more clearly.
+- The tag band is on by default. Set `ring.tag_band` to `none` to turn it off.
+
 ## [0.8.1] - 2026-10-30
 
 ### Fixed

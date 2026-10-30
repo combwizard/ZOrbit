@@ -3,7 +3,7 @@ slots opened up. Used by the app and by the Studio's previews, so both show the 
 
   * auto slots become the brushes usage.py picked for them (an empty slot stays a placeholder);
   * a brush slot gets the colour of the brush's first tag (also a steps slot that starts with a brush, since
-    the ring shows that brush's icon), unless ring.tag_colors is "none";
+    the ring shows that brush's icon), unless ring.tag_colors and ring.tag_band are both "none";
   * a {"tag": key} slot whose tag exists and has installed brushes becomes an ordinary submenu slot, pointing
     at the synthetic menu "tag:<key>"; with no brushes (or no tag) it stays a "tag" slot and is drawn faint.
 
@@ -68,7 +68,7 @@ class Expander:
             names = self.usage.rank(found)
             color = self.tags.color(key)
             more = len(names) > TAG_SLOTS
-            fill = "" if self.cfg.ring.get("tag_colors") == "none" else color   # the fan's tag, not each brush's own
+            fill = color if self._colours_on() else ""   # the fan's tag, not each brush's own
             items = [C.Item(label=n, kind="brush", data={"brush": n}, color=fill)
                      for n in names[:TAG_SLOTS - 1 if more else TAG_SLOTS]]
             if more:
@@ -78,8 +78,13 @@ class Expander:
         return menu
 
     # --- colours and tag slots -------------------------------------------------------------------
+    def _colours_on(self):
+        """Slots carry their tag colour unless every way of showing it is off."""
+        r = self.cfg.ring
+        return r.get("tag_colors", "tint") != "none" or r.get("tag_band", "medium") != "none"
+
     def _brush_color(self, name):
-        if self.cfg.ring.get("tag_colors") == "none":
+        if not self._colours_on():
             return ""
         return self.tags.color_of_item(item_key("brush", name))
 

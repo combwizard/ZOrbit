@@ -113,12 +113,6 @@ const KIND = {
   tag: { label: 'Tag', icon: 'tag', hint: 'Every brush with a tag, most used first' },
   browser: { label: 'Browser', icon: 'k_browser', hint: 'Open the brush browser' },
 };
-const TAG_COLOR_INFO = {
-  none: ['None', 'Tags never colour a slot'],
-  tint: ['Tint', 'A coloured rim and a tinted disc'],
-  glow: ['Glow', 'A soft halo in the tag colour'],
-  both: ['Both', 'The tint and the halo together'],
-};
 const ANIM_INFO = {
   smooth: 'Slots scale in together with a slight overshoot.',
   bounce: 'Bigger, springier overshoot.',
@@ -146,8 +140,10 @@ const BRIDGE_INFO = {
   key: ['Key', 'Presses the bridge key. Bind that key in ZBrush to Zplugin > ZOrbit > Apply (Ctrl+Alt+click the button, press the key, then Preferences > Hotkeys > Store).'],
 };
 const FALLBACK_DEFAULTS = { radius: 145, slot: 72, dead_zone: 38, tap_ms: 250, timeout_s: 20, animation: 'smooth', labels: 'name', tag_colors: 'tint', flick: true, hover_submenus: true,
+  tag_band: 'medium', tag_band_opacity: 0.45, tag_glow_opacity: 0.4, tag_tint_opacity: 0.3, tag_tint_style: 'gradient', tag_tint_blend: 'multiply',
   colors: { bg: '#222327', accent: '#f86b33', highlight: '#4dc8e9', text: '#f0f0f0', lines: '#f86b33' } };
-const FALLBACK_RANGES = { radius: [60, 400], slot: [32, 160], dead_zone: [10, 120], tap_ms: [0, 1000], timeout_s: [2, 120] };
+const FALLBACK_RANGES = { radius: [60, 400], slot: [32, 160], dead_zone: [10, 120], tap_ms: [0, 1000], timeout_s: [2, 120],
+  tag_band_opacity: [0, 1], tag_glow_opacity: [0, 1], tag_tint_opacity: [0, 1] };
 
 const params = new URLSearchParams(location.search);
 const POPOUT = window.__ZORBIT_MODE__ === 'popout';       // the brush browser popout (popout.html), not the Studio
@@ -560,32 +556,34 @@ function itemThumb(it, size = 30) {
 }
 
 /* ================================================================== ring preview + animation loaders */
+const SAMPLE_MENU = 'sample:tags';             // not a menu: the backend's sample ring of library brushes in the user's tag colours
 const RingLoader = {
-  cache: new Map(), ver: -1, gen: 0, queue: null, cur: null, busy: false,   // gen: bumped by tag edits, which S.version does not see
+  cache: new Map(), ver: -1, gen: 0, queue: {}, cur: null, busy: false,   // gen: bumped by tag edits, which S.version does not see; queue: lane -> waiting request
   key: (m, hv, path) => m + '|' + (hv === null || hv === undefined ? 'n' : hv) + '|' + (path && path.length ? path.join('.') : ''),
   sync() { if (this.ver !== S.version) { this.cache.clear(); this.ver = S.version; } },
   peek(menuId, hover, path) { this.sync(); return this.cache.get(this.key(menuId, hover, path)) || null; },
-  get(menuId, hover, path) {                     // path: item indices of the fan submenus to show open (null: none)
+  get(menuId, hover, path, lane = 'main') {      // path: item indices of the fan submenus to show open (null: none)
     this.sync();
     const k = this.key(menuId, hover, path), c = this.cache.get(k);
     if (c) return Promise.resolve(c);
     return new Promise(res => {
       // the same picture asked for twice (several previews on one screen) shares one backend call
-      const same = [this.cur, this.queue].find(q => q && q.k === k && q.ver === S.version && q.gen === this.gen);
+      const same = [this.cur, ...Object.values(this.queue)].find(q => q && q.k === k && q.ver === S.version && q.gen === this.gen);
       if (same) { same.waiters.push(res); return; }
-      if (this.queue) this.settle(this.queue, null);           // latest request wins
-      this.queue = { menuId, hover: hover === undefined ? null : hover, path: path && path.length ? path : null, k, ver: S.version, gen: this.gen, res, waiters: [] };
+      if (this.queue[lane]) this.settle(this.queue[lane], null);   // latest request wins within a lane; other lanes keep theirs
+      this.queue[lane] = { menuId, hover: hover === undefined ? null : hover, path: path && path.length ? path : null, k, ver: S.version, gen: this.gen, res, waiters: [] };
       this.pump();
     });
   },
   settle(q, out) { q.res(out); for (const w of q.waiters) w(out); },
   async pump() {
-    if (this.busy || !this.queue) return;
+    const lane = Object.keys(this.queue)[0];                  // oldest lane first, so lanes take turns
+    if (this.busy || !lane) return;
     this.busy = true;
-    const q = this.queue; this.queue = null; this.cur = q;
+    const q = this.queue[lane]; delete this.queue[lane]; this.cur = q;
     let out;
     try {
-      out = await call('preview_ring', S.cfg, q.menuId, q.hover, 1.0, q.path);
+      out = q.menuId === SAMPLE_MENU ? await call('preview_tags', S.cfg, q.hover, 1.0) : await call('preview_ring', S.cfg, q.menuId, q.hover, 1.0, q.path);
       if (out && out.image && q.ver === this.ver && q.gen === this.gen) {
         this.cache.set(q.k, out);
         if (this.cache.size > 60) this.cache.delete(this.cache.keys().next().value);
@@ -2832,26 +2830,28 @@ function normHex(v) {
   if (/^[0-9a-f]{3}$/i.test(t)) t = t.replace(/./g, c => c + c);
   return /^[0-9a-f]{6}$/i.test(t) ? '#' + t.toLowerCase() : null;
 }
-function sliderRow({ label, hint, key, step = 1, unit = '', onLive }) {
-  const [min, max] = ranges()[key] || [0, 100];
-  const range = h('input', { type: 'range', min, max, step, value: ringNum(key), 'aria-label': label });
-  const num = h('input', { class: 'inp mono num', type: 'number', min, max, step, value: ringNum(key), 'aria-label': label + ' value' });
-  const reset = iconBtn('undo', 'Reset to default (' + S.defaults[key] + ')', () => { delete ensureRing()[key]; commit(); sync(ringNum(key)); onLive && onLive(); }, 'reset');
+function sliderRow({ label, hint, key, step = 1, unit = '', scale = 1, onLive }) {   // scale: shown = stored * scale (0-1 opacity as 0-100 %)
+  const [lo, hi] = ranges()[key] || [0, 100];
+  const min = lo * scale, max = hi * scale;
+  const disp = v => Number((v * scale).toFixed(6)), store = d => Number((d / scale).toFixed(6));
+  const range = h('input', { type: 'range', min, max, step, value: disp(ringNum(key)), 'aria-label': label });
+  const num = h('input', { class: 'inp mono num', type: 'number', min, max, step, value: disp(ringNum(key)), 'aria-label': label + ' value' });
+  const reset = iconBtn('undo', 'Reset to default (' + disp(S.defaults[key]) + (scale !== 1 ? unit : '') + ')', () => { delete ensureRing()[key]; commit(); sync(ringNum(key)); onLive && onLive(); }, 'reset');
   const note = h('span', { class: 'num-hint', role: 'status' });
   let noteT = 0;
   const say = t => { clearTimeout(noteT); note.textContent = t; if (t) noteT = setTimeout(() => { note.textContent = ''; }, 2000); };
-  const sync = v => { range.value = v; num.value = v; range.style.setProperty('--pct', ((v - min) / (max - min)) * 100 + '%'); reset.style.visibility = key in ring() && ring()[key] !== S.defaults[key] ? 'visible' : 'hidden'; };
-  range.addEventListener('input', () => { const v = Number(range.value); setRing(key, v); sync(v); onLive && onLive(); });
+  const sync = v => { range.value = num.value = disp(v); range.style.setProperty('--pct', ((v - lo) / (hi - lo)) * 100 + '%'); reset.style.visibility = key in ring() && ring()[key] !== S.defaults[key] ? 'visible' : 'hidden'; };
+  range.addEventListener('input', () => { const v = store(Number(range.value)); setRing(key, v); sync(v); onLive && onLive(); });
   num.addEventListener('change', () => {
     const raw = num.value.trim(), n = Number(raw);
     if (raw === '' || !Number.isFinite(n)) { sync(ringNum(key)); say(''); return; }     // nothing usable typed: keep what was there
-    const snapped = Number((min + Math.round((n - min) / step) * step).toFixed(6)), v = clamp(snapped, min, max);
+    const snapped = Number((min + Math.round((n - min) / step) * step).toFixed(6)), v = store(clamp(snapped, min, max));
     say(n < min || n > max ? 'Kept within ' + min + ' to ' + max : '');
     if (v !== ringNum(key)) { setRing(key, v); onLive && onLive(); }
     sync(v);
   });
   sync(ringNum(key));
-  return h('div', { class: 'srow' }, h('div', { class: 'slabel' }, h('span', null, label), h('small', null, hint)), h('div', { class: 'sctl' }, range, h('span', { class: 'nwrap' }, num, unit ? h('em', null, unit) : null, note), reset));
+  return h('div', { class: 'srow' }, h('div', { class: 'slabel' }, h('span', null, label), hint ? h('small', null, hint) : null), h('div', { class: 'sctl' }, range, h('span', { class: 'nwrap' }, num, unit ? h('em', null, unit) : null, note), reset));
 }
 function switchRow({ label, hint, key }) {
   const v = ring()[key];
@@ -2970,6 +2970,7 @@ function buildSettingsScreen(root) {
     R.preview = async () => {
       const none = !curMenu() || !usableIdx(S.menuId).length;
       pbox.classList.toggle('none', none); cbox.classList.toggle('none', none);
+      paintTagPrev();                                          // its own picture: the sample ring when this menu has no tagged brush
       if (none) return;
       const ver = S.version;
       const res = await RingLoader.get(S.menuId, null);       // one request feeds the geometry, animation and colour previews
@@ -3005,10 +3006,62 @@ function buildSettingsScreen(root) {
     const LAB = { name: ['Icon and name', 'Each slot shows its label underneath.'], none: ['Icon only', 'A cleaner ring. Names appear only in this Studio.'] };
     page.append(card('Labels', null, choiceCards(labelOpts.map(l => [l, (LAB[l] || [l, ''])[0], (LAB[l] || [l, ''])[1]]), ring().labels || S.defaults.labels, v => setRing('labels', v), 'two', 'Labels')));
 
-    /* --- tag colours: how a brush's first tag shows on its slot (tag slots always show their tag's colour) */
-    const tcOpts = (S.opts && S.opts.tag_colors) || Object.keys(TAG_COLOR_INFO);
-    page.append(card('Tag colours', "How a brush's first tag shows on its slot",
-      choiceCards(tcOpts.map(v => [v, (TAG_COLOR_INFO[v] || [v[0].toUpperCase() + v.slice(1), ''])[0], (TAG_COLOR_INFO[v] || [v, ''])[1]]), ring().tag_colors || S.defaults.tag_colors || 'tint', v => setRing('tag_colors', v), 'tag-cards', 'Tag colours')));
+    /* --- tag colours: how a brush's first tag shows on its slot (tag slots always show their tag's colour).
+       Three effects, each a switch with its own controls; tint and glow together are the stored tag_colors. */
+    const tc = () => ring().tag_colors || S.defaults.tag_colors || 'tint';
+    const tintOn = () => tc() === 'tint' || tc() === 'both', glowOn = () => tc() === 'glow' || tc() === 'both';
+    const setTc = (tint, glow) => setRing('tag_colors', tint && glow ? 'both' : tint ? 'tint' : glow ? 'glow' : 'none');
+    const bandDef = S.defaults.tag_band && S.defaults.tag_band !== 'none' ? S.defaults.tag_band : 'medium';
+    let bandWas = ring().tag_band && ring().tag_band !== 'none' ? ring().tag_band : bandDef;     // the thickness to come back to
+    const bandOn = () => (ring().tag_band || S.defaults.tag_band) !== 'none';
+    const cap = t => t[0].toUpperCase() + t.slice(1);
+    const tcRows = [];                                    // [row, is its effect on]: rows of a switched-off effect are dimmed and disabled
+    const paintTc = () => {
+      for (const [row, on] of tcRows) {
+        const live = on();
+        row.classList.toggle('off', !live);
+        row.querySelectorAll('input, button').forEach(c => { c.disabled = !live; });
+      }
+    };
+    const segRow = ({ label, hint, key, opts, on, onPick }) => {
+      const row = h('div', { class: 'srow' }, h('div', { class: 'slabel' }, h('span', null, label), hint ? h('small', null, hint) : null),
+        choiceCards(opts, onPick ? bandWas : ring()[key] || S.defaults[key], onPick || (v => setRing(key, v)), 'seg', label));
+      tcRows.push([row, on]); return row;
+    };
+    const opacity = (key, on) => { const row = sliderRow({ label: 'Opacity', key, step: 5, scale: 100, unit: '%' }); tcRows.push([row, on]); return row; };
+    const group = ({ label, hint, on, set, rows }) => h('div', { class: 'tgroup' },
+      h('div', { class: 'tg-head' }, h('div', { class: 'slabel' }, h('span', null, label), h('small', null, hint)), toggleSwitch(on(), v => { set(v); paintTc(); }, label)),
+      h('div', { class: 'tg-body' }, ...rows));
+    const bandOpts = ((S.opts && S.opts.tag_bands) || ['none', 'hairline', 'narrow', 'medium', 'wide']).filter(v => v !== 'none').map(v => [v, cap(v), '']);
+    const BLEND = { multiply: 'Darken', overlay: 'Keep highlights' };
+    const timg = h('img', { class: 'ring-img pending', alt: 'Ring preview with the current tag colours', draggable: false, onload: () => timg.classList.remove('pending') });   // hidden until it has a picture
+    const tcap = h('div', { class: 'mini-cap micro' });
+    const tnote = h('div', { class: 'fhint' });
+    const tbox = h('div', { class: 'mini-stage' }, h('div', { class: 'stage-rings', 'aria-hidden': 'true' }), h('div', { class: 'mini-wrap' }, timg), tcap);
+    // The current menu when it has a tagged brush to show, else the backend's sample ring.
+    const hasTagged = m => !!m && (m.items || []).some(it => kindOf(it) === 'brush' && firstTag(it.brush));
+    let tTok = 0;
+    const paintTagPrev = async () => {
+      const sample = !hasTagged(curMenu()), tok = ++tTok, ver = S.version;
+      tcap.textContent = sample ? 'Sample ring' : 'Preview: ' + (curMenu().title || S.menuId);
+      tnote.textContent = sample ? 'This menu has no tagged brushes yet, so the sample puts your tags on a few library brushes.' : '';
+      const res = await RingLoader.get(sample ? SAMPLE_MENU : S.menuId, null, null, 'tags');
+      if (tok !== tTok || !res || ver !== S.version) return;
+      if (res.image) timg.src = res.image;
+      else if (res.error || (res.problems || []).length) tnote.textContent = 'No preview: ' + (res.problems || [])[0];
+    };
+    page.append(card('Tag colours', "How a brush's tags show on its slots", h('div', { class: 'split tag-split' }, h('div', { class: 'split-main' },
+      group({ label: 'Icon tint', hint: 'A coloured rim, and the tag colour laid over the icon', on: tintOn, set: v => setTc(v, glowOn()), rows: [
+        opacity('tag_tint_opacity', tintOn),
+        segRow({ label: 'Style', hint: 'Gradient is stronger towards the rim', key: 'tag_tint_style', on: tintOn, opts: ((S.opts && S.opts.tint_styles) || ['flat', 'gradient']).map(v => [v, cap(v), '']) }),
+        segRow({ label: 'Blend', key: 'tag_tint_blend', on: tintOn, opts: ((S.opts && S.opts.tint_blends) || ['multiply', 'overlay']).map(v => [v, BLEND[v] || cap(v), '']) })] }),
+      group({ label: 'Glow', hint: 'A soft halo in the tag colour around the slot', on: glowOn, set: v => setTc(tintOn(), v), rows: [
+        opacity('tag_glow_opacity', glowOn)] }),
+      group({ label: 'Band', hint: 'A coloured strip through the slots, one stretch per slot', on: bandOn, set: v => setRing('tag_band', v ? bandWas : 'none'), rows: [
+        segRow({ label: 'Thickness', on: bandOn, opts: bandOpts, onPick: v => { bandWas = v; setRing('tag_band', v); } }),
+        opacity('tag_band_opacity', bandOn)] })),
+      h('div', { class: 'tag-prev' }, tbox, tnote))));
+    paintTc();
 
     /* --- colours (the preview is the same picture as the geometry card's: one request per edit) */
     const colorPaints = [];
@@ -3377,9 +3430,11 @@ function updateDirty() {
 /* Turns one message from the loader (config.py) into plain words plus where to go to fix it.
    Returns { text, raw, target }; target is null when the format is not recognised. */
 const RING_CARD = { radius: 'set-ring-geometry', slot: 'set-ring-geometry', dead_zone: 'set-ring-geometry', animation: 'set-open-animation',
-  labels: 'set-labels', tag_colors: 'set-tag-colours', colors: 'set-colours', tap_ms: 'set-behaviour', timeout_s: 'set-behaviour', flick: 'set-behaviour', hover_submenus: 'set-behaviour' };
+  labels: 'set-labels', tag_colors: 'set-tag-colours', tag_band: 'set-tag-colours', tag_band_opacity: 'set-tag-colours', tag_glow_opacity: 'set-tag-colours',
+  tag_tint_opacity: 'set-tag-colours', tag_tint_style: 'set-tag-colours', tag_tint_blend: 'set-tag-colours', colors: 'set-colours', tap_ms: 'set-behaviour', timeout_s: 'set-behaviour', flick: 'set-behaviour', hover_submenus: 'set-behaviour' };
 const RING_NAME = { radius: 'Ring radius', slot: 'Slot size', dead_zone: 'Dead zone', tap_ms: 'Tap time', timeout_s: 'Auto-close', flick: 'Flick to pick',
-  hover_submenus: 'Open submenus on hover', animation: 'Open animation', labels: 'Labels', tag_colors: 'Tag colours' };
+  hover_submenus: 'Open submenus on hover', animation: 'Open animation', labels: 'Labels', tag_colors: 'Tag colours',
+  tag_band: 'Band', tag_band_opacity: 'Band opacity', tag_glow_opacity: 'Glow opacity', tag_tint_opacity: 'Icon tint opacity', tag_tint_style: 'Icon tint style', tag_tint_blend: 'Icon tint blend' };
 const unq = s => String(s).replace(/^(['"])(.*)\1$/, '$2');
 function describeProblem(raw) {
   const out = (text, target) => ({ text, raw, target: target || null });
@@ -3724,6 +3779,7 @@ function describeChanges() {
   const ringLines = [];
   const br = before.ring || {}, ar = after.ring || {};
   const NAMES = { radius: 'Ring radius', slot: 'Slot size', dead_zone: 'Dead zone', tap_ms: 'Tap time', timeout_s: 'Auto-close', animation: 'Open animation', labels: 'Labels', tag_colors: 'Tag colours',
+    tag_band: 'Tag band', tag_band_opacity: 'Tag band opacity', tag_glow_opacity: 'Tag glow opacity', tag_tint_opacity: 'Tag tint opacity', tag_tint_style: 'Tag tint style', tag_tint_blend: 'Tag tint blend',
     flick: 'Flick to pick', hover_submenus: 'Open submenus on hover' };
   for (const k of new Set([...Object.keys(br), ...Object.keys(ar)])) {
     if (k === 'colors') continue;

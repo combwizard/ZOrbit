@@ -3,9 +3,10 @@
 Look: slots of round icons around a glowing accent centre dot,
 hairline spokes and faint guide rings; hover = accent border, soft ring, glow, 1.12x scale and accent label;
 submenus use the highlight colour and a small badge (an arrow, or a fan for one that fans out); an auto slot nothing has filled yet is a faint "+".
-Tag colours: an item that carries a colour (config.Item.color, from its first tag) gets a rim and a slightly
-tinted disc, a soft halo, or both, as ring.tag_colors says; its hover border, spoke and label take the colour
-too. A tag slot is a solid disc in the tag colour with a tag glyph whatever ring.tag_colors says; one with no
+Tag colours: an item that carries a colour (config.Item.color, from its first tag) gets a rim and its icon
+tinted (ring.tag_tint_*), a soft halo (ring.tag_glow_opacity), or both, as ring.tag_colors says; its hover
+border, spoke and label take the colour too. A band through the slot centres (ring.tag_band) shows each slot's
+colour, faint for one without; it is left out when no slot has a colour. A tag slot is a solid disc in the tag colour with a tag glyph whatever ring.tag_colors says; one with no
 brushes is a faint tag glyph and nothing else of it is coloured.
 All of it is drawn into the sprites when they are built, so a frame costs the same as before.
 Selection is by angle outside a dead zone; a slot covers at most a quarter of the circle, so a ring of one to
@@ -48,6 +49,7 @@ TIMER_TICK = 1
 CLASS_NAME = "ZOrbitRing"
 HOVER_MS = 120
 MAX_SECTOR = 90.0           # widest angle (degrees) a single slot answers to
+TAG_BANDS = {"hairline": 0.0, "narrow": 0.36, "medium": 0.62, "wide": 0.9}   # band width, relative to a slot
 FAN_SLOT = 0.86             # fan slot size, relative to a ring slot
 FAN_DEPTH = 3               # fans inside fans, at most this deep
 FAN_SPAN = (130.0, 110.0)   # widest arc (degrees) of a first fan and of a deeper one
@@ -155,6 +157,22 @@ def _chrome(it):
     """The colour an item's rim, spoke, hover and fan lines take: its tag colour, except for an empty tag slot,
     which stays faint all over (its colour only tints the glyph)."""
     return it.color if it.kind != "tag" else ""
+
+
+def _tint_icon(icon, col, amount, style, blend):
+    """icon (RGBA, a disc) with colour col laid over it by multiply or overlay; gradient makes it stronger
+    towards the rim and weaker in the middle."""
+    rgb = icon.convert("RGB")
+    over = Image.new("RGB", icon.size, _rgb(col))
+    mixed = ImageChops.overlay(rgb, over) if blend == "overlay" else ImageChops.multiply(rgb, over)
+    if style == "gradient":                        # radial_gradient: 0 at the centre, 128 at the disc's edge
+        lut = [int(min(255, amount * 255 * (0.4 + min(1.0, v / 128)))) for v in range(256)]
+        mask = Image.radial_gradient("L").resize(icon.size, Image.BILINEAR).point(lut)
+    else:
+        mask = Image.new("L", icon.size, int(amount * 255))
+    out = Image.composite(mixed, rgb, mask).convert("RGBA")
+    out.putalpha(icon.getchannel("A"))
+    return out
 
 
 def _blit(canvas, im, x, y):
@@ -727,7 +745,8 @@ class Ring:
         hue = col or (self.c_hi if sub else self.c_accent)
         mode = self.cfg.get("tag_colors", "tint")
         tint = bool(col) and (mode in ("tint", "both") or bool(it.tag))
-        soft = bool(col) and mode in ("glow", "both")
+        glow_a = self.cfg.get("tag_glow_opacity", 0.4)
+        soft = bool(col) and mode in ("glow", "both") and glow_a > 0
         icon = None
         try:
             icon = self.icon_for(it)
@@ -739,6 +758,10 @@ class Ring:
             mask = Image.new("L", (ins, ins), 0)
             ImageDraw.Draw(mask).ellipse((0, 0, ins - 1, ins - 1), fill=255)
             icon.putalpha(ImageChops.multiply(icon.getchannel("A"), mask))
+            amount = self.cfg.get("tag_tint_opacity", 0.3)
+            if col and mode in ("tint", "both") and amount > 0:
+                icon = _tint_icon(icon, col, amount, self.cfg.get("tag_tint_style", "gradient"),
+                                  self.cfg.get("tag_tint_blend", "multiply"))
         solid = bool(col) and bool(it.tag) and sub and icon is None   # a tag slot: solid disc in the tag colour
         fill = _mix(self.c_bg, col, 0.6) + (255,) if solid else (
             _mix(self.c_bg, col, 0.45) + (235,) if tint else _rgba(self.c_bg, 0.92))
@@ -804,7 +827,7 @@ class Ring:
                 n = out.size[0]
                 gr = D / 2 / s + 2 * self.scale
                 halo = Image.new("RGBA", (n, n), (0, 0, 0, 0))
-                ImageDraw.Draw(halo).ellipse((n / 2 - gr, n / 2 - gr, n / 2 + gr, n / 2 + gr), fill=_rgba(col, 0.4))
+                ImageDraw.Draw(halo).ellipse((n / 2 - gr, n / 2 - gr, n / 2 + gr, n / 2 + gr), fill=_rgba(col, glow_a))
                 halo = halo.filter(ImageFilter.GaussianBlur(8 * self.scale))
                 halo.alpha_composite(out)
                 out = halo
@@ -890,6 +913,7 @@ class Ring:
         hit = (self.R + self.slot * 0.62 + 6 * self.scale) * s   # invisible disc so clicks land on us
         d.ellipse((cx - hit, cy - hit, cx + hit, cy + hit), fill=(0, 0, 0, 1))
         lw = max(1, int(self.scale * s))
+        self._band(im, cx, cy)
         for frac, a in ((0.28, 0.05), (0.52, 0.03), (0.76, 0.02)):
             r = self.R * frac * s
             d.ellipse((cx - r, cy - r, cx + r, cy + r), outline=_rgba(self.c_lines, a), width=lw)
@@ -906,6 +930,28 @@ class Ring:
                    fill=colr)
         self._static_cache = im.resize((self.rsize, self.rsize), Image.LANCZOS)
         return self._static_cache
+
+    def _band(self, im, cx, cy):
+        """The tag band (supersampled, into im): a ring through the slot centres, each slot's stretch of it in
+        its colour and the rest faint."""
+        width = TAG_BANDS.get(self.cfg.get("tag_band", "medium"))
+        cols = [_chrome(it) for it in self.items]
+        if width is None or not any(cols):
+            return
+        a = self.cfg.get("tag_band_opacity", 0.45)
+        s = SS
+        w = max(2 * self.scale, self.slot * width) * s
+        ro, ri = self.R * s + w / 2, self.R * s - w / 2
+        band = Image.new("RGBA", im.size, (0, 0, 0, 0))
+        d = ImageDraw.Draw(band)                   # fills replace, so each stretch overwrites the faint base
+        d.ellipse((cx - ro, cy - ro, cx + ro, cy + ro), fill=_rgba(self.c_text, a * 0.2))
+        half = min(self.step, MAX_SECTOR) / 2
+        for i, col in enumerate(cols):
+            if col:
+                mid = self.step * i - 90           # Pillow's 0 is 3 o'clock, ours 12
+                d.pieslice((cx - ro, cy - ro, cx + ro, cy + ro), mid - half, mid + half, fill=_rgba(col, a))
+        d.ellipse((cx - ri, cy - ri, cx + ri, cy + ri), fill=(0, 0, 0, 0))
+        im.alpha_composite(band)
 
     def _base(self, el):
         """A fresh canvas holding the invisible hit surface of the open fans and the ring's static layer

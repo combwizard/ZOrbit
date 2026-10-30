@@ -25,6 +25,7 @@ def main():
         "get_suggestions": a.get_suggestions(), "get_tags": a.get_tags(), "get_status": a.get_status(), "get_options": a.get_options(),
         "preview_ring": {mid: a.preview_ring(cfg["config"], mid) for mid in cfg["config"]["menus"]},
         "preview_ring_hover0": a.preview_ring(cfg["config"], first, hover=0),
+        "preview_tags": a.preview_tags(cfg["config"]),
         "preview_animation": a.preview_animation(cfg["config"], first),
     }
     out = os.path.join(ROOT, "zorbit", "studio_ui", "dev", "mock_data.js")
