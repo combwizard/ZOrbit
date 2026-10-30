@@ -1,5 +1,5 @@
 ; Inno Setup 6 script for ZOrbit, a radial brush menu for ZBrush.
-; Build: ISCC.exe /DAppVersion=0.9.0 packaging\installer.iss   (packaging\build.ps1 does this after PyInstaller)
+; Build: ISCC.exe /DAppVersion=0.10.0 packaging\installer.iss   (packaging\build.ps1 does this after PyInstaller)
 ; Expects dist\ZOrbit\ (PyInstaller onedir output) relative to the repository root.
 
 #ifndef AppVersion
@@ -68,7 +68,7 @@ Type: files; Name: "{autodesktop}\{#LegacyName} Studio.lnk"
 
 [Icons]
 Name: "{autoprograms}\ZOrbit Studio"; Filename: "{app}\{#AppExe}"; Parameters: "--studio"; WorkingDir: "{app}"; AppUserModelID: "ZOrbit.Studio"; Comment: "Edit radial menus for ZBrush"
-Name: "{autoprograms}\ZOrbit Browser"; Filename: "{app}\{#AppExe}"; Parameters: "--popout --show"; WorkingDir: "{app}"; IconFilename: "{app}\browser.ico"; AppUserModelID: "ZOrbit.Browser"; Comment: "Browse and tag ZBrush brushes, alphas, materials and textures"
+Name: "{autoprograms}\ZOrbit Browser"; Filename: "{app}\{#AppExe}"; Parameters: "--popout --show"; WorkingDir: "{app}"; IconFilename: "{app}\_internal\browser.ico"; AppUserModelID: "ZOrbit.Browser"; Comment: "Browse and tag ZBrush brushes, alphas, materials and textures"
 Name: "{autodesktop}\ZOrbit Studio"; Filename: "{app}\{#AppExe}"; Parameters: "--studio"; WorkingDir: "{app}"; AppUserModelID: "ZOrbit.Studio"; Tasks: desktopicon
 
 [Run]

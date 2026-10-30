@@ -4,7 +4,7 @@ All notable changes to this project are listed here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.10.0] - 2026-10-30
 
 ### Added
 
@@ -376,7 +376,7 @@ First public release.
   only brushes included with ZBrush.
 - Documentation: README, user guide, third-party notices and contributing guide.
 
-[Unreleased]: https://github.com/combwizard/zorbit/compare/v0.9.0...HEAD
+[0.10.0]: https://github.com/combwizard/zorbit/releases/tag/v0.10.0
 [0.9.0]: https://github.com/combwizard/zorbit/releases/tag/v0.9.0
 [0.8.1]: https://github.com/combwizard/zorbit/releases/tag/v0.8.1
 [0.8.0]: https://github.com/combwizard/zorbit/releases/tag/v0.8.0
