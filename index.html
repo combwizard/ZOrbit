@@ -143,7 +143,8 @@
     <article class="feature flip">
       <div class="feature-copy">
         <h3>More than brushes.</h3>
-        <p>A slot can select a brush, press any ZBrush button, set a slider, flip a switch, run several of those in a row, or open another ring. Hover a submenu and one stroke reaches an item two rings deep.</p>
+        <p>A slot can select a brush, an alpha, a material or a texture, press any ZBrush button, set a slider, flip a switch, run several of those in a row, or open another ring. Hover a submenu and one stroke reaches an item two rings deep.</p>
+        <p class="feature-sub">If ZBrush does not have the alpha, material or texture yet, ZOrbit loads it from its file first.</p>
       </div>
       <figure class="feature-media">
         <img src="images/ring.png" alt="Brushes menu with ClayBuildup hovered" width="600" height="450" loading="lazy">
@@ -161,6 +162,49 @@
           <source srcset="images/fan.png" media="(prefers-reduced-motion: reduce)">
           <img src="images/fan-out.gif" alt="Holding Q: hovering More Brushes fans its brushes out to the left; moving to Tools fans out its switches, SubDivide fans out its sizes above that, and a flick past 1.00 picks it" width="594" height="771" loading="lazy">
         </picture>
+      </figure>
+    </article>
+
+    <article class="feature flip">
+      <div class="feature-copy">
+        <h3>Tag it. Colour it. Fan it.</h3>
+        <p>Tag your brushes, alphas, materials and textures, then colour their slots by tag. Show the colour as an icon tint, a glow, or a band through the ring, and set how strong each one is. A tag slot opens a fan of every item with that tag.</p>
+        <p class="feature-sub">Settings &gt; Tag colours has a switch and an opacity for each of the three.</p>
+      </div>
+      <figure class="feature-media">
+        <img src="images/tag-colours.png" alt="A ring of eight brushes with two tags. Blocking is orange and Detailing is blue. Each tagged slot has a rim in its tag colour, and a band behind the slots follows the tags, with two untagged slots in grey." width="600" height="600" loading="lazy">
+      </figure>
+    </article>
+
+    <article class="feature">
+      <div class="feature-copy">
+        <h3>A browser for everything.</h3>
+        <p>Press <kbd>Alt</kbd>+<kbd>B</kbd> and the Browser opens over ZBrush. It has four tabs, Brushes, Alphas, Materials and Textures, each with search, folders, tag chips and thumbnails. Press <kbd>Enter</kbd> to pick.</p>
+        <p class="feature-sub">Star an item once to make it a favourite, or press <kbd>Ctrl</kbd>+<kbd>D</kbd>. Recent lists your last picks.</p>
+      </div>
+      <figure class="feature-media browser-media" aria-hidden="true">
+        <div class="bm">
+          <div class="bm-tabs">
+            <span class="bm-tab on">Brushes</span><span class="bm-tab">Alphas</span><span class="bm-tab">Materials</span><span class="bm-tab">Textures</span>
+          </div>
+          <div class="bm-body">
+            <div class="bm-side">
+              <span class="bm-search">Search</span>
+              <span class="bm-folder fav"><i>&#9733;</i>Favourites</span>
+              <span class="bm-folder">Recent</span>
+              <span class="bm-folder">All brushes</span>
+              <span class="bm-chips"><span class="bm-chip orange">Blocking</span><span class="bm-chip blue">Detailing</span></span>
+            </div>
+            <div class="bm-grid">
+              <span class="bm-card"><img src="brush-icons/Clay.png" alt="" width="48" height="48" loading="lazy"><b>Clay</b></span>
+              <span class="bm-card sel"><img src="brush-icons/ClayBuildup.png" alt="" width="48" height="48" loading="lazy"><b>ClayBuildup</b><i class="bm-star on">&#9733;</i></span>
+              <span class="bm-card"><img src="brush-icons/ClayTubes.png" alt="" width="48" height="48" loading="lazy"><b>ClayTubes</b></span>
+              <span class="bm-card"><img src="brush-icons/DamStandard.png" alt="" width="48" height="48" loading="lazy"><b>DamStandard</b><i class="bm-star on">&#9733;</i></span>
+              <span class="bm-card"><img src="brush-icons/Flatten.png" alt="" width="48" height="48" loading="lazy"><b>Flatten</b></span>
+              <span class="bm-card"><img src="brush-icons/Move.png" alt="" width="48" height="48" loading="lazy"><b>Move</b></span>
+            </div>
+          </div>
+        </div>
       </figure>
     </article>
 
@@ -189,13 +233,14 @@
       <div class="feature-copy">
         <h3>Edit it in Studio.</h3>
         <p>ZOrbit Studio shows a live preview of the real ring. Drag brushes in from a searchable library, record hotkeys, change colours, size and animation. Twelve open animations, from instant to a swirling spiral.</p>
+        <p class="feature-sub">The first time Studio opens, a Setup screen walks you through the install. It finds ZBrush, says whether to restart it, and has you try the ring once.</p>
       </div>
       <figure class="feature-media">
         <img src="images/studio.png" alt="ZOrbit Studio: the menu list, the ring preview and the brush library" width="800" height="500" loading="lazy">
       </figure>
     </article>
 
-    <p class="under-note">It starts and stops with ZBrush. Your menus live in plain JSON, so you can back them up, share them and keep them in version control.</p>
+    <p class="under-note">It starts and stops with ZBrush. Your menus live in plain JSON, so you can back them up, share them and keep them in version control. Settings &gt; Import and export saves your menus, settings and tags to one file.</p>
   </section>
 
   <section class="section" id="price">
@@ -525,7 +570,7 @@
         <span class="step-n">2</span>
         <div>
           <h3>Run it.</h3>
-          <p>It installs for your user only and does not need administrator rights. It adds a Start menu shortcut called ZOrbit Studio.</p>
+          <p>It installs for your user only and does not need administrator rights. It adds Start menu shortcuts called ZOrbit Studio and ZOrbit Browser. The first time Studio opens, it starts on a Setup screen that checks the rest: it finds ZBrush, says whether to restart it, and has an Install button for the plugin on ZBrush 2022 to 2025.</p>
         </div>
       </li>
       <li>
@@ -612,7 +657,7 @@
       <aside class="faq-side">
         <label class="faq-search" hidden>
           <span class="faq-search-l">Search</span>
-          <input type="search" id="faqSearch" placeholder="Hotkey, fan, uninstall…" autocomplete="off" spellcheck="false">
+          <input type="search" id="faqSearch" placeholder="Hotkey, tags, browser…" autocomplete="off" spellcheck="false">
         </label>
         <nav class="faq-topics" aria-label="FAQ topics">
           <a href="#faq-basics">The basics</a>
@@ -677,6 +722,10 @@
           <details class="faq-q" id="q-restart">
             <summary>Why do I have to restart ZBrush?</summary>
             <div class="faq-a"><p>ZBrush reads <code>ZBRUSH_PLUGIN_PATH</code> only when it starts. Restart it once after installing and it loads the plugin, which starts ZOrbit. After that it starts with ZBrush on its own.</p></div>
+          </details>
+          <details class="faq-q" id="q-first-run">
+            <summary>Is there a first-run setup?</summary>
+            <div class="faq-a"><p>Yes. On a fresh install Studio opens on a Setup screen. It lists whether ZBrush was found, whether the plugin is loaded, whether ZBrush needs a restart, and has you try the ring once. Press Finish or Skip for now when you are done. If you close Studio without either, Setup comes back next time. It is Alt+6 in Studio, and Show Setup on next start at the bottom of the screen brings it back.</p></div>
           </details>
           <details class="faq-q" id="q-older">
             <summary>I use ZBrush 2022, 2023, 2024 or 2025. What is different?</summary>
@@ -761,6 +810,17 @@
             <summary>Does the ring take focus away from ZBrush?</summary>
             <div class="faq-a"><p>No. The ring window never takes keyboard focus, so ZBrush stays the active window underneath it.</p></div>
           </details>
+          <details class="faq-q" id="q-browser">
+            <summary>What is the Browser?</summary>
+            <div class="faq-a">
+              <p>A window with your brushes, alphas, materials and textures on four tabs, each with search, folders, tag chips and thumbnails. Press <kbd>Alt</kbd>+<kbd>B</kbd> to open it over ZBrush. New installs have that hotkey. If you have an older <code>radial.json</code>, set one on Settings &gt; Browser first. A Browser slot on a ring opens it too.</p>
+              <p>Switch tabs with <kbd>Ctrl</kbd>+<kbd>Tab</kbd>, type to search, use the arrow keys to move and press <kbd>Enter</kbd> to pick. Press the hotkey again while it is in front and the keyboard goes back to ZBrush. It also works without ZBrush running, so you can browse and tag items on their own.</p>
+            </div>
+          </details>
+          <details class="faq-q" id="q-favourites">
+            <summary>How do Favourites and Recent work?</summary>
+            <div class="faq-a"><p>Hover an item in the Browser or the Library and press the star in its corner, or select it and press <kbd>Ctrl</kbd>+<kbd>D</kbd>. Favourites is the first entry in the folders list on every tab. Recent sits under it and lists every brush, alpha, material or texture you picked in ZBrush, newest first, up to 24 per tab. A <code>{"tag": "favourite"}</code> slot opens a fan of your favourites on the ring.</p></div>
+          </details>
           <details class="faq-q" id="q-tablet">
             <summary>Does it work with a pen tablet?</summary>
             <div class="faq-a"><p>The ring opens from a keyboard key, so you point with the pen as you would with a mouse. Picks made mid-stroke wait for the pen to lift, and after each pick ZOrbit nudges the cursor by zero pixels to wake ZBrush’s pen tracking.</p></div>
@@ -799,12 +859,26 @@
               <p>Each slot does one of these:</p>
               <ul>
                 <li>Select a brush (<code>brush</code>).</li>
+                <li>Select an alpha, a material or a texture (<code>alpha</code>, <code>material</code>, <code>texture</code>).</li>
                 <li>Press any ZBrush button by its interface path (<code>press</code>).</li>
                 <li>Set a slider or value to a number (<code>set</code>).</li>
                 <li>Flip a switch (<code>toggle</code>).</li>
                 <li>Run a list of those in order (<code>steps</code>).</li>
                 <li>Open another ring (<code>menu</code>).</li>
+                <li>Open a fan of every item with a tag (<code>tag</code>).</li>
+                <li>Open the Browser (<code>browser</code>).</li>
               </ul>
+            </div>
+          </details>
+          <details class="faq-q" id="q-alpha-slot">
+            <summary>Can a slot load an alpha, material or texture?</summary>
+            <div class="faq-a"><p>Yes. Use <code>{"alpha": "Alpha 058"}</code>, <code>{"material": "SkinShade4"}</code> or <code>{"texture": "Txtr01"}</code>, or drag one in from the Library. The name is the file’s name without its extension, and capitals and spaces do not matter. If ZBrush has it loaded, it is selected. If not, ZOrbit loads it from its file first. A material goes into the selected material slot and replaces what was there, as in ZBrush. ZBrush 2022 to 2025 need the plugin updated first, with Update in Settings &gt; Older ZBrush.</p></div>
+          </details>
+          <details class="faq-q" id="q-tags">
+            <summary>What are tags, and how do I use them?</summary>
+            <div class="faq-a">
+              <p>A tag is a coloured label for brushes, alphas, materials and textures. An item can have several, and they all share one set of tags. In the Library, select items and press Tag..., or right-click one, then click a tag to put it on or take it off.</p>
+              <p>Favourites is a built-in tag with a star. It cannot be deleted or renamed. A tag slot, such as <code>{"tag": "blocking"}</code>, opens a fan of every item with that tag, brushes first and most used first. The fan holds up to 12, and a last More... slot opens the Browser on that tag. <a href="#q-tag-colours">Tag colours</a> can show the colour on the ring.</p>
             </div>
           </details>
           <details class="faq-q" id="q-how-many">
@@ -873,7 +947,11 @@
           </details>
           <details class="faq-q" id="q-colours">
             <summary>Can I change the colours, or hide the names?</summary>
-            <div class="faq-a"><p>Yes. There are five colours: slot fill, accent, highlight, text and lines. Any you leave alone keep their default, and Reset all colours puts them back. To show icons only, set Labels to none.</p></div>
+            <div class="faq-a"><p>Yes. There are five colours: slot fill, accent, highlight, text and lines. Any you leave alone keep their default, and Reset all colours puts them back. To show icons only, set Labels to none. Tags have colours of their own, see <a href="#q-tag-colours">tag colours</a>.</p></div>
+          </details>
+          <details class="faq-q" id="q-tag-colours">
+            <summary>How do I colour slots by tag?</summary>
+            <div class="faq-a"><p>Open Settings &gt; Tag colours. An item’s first tag can show on its slot as an icon tint, a glow or a band through the ring. Each has its own switch and an opacity, and a preview beside them shows the result. The band is on by default. A ring with no tagged slots has no band.</p></div>
           </details>
         </div>
 
@@ -881,7 +959,7 @@
           <h3>Studio and your files</h3>
           <details class="faq-q" id="q-studio">
             <summary>What does Studio do?</summary>
-            <div class="faq-a"><p>It edits your menus. The Menus screen has a live preview drawn by the same code as the real ring. The Library lets you search every brush ZBrush can load and drag them in. Settings covers size, animation, labels, colours, timing and the ZBrush bridge. Status shows whether ZBrush, the app and the bridge are running.</p></div>
+            <div class="faq-a"><p>It edits your menus. The Menus screen has a live preview drawn by the same code as the real ring. The Library lets you search every brush, alpha, material and texture ZBrush can load, tag them and drag them in. Setup walks a new install through its first steps. Settings covers size, animation, labels, colours, timing and the ZBrush bridge. Status shows whether ZBrush, the app and the bridge are running.</p></div>
           </details>
           <details class="faq-q" id="q-studio-open">
             <summary>Does Studio need to stay open?</summary>
@@ -909,11 +987,11 @@
           </details>
           <details class="faq-q" id="q-backup">
             <summary>How do I back up my menus or keep them in version control?</summary>
-            <div class="faq-a"><p>Copy <code>radial.json</code>. Studio also keeps the version before your last save as <code>radial.json.bak</code>. The file is plain JSON with two-space indentation, so it diffs cleanly in git.</p></div>
+            <div class="faq-a"><p>Settings &gt; Import and export has an Export button that saves your menus, settings and tags to one <code>.json</code> file. Or copy <code>radial.json</code> and <code>tags.json</code> from <code>%APPDATA%\ZOrbit</code> yourself. Studio also keeps the version before your last save as <code>radial.json.bak</code>. Both files are plain JSON, so they diff cleanly in git.</p></div>
           </details>
           <details class="faq-q" id="q-share">
             <summary>How do I share my menus with someone?</summary>
-            <div class="faq-a"><p>Send them <code>radial.json</code> to put in their <code>%APPDATA%\ZOrbit</code>. They need the same brushes, and any button paths must exist in their ZBrush. Icons that point at <code>.png</code> files on your disk do not travel with it. Studio has no import or export because the menus are that one file.</p></div>
+            <div class="faq-a"><p>Export from Settings &gt; Import and export and send them the <code>.json</code> file. They press Import, which shows what the file holds before anything changes. Menus and settings load as an unsaved change, so Undo takes them back. For tags they choose Merge or Replace, and Replace keeps their old tags as <code>tags.json.bak</code>. They need the same brushes, alphas, materials and textures, and any button paths must exist in their ZBrush. Icons that point at <code>.png</code> files on your disk do not travel with it. Your tags live in <code>%APPDATA%\ZOrbit\tags.json</code>.</p></div>
           </details>
           <details class="faq-q" id="q-reset">
             <summary>How do I go back to the starter menus?</summary>
@@ -928,6 +1006,7 @@
             <div class="faq-a">
               <p>Work down this list:</p>
               <ol>
+                <li>Open Studio’s Setup screen (Alt+6) first. It says which step is missing.</li>
                 <li>Make sure ZBrush is the front window. The hotkey is ignored everywhere else.</li>
                 <li>In ZBrush, open Zplugin &gt; ZOrbit &gt; Status. If the palette is missing, see the <a href="#q-no-palette">next question</a>.</li>
                 <li>If Status says the app is not running, press Start App, then read <code>app_stderr.log</code> and <code>radiald.log</code>.</li>
@@ -974,7 +1053,7 @@
           </details>
           <details class="faq-q" id="q-data">
             <summary>Does ZOrbit send any data?</summary>
-            <div class="faq-a"><p>No. There is no account, no tracking and no telemetry. The only network request is Studio’s update check, which asks GitHub for the latest release and sends nothing about you or your menus. The app that draws the ring and the ZBrush plugin make no network requests. On your own PC, the app keeps a count of which brushes you pick in <code>usage.json</code>, and that file never leaves it.</p></div>
+            <div class="faq-a"><p>No. There is no account, no tracking and no telemetry. The only network request is Studio’s update check, which asks GitHub for the latest release and sends nothing about you or your menus. The app that draws the ring and the ZBrush plugin make no network requests. On your own PC, the app keeps a count of which brushes you pick, and your recent picks, in <code>usage.json</code>, and that file never leaves it.</p></div>
           </details>
           <details class="faq-q" id="q-offline">
             <summary>Does it need an internet connection?</summary>
@@ -986,7 +1065,7 @@
           </details>
           <details class="faq-q" id="q-zbrush-access">
             <summary>What can ZOrbit do inside ZBrush?</summary>
-            <div class="faq-a"><p>Only what is on your menus: select a brush, press a button, set a slider, flip a switch, or a list of those. It does them through ZBrush’s own commands, and <code>radial.json</code> is plain text, so you can read exactly what each slot does.</p></div>
+            <div class="faq-a"><p>Only what is on your menus: select a brush, alpha, material or texture, press a button, set a slider, flip a switch, or a list of those. It does them through ZBrush’s own commands, and <code>radial.json</code> is plain text, so you can read exactly what each slot does.</p></div>
           </details>
           <details class="faq-q" id="q-build">
             <summary>I would rather not run a binary I did not build.</summary>
