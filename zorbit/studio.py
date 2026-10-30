@@ -804,7 +804,8 @@ class Api(webapi.LibraryApi, webapi.TagApi):
 
     def open_url(self, url):
         """Opens one of the project's own links in the default browser (nothing else is allowed)."""
-        allowed = ("https://github.com/combwizard/zorbit", "https://www.gnu.org/licenses/gpl-3.0.html")
+        allowed = ("https://github.com/combwizard/zorbit", "https://zorbit.lol/docs",
+                   "https://www.gnu.org/licenses/gpl-3.0.html")
         ok = isinstance(url, str) and any(url == a or url.startswith(a + c) for a in allowed for c in "/?#")
         if ok:
             os.startfile(url)

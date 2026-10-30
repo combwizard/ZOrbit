@@ -16,19 +16,20 @@ If you know pie menus from Blender or marking menus from Maya, ZOrbit brings tha
 
 **Contents**
 
+- [Documentation](#documentation)
 - [Features](#features)
 - [Requirements](#requirements)
 - [Install](#install)
-  - [Upgrading from Radial Menu for ZBrush](#upgrading-from-radial-menu-for-zbrush)
-  - [ZBrush 2022 to 2025](#zbrush-2022-to-2025)
   - [Windows says "Windows protected your PC"](#windows-says-windows-protected-your-pc)
 - [First steps](#first-steps)
-- [Uninstall](#uninstall)
+- [Upgrading, uninstalling and troubleshooting](#upgrading-uninstalling-and-troubleshooting)
 - [Build from source](#build-from-source)
-- [How it works](#how-it-works)
-- [Troubleshooting](#troubleshooting)
 - [Licence](#licence)
 - [Disclaimer](#disclaimer)
+
+## Documentation
+
+The full documentation is at **[zorbit.lol/docs](https://zorbit.lol/docs/)**: every setting and item type, tags, the browser, hotkeys, files and logs, and how ZOrbit talks to ZBrush.
 
 ## Features
 
@@ -50,7 +51,7 @@ If you know pie menus from Blender or marking menus from Maya, ZOrbit brings tha
 
 ### Fan-out submenus
 
-A submenu can open as a fan instead of a new ring. Turn on **Fan out when opened from another menu** in the menu's settings in Studio (or give the menu `"fan": true`). Hover its slot and the items spread out beyond it, joined by dashed lines, with the ring you came from still in place. Release over an item, click it, or flick past it to pick it. An item in a fan can be a fan submenu too, so one stroke can run three fans deep. Near a screen edge, where there is no room, the submenu opens as a ring as before.
+A menu can open as a fan: hover its slot and its items spread out beyond it, with the ring you came from still in place. The [menus page](https://zorbit.lol/docs/menus/#submenu) explains how to turn it on.
 
 <p align="center">
   <img src="docs/images/fan-out.gif" alt="Holding Q: hovering More Brushes fans its brushes out to the left; moving to Tools fans out its switches, SubDivide fans out its sizes above that, and a flick past 1.00 picks it" width="520">
@@ -59,7 +60,7 @@ A submenu can open as a fan instead of a new ring. Turn on **Fan out when opened
 ## Requirements
 
 - Windows 10 or 11
-- ZBrush 2022 or newer. ZBrush 2026 and newer load the Python plugin that the installer sets up. ZBrush 2022 to 2025 have no Python API, so they get a ZScript plugin, which you install from Studio (see [ZBrush 2022 to 2025](#zbrush-2022-to-2025)).
+- ZBrush 2022 or newer. ZBrush 2026 and newer load the Python plugin that the installer sets up. ZBrush 2022 to 2025 have no Python API, so they get a ZScript plugin, which you install from Studio (see [ZBrush 2022 to 2025](https://zorbit.lol/docs/install/#zbrush-2022-to-2025)).
 - The Microsoft Edge WebView2 runtime, which Studio uses for its window. It is part of Windows 11 and of up-to-date Windows 10.
 
 ## Install
@@ -72,22 +73,6 @@ A submenu can open as a fan instead of a new ring. Turn on **Fan out when opened
 The first time you open **ZOrbit Studio** it starts on its **Setup** screen. Setup walks through the rest: it finds your ZBrush, tells you whether to restart it, installs the plugin for ZBrush 2022 to 2025, and has you try the ring once. You can reopen it any time with Alt+6.
 
 The first run puts a starter set of menus in `%APPDATA%\ZOrbit\radial.json`. They use only brushes that come with ZBrush.
-
-### Upgrading from Radial Menu for ZBrush
-
-ZOrbit used to be called Radial Menu for ZBrush. Run the new installer over the old install. It moves the program to `%LOCALAPPDATA%\Programs\ZOrbit` and removes the old folder, its Start menu shortcut and its plugin path entry. Your menus and settings are copied to `%APPDATA%\ZOrbit` on the first start, and learned auto slots to `%LOCALAPPDATA%\ZOrbit`. The old `RadialMenu` folders stay where they are; you can delete them.
-
-In ZBrush 2026 the palette is now **Zplugin > ZOrbit**. If you bound F9 to the old **Apply** by hand, bind it again on **Zplugin > ZOrbit > Apply**: Ctrl+Alt+click it, press **F9**, then **Preferences > Hotkeys > Store**. In ZBrush 2022 to 2025, Studio shows the old plugin as **Update available**. **Update** replaces it with the ZOrbit plugin.
-
-### ZBrush 2022 to 2025
-
-These versions load plugins only from their own `ZStartup\ZPlugs64` folder, so Studio puts the plugin there:
-
-1. Open **ZOrbit Studio** and go to **Settings > Older ZBrush**. It lists the 2022 to 2025 versions it found. If yours is missing, use **Add a ZBrush folder**. The **Setup** screen (Alt+6) lists the same versions with the same **Install** button.
-2. Click **Install**. A ZBrush under Program Files asks for administrator rights once.
-3. Restart that ZBrush.
-
-The plugin has no listener window, so every pick in these versions goes through the bridge key, F9. The plugin binds F9 to **Zplugin > ZOrbit > Apply** itself, so there is nothing to set up. If you change the bridge key in Studio, bind the new key by hand in each version: Ctrl+Alt+click **Apply**, press the key, then **Preferences > Hotkeys > Store**. When a new version of ZOrbit has a newer plugin, **Settings** shows a badge and the row says **Update available**.
 
 ### Windows says "Windows protected your PC"
 
@@ -106,15 +91,15 @@ To continue, click **More info**, then **Run anyway**. If you would rather not r
   <img src="docs/images/studio.png" alt="ZOrbit Studio: the menu list, the ring preview and the brush library">
 </p>
 
-The [user guide](docs/user-guide.md) covers every setting and item type.
+The [documentation](https://zorbit.lol/docs/) covers every setting and item type.
 
-## Uninstall
+## Upgrading, uninstalling and troubleshooting
 
-Open **Windows Settings > Apps > Installed apps**, find **ZOrbit** and choose **Uninstall**. Restart ZBrush afterwards so it lets go of the plugin.
-
-The uninstaller cannot reach the plugin inside a ZBrush 2022 to 2025. Remove it first with **Studio > Settings > Older ZBrush > Remove**, or afterwards by deleting `ZOrbitBridge.zsc` and the `ZOrbitData` folder from that ZBrush's `ZStartup\ZPlugs64`.
-
-Your menus and logs are not part of the program. They live in `%APPDATA%\ZOrbit` and `%LOCALAPPDATA%\ZOrbit`; delete those folders if you want no trace.
+- **Upgrading from Radial Menu for ZBrush:** run the new installer over the old one. Your menus and settings are copied over on the first start. See [Upgrading from Radial Menu for ZBrush](https://zorbit.lol/docs/install/#upgrading-from-radial-menu-for-zbrush).
+- **ZBrush 2022 to 2025:** these versions get a ZScript plugin that you install from Studio. See [ZBrush 2022 to 2025](https://zorbit.lol/docs/install/#zbrush-2022-to-2025).
+- **Uninstall:** remove ZOrbit in **Windows Settings > Apps > Installed apps**. Remove the plugin from a ZBrush 2022 to 2025 first. See [Uninstall](https://zorbit.lol/docs/install/#uninstall).
+- **How it works:** a small app draws the ring outside ZBrush, and a plugin inside ZBrush carries out the pick. See [How ZOrbit talks to ZBrush](https://zorbit.lol/docs/bridge/).
+- **Something not working?** See [Troubleshooting](https://zorbit.lol/docs/troubleshooting/).
 
 ## Build from source
 
@@ -128,44 +113,6 @@ pip install -r requirements-dev.txt
 The script's header lists what else it needs and where the installer ends up.
 
 To run straight from a checkout while you work on the code, use `tools\dev-install.ps1`. It registers the checkout's `bridge` folder in `ZBRUSH_PLUGIN_PATH` and adds the Start menu shortcut, and `-Uninstall` takes both away again. Add `-WhatIf` to see what it would do first.
-
-## How it works
-
-ZOrbit has two halves.
-
-- **The app** (`zorbit\`) runs outside ZBrush. A keyboard hook watches for your menu hotkeys, but only while ZBrush is the front window. When one is pressed it draws the ring in a window that never takes focus, so ZBrush keeps working underneath.
-- **The bridge** (`bridge\zorbit_bridge.py`) runs inside ZBrush as a Python plugin. It adds the **Zplugin > ZOrbit** palette, starts the app, and carries out picks by calling ZBrush's own commands.
-
-When you pick a slot, the app writes the request to a small file and posts a Windows message to a hidden listener window the bridge keeps inside ZBrush. The bridge reads the file and does the work on ZBrush's main thread. If the listener is not available, the app can press a fallback key (F9) that you bind to **Zplugin > ZOrbit > Apply**.
-
-ZBrush 2022 to 2025 have no Python API, so for them the bridge is a ZScript plugin (`bridge\zscript\`) with the same palette. ZScript cannot host a listener window, so the app always presses the bridge key there. The app also writes each pick in a plain line-by-line form that ZScript can read, and loads brushes from that ZBrush version's own files.
-
-The app exits when ZBrush does.
-
-## Troubleshooting
-
-**Nothing happens when I press Q.**
-Open Studio's **Setup** screen (Alt+6). It says which step is missing. Make sure ZBrush is the front window. Then in ZBrush open **Zplugin > ZOrbit > Status**. It should say the listener is verified and the app is running. If the palette is missing, ZBrush did not load the plugin: restart it, and check that `ZBRUSH_PLUGIN_PATH` (in Windows' environment variables, user section) contains the bridge folder.
-
-**The ring opens but picks do nothing.**
-Open **Zplugin > ZOrbit > Status** and check that the listener says "verified". Look at `bridge.log`, which shows exactly what ZBrush did with each pick. Failed items are listed there, for example a button path that does not exist.
-
-**The browser does not open.**
-It needs ZBrush (or the browser itself, to close it) in front, and a hotkey set under **Settings > Browser** (new installs have Alt+B) or a **Browser** slot. In ZBrush 2022 to 2025 a pick is dropped if ZBrush does not get the focus back within 2 seconds. `popout.log` and the `browser` lines of `radiald.log` say what happened.
-
-**Use the fallback key.**
-In ZBrush, Ctrl+Alt+click **Zplugin > ZOrbit > Apply**, press **F9**, then store it in **Preferences > Hotkeys > Store**. With the bridge mode on `auto` (the default), ZOrbit presses F9 when the listener does not answer.
-
-**ZBrush 2022 to 2025: the ring opens, but picks do nothing.**
-Picks there only arrive through the bridge key. Hover **Zplugin > ZOrbit > Apply**: its hotkey should match the bridge key in Studio (F9 unless you changed it). If **Settings > Older ZBrush** says **Update available**, update the plugin; older plugins don't bind F9 themselves. If you use another key, bind it to **Apply** and click **Preferences > Hotkeys > Store**; a binding that was not stored is gone after a restart. `zscript_bridge.log` shows what the last pick did.
-
-**Logs.**
-`%LOCALAPPDATA%\ZOrbit` holds `radiald.log` (the app), `bridge.log` (ZBrush side), `zscript_bridge.log` (ZBrush 2022 to 2025: the last pick), `studio.log` (how Studio started), `popout.log` (the browser) and `app_stderr.log` (crashes at startup). Studio's **Status** screen shows the tail of the app log and has a button that opens the folder.
-
-**Windows protected your PC.**
-See [above](#windows-says-windows-protected-your-pc).
-
-More is in the [user guide](docs/user-guide.md#troubleshooting).
 
 ## Licence
 

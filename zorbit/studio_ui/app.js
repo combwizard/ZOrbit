@@ -3820,7 +3820,7 @@ function deriveSteps(d, tryFrom, ctx) {
   return [s1, s2, s3, s4, s5];
 }
 
-const USER_GUIDE_URL = 'https://github.com/combwizard/zorbit/blob/main/docs/user-guide.md';
+const USER_GUIDE_URL = 'https://zorbit.lol/docs/';
 const SETUP_WHERE = [
   ['Menus', 'Edit the rings and what each slot does', 'menus'],
   ['Library', 'Every brush ZBrush can load, with tags', 'library'],

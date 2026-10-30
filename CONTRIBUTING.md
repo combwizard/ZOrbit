@@ -17,7 +17,9 @@ Bug reports and ideas are welcome on the
 1. Fork the repository and make a branch.
 2. Keep the change focused: one fix or feature per pull request, with a short description of what and why.
 3. Match the style of the surrounding code. Keep the ring code fast: a frame should cost a few milliseconds.
-4. Try it in ZBrush if you can, and update `docs\user-guide.md` and `CHANGELOG.md` when behaviour changes.
+4. Try it in ZBrush if you can, and update the page in `docs\` and `CHANGELOG.md` when behaviour changes.
+   The docs are published at <https://zorbit.lol/docs/>; preview them with
+   `pip install -r requirements-docs.txt` and `mkdocs serve`.
 5. By contributing, you agree that your work is licensed under the GPL-3.0, like the rest of the project.
 
 ## Development setup

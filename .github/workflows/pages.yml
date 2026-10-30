@@ -1,0 +1,67 @@
+name: pages
+
+# Publishes zorbit.lol: the landing page from the `site` branch at the root and the
+# documentation from `main` (docs/ + mkdocs.yml) under /docs/. The `site` branch has a
+# copy of this workflow so a push to either branch deploys both halves.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "docs/**"
+      - "mkdocs.yml"
+      - "requirements-docs.txt"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: site
+          path: site
+
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          path: main
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: main/requirements-docs.txt
+
+      - name: Stage landing page
+        shell: pwsh
+        run: ./site/stage.ps1 -Out _site
+
+      - name: Build docs
+        env:
+          NO_MKDOCS_2_WARNING: "1"
+        run: |
+          pip install -r main/requirements-docs.txt
+          mkdocs build --strict -f main/mkdocs.yml -d "$GITHUB_WORKSPACE/_site/docs"
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - id: deployment
+        uses: actions/deploy-pages@v4

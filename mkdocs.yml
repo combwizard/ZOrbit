@@ -1,0 +1,85 @@
+# ZOrbit documentation, published at https://zorbit.lol/docs/ by .github/workflows/pages.yml.
+# Preview locally:  pip install -r requirements-docs.txt  then  mkdocs serve
+site_name: ZOrbit
+site_description: A radial brush menu for ZBrush.
+site_url: https://zorbit.lol/docs/
+repo_url: https://github.com/combwizard/zorbit
+repo_name: combwizard/zorbit
+edit_uri: edit/main/docs/
+copyright: ZOrbit is free software under the GPL-3.0. It is not affiliated with or endorsed by Maxon.
+
+docs_dir: docs
+exclude_docs: |
+  user-guide.md
+
+nav:
+  - Home: index.md
+  - Getting started:
+      - install.md
+      - getting-started.md
+  - Using ZOrbit:
+      - studio.md
+      - menus.md
+      - tags.md
+      - browser.md
+      - hotkeys.md
+      - appearance.md
+      - files.md
+  - Under the hood:
+      - bridge.md
+      - troubleshooting.md
+      - building.md
+
+theme:
+  name: material
+  logo: assets/icon.png
+  favicon: assets/icon.png
+  font: false
+  icon:
+    repo: fontawesome/brands/github
+  palette:
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/weather-sunny
+        name: Light mode
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/weather-night
+        name: Dark mode
+  features:
+    - navigation.sections
+    - navigation.footer
+    - navigation.top
+    - navigation.instant
+    - search.suggest
+    - search.highlight
+    - toc.follow
+    - content.code.copy
+    - content.action.edit
+
+extra_css:
+  - stylesheets/extra.css
+
+extra:
+  homepage: https://zorbit.lol/
+  generator: false
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.superfences
+  - pymdownx.details
+
+validation:
+  links:
+    anchors: warn
