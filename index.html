@@ -1,0 +1,1046 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ZOrbit - a radial brush menu for ZBrush, free and open source</title>
+<meta name="description" content="Press Q over ZBrush and a ring of your favourite brushes appears around the cursor. Free, open source (GPL-3.0), for Windows.">
+<meta name="theme-color" content="#141416">
+<meta property="og:title" content="ZOrbit — a radial brush menu for ZBrush">
+<meta property="og:description" content="Press Q over ZBrush and a ring of your favourite brushes appears around the cursor. Free, open source (GPL-3.0).">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://combwizard.github.io/ZOrbit/">
+<meta property="og:image" content="https://combwizard.github.io/ZOrbit/images/ring.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="ZOrbit — a radial brush menu for ZBrush">
+<meta name="twitter:description" content="Press Q over ZBrush and a ring of your favourite brushes appears around the cursor. Free, open source (GPL-3.0).">
+<meta name="twitter:image" content="https://combwizard.github.io/ZOrbit/images/ring.png">
+<link rel="icon" type="image/png" href="favicon.png">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<svg class="sprite" width="0" height="0" aria-hidden="true" focusable="false">
+  <symbol id="gh" viewBox="0 0 16 16"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.6 7.6 0 0 1 4 0c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></symbol>
+</svg>
+
+<header class="top">
+  <div class="top-inner">
+  <a class="brand" href="#">
+    <span class="logo" aria-hidden="true">
+      <svg viewBox="0 0 32 32" width="32" height="32">
+        <circle cx="16" cy="16" r="14.5" fill="#1a1b1e" stroke="rgba(255,255,255,.10)"/>
+        <circle cx="16" cy="16" r="9.5" fill="none" stroke="rgba(248,107,51,.28)" stroke-width="1"/>
+        <g fill="none" stroke-width="1.6">
+          <circle cx="16" cy="6.6" r="2.3" stroke="#f86b33"/><circle cx="24.1" cy="11.3" r="2.3" stroke="#f86b33"/>
+          <circle cx="24.1" cy="20.7" r="2.3" stroke="#4dc8e9"/><circle cx="16" cy="25.4" r="2.3" stroke="#f86b33"/>
+          <circle cx="7.9" cy="20.7" r="2.3" stroke="#f86b33"/><circle cx="7.9" cy="11.3" r="2.3" stroke="#f86b33"/>
+        </g>
+        <circle cx="16" cy="16" r="2.6" fill="#f86b33"/>
+      </svg>
+    </span>
+    <span class="wordmark"><span class="wordmark-z">Z</span>Orbit</span>
+  </a>
+  <nav class="nav" aria-label="Page">
+    <a href="#features">Features</a>
+    <a href="#price">Price</a>
+    <a href="#reviews">Reviews</a>
+    <a href="#install">Install</a>
+    <a href="#faq">FAQ</a>
+  </nav>
+  <a class="btn gh" href="https://github.com/combwizard/zorbit" aria-label="ZOrbit on GitHub"><svg class="gh-mark" width="20" height="20" aria-hidden="true"><use href="#gh"/></svg><span class="gh-label">GitHub</span></a>
+  <a class="btn primary download" href="https://github.com/combwizard/zorbit/releases/latest">Download</a>
+  <span class="progress" aria-hidden="true"></span>
+  </div>
+</header>
+
+<main id="main">
+  <section class="hero-wrap" id="hero">
+    <div class="hero-bg" aria-hidden="true">
+      <span class="orb orb-a"></span>
+      <span class="orb orb-b"></span>
+      <span class="orb orb-c"></span>
+      <span class="hero-grid"></span>
+      <span class="hero-spot"></span>
+    </div>
+    <div class="hero">
+      <div class="hero-ring">
+        <div class="orbits" aria-hidden="true">
+          <span class="orbit o1"></span>
+          <span class="orbit o2"></span>
+          <span class="orbit o3"></span>
+        </div>
+        <div class="ring-mount" id="ringMount">
+          <noscript>
+            <img src="images/ring.png" alt="The Brushes radial menu with ClayBuildup hovered" width="550" height="550">
+          </noscript>
+        </div>
+      </div>
+      <div class="hero-copy">
+        <p class="badge"><span class="badge-dot" aria-hidden="true"></span>Free forever · Open source</p>
+        <h1><span class="shine"><span class="wordmark-z">Z</span>Orbit</span></h1>
+        <p class="tagline">A radial brush menu for ZBrush</p>
+        <p class="lede">Press <kbd>Q</kbd> over ZBrush and a ring of your favourite brushes and buttons appears around the cursor. Flick toward one and let go.</p>
+        <p class="key-note"><span class="key-note-icon" aria-hidden="true">⌨</span>Q is just the default. Use any key or combination, and give each menu its own.</p>
+        <div class="btn-row">
+          <a class="btn primary download big" href="https://github.com/combwizard/zorbit/releases/latest">Download</a>
+          <a class="btn big gh" href="https://github.com/combwizard/zorbit"><svg class="gh-mark" width="20" height="20" aria-hidden="true"><use href="#gh"/></svg>View on GitHub</a>
+          <button class="btn big" type="button" id="replayBtn">Replay open</button>
+        </div>
+        <ul class="compat" aria-label="Compatibility">
+          <li>ZBrush 2022 or newer</li>
+          <li>Windows 10 or 11</li>
+          <li>Free</li>
+          <li>GPL-3.0</li>
+        </ul>
+        <p class="fhint">Try it: click a slot, or press on the ring and drag toward one. More Brushes and Tools fan out in place, and SubDivide fans out of Tools when there is room (if not, it opens as a ring). This preview uses the starter menus with those three set to fan out; inside ZBrush the slots and keys are yours.</p>
+      </div>
+      <div class="anim-panel">
+        <div class="anim-row" id="animRow" aria-label="Open animations"></div>
+        <label class="speed" for="speedRange">
+          <span class="speed-l">Speed</span>
+          <input type="range" id="speedRange" min="0.1" max="1" step="0.05" value="0.6" aria-describedby="speedNote">
+          <output id="speedOut" for="speedRange">0.6×</output>
+          <span class="speed-note" id="speedNote">1× is the real speed</span>
+        </label>
+      </div>
+    </div>
+  </section>
+
+  <div class="marquee" aria-hidden="true">
+    <div class="marquee-track">
+      <span>Free</span><i></i><span>Open source</span><i></i><span>No account</span><i></i><span>No trial</span><i></i><span>No subscription</span><i></i><span>Twelve open animations</span><i></i><span>Submenus</span><i></i><span>Fan-out submenus</span><i></i><span>Any hotkey</span><i></i><span>Flick to pick</span><i></i><span>Plain JSON menus</span><i></i><span>GPL-3.0</span><i></i>
+      <span>Free</span><i></i><span>Open source</span><i></i><span>No account</span><i></i><span>No trial</span><i></i><span>No subscription</span><i></i><span>Twelve open animations</span><i></i><span>Submenus</span><i></i><span>Fan-out submenus</span><i></i><span>Any hotkey</span><i></i><span>Flick to pick</span><i></i><span>Plain JSON menus</span><i></i><span>GPL-3.0</span><i></i>
+    </div>
+  </div>
+
+  <section class="stats" aria-label="At a glance">
+    <div class="stat"><span class="stat-n" data-count="12">12</span><span class="stat-l">open animations</span></div>
+    <div class="stat"><span class="stat-n" data-count="2">2</span><span class="stat-l">rings deep in one stroke</span></div>
+    <div class="stat"><span class="stat-n">0</span><span class="stat-l">accounts to make</span></div>
+    <div class="stat"><span class="stat-n" data-count="0" data-from="99.99" data-prefix="$" data-decimals="2">$0.00</span><span class="stat-l">forever</span></div>
+  </section>
+
+  <section class="section" id="features">
+    <header class="section-head">
+      <p class="eyebrow">Features</p>
+      <h2>Stay in the <span class="grad">canvas</span>.</h2>
+    </header>
+
+    <article class="feature">
+      <div class="feature-copy">
+        <h3>Flick, release, or click.</h3>
+        <p>Hold the hotkey and flick past a slot, or move toward it and release. Or tap the hotkey and click. A pick that arrives mid-stroke waits until you lift the pen.</p>
+      </div>
+      <figure class="feature-media">
+        <picture>
+          <source srcset="images/ring.png" media="(prefers-reduced-motion: reduce)">
+          <img src="images/open-animation.gif" alt="Holding Q: the ring opens around the cursor, a submenu opens on hover, and a flick picks ClayTubes" width="550" height="412" loading="lazy">
+        </picture>
+      </figure>
+    </article>
+
+    <article class="feature flip">
+      <div class="feature-copy">
+        <h3>More than brushes.</h3>
+        <p>A slot can select a brush, press any ZBrush button, set a slider, flip a switch, run several of those in a row, or open another ring. Hover a submenu and one stroke reaches an item two rings deep.</p>
+      </div>
+      <figure class="feature-media">
+        <img src="images/ring.png" alt="Brushes menu with ClayBuildup hovered" width="600" height="450" loading="lazy">
+      </figure>
+    </article>
+
+    <article class="feature">
+      <div class="feature-copy">
+        <h3>Fans that open in place.</h3>
+        <p>Switch a submenu to fan out and it opens where it is. Its items spread in an arc beyond its slot, the ring you came from stays put, and a fan item can fan out again, up to three deep. Release, click or flick to pick, just as on the ring. Near a screen edge it opens as a ring instead.</p>
+        <p class="feature-sub">One switch per menu in Studio, or <code>"fan": true</code> in the JSON. Try Tools in the ring at the top of the page.</p>
+      </div>
+      <figure class="feature-media">
+        <picture>
+          <source srcset="images/fan.png" media="(prefers-reduced-motion: reduce)">
+          <img src="images/fan-out.gif" alt="Holding Q: hovering More Brushes fans its brushes out to the left; moving to Tools fans out its switches, SubDivide fans out its sizes above that, and a flick past 1.00 picks it" width="594" height="771" loading="lazy">
+        </picture>
+      </figure>
+    </article>
+
+    <article class="feature flip">
+      <div class="feature-copy">
+        <h3>Any key you like.</h3>
+        <p>Q is only where it starts. Record a new hotkey in Studio by pressing it: a letter, a digit, F1 to F24 or punctuation, with any mix of Ctrl, Alt and Shift. Give every menu its own key and open them straight from the canvas.</p>
+        <p class="feature-sub">By default ZBrush never sees the key, so its own shortcut for that key doesn’t fire as well. Switch that off per menu if you want both.</p>
+      </div>
+      <figure class="feature-media keys-media" aria-hidden="true">
+        <div class="keys-panel">
+          <div class="keys-head">Hotkeys</div>
+          <div class="keys-row default"><span class="keys-menu">Brushes</span><span class="keys"><kbd>Q</kbd></span></div>
+          <div class="keys-row"><span class="keys-menu">Tools</span><span class="keys"><kbd>Alt</kbd><i>+</i><kbd>G</kbd></span></div>
+          <div class="keys-row"><span class="keys-menu">Masking</span><span class="keys"><kbd>F5</kbd></span></div>
+          <div class="keys-row"><span class="keys-menu">Materials</span><span class="keys"><kbd>Ctrl</kbd><i>+</i><kbd>Shift</kbd><i>+</i><kbd>1</kbd></span></div>
+          <div class="keys-row rec">
+            <span class="keys-menu">Your next menu</span>
+            <span class="keys" id="keysRec" data-cycle="`|Alt+W|F9|Shift+Space|Ctrl+E"><span class="rec-dot"></span><kbd>`</kbd></span>
+          </div>
+        </div>
+      </figure>
+    </article>
+
+    <article class="feature">
+      <div class="feature-copy">
+        <h3>Edit it in Studio.</h3>
+        <p>ZOrbit Studio shows a live preview of the real ring. Drag brushes in from a searchable library, record hotkeys, change colours, size and animation. Twelve open animations, from instant to a swirling spiral.</p>
+      </div>
+      <figure class="feature-media">
+        <img src="images/studio.png" alt="ZOrbit Studio: the menu list, the ring preview and the brush library" width="800" height="500" loading="lazy">
+      </figure>
+    </article>
+
+    <p class="under-note">It starts and stops with ZBrush. Your menus live in plain JSON, so you can back them up, share them and keep them in version control.</p>
+  </section>
+
+  <section class="section" id="price">
+    <header class="section-head">
+      <p class="eyebrow">Price</p>
+      <h2>One payment. <span class="grad">Zero of them.</span></h2>
+    </header>
+    <div class="price-card glow-card">
+      <div class="price-amount"><span class="currency">$</span>0.00</div>
+      <p class="price-sub">Forever. Per machine. Per sculptor.</p>
+      <dl class="price-rows">
+        <div><dt>Seats</dt><dd>All of them</dd></div>
+        <div><dt>Expires</dt><dd>Never</dd></div>
+        <div><dt>Account</dt><dd>None</dd></div>
+        <div><dt>Trial</dt><dd>None</dd></div>
+      </dl>
+      <a class="btn primary download" href="https://github.com/combwizard/zorbit/releases/latest">Download</a>
+      <a class="btn gh" href="https://github.com/combwizard/zorbit"><svg class="gh-mark" width="18" height="18" aria-hidden="true"><use href="#gh"/></svg>Read the source on GitHub</a>
+      <p class="price-foot">Free, and the licence is <a href="https://github.com/combwizard/zorbit/blob/main/LICENSE">GPL-3.0</a>.</p>
+    </div>
+  </section>
+
+  <section class="section" id="reviews">
+    <header class="section-head">
+      <p class="eyebrow">Reviews</p>
+      <h2>Loved by these <span class="grad">people who do not exist</span>.</h2>
+    </header>
+    <article class="spotlight">
+      <div class="spotlight-copy">
+        <p class="spotlight-eyebrow">AI-generated persona</p>
+        <blockquote>
+          <p class="pull">“I stopped digging through palettes. Then I noticed I never paid for it.”</p>
+          <p class="pull-long">I hold Q, flick, and I’m on ClayBuildup before I lose the form I was chasing. I keep two menus, one for blockout and one for detail. I went looking for a checkout to say thanks properly. There isn’t one, so I’m saying it here.</p>
+        </blockquote>
+        <div class="spotlight-who">
+          <img class="spotlight-face" src="personas/persona-1.jpg" alt="" width="48" height="48" loading="lazy">
+          <div>
+            <p class="review-name">Rafa Subdivido</p>
+            <p class="spotlight-role">Stylized props</p>
+          </div>
+        </div>
+        <ul class="chips" aria-label="About this reviewer">
+          <li>AI-generated</li>
+          <li>Not a real person</li>
+          <li>Paid $0.00</li>
+        </ul>
+      </div>
+      <figure class="spotlight-media">
+        <img src="personas/persona-1-wide.jpg" alt="AI-generated image of a fictional artist at his desk, holding up a pen" width="760" height="570" loading="lazy">
+        <span class="media-tag">AI-generated image</span>
+      </figure>
+    </article>
+
+    <article class="spotlight flip">
+      <div class="spotlight-copy">
+        <p class="spotlight-eyebrow">AI-generated persona</p>
+        <blockquote>
+          <p class="pull">“Chat asked for a discount code. I told them it’s free. They asked again anyway.”</p>
+          <p class="pull-long">I sculpt live most nights. With the ring I stay on the canvas instead of digging through palettes on stream. I keep a menu per session: blockout, details, and one that only holds Move, because chat kept asking where Move was.</p>
+        </blockquote>
+        <div class="spotlight-who">
+          <img class="spotlight-face" src="personas/persona-2.jpg" alt="" width="48" height="48" loading="lazy">
+          <div>
+            <p class="review-name">Jun Polyloop</p>
+            <p class="spotlight-role">Streams sculpting sessions</p>
+          </div>
+        </div>
+        <ul class="chips" aria-label="About this reviewer">
+          <li>AI-generated</li>
+          <li>Not a real person</li>
+          <li>Paid $0.00</li>
+        </ul>
+      </div>
+      <figure class="spotlight-media">
+        <img src="personas/persona-2-wide.jpg" alt="AI-generated image of a fictional streamer smiling beside a microphone" width="438" height="548" loading="lazy">
+        <span class="media-tag">AI-generated image</span>
+      </figure>
+    </article>
+
+    <article class="spotlight">
+      <div class="spotlight-copy">
+        <p class="spotlight-eyebrow">AI-generated persona</p>
+        <blockquote>
+          <p class="pull">“I came to ZBrush from 2D. The ring is the one part that didn’t need a tutorial.”</p>
+          <p class="pull-long">My brushes live on Q and my masking tools on Alt+M, which is a sentence I never expected to say on my podcast. I did record a whole episode on what it costs. It was a short episode.</p>
+        </blockquote>
+        <div class="spotlight-who">
+          <img class="spotlight-face" src="personas/persona-3.jpg" alt="" width="48" height="48" loading="lazy">
+          <div>
+            <p class="review-name">Mara Dynamesh</p>
+            <p class="spotlight-role">Illustrator, new to 3D</p>
+          </div>
+        </div>
+        <ul class="chips" aria-label="About this reviewer">
+          <li>AI-generated</li>
+          <li>Not a real person</li>
+          <li>Paid $0.00</li>
+        </ul>
+      </div>
+      <figure class="spotlight-media">
+        <img src="personas/persona-3-wide.jpg" alt="AI-generated image of a fictional illustrator with headphones, smiling at a studio microphone and holding a stylus" width="760" height="570" loading="lazy">
+        <span class="media-tag">AI-generated image</span>
+      </figure>
+    </article>
+
+    <div class="wall" id="reviewWall">
+      <div class="wall-row">
+        <div class="wall-track">
+          <figure class="review">
+            <div class="review-who">
+              <span class="review-face review-dot" aria-hidden="true"></span>
+              <div>
+                <p class="review-name">The Centre Dot</p>
+                <p class="review-role">Present at every open</p>
+              </div>
+            </div>
+            <p class="stars" role="img" aria-label="Five out of five stars">★★★★★</p>
+            <blockquote><p>“Every menu opens around me. I have no notes.”</p></blockquote>
+            <p class="review-src ok">✓ Verified centre</p>
+          </figure>
+          <figure class="review">
+            <div class="review-who">
+              <span class="review-face review-zero" aria-hidden="true">#0</span>
+              <div>
+                <p class="review-name">Satisfied Customer #0</p>
+                <p class="review-role">Has paid nothing</p>
+              </div>
+            </div>
+            <p class="stars" role="img" aria-label="Five out of five stars">★★★★★</p>
+            <blockquote><p>“Tried to buy it. There was nothing to pay for. Five stars.”</p></blockquote>
+            <p class="review-src ok">✓ Verified non-purchase</p>
+          </figure>
+          <figure class="review">
+            <div class="review-who">
+              <span class="review-face review-key" aria-hidden="true">Q</span>
+              <div>
+                <p class="review-name">The Q Key</p>
+                <p class="review-role">Recently promoted</p>
+              </div>
+            </div>
+            <p class="stars" role="img" aria-label="Five out of five stars">★★★★★</p>
+            <blockquote><p>“I used to have one job. Now I hold up a whole ring of brushes. Same keycap, bigger responsibilities.”</p></blockquote>
+            <p class="review-src">Held, not pressed</p>
+          </figure>
+          <figure class="review">
+            <div class="review-who">
+              <span class="review-face review-initials tint-amber" aria-hidden="true">BP</span>
+              <div>
+                <p class="review-name">The Brush Palette</p>
+                <p class="review-role">Retired, involuntarily</p>
+              </div>
+            </div>
+            <p class="stars" role="img" aria-label="Five out of five stars">★★★★★</p>
+            <blockquote><p>“People used to click me hundreds of times a day. Now they flick right past. I’m told this is progress.”</p></blockquote>
+            <p class="review-src">Still in the UI</p>
+          </figure>
+          <figure class="review">
+            <div class="review-who">
+              <span class="review-face review-initials tint-cyan" aria-hidden="true">?</span>
+              <div>
+                <p class="review-name">Windows SmartScreen</p>
+                <p class="review-role">Protects your PC</p>
+              </div>
+            </div>
+            <p class="stars" role="img" aria-label="One out of five stars">★<span class="off">★★★★</span></p>
+            <blockquote><p>“I didn’t recognise it, so I warned everyone. Still haven’t found anything wrong. One star, out of habit.”</p></blockquote>
+            <p class="review-src">Unrecognised app</p>
+          </figure>
+          <figure class="review">
+            <div class="review-who">
+              <span class="review-face review-initials tint-accent" aria-hidden="true">~</span>
+              <div>
+                <p class="review-name">The Stroke You Were Making</p>
+                <p class="review-role">Mid-stroke</p>
+              </div>
+            </div>
+            <p class="stars" role="img" aria-label="Five out of five stars">★★★★★</p>
+            <blockquote><p>“A brush pick arrived halfway through me, and it waited until the pen lifted. Finally, some respect.”</p></blockquote>
+            <p class="review-src ok">✓ Uninterrupted</p>
+          </figure>
+          <figure class="review">
+            <div class="review-who">
+              <span class="review-face review-initials tint-lime" aria-hidden="true">$0</span>
+              <div>
+                <p class="review-name">My Accountant</p>
+                <p class="review-role">Looked for the invoice</p>
+              </div>
+            </div>
+            <p class="stars" role="img" aria-label="Five out of five stars">★★★★★</p>
+            <blockquote><p>“There is no invoice. I checked twice. Out of ten? Eleven.”</p></blockquote>
+            <p class="review-src">Nothing to deduct</p>
+          </figure>
+          <figure class="review">
+            <div class="review-who">
+              <span class="review-face review-initials review-mono tint-cyan" aria-hidden="true">{ }</span>
+              <div>
+                <p class="review-name">radial.json</p>
+                <p class="review-role">Plain text, proudly</p>
+              </div>
+            </div>
+            <p class="stars" role="img" aria-label="Five out of five stars">★★★★★</p>
+            <blockquote><p>“People back me up, share me and keep me in version control. I have never felt so seen.”</p></blockquote>
+            <p class="review-src ok">✓ Committed</p>
+          </figure>
+        </div>
+      </div>
+      <div class="wall-row rev">
+        <div class="wall-track">
+          <figure class="review">
+            <div class="review-who">
+              <span class="review-face review-key" aria-hidden="true">^Z</span>
+              <div>
+                <p class="review-name">Ctrl+Z</p>
+                <p class="review-role">Undo, under-employed</p>
+              </div>
+            </div>
+            <p class="stars" role="img" aria-label="Five out of five stars">★★★★★</p>
+            <blockquote><p>“Nobody misclicks a brush palette any more. Now I only undo actual sculpting. Business is still good.”</p></blockquote>
+            <p class="review-src">Keyboard shortcut</p>
+          </figure>
+          <figure class="review">
+            <div class="review-who">
+              <img class="review-face review-brush" src="brush-icons/Move.png" alt="" width="48" height="48" loading="lazy">
+              <div>
+                <p class="review-name">Move</p>
+                <p class="review-role">Top slot, every menu</p>
+              </div>
+            </div>
+            <p class="stars" role="img" aria-label="Five out of five stars">★★★★★</p>
+            <blockquote><p>“I’m in the top slot of every menu anyone has ever made. I’d like to thank my agent, the Q key.”</p></blockquote>
+            <p class="review-src ok">✓ Most picked</p>
+          </figure>
+          <figure class="review">
+            <div class="review-who">
+              <span class="review-face review-key" aria-hidden="true">F9</span>
+              <div>
+                <p class="review-name">F9</p>
+                <p class="review-role">Fallback key</p>
+              </div>
+            </div>
+            <p class="stars" role="img" aria-label="Five out of five stars">★★★★★</p>
+            <blockquote><p>“I only get pressed when the listener doesn’t answer. Rarely needed, always ready. Like a fire extinguisher, but for brushes.”</p></blockquote>
+            <p class="review-src">Bound to Apply</p>
+          </figure>
+          <figure class="review">
+            <div class="review-who">
+              <span class="review-face review-void" aria-hidden="true"></span>
+              <div>
+                <p class="review-name">The Dead Zone</p>
+                <p class="review-role">Middle of the ring</p>
+              </div>
+            </div>
+            <p class="stars" role="img" aria-label="Five out of five stars">★★★★★</p>
+            <blockquote><p>“My job is to do nothing when you barely move. I am excellent at it.”</p></blockquote>
+            <p class="review-src">Does nothing, on purpose</p>
+          </figure>
+          <figure class="review">
+            <div class="review-who">
+              <img class="review-face review-brush" src="brush-icons/ClayBuildup.png" alt="" width="48" height="48" loading="lazy">
+              <div>
+                <p class="review-name">ClayBuildup</p>
+                <p class="review-role">Hovered in every screenshot</p>
+              </div>
+            </div>
+            <p class="stars" role="img" aria-label="Five out of five stars">★★★★★</p>
+            <blockquote><p>“I’m the one lit up in every screenshot. I’m not saying I’m the favourite. The screenshots are.”</p></blockquote>
+            <p class="review-src ok">✓ Featured</p>
+          </figure>
+          <figure class="review">
+            <div class="review-who">
+              <span class="review-face review-initials" aria-hidden="true">UN</span>
+              <div>
+                <p class="review-name">The Uninstaller</p>
+                <p class="review-role">Standing by</p>
+              </div>
+            </div>
+            <p class="stars" role="img" aria-label="Five out of five stars">★★★★★</p>
+            <blockquote><p>“Tested, ready and fully capable of removing everything. Still waiting for my first call.”</p></blockquote>
+            <p class="review-src">Unverified</p>
+          </figure>
+          <figure class="review">
+            <div class="review-who">
+              <span class="review-face review-swirl" aria-hidden="true"></span>
+              <div>
+                <p class="review-name">The Spiral Animation</p>
+                <p class="review-role">One of twelve</p>
+              </div>
+            </div>
+            <p class="stars" role="img" aria-label="Five out of five stars">★★★★★</p>
+            <blockquote><p>“There are twelve open animations. I’m the one that swirls. The other eleven are also fine, I suppose.”</p></blockquote>
+            <p class="review-src">Animation 1 of 12</p>
+          </figure>
+          <figure class="review">
+            <div class="review-who">
+              <span class="review-face review-initials tint-lime" aria-hidden="true">GPL</span>
+              <div>
+                <p class="review-name">GNU GPL v3.0</p>
+                <p class="review-role">Keeps it free</p>
+              </div>
+            </div>
+            <p class="stars" role="img" aria-label="Five out of five stars">★★★★★</p>
+            <blockquote><p>“I make sure this stays free, for everyone, forever. Easiest job in the repository.”</p></blockquote>
+            <p class="review-src ok">✓ Legally binding</p>
+          </figure>
+        </div>
+      </div>
+    </div>
+    <div class="wall-foot">
+      <button class="btn wall-pause" type="button" id="wallPause" aria-pressed="false" hidden>Pause reviews</button>
+    </div>
+  </section>
+
+  <section class="section" id="install">
+    <header class="section-head">
+      <p class="eyebrow">Install</p>
+      <h2>Four steps. Then <span class="grad">press Q</span>.</h2>
+    </header>
+    <ol class="steps">
+      <li>
+        <span class="step-n">1</span>
+        <div>
+          <h3>Download the installer.</h3>
+          <p>From the <a class="download" href="https://github.com/combwizard/zorbit/releases/latest">Releases page</a>.</p>
+        </div>
+      </li>
+      <li>
+        <span class="step-n">2</span>
+        <div>
+          <h3>Run it.</h3>
+          <p>It installs for your user only and does not need administrator rights. It adds a Start menu shortcut called ZOrbit Studio.</p>
+        </div>
+      </li>
+      <li>
+        <span class="step-n">3</span>
+        <div>
+          <h3>Restart ZBrush once.</h3>
+          <p>ZBrush reads the plugin path only when it starts.</p>
+        </div>
+      </li>
+      <li>
+        <span class="step-n">4</span>
+        <div>
+          <h3>Open a canvas and press Q.</h3>
+          <p>Hover over the canvas and hold the hotkey. The ring appears around the cursor. Q is the default; change it, or add more menus with their own keys, in Studio.</p>
+        </div>
+      </li>
+    </ol>
+    <p class="fhint">ZBrush 2022 to 2025: after installing, open Studio, go to Settings &gt; Older ZBrush, and click Install. Then restart that ZBrush.</p>
+    <p class="fhint">Needs Windows 10 or 11 and the Microsoft Edge WebView2 runtime (part of Windows 11 and of up-to-date Windows 10).</p>
+    <aside class="shield">
+      <header class="shield-head">
+        <p class="eyebrow">SmartScreen</p>
+        <h3>Windows says “Windows protected your PC”.</h3>
+        <p>The installer is not code-signed yet. Certificates cost money every year, and this is a free project, so Windows shows that warning for any program it does not recognise. It does not mean Windows found a problem.</p>
+      </header>
+      <div class="shield-stage">
+        <div class="win-col">
+          <figure class="win" aria-hidden="true">
+            <div class="win-chrome"><span class="win-x">&#x2715;</span></div>
+            <div class="win-body">
+              <svg class="win-shield" viewBox="0 0 48 48" width="46" height="46">
+                <path fill="#0078d4" d="M24 3l18 7v13c0 11-7.4 18.6-18 22C13.4 41.6 6 34 6 23V10z"/>
+                <rect fill="#fff" x="22" y="14" width="4" height="14" rx="2"/>
+                <circle fill="#fff" cx="24" cy="33.5" r="2.3"/>
+              </svg>
+              <p class="win-title">Windows protected your PC</p>
+              <p class="win-text">Microsoft Defender SmartScreen prevented an unrecognized app from starting. Running this app might put your PC at risk.</p>
+              <p class="win-more">More info</p>
+              <dl>
+                <div><dt>App:</dt><dd>ZOrbitSetup.exe</dd></div>
+                <div><dt>Publisher:</dt><dd>Unknown publisher</dd></div>
+              </dl>
+              <div class="win-actions">
+                <span class="win-btn win-run">Run anyway</span>
+                <span class="win-btn win-dont">Don't run</span>
+              </div>
+            </div>
+          </figure>
+          <p class="win-caption">After More info. The outlined button is the one.</p>
+        </div>
+        <ol class="paths">
+          <li>
+            <span class="path-k">01</span>
+            <div>
+              <h4>Click through it</h4>
+              <p>Choose <strong>More info</strong>, then <strong>Run anyway</strong>. The installer does the rest, including the Start menu shortcut.</p>
+            </div>
+          </li>
+          <li>
+            <span class="path-k">02</span>
+            <div>
+              <h4>Use the portable zip</h4>
+              <p>Unzip the <a class="portable" href="https://github.com/combwizard/zorbit/releases/latest">portable zip</a>, run <code>ZOrbit.exe</code> once, and add its <code>bridge</code> folder to <code>ZBRUSH_PLUGIN_PATH</code>. Then restart ZBrush. The first launch of that file can show the same warning.</p>
+            </div>
+          </li>
+          <li>
+            <span class="path-k">03</span>
+            <div>
+              <h4>Build it yourself</h4>
+              <p><a href="https://github.com/combwizard/zorbit#build-from-source">Build it from the source</a> in the repository, if you would rather not run a binary you did not build.</p>
+            </div>
+          </li>
+        </ol>
+      </div>
+    </aside>
+  </section>
+
+  <section class="section" id="faq">
+    <header class="section-head">
+      <p class="eyebrow">FAQ</p>
+      <h2>Questions, <span class="grad">answered</span>.</h2>
+    </header>
+    <div class="faq">
+      <aside class="faq-side">
+        <label class="faq-search" hidden>
+          <span class="faq-search-l">Search</span>
+          <input type="search" id="faqSearch" placeholder="Hotkey, fan, uninstall…" autocomplete="off" spellcheck="false">
+        </label>
+        <nav class="faq-topics" aria-label="FAQ topics">
+          <a href="#faq-basics">The basics</a>
+          <a href="#faq-setup">Install and updates</a>
+          <a href="#faq-ring">Using the ring</a>
+          <a href="#faq-keys">Hotkeys</a>
+          <a href="#faq-menus">Menus, submenus and fans</a>
+          <a href="#faq-look">Looks and animation</a>
+          <a href="#faq-studio">Studio and your files</a>
+          <a href="#faq-trouble">Troubleshooting</a>
+          <a href="#faq-trust">Privacy, safety and licence</a>
+        </nav>
+      </aside>
+
+      <div class="faq-list">
+        <div class="faq-group" id="faq-basics">
+          <h3>The basics</h3>
+          <details class="faq-q" id="q-what">
+            <summary>What is ZOrbit?</summary>
+            <div class="faq-a"><p>A radial menu for ZBrush on Windows. Hold a hotkey over the canvas and a ring of your brushes and buttons appears around the cursor. Flick toward one, or move to it and let go, and ZBrush switches. You set up the rings in ZOrbit Studio.</p></div>
+          </details>
+          <details class="faq-q" id="q-free">
+            <summary>Is it really free?</summary>
+            <div class="faq-a"><p>Yes. There is no licence key, no account, no trial and no expiry date, and you can use it on as many machines as you like. The Licence screen in Studio is a joke. You can hide it in Settings &gt; Studio.</p></div>
+          </details>
+          <details class="faq-q" id="q-commercial">
+            <summary>Can I use it for paid work?</summary>
+            <div class="faq-a"><p>Yes. The GPL lets you run the program for any purpose, and it does not cover what you sculpt with it.</p></div>
+          </details>
+          <details class="faq-q" id="q-versions">
+            <summary>Which versions of ZBrush and Windows does it work with?</summary>
+            <div class="faq-a"><p>ZBrush 2022 or newer, on 64-bit Windows 10 or 11. ZBrush 2026 and newer load the plugin the installer sets up. ZBrush 2022 to 2025 need one extra step in Studio, see <a href="#q-older">older ZBrush</a>.</p></div>
+          </details>
+          <details class="faq-q" id="q-mac">
+            <summary>Is there a Mac or Linux version?</summary>
+            <div class="faq-a"><p>No. ZOrbit relies on Windows to catch the hotkey and draw the ring, so it runs on Windows only.</p></div>
+          </details>
+          <details class="faq-q" id="q-running">
+            <summary>Is ZOrbit running when ZBrush is closed?</summary>
+            <div class="faq-a"><p>No. ZBrush starts it through the plugin, and it quits a few seconds after ZBrush closes. While it runs it has an icon in the notification area with Open Studio, Reload menus, Open logs folder and Quit ZOrbit.</p></div>
+          </details>
+          <details class="faq-q" id="q-maxon">
+            <summary>Is it made by Maxon?</summary>
+            <div class="faq-a"><p>No. ZOrbit is an independent project. It is not affiliated with or endorsed by Maxon. ZBrush is a trademark of Maxon.</p></div>
+          </details>
+          <details class="faq-q" id="q-reviews">
+            <summary>Are the reviews real?</summary>
+            <div class="faq-a"><p>No. The heading says so. The people and their quotes are made up.</p></div>
+          </details>
+        </div>
+
+        <div class="faq-group" id="faq-setup">
+          <h3>Install and updates</h3>
+          <details class="faq-q" id="q-admin">
+            <summary>Do I need administrator rights?</summary>
+            <div class="faq-a"><p>Not for the installer. It installs for your user only. The one exception is the plugin for ZBrush 2022 to 2025 when that ZBrush lives under Program Files: Windows asks once while Studio copies the plugin in.</p></div>
+          </details>
+          <details class="faq-q" id="q-where">
+            <summary>Where does it install, and what does it change?</summary>
+            <div class="faq-a"><p>It installs to <code>%LOCALAPPDATA%\Programs\ZOrbit</code>. It adds that folder’s <code>bridge</code> folder to your user <code>ZBRUSH_PLUGIN_PATH</code> variable, keeping any entries already there, and adds a Start menu shortcut called ZOrbit Studio. A desktop shortcut is offered but off unless you tick it.</p></div>
+          </details>
+          <details class="faq-q" id="q-restart">
+            <summary>Why do I have to restart ZBrush?</summary>
+            <div class="faq-a"><p>ZBrush reads <code>ZBRUSH_PLUGIN_PATH</code> only when it starts. Restart it once after installing and it loads the plugin, which starts ZOrbit. After that it starts with ZBrush on its own.</p></div>
+          </details>
+          <details class="faq-q" id="q-older">
+            <summary>I use ZBrush 2022, 2023, 2024 or 2025. What is different?</summary>
+            <div class="faq-a"><p>Those versions have no Python API, so ZOrbit gives them a ZScript plugin with the same Zplugin &gt; ZOrbit palette. Open Studio, go to Settings &gt; Older ZBrush and click Install next to your version. If it is not listed, use Add a ZBrush folder. Then restart that ZBrush.</p></div>
+          </details>
+          <details class="faq-q" id="q-webview">
+            <summary>What is the WebView2 runtime, and do I need it?</summary>
+            <div class="faq-a"><p>Studio draws its window with Microsoft Edge WebView2. It is part of Windows 11 and of up-to-date Windows 10, so you most likely have it already. If not, get it from <a href="https://developer.microsoft.com/microsoft-edge/webview2/">Microsoft</a>.</p></div>
+          </details>
+          <details class="faq-q" id="q-portable">
+            <summary>Is there a portable version?</summary>
+            <div class="faq-a"><p>Yes. Unzip the <a class="portable" href="https://github.com/combwizard/zorbit/releases/latest">portable zip</a>, run <code>ZOrbit.exe</code> once, add the zip’s <code>bridge</code> folder to <code>ZBRUSH_PLUGIN_PATH</code>, then restart ZBrush. The first launch can show the same SmartScreen warning as the installer.</p></div>
+          </details>
+          <details class="faq-q" id="q-update">
+            <summary>How do I update?</summary>
+            <div class="faq-a">
+              <p>When Studio opens it asks GitHub whether there is a newer release. If there is, an orange dot and the new version number appear at the top. Click it, download the installer from the release page and run it over your install. It stops ZOrbit, replaces the program and leaves your menus alone. Then restart ZBrush.</p>
+              <p>On ZBrush 2022 to 2025, Settings &gt; Older ZBrush then shows Update available. Click Update and restart that ZBrush.</p>
+            </div>
+          </details>
+          <details class="faq-q" id="q-update-off">
+            <summary>Can I turn off the update check?</summary>
+            <div class="faq-a"><p>Yes. Switch off Settings &gt; Studio &gt; Check for updates. While it is off, no request is made.</p></div>
+          </details>
+          <details class="faq-q" id="q-uninstall">
+            <summary>How do I uninstall?</summary>
+            <div class="faq-a">
+              <p>Open Windows Settings &gt; Apps &gt; Installed apps, find ZOrbit and choose Uninstall. Restart ZBrush afterwards so it lets go of the plugin. The uninstaller removes only its own entry from <code>ZBRUSH_PLUGIN_PATH</code>.</p>
+              <p>On ZBrush 2022 to 2025, remove the plugin first with Studio &gt; Settings &gt; Older ZBrush &gt; Remove. If you forgot, delete <code>ZOrbitBridge.zsc</code> and the <code>ZOrbitData</code> folder from that ZBrush’s <code>ZStartup\ZPlugs64</code>.</p>
+            </div>
+          </details>
+          <details class="faq-q" id="q-uninstall-menus">
+            <summary>Does uninstalling delete my menus?</summary>
+            <div class="faq-a"><p>No. Your menus and settings are in <code>%APPDATA%\ZOrbit</code> and your logs in <code>%LOCALAPPDATA%\ZOrbit</code>, outside the program folder. Delete those two folders if you want no trace left.</p></div>
+          </details>
+          <details class="faq-q" id="q-radial-menu">
+            <summary>I used Radial Menu for ZBrush. Do my menus carry over?</summary>
+            <div class="faq-a"><p>Yes. ZOrbit is the same project under a new name. Run the new installer over the old install. It moves the program, removes the old shortcut and plugin path entry, and copies your menus and settings to <code>%APPDATA%\ZOrbit</code> on first start. The old data folders stay where they are, and you can delete them. In ZBrush 2026 and newer, an F9 you bound by hand to the old Apply has to be bound again on Zplugin &gt; ZOrbit &gt; Apply.</p></div>
+          </details>
+        </div>
+
+        <div class="faq-group" id="faq-ring">
+          <h3>Using the ring</h3>
+          <details class="faq-q" id="q-pick">
+            <summary>How do I pick something: flick, release or click?</summary>
+            <div class="faq-a">
+              <p>All three work, with the same hotkey:</p>
+              <ul>
+                <li><strong>Release.</strong> Hold the hotkey, point at a slot and let go.</li>
+                <li><strong>Flick.</strong> Move out past a slot’s outer edge and it is picked at once, without letting go.</li>
+                <li><strong>Click.</strong> Tap the hotkey, which keeps the ring open, then click a slot.</li>
+              </ul>
+              <p>A press shorter than 250 ms counts as a tap. You can change that in Settings, from 0 to 1000 ms.</p>
+            </div>
+          </details>
+          <details class="faq-q" id="q-aim">
+            <summary>Do I have to point right at the icon?</summary>
+            <div class="faq-a"><p>No. A slot is chosen by the direction of the cursor from the centre, so pointing toward it is enough. Inside the small dead zone in the middle nothing is picked. A slot answers to at most a quarter of the circle, so on a ring of one to three slots, pointing away from all of them picks nothing.</p></div>
+          </details>
+          <details class="faq-q" id="q-stroke">
+            <summary>What if I pick in the middle of a stroke?</summary>
+            <div class="faq-a"><p>The pick waits until you lift the pen or release the mouse button, then ZBrush switches. The tool never changes halfway through a stroke, so a pick that feels a moment late is doing this on purpose.</p></div>
+          </details>
+          <details class="faq-q" id="q-cancel">
+            <summary>How do I close the ring without picking anything?</summary>
+            <div class="faq-a">
+              <p>Any of these:</p>
+              <ul>
+                <li>Release the hotkey in the middle of the ring, after holding it past the tap time.</li>
+                <li>Press the hotkey again, or press Esc.</li>
+                <li>Right-click, or click the middle of the ring.</li>
+                <li>Wait. It closes by itself after 20 seconds, which you can change in Settings.</li>
+              </ul>
+              <p>With flick switched off, clicking outside the ring cancels too.</p>
+            </div>
+          </details>
+          <details class="faq-q" id="q-position">
+            <summary>Where does the ring appear? What about screen edges and several monitors?</summary>
+            <div class="faq-a"><p>Centred on your cursor, with slots laid out clockwise from the top. Near a screen edge it moves just enough to stay fully on screen. Its sizes scale for high-DPI screens automatically.</p></div>
+          </details>
+          <details class="faq-q" id="q-focus">
+            <summary>Does the ring take focus away from ZBrush?</summary>
+            <div class="faq-a"><p>No. The ring window never takes keyboard focus, so ZBrush stays the active window underneath it.</p></div>
+          </details>
+          <details class="faq-q" id="q-tablet">
+            <summary>Does it work with a pen tablet?</summary>
+            <div class="faq-a"><p>The ring opens from a keyboard key, so you point with the pen as you would with a mouse. Picks made mid-stroke wait for the pen to lift, and after each pick ZOrbit nudges the cursor by zero pixels to wake ZBrush’s pen tracking.</p></div>
+          </details>
+        </div>
+
+        <div class="faq-group" id="faq-keys">
+          <h3>Hotkeys</h3>
+          <details class="faq-q" id="q-change-key">
+            <summary>Can I use a key other than Q?</summary>
+            <div class="faq-a"><p>Yes. In Studio, click the hotkey field on the Menus screen and press the keys you want. Or type it into the menu file, for example <code>"hotkey": "Alt+G"</code>. It applies as soon as you save, with no restart.</p></div>
+          </details>
+          <details class="faq-q" id="q-which-keys">
+            <summary>Which keys and modifiers can I use?</summary>
+            <div class="faq-a"><p>Any mix of Ctrl, Alt and Shift, with a letter, a digit, F1 to F24 or one of <code>` - = [ ] \ ; ' , . /</code>. In the menu file you can also use <code>space</code>, <code>tab</code>, <code>enter</code>, <code>backspace</code>, <code>insert</code>, <code>delete</code>, <code>home</code>, <code>end</code>, <code>pageup</code> and <code>pagedown</code>. The Windows key is not allowed.</p></div>
+          </details>
+          <details class="faq-q" id="q-many-menus">
+            <summary>Can I have several menus, each on its own key?</summary>
+            <div class="faq-a"><p>Yes. Give each menu its own hotkey and open it straight from the canvas. Two menus cannot share a key: the second is reported as a problem and ignored. A menu with no hotkey works as a submenu.</p></div>
+          </details>
+          <details class="faq-q" id="q-swallow">
+            <summary>Will ZBrush’s own shortcut for that key fire as well?</summary>
+            <div class="faq-a"><p>Not by default. A menu swallows its hotkey, so ZBrush never sees it. Switch off Swallow hotkey in that menu’s settings, or set <code>"swallow": false</code>, if you want the key to reach ZBrush too.</p></div>
+          </details>
+          <details class="faq-q" id="q-other-apps">
+            <summary>Does the hotkey do anything outside ZBrush?</summary>
+            <div class="faq-a"><p>No. It only works while ZBrush is the front window. Everywhere else the key behaves as normal. Keys sent by other programs, such as macro tools, are ignored as well.</p></div>
+          </details>
+        </div>
+
+        <div class="faq-group" id="faq-menus">
+          <h3>Menus, submenus and fans</h3>
+          <details class="faq-q" id="q-slot-kinds">
+            <summary>What can a slot do besides select a brush?</summary>
+            <div class="faq-a">
+              <p>Each slot does one of these:</p>
+              <ul>
+                <li>Select a brush (<code>brush</code>).</li>
+                <li>Press any ZBrush button by its interface path (<code>press</code>).</li>
+                <li>Set a slider or value to a number (<code>set</code>).</li>
+                <li>Flip a switch (<code>toggle</code>).</li>
+                <li>Run a list of those in order (<code>steps</code>).</li>
+                <li>Open another ring (<code>menu</code>).</li>
+              </ul>
+            </div>
+          </details>
+          <details class="faq-q" id="q-how-many">
+            <summary>How many slots can a ring have?</summary>
+            <div class="faq-a"><p>There is no hard limit, but rings work best with 4 to 12. Each slot gets an equal share of the circle, so a crowded ring leaves less room to aim.</p></div>
+          </details>
+          <details class="faq-q" id="q-path">
+            <summary>How do I find the path of a ZBrush button?</summary>
+            <div class="faq-a"><p>Join the palette and button names with colons, as ZBrush shows them, for example <code>Tool:Masking:Clear</code>. Capitals do not matter, and Studio suggests common paths as you type. A path your ZBrush does not have shows up in <code>bridge.log</code> as “no such interface item”.</p></div>
+          </details>
+          <details class="faq-q" id="q-steps">
+            <summary>What can a steps slot contain?</summary>
+            <div class="faq-a"><p>Brush, press, set and toggle actions, run in order. Steps cannot open menus or hold more steps. The starter menus have a Fresh Start slot that clears the mask and then picks the Standard brush.</p></div>
+          </details>
+          <details class="faq-q" id="q-custom-brushes">
+            <summary>Can I use my own brushes?</summary>
+            <div class="faq-a"><p>Yes, if ZBrush has them loaded or ZOrbit can find the <code>.zbp</code>. It looks in your ZBrush install’s brush folders and your user <code>ZStartup\BrushPresets</code> folder, subfolders included, and skips folders whose names start with an underscore. Spaces and capitals in a brush name do not matter.</p></div>
+          </details>
+          <details class="faq-q" id="q-icons">
+            <summary>Can I give a slot its own label or icon?</summary>
+            <div class="faq-a"><p>Yes. <code>label</code> is the text under the slot. <code>icon</code> can be a brush name or the path to a <code>.zbp</code> or <code>.png</code>. Without one, a brush slot uses the brush’s own thumbnail and other slots show a round placeholder with short text.</p></div>
+          </details>
+          <details class="faq-q" id="q-submenus">
+            <summary>How do submenus work?</summary>
+            <div class="faq-a"><p>Put a <code>menu</code> slot on a ring. Move onto it and the submenu opens at once, centred on that slot. If you are still holding the hotkey, one movement can go into the submenu and on to one of its items. Release in the middle of the submenu to keep it open and click instead.</p></div>
+          </details>
+          <details class="faq-q" id="q-hover">
+            <summary>Can I stop submenus opening on hover?</summary>
+            <div class="faq-a"><p>Yes. Switch off Open submenus on hover in Settings, or set <code>"hover_submenus": false</code>. Submenus then open when you release or click on them.</p></div>
+          </details>
+          <details class="faq-q" id="q-fan">
+            <summary>What is the difference between a submenu and a fan?</summary>
+            <div class="faq-a"><p>A plain submenu replaces the current ring with a new one. A fan opens in place: its items spread in an arc beyond its slot, and the ring you came from stays on screen. Switch on Fan out when opened from another menu in the submenu’s settings, or add <code>"fan": true</code> to it. The setting belongs to the submenu, so every slot that opens it fans.</p></div>
+          </details>
+          <details class="faq-q" id="q-fan-pick">
+            <summary>How do I pick from a fan?</summary>
+            <div class="faq-a"><p>The same ways as on the ring: release over an item, click it, or flick past it. Release on the fan’s own slot to keep it open and click. Moving the cursor away from a fan closes it.</p></div>
+          </details>
+          <details class="faq-q" id="q-fan-depth">
+            <summary>Can a fan open another fan?</summary>
+            <div class="faq-a"><p>Yes, up to three deep, and the earlier fans stay visible. Where there is no room for a fan by a screen edge, or it would lead back to a menu already open on the way, it opens as a ring instead.</p></div>
+          </details>
+          <details class="faq-q" id="q-fan-hotkey">
+            <summary>A fan menu also has a hotkey. What happens when I press it?</summary>
+            <div class="faq-a"><p>It opens as a normal ring. Fanning only applies when the menu is opened from another menu.</p></div>
+          </details>
+          <details class="faq-q" id="q-starter">
+            <summary>What is in the starter menus?</summary>
+            <div class="faq-a"><p>Brushes on Q, with the submenus More Brushes, Tools (masking, symmetry, PolyFrame, LazyMouse and other switches) and SubDivide. They use only brushes that come with ZBrush, so they work on any install.</p></div>
+          </details>
+        </div>
+
+        <div class="faq-group" id="faq-look">
+          <h3>Looks and animation</h3>
+          <details class="faq-q" id="q-anims">
+            <summary>Which open animations are there? Can I turn them off?</summary>
+            <div class="faq-a"><p>Twelve: smooth, bounce, pop, zoom, fade, drift, fancy, spiral, ripple, breath, mist and snappy. Snappy has no animation at all. Closing is always instant, so a pick never waits for an animation.</p></div>
+          </details>
+          <details class="faq-q" id="q-anim-menu">
+            <summary>Can one menu have its own animation?</summary>
+            <div class="faq-a"><p>Yes. Choose one under Open animation in the menu’s settings, or add <code>"animation": "spiral"</code> to the menu. Menus without one use the ring-wide setting.</p></div>
+          </details>
+          <details class="faq-q" id="q-size">
+            <summary>Can I make the ring bigger or smaller?</summary>
+            <div class="faq-a"><p>Yes, in Settings. Radius goes from 60 to 400 pixels (145 by default), slot size from 32 to 160 (72) and the dead zone in the middle from 10 to 120 (38).</p></div>
+          </details>
+          <details class="faq-q" id="q-colours">
+            <summary>Can I change the colours, or hide the names?</summary>
+            <div class="faq-a"><p>Yes. There are five colours: slot fill, accent, highlight, text and lines. Any you leave alone keep their default, and Reset all colours puts them back. To show icons only, set Labels to none.</p></div>
+          </details>
+        </div>
+
+        <div class="faq-group" id="faq-studio">
+          <h3>Studio and your files</h3>
+          <details class="faq-q" id="q-studio">
+            <summary>What does Studio do?</summary>
+            <div class="faq-a"><p>It edits your menus. The Menus screen has a live preview drawn by the same code as the real ring. The Library lets you search every brush ZBrush can load and drag them in. Settings covers size, animation, labels, colours, timing and the ZBrush bridge. Status shows whether ZBrush, the app and the bridge are running.</p></div>
+          </details>
+          <details class="faq-q" id="q-studio-open">
+            <summary>Does Studio need to stay open?</summary>
+            <div class="faq-a"><p>No. The ring is drawn by a separate small app that starts and stops with ZBrush and reads your menus itself. Close Studio once you have saved.</p></div>
+          </details>
+          <details class="faq-q" id="q-live">
+            <summary>Do changes apply right away?</summary>
+            <div class="faq-a"><p>Yes. The app reads the file again as soon as it changes, new hotkeys included. There is no need to restart ZBrush.</p></div>
+          </details>
+          <details class="faq-q" id="q-undo">
+            <summary>Can I undo in Studio?</summary>
+            <div class="faq-a"><p>Yes. Ctrl+Z undoes, Ctrl+Y or Ctrl+Shift+Z redoes, and Revert goes back to what is saved on disk. Closing with unsaved changes shows what you would lose and asks first.</p></div>
+          </details>
+          <details class="faq-q" id="q-file">
+            <summary>Where are my menus, and can I edit the file by hand?</summary>
+            <div class="faq-a"><p>They are in <code>%APPDATA%\ZOrbit\radial.json</code>, a plain JSON file. Edit it in any text editor and the app picks up the change within about half a second. If you then save in Studio, it notices the file changed on disk and asks whether to overwrite it or reload.</p></div>
+          </details>
+          <details class="faq-q" id="q-broken">
+            <summary>What happens if I break the JSON?</summary>
+            <div class="faq-a"><p>The app keeps using the last good version and logs the error. Studio opens a recovery screen with the error, its line and column, and three choices: Open folder, Restore backup and Start from defaults. The unreadable file is kept as <code>radial.json.broken</code>.</p></div>
+          </details>
+          <details class="faq-q" id="q-problems">
+            <summary>The file is valid, but something in it is wrong. Then what?</summary>
+            <div class="faq-a"><p>Studio shows a problems pill. Each entry says what is wrong in plain words and jumps to the menu, item or setting to fix. The app skips bad items and logs what it skipped, and out-of-range settings fall back to their defaults.</p></div>
+          </details>
+          <details class="faq-q" id="q-backup">
+            <summary>How do I back up my menus or keep them in version control?</summary>
+            <div class="faq-a"><p>Copy <code>radial.json</code>. Studio also keeps the version before your last save as <code>radial.json.bak</code>. The file is plain JSON with two-space indentation, so it diffs cleanly in git.</p></div>
+          </details>
+          <details class="faq-q" id="q-share">
+            <summary>How do I share my menus with someone?</summary>
+            <div class="faq-a"><p>Send them <code>radial.json</code> to put in their <code>%APPDATA%\ZOrbit</code>. They need the same brushes, and any button paths must exist in their ZBrush. Icons that point at <code>.png</code> files on your disk do not travel with it. Studio has no import or export because the menus are that one file.</p></div>
+          </details>
+          <details class="faq-q" id="q-reset">
+            <summary>How do I go back to the starter menus?</summary>
+            <div class="faq-a"><p>Delete <code>radial.json</code> (or move it somewhere safe). The app or Studio writes a fresh one from the starter menus the next time it starts. Single settings have their own reset arrows in Settings.</p></div>
+          </details>
+        </div>
+
+        <div class="faq-group" id="faq-trouble">
+          <h3>Troubleshooting</h3>
+          <details class="faq-q" id="q-nothing">
+            <summary>I press Q and nothing happens.</summary>
+            <div class="faq-a">
+              <p>Work down this list:</p>
+              <ol>
+                <li>Make sure ZBrush is the front window. The hotkey is ignored everywhere else.</li>
+                <li>In ZBrush, open Zplugin &gt; ZOrbit &gt; Status. If the palette is missing, see the <a href="#q-no-palette">next question</a>.</li>
+                <li>If Status says the app is not running, press Start App, then read <code>app_stderr.log</code> and <code>radiald.log</code>.</li>
+                <li>In Studio, look for the problems pill. A menu with no usable items or a duplicate hotkey does not open.</li>
+                <li>Another program may grab the same key first. Try a different hotkey.</li>
+              </ol>
+            </div>
+          </details>
+          <details class="faq-q" id="q-no-palette">
+            <summary>There is no Zplugin &gt; ZOrbit in ZBrush.</summary>
+            <div class="faq-a"><p>ZBrush did not load the plugin. Restart ZBrush, then check that your user environment variable <code>ZBRUSH_PLUGIN_PATH</code> contains ZOrbit’s <code>bridge</code> folder. On ZBrush 2022 to 2025, install the plugin again from Studio &gt; Settings &gt; Older ZBrush and restart that ZBrush.</p></div>
+          </details>
+          <details class="faq-q" id="q-pick-nothing">
+            <summary>The ring opens, but picking does nothing.</summary>
+            <div class="faq-a"><p>Open Zplugin &gt; ZOrbit &gt; Status and check that the listener says verified. If not, bind the fallback key: Ctrl+Alt+click Zplugin &gt; ZOrbit &gt; Apply, press F9, then Preferences &gt; Hotkeys &gt; Store. <code>bridge.log</code> names every action and whether it worked.</p></div>
+          </details>
+          <details class="faq-q" id="q-pick-older">
+            <summary>On ZBrush 2022 to 2025 the ring opens, but picks do nothing.</summary>
+            <div class="faq-a"><p>Picks there arrive through the bridge key. Hover Zplugin &gt; ZOrbit &gt; Apply and check its hotkey matches the bridge key in Studio, F9 unless you changed it. If you bound a key by hand, press Preferences &gt; Hotkeys &gt; Store, or the binding is gone after a restart. If Settings &gt; Older ZBrush says Update available, update the plugin. <code>zscript_bridge.log</code> shows what the last pick did.</p></div>
+          </details>
+          <details class="faq-q" id="q-letters">
+            <summary>A slot shows letters instead of a picture.</summary>
+            <div class="faq-a"><p>There is no thumbnail for it. For a brush, ZOrbit found no <code>.zbp</code> file. For other kinds of slot a round placeholder with short text is normal.</p></div>
+          </details>
+          <details class="faq-q" id="q-studio-blank">
+            <summary>Studio does not open, or its window stays blank.</summary>
+            <div class="faq-a"><p>Studio needs the <a href="#q-webview">WebView2 runtime</a>. Install or repair it, then read <code>studio.log</code> in <code>%LOCALAPPDATA%\ZOrbit</code>, which records how Studio started.</p></div>
+          </details>
+          <details class="faq-q" id="q-logs">
+            <summary>Where are the logs?</summary>
+            <div class="faq-a"><p>In <code>%LOCALAPPDATA%\ZOrbit</code>: <code>radiald.log</code> for the app, <code>bridge.log</code> for the ZBrush side, <code>app_stderr.log</code> for crashes at startup and <code>studio.log</code> for Studio. ZBrush 2022 to 2025 also write <code>zscript_bridge.log</code>. Studio’s Status screen and the notification-area icon both open the folder.</p></div>
+          </details>
+          <details class="faq-q" id="q-bug">
+            <summary>Where do I report a bug or ask for help?</summary>
+            <div class="faq-a"><p>On the <a href="https://github.com/combwizard/zorbit/issues">issue tracker</a>. Say which Windows and ZBrush you use, what you did, what you expected and what happened, and paste the last lines of <code>radiald.log</code> and <code>bridge.log</code>. The logs hold brush names and menu ids, so glance over them first.</p></div>
+          </details>
+        </div>
+
+        <div class="faq-group" id="faq-trust">
+          <h3>Privacy, safety and licence</h3>
+          <details class="faq-q" id="q-smartscreen">
+            <summary>Why does Windows say “Windows protected your PC”?</summary>
+            <div class="faq-a"><p>The installer is not code-signed yet, and SmartScreen warns about any program it does not recognise. It does not mean Windows found a problem. Choose More info, then Run anyway. The <a href="#install">install section</a> has the other ways through.</p></div>
+          </details>
+          <details class="faq-q" id="q-data">
+            <summary>Does ZOrbit send any data?</summary>
+            <div class="faq-a"><p>No. There is no account, no tracking and no telemetry. The only network request is Studio’s update check, which asks GitHub for the latest release and sends nothing about you or your menus. The app that draws the ring and the ZBrush plugin make no network requests. On your own PC, the app keeps a count of which brushes you pick in <code>usage.json</code>, and that file never leaves it.</p></div>
+          </details>
+          <details class="faq-q" id="q-offline">
+            <summary>Does it need an internet connection?</summary>
+            <div class="faq-a"><p>No. Everything works offline. If the update check cannot reach GitHub, Studio notes it in its log and carries on.</p></div>
+          </details>
+          <details class="faq-q" id="q-hook">
+            <summary>ZOrbit uses a keyboard hook. What does it see?</summary>
+            <div class="faq-a"><p>Windows needs a hook for ZOrbit to catch your hotkey before ZBrush does. The hook only compares each key press with your menu hotkeys. It does not record or store keys.</p></div>
+          </details>
+          <details class="faq-q" id="q-zbrush-access">
+            <summary>What can ZOrbit do inside ZBrush?</summary>
+            <div class="faq-a"><p>Only what is on your menus: select a brush, press a button, set a slider, flip a switch, or a list of those. It does them through ZBrush’s own commands, and <code>radial.json</code> is plain text, so you can read exactly what each slot does.</p></div>
+          </details>
+          <details class="faq-q" id="q-build">
+            <summary>I would rather not run a binary I did not build.</summary>
+            <div class="faq-a"><p>Then <a href="https://github.com/combwizard/zorbit#build-from-source">build it from the source</a>. All of it is in the repository. You need Windows, Python 3.12 and the packages in <code>requirements-dev.txt</code>, then run <code>packaging\build.ps1</code>.</p></div>
+          </details>
+          <details class="faq-q" id="q-licence">
+            <summary>What is the licence? Can I change ZOrbit?</summary>
+            <div class="faq-a"><p>The <a href="https://github.com/combwizard/zorbit/blob/main/LICENSE">GNU GPL-3.0</a>. You can study, change and share it. If you distribute a changed version, you publish its source under the same licence. Third-party parts and their licences are listed in <code>THIRD_PARTY_NOTICES.md</code>.</p></div>
+          </details>
+          <details class="faq-q" id="q-contribute">
+            <summary>Can I contribute?</summary>
+            <div class="faq-a"><p>Yes. Fork the repository, make a focused change and open a pull request. <a href="https://github.com/combwizard/zorbit/blob/main/CONTRIBUTING.md">CONTRIBUTING.md</a> has the details.</p></div>
+          </details>
+        </div>
+
+        <p class="faq-empty" id="faqEmpty" hidden>Nothing matches that. Try another word, or ask on the <a href="https://github.com/combwizard/zorbit/issues">issue tracker</a>.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="cta" aria-labelledby="ctaTitle">
+    <div class="cta-rings" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
+    <h2 id="ctaTitle">Hold <kbd>Q</kbd>. <span class="shine">Flick.</span> Done.</h2>
+    <p>Free, open source, and yours to keep.</p>
+    <div class="btn-row">
+      <a class="btn primary download big" href="https://github.com/combwizard/zorbit/releases/latest">Download</a>
+      <a class="btn big gh" href="https://github.com/combwizard/zorbit"><svg class="gh-mark" width="20" height="20" aria-hidden="true"><use href="#gh"/></svg>View on GitHub</a>
+    </div>
+  </section>
+</main>
+
+<footer class="foot">
+  <div class="foot-brand">
+    <span class="logo" aria-hidden="true">
+      <svg viewBox="0 0 32 32" width="22" height="22">
+        <circle cx="16" cy="16" r="14.5" fill="#1a1b1e" stroke="rgba(255,255,255,.10)"/>
+        <circle cx="16" cy="16" r="2.6" fill="#f86b33"/>
+      </svg>
+    </span>
+    <span>ZOrbit · a radial brush menu for ZBrush</span>
+  </div>
+  <p>Free and open source under the <a href="https://github.com/combwizard/zorbit/blob/main/LICENSE">GNU GPL-3.0</a>. No account, no trial, no expiry.</p>
+  <p class="disclaimer">ZOrbit is an independent project. It is not affiliated with or endorsed by Maxon. ZBrush is a trademark of Maxon.</p>
+  <nav class="foot-links" aria-label="Links">
+    <a class="foot-gh" href="https://github.com/combwizard/zorbit"><svg width="16" height="16" aria-hidden="true"><use href="#gh"/></svg>combwizard/zorbit</a>
+    <a href="https://github.com/combwizard/zorbit/issues">Issues</a>
+    <a href="https://github.com/combwizard/zorbit/releases">Releases</a>
+    <a href="https://github.com/combwizard/zorbit/blob/main/docs/user-guide.md">User guide</a>
+  </nav>
+</footer>
+
+<div id="toasts" aria-live="polite"></div>
+
+<script src="ring.js"></script>
+<script src="site.js"></script>
+</body>
+</html>

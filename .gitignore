@@ -1,0 +1,4 @@
+# Local staging folder for preview.ps1: never commit.
+.preview/
+_site/
+__pycache__/
