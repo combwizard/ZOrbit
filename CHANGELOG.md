@@ -4,6 +4,14 @@ All notable changes to this project are listed here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [0.10.2] - 2026-10-30
+
+### Fixed
+
+- The **Skip to content** link no longer shows at the top left of Studio when it opens. Since 0.10.1 the window passes
+  keyboard focus to the page when it is shown, and the page put that focus on the link. It now takes focus only after
+  a Tab press.
+
 ## [0.10.1] - 2026-10-30
 
 ### Fixed
@@ -388,6 +396,7 @@ First public release.
   only brushes included with ZBrush.
 - Documentation: README, user guide, third-party notices and contributing guide.
 
+[0.10.2]: https://github.com/combwizard/zorbit/releases/tag/v0.10.2
 [0.10.1]: https://github.com/combwizard/zorbit/releases/tag/v0.10.1
 [0.10.0]: https://github.com/combwizard/zorbit/releases/tag/v0.10.0
 [0.9.0]: https://github.com/combwizard/zorbit/releases/tag/v0.9.0

@@ -459,7 +459,7 @@
         if (q.has('importfail')) return { ok: false, message: "That file is not valid JSON: Expecting ',' delimiter: line 12 column 5 (mock)." };
         var tagsOnly = q.has('importtags'), n = Object.keys(saved.menus || {}).length;
         return { ok: true, path: 'C:\\Users\\mock\\Documents\\ZOrbit settings 2026-10-30.json', kind: tagsOnly ? 'tags' : 'bundle', has_config: !tagsOnly, menus: tagsOnly ? 0 : n,
-          has_tags: true, tags: 4, new_tags: 2, items: 17, problems: tagsOnly || !q.has('problems') ? [] : validate(saved), version: '0.10.1' };
+          has_tags: true, tags: 4, new_tags: 2, items: 17, problems: tagsOnly || !q.has('problems') ? [] : validate(saved), version: '0.10.2' };
       });
     },
     apply_import: function (tag_mode) {
@@ -735,8 +735,8 @@
     win_close: function () { return Promise.resolve(); },
     win_toggle_maximize: function () { return Promise.resolve(false); },
     win_is_maximized: function () { return Promise.resolve(false); },
-    get_app_info: function () { return Promise.resolve({ version: '0.10.1' }); },
-    check_update: function () { var p = JSON.parse(localStorage.getItem('rm_prefs') || '{}'); if (p.check_updates === false) return Promise.resolve({ newer: false, current: '0.10.1', latest: null, url: 'https://github.com/combwizard/zorbit/releases' }); return sleep(300).then(function () { if (q.has('unreach')) return { newer: false, current: '0.10.1', latest: null, url: 'https://github.com/combwizard/zorbit/releases' }; return q.has('update') ? { newer: true, current: '0.10.1', latest: '0.10.1', url: 'https://github.com/combwizard/zorbit/releases' } : { newer: false, current: '0.10.1', latest: '0.10.1', url: 'https://github.com/combwizard/zorbit/releases' }; }); },
+    get_app_info: function () { return Promise.resolve({ version: '0.10.2' }); },
+    check_update: function () { var p = JSON.parse(localStorage.getItem('rm_prefs') || '{}'); if (p.check_updates === false) return Promise.resolve({ newer: false, current: '0.10.2', latest: null, url: 'https://github.com/combwizard/zorbit/releases' }); return sleep(300).then(function () { if (q.has('unreach')) return { newer: false, current: '0.10.2', latest: null, url: 'https://github.com/combwizard/zorbit/releases' }; return q.has('update') ? { newer: true, current: '0.10.2', latest: '0.10.2', url: 'https://github.com/combwizard/zorbit/releases' } : { newer: false, current: '0.10.2', latest: '0.10.2', url: 'https://github.com/combwizard/zorbit/releases' }; }); },
     open_url: function (url) { console.log('[mock] open_url', url); return Promise.resolve(true); },
     open_browser: function () { console.log('[mock] open_browser'); return Promise.resolve({ ok: true, started: false }); },
     // The browser popout (popout.html?mock). A pick only logs; ?nopick answers like a popout whose app is gone.

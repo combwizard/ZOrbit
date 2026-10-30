@@ -1,5 +1,5 @@
 ; Inno Setup 6 script for ZOrbit, a radial brush menu for ZBrush.
-; Build: ISCC.exe /DAppVersion=0.10.1 packaging\installer.iss   (packaging\build.ps1 does this after PyInstaller)
+; Build: ISCC.exe /DAppVersion=0.10.2 packaging\installer.iss   (packaging\build.ps1 does this after PyInstaller)
 ; Expects dist\ZOrbit\ (PyInstaller onedir output) relative to the repository root.
 
 #ifndef AppVersion
