@@ -8,7 +8,8 @@ mkdir -p "$dir"
 for hook in tools/hooks/*; do
 	name=$(basename "$hook")
 	[ "$name" = install.sh ] && continue
-	printf '#!/bin/sh\nexec sh "$(git rev-parse --show-toplevel)/tools/hooks/%s" "$@"\n' "$name" > "$dir/$name"
+	# A checkout without tools/hooks (the site branch) skips the hook.
+	printf '#!/bin/sh\nhook="$(git rev-parse --show-toplevel)/tools/hooks/%s"\n[ -f "$hook" ] || exit 0\nexec sh "$hook" "$@"\n' "$name" > "$dir/$name"
 	chmod +x "$dir/$name"
 	echo "installed $dir/$name"
 done
