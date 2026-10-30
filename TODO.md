@@ -79,6 +79,9 @@
       (`Alpha:Import`, `Material:Load`, `Texture:Import`)
 - [ ] Any / All toggle for the tag chips (they match any chosen tag today)
 - [ ] A segmented slot border when a brush has several tags (only the first colours it now)
+- [ ] Group same-tag slots: an option to draw a ring with each tag's slots side by side, so the band forms
+      solid arcs (it would move slots, so it needs to be per menu and off by default)
+- [ ] The tag band along a fan's arc (only the ring has it; a fan's slots take the tint and glow)
 - [ ] Idle exit for the browser process: quit after a while unused and start again on the next press
 - [ ] `ring.tag_limit`: change the 12-slot cap of a tag fan
 - [ ] Import and export tags (share a tag set or merge another `tags.json`)
@@ -87,6 +90,11 @@
 
 - [ ] First-run wizard: find ZBrush, pick eight brushes, try the ring once
 - [ ] A short guided tour, offered on first run and under Help
+- [ ] Reorder the Settings cards: Ring geometry, Colours, Labels, Tag colours (the look); Open animation, Behaviour
+      (the feel); Brush browser, ZBrush bridge; then the cards that save straight away: Older ZBrush, Tags,
+      Studio. Do it by sorting the built cards by name before the "On this page" list is made, not by moving
+      their code, and put the same order in the Settings row of the user guide's Studio table. Optionally a
+      **Manage tags...** button in the Tag colours card
 
 ### macOS notes
 

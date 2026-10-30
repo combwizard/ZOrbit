@@ -11,13 +11,29 @@ If you know pie menus from Blender or marking menus from Maya, ZOrbit brings tha
   <img src="docs/images/open-animation.gif" alt="Holding Q: the ring opens around the cursor, the cursor hovers two brushes, the More Brushes submenu opens on hover, and a flick picks ClayTubes" width="550">
 </p>
 
+**Contents**
+
+- [Features](#features)
+- [Requirements](#requirements)
+- [Install](#install)
+  - [Upgrading from Radial Menu for ZBrush](#upgrading-from-radial-menu-for-zbrush)
+  - [ZBrush 2022 to 2025](#zbrush-2022-to-2025)
+  - [Windows says "Windows protected your PC"](#windows-says-windows-protected-your-pc)
+- [First steps](#first-steps)
+- [Uninstall](#uninstall)
+- [Build from source](#build-from-source)
+- [How it works](#how-it-works)
+- [Troubleshooting](#troubleshooting)
+- [Licence](#licence)
+- [Disclaimer](#disclaimer)
+
 ## Features
 
 - **Fast picking.** Hold the hotkey and flick past a slot, or move toward it and release. Or tap the hotkey and click.
 - **More than brushes.** A slot can select a brush, press any ZBrush button, set a slider, flip a switch, run several of those in a row, or open another ring.
 - **Submenus.** Rings can open other rings, so a handful of hotkeys can reach a lot. Hover a submenu and it opens on the spot, so one stroke can reach an item two rings deep.
 - **Fan-out submenus.** Switch a menu to fan out and it opens in place: its items spread in an arc beyond its slot while the ring you came from stays put. Fans can open fans, up to three deep.
-- **Tags and a brush browser.** Tag your brushes in Studio, colour their slots by tag, and give a slot a tag to open a fan of every brush that carries it, most used first. A hotkey (Alt+B) opens a browser over ZBrush with search, folders, tag chips and thumbnails; Enter picks the brush.
+- **Tags and a brush browser.** Tag your brushes in Studio, colour their slots by tag (an icon tint, a glow, or a band through the ring), and give a slot a tag to open a fan of every brush that carries it, most used first. A hotkey (Alt+B) opens a browser over ZBrush with search, folders, tag chips and thumbnails; Enter picks the brush.
 - **ZOrbit Studio.** Edit menus with a live preview of the real ring. Drag brushes in from a searchable library with thumbnails, record hotkeys, change colours, size and animation.
 - **Twelve open animations**, from instant to a swirling spiral, plus ring size, dead zone and label options.
 - **Starts and stops with ZBrush.** There is nothing to launch by hand.
