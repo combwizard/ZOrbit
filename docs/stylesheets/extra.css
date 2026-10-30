@@ -13,8 +13,9 @@
   --zo-amber: #f0c040;
   --zo-ease: cubic-bezier(.2, .8, .2, 1);
   --zo-bar: 76px;
-  --md-text-font-family: "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
-  --md-code-font-family: "Cascadia Mono", Consolas, "Courier New", monospace;
+  /* Material builds --md-text-font-family and --md-code-font-family from these two. */
+  --md-text-font: "Segoe UI Variable", "Segoe UI", system-ui;
+  --md-code-font: "Cascadia Mono", Consolas, "Courier New";
   color-scheme: dark;
 }
 
@@ -96,7 +97,7 @@ body::before {
 .zo-brand {
   display: flex; align-items: center; gap: 11px;
   color: var(--zo-text) !important; text-decoration: none;
-  font-weight: 800; font-size: 18px; letter-spacing: -.02em;
+  font-weight: 800; font-size: 18px; line-height: 1.55; letter-spacing: -.02em;
 }
 .zo-logo { flex: none; filter: drop-shadow(0 0 8px rgba(248, 107, 51, .5)); }
 .zo-z { color: var(--zo-accent); }
