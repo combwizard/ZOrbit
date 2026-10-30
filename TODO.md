@@ -2,6 +2,21 @@
 
 ## Next
 
+- [ ] Profiles for different ZBrush projects or jobs (hard-surface, creature, a client's pipeline): each profile
+      has its own menus, settings, hotkeys, tags and favourites, so a ring can be set up for one kind of work and
+      swapped out for another
+  - [ ] Decide what a profile holds: `radial.json` (menus, ring settings, browser hotkey) and `tags.json` for
+        sure; auto-slot usage (`usage.json`) and the Recent list probably stay per user, not per profile
+  - [ ] Switch from the tray menu and from Studio (a profile picker in the top bar), and optionally with a hotkey
+        that cycles them; the ring, the browser and the Studio all follow at once, with no restart
+  - [ ] Optional automatic switch when ZBrush opens a project or tool whose name matches a rule (the window title
+        carries the file name), with a toast saying which profile it chose
+  - [ ] New profile: start empty, from the starter menus, or as a copy of the current one; rename, duplicate,
+        delete (the last one cannot be deleted); the file layout could be `%APPDATA%\ZOrbit\profiles\<name>\`
+        with the current files becoming the "Default" profile, so an existing install upgrades with no change
+  - [ ] Settings > Import and export already moves a menus, settings and tags file between machines: a profile
+        export/import can reuse it
+
 - [ ] Support ZBrush 2022–2025 (ZScript bridge in `bridge/zscript/`, Studio: Settings > Older ZBrush)
   - [ ] 2022: load a brush that isn't loaded yet, press/set/toggle, steps, Status, Studio button
     - The 2026 bridge had to press a freshly loaded brush again once ZBrush had added its button (a timer on
@@ -76,23 +91,6 @@
 - [ ] `ring.tag_limit`: change the 12-slot cap of a tag fan
 - [ ] Favourites: manual drag-to-reorder and several named favourite tabs (XMD Toolbox style); a mini-mode strip of
       favourites over ZBrush
-
-### Profiles
-
-- [ ] Profiles for different ZBrush projects or jobs (hard-surface, creature, a client's pipeline): each profile
-      has its own menus, settings, hotkeys, tags and favourites, so a ring can be set up for one kind of work and
-      swapped out for another
-  - [ ] Decide what a profile holds: `radial.json` (menus, ring settings, browser hotkey) and `tags.json` for
-        sure; auto-slot usage (`usage.json`) and the Recent list probably stay per user, not per profile
-  - [ ] Switch from the tray menu and from Studio (a profile picker in the top bar), and optionally with a hotkey
-        that cycles them; the ring, the browser and the Studio all follow at once, with no restart
-  - [ ] Optional automatic switch when ZBrush opens a project or tool whose name matches a rule (the window title
-        carries the file name), with a toast saying which profile it chose
-  - [ ] New profile: start empty, from the starter menus, or as a copy of the current one; rename, duplicate,
-        delete (the last one cannot be deleted); the file layout could be `%APPDATA%\ZOrbit\profiles\<name>\`
-        with the current files becoming the "Default" profile, so an existing install upgrades with no change
-  - [ ] Settings > Import and export already moves a menus, settings and tags file between machines: a profile
-        export/import can reuse it
 
 ### Studio
 
