@@ -903,6 +903,14 @@ body.dragging .irow:hover { background: transparent; }
 .pop .searchbox input:focus { box-shadow: none; }         /* the search box draws its own focus ring */
 .pop .b-sub { padding: 0 14px 8px; }
 .pop .b-count { display: none; }                  /* the popout shows no "N items" line */
+/* The filters that are on, as chips in the toolbar; only while the folders and tags column is collapsed, since the column shows them otherwise. */
+.filter-chips { display: none; align-items: center; gap: 6px; min-width: 0; flex-wrap: wrap; }
+.pop.col-hidden .filter-chips:not([hidden]) { display: flex; }
+.fchip { display: inline-flex; align-items: center; gap: 6px; min-width: 0; max-width: 240px; height: 26px; padding: 0 8px 0 11px; background: var(--accent-wash); border: 1px solid var(--accent); border-radius: 99px; color: var(--text); font-size: 12px; transition: background .12s; }
+.fchip:hover { background: color-mix(in srgb, var(--accent) 28%, var(--bg2)); }
+.fchip .fc-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fchip .ico { flex: none; color: var(--sub); }
+.fchip:hover .ico { color: var(--text); }
 .pop .b-scroll { padding: 12px 14px 16px; }
 .pop .bgrid { gap: 8px; }
 .pop .bcard { cursor: pointer; }
