@@ -111,11 +111,12 @@ kbd {
   background: linear-gradient(100deg, #fff 0%, #fff 38%, #ffb08a 46%, var(--accent) 50%, var(--cyan) 56%, #fff 64%, #fff 100%);
   background-size: 300% 100%; background-position: 100% 0;
   -webkit-background-clip: text; background-clip: text; color: transparent;
-  animation: shine 7s var(--ease) infinite;
 }
+/* site.js adds .play each time the whole word comes into view. */
+.shine.play { animation: shine 3.2s var(--ease) .4s; }
 @keyframes shine {
-  0%, 15% { background-position: 100% 0; }
-  60%, 100% { background-position: 0 0; }
+  from { background-position: 100% 0; }
+  to { background-position: 0 0; }
 }
 
 /* ------------------------------------------------------------ top bar */
@@ -266,7 +267,7 @@ kbd {
   100% { box-shadow: 0 0 0 10px rgba(168, 223, 35, 0); }
 }
 .hero h1 {
-  font-size: clamp(2.8rem, 6.2vw, 5rem); font-weight: 800; letter-spacing: -.035em;
+  font-size: clamp(5.6rem, 12.4vw, 10rem); font-weight: 800; letter-spacing: -.035em;
   line-height: .98; margin-bottom: 12px;
   filter: drop-shadow(0 6px 30px rgba(248, 107, 51, .18));
 }
@@ -1057,7 +1058,7 @@ kbd {
 .reveal.in { opacity: 1; transform: none; filter: none; }
 @media (prefers-reduced-motion: reduce) {
   .reveal { opacity: 1; transform: none; filter: none; transition: none; }
-  .orb, .orbit, .shine, .badge-dot, .marquee-track, .glow-card, .glow-card::before, .cta-rings span, .win-run { animation: none; }
+  .orb, .orbit, .shine.play, .badge-dot, .marquee-track, .glow-card, .glow-card::before, .cta-rings span, .win-run { animation: none; }
   .marquee-track { flex-wrap: wrap; justify-content: center; width: auto; padding: 0 24px; }
   .marquee-track > :nth-child(n + 23) { display: none; }
   .rec-dot { animation: none; }

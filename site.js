@@ -225,7 +225,29 @@
     });
   }
 
-  var BURST_COLOURS = ['#f86b33', '#ff9a6a', '#f0c040', '#4dc8e9', '#a8df23', '#f0f0f0'];
+  // The shine sweeps once when the whole word is in view: on load, and again after it has left the screen
+  // and come back. The sticky top bar counts as off screen.
+  function shine() {
+    var nodes = document.querySelectorAll('.shine');
+    if (!nodes.length || REDUCE) return;
+    var top = document.querySelector('.top');
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (en) {
+        var el = en.target;
+        if (en.intersectionRatio >= 0.99 && !el.dataset.shone) {
+          el.dataset.shone = '1';
+          el.classList.remove('play');
+          void el.offsetWidth;   // restarts the animation
+          el.classList.add('play');
+        } else if (!en.isIntersecting) {
+          delete el.dataset.shone;
+        }
+      });
+    }, { threshold: [0, 1], rootMargin: '-' + (top ? top.offsetHeight : 0) + 'px 0px 0px 0px' });
+    nodes.forEach(function (el) { io.observe(el); });
+  }
+
+  var BURST_COLOURS =['#f86b33', '#ff9a6a', '#f0c040', '#4dc8e9', '#a8df23', '#f0f0f0'];
 
   function burst(x, y) {
     var n = 28;
@@ -358,6 +380,7 @@
     heroSpotlight();
     tilt();
     countUp();
+    shine();
     downloadBursts();
     recordingKeys();
 
