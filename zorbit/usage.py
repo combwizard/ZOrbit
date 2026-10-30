@@ -14,10 +14,13 @@ Recent picks are separate: every brush, alpha, material or texture picked (from 
 noted in "picks" with a count and the time of the last pick, the newest 200 kept. Nothing fades there: the
 browser lists them newest first, and "most used" for anything but brushes is the plain count.
 
+A name is keyed in lower case without spaces (norm(), as tags.json does): "Clay Buildup" and "ClayBuildup" are
+one brush. Keys written with spaces by an earlier version are merged when the file is read.
+
 %LOCALAPPDATA%\\ZOrbit\\usage.json (written by the app; the Studio and the browser write it only to forget a recent):
 {"brushes": {"claybuildup": {"name": "ClayBuildup", "score": 3.2, "t": 1761550000.0}},   # score as of t
  "menus": {"<menu id>": {"slots": ["ClayBuildup", null], "pending": ["Pinch"]}},
- "picks": {"alpha:alpha_01": {"name": "Alpha_01", "count": 4, "t": 1761550000.0}}}       # key: kind:name, lower case
+ "picks": {"alpha:alpha_01": {"name": "Alpha_01", "count": 4, "t": 1761550000.0}}}       # key: kind:norm(name)
 """
 import json
 import os
@@ -32,12 +35,17 @@ FORGET_BELOW = 0.01                    # a single pick drops out after about 3 m
 PICKS_KEPT = 200                       # recent picks across all kinds; the oldest go on save
 
 
+def norm(name) -> str:
+    """The key of a name: lower case, no spaces (the same rule as tags.item_key)."""
+    return "".join(str(name).split()).lower()
+
+
 def auto_count(menu) -> int:
     return sum(1 for it in menu.items if it.kind == "auto")
 
 
 def _pinned(menu) -> set:
-    return {it.data["brush"].lower() for it in menu.items if it.kind == "brush"}
+    return {norm(it.data["brush"]) for it in menu.items if it.kind == "brush"}
 
 
 class Usage:
@@ -63,16 +71,28 @@ class Usage:
         try:
             with open(self.path, encoding="utf-8") as f:
                 raw = json.load(f)
+            now = time.time()
             for k, e in (raw.get("brushes") or {}).items():
                 if isinstance(e, dict) and isinstance(e.get("name"), str):
-                    self.brushes[k] = {"name": e["name"], "score": float(e["score"]), "t": float(e["t"])}
+                    new = {"name": e["name"], "score": float(e["score"]), "t": float(e["t"])}
+                    k = norm(k)
+                    old = self.brushes.get(k)
+                    if old is None or self._faded(new, now) > self._faded(old, now):   # two spellings: higher score
+                        self.brushes[k] = new
             for mid, st in (raw.get("menus") or {}).items():
                 if isinstance(st, dict):
                     self.menus[mid] = {"slots": [s if isinstance(s, str) else None for s in st.get("slots") or []],
                                        "pending": [s for s in st.get("pending") or [] if isinstance(s, str)]}
             for k, e in (raw.get("picks") or {}).items():
                 if isinstance(e, dict) and isinstance(e.get("name"), str):
-                    self.picks[k] = {"name": e["name"], "count": int(e["count"]), "t": float(e["t"])}
+                    new = {"name": e["name"], "count": int(e["count"]), "t": float(e["t"])}
+                    kind, _, name = k.partition(":")
+                    k = f"{kind}:{norm(name)}"
+                    old = self.picks.get(k)
+                    if old is not None:                    # two spellings: the newer pick, with both counts
+                        count = old["count"] + new["count"]
+                        new = dict(new if new["t"] >= old["t"] else old, count=count)
+                    self.picks[k] = new
         except (OSError, ValueError, TypeError, KeyError, AttributeError):
             pass
         return self
@@ -88,20 +108,25 @@ class Usage:
         self.mtime = os.stat(self.path).st_mtime
 
     # --- scores ----------------------------------------------------------------------------------
+    @staticmethod
+    def _faded(e: dict, now: float) -> float:
+        return e["score"] * 0.5 ** ((now - e["t"]) / HALF_LIFE_S)
+
     def score(self, key: str, now: float) -> float:
+        """The fading score of a brush, by its key (norm() of the name)."""
         e = self.brushes.get(key)
-        return e["score"] * 0.5 ** ((now - e["t"]) / HALF_LIFE_S) if e else 0.0
+        return self._faded(e, now) if e else 0.0
 
     def record(self, name: str, now: float | None = None) -> None:
         now = time.time() if now is None else now
-        k = name.lower()
+        k = norm(name)
         self.brushes[k] = {"name": name, "score": self.score(k, now) + 1.0, "t": now}
         self.version += 1
 
     def record_pick(self, kind: str, name: str, now: float | None = None) -> None:
         """Notes a pick of any kind in the recent list (a brush is counted by record() as well)."""
         now = time.time() if now is None else now
-        k = f"{kind}:{name.lower()}"
+        k = f"{kind}:{norm(name)}"
         old = self.picks.get(k)
         self.picks[k] = {"name": name, "count": (old["count"] if old else 0) + 1, "t": now}
         self.version += 1
@@ -116,19 +141,26 @@ class Usage:
     def forget(self, kind: str, name: str) -> bool:
         """Takes one item off the recent list (in memory; save() keeps it). True if it was there. A brush's score
         stays: that is what fills the auto slots, and forgetting a recent is only tidying a list."""
-        if self.picks.pop(f"{kind}:{name.lower()}", None) is None:
+        if self.picks.pop(f"{kind}:{norm(name)}", None) is None:
             return False
         self.version += 1
         return True
 
     def scores_for(self, kind: str, now: float | None = None) -> dict:
-        """{name.lower(): score} for "most used": brushes by their fading score, the other kinds by pick count
-        (they have no fading)."""
+        """{norm(name): score} for "most used": brushes by their fading score, the other kinds by pick count
+        (they have no fading). A name with spaces is also given under its plain lower-case spelling, for pages that
+        look scores up with that."""
         if kind == "brush":
             now = time.time() if now is None else now
-            return {k: self.score(k, now) for k in self.brushes}
-        pre = kind + ":"
-        return {k[len(pre):]: float(e["count"]) for k, e in self.picks.items() if k.startswith(pre)}
+            out = {k: self.score(k, now) for k in self.brushes}
+            names = [(k, e["name"]) for k, e in self.brushes.items()]
+        else:
+            pre = kind + ":"
+            out = {k[len(pre):]: float(e["count"]) for k, e in self.picks.items() if k.startswith(pre)}
+            names = [(k[len(pre):], e["name"]) for k, e in self.picks.items() if k.startswith(pre)]
+        for k, name in names:
+            out.setdefault(name.lower(), out[k])
+        return out
 
     def ranked(self, now: float) -> list:
         """Brush names, best first (ties by name, so the order is stable)."""
@@ -138,7 +170,7 @@ class Usage:
     def rank(self, names, now: float | None = None) -> list:
         """The given brush names, best-scoring first (ties by name); unknown brushes score 0 and come last."""
         now = time.time() if now is None else now
-        return sorted(names, key=lambda n: (-self.score(n.lower(), now), n.lower()))
+        return sorted(names, key=lambda n: (-self.score(norm(n), now), n.lower()))
 
     # --- slots -----------------------------------------------------------------------------------
     def slots(self, menu, now: float | None = None) -> list:
@@ -150,12 +182,12 @@ class Usage:
         taken = set(_pinned(menu))
         slots = []
         for name in (st["slots"] + [None] * n)[:n]:
-            if name is not None and name.lower() in taken:
+            if name is not None and norm(name) in taken:
                 name = None
             if name is not None:
-                taken.add(name.lower())
+                taken.add(norm(name))
             slots.append(name)
-        free = (name for name in self.ranked(now) if name.lower() not in taken)
+        free = (name for name in self.ranked(now) if norm(name) not in taken)
         slots = [s if s is not None else next(free, None) for s in slots]
         st["slots"] = slots
         return list(slots)
@@ -166,16 +198,16 @@ class Usage:
         slots = self.slots(menu, now)
         st = self.menus[menu.id]
         pinned = _pinned(menu)
-        top = [name for name in self.ranked(now) if name.lower() not in pinned][:len(slots)]
-        top_keys = {name.lower() for name in top}
-        held = {s.lower() for s in slots if s is not None}
-        challengers = [name for name in top if name.lower() not in held]
-        before = {name.lower() for name in st["pending"]}
-        losers = sorted((i for i, s in enumerate(slots) if s is not None and s.lower() not in top_keys),
-                        key=lambda i: self.score(slots[i].lower(), now))
+        top = [name for name in self.ranked(now) if norm(name) not in pinned][:len(slots)]
+        top_keys = {norm(name) for name in top}
+        held = {norm(s) for s in slots if s is not None}
+        challengers = [name for name in top if norm(name) not in held]
+        before = {norm(name) for name in st["pending"]}
+        losers = sorted((i for i, s in enumerate(slots) if s is not None and norm(s) not in top_keys),
+                        key=lambda i: self.score(norm(slots[i]), now))
         pending = []
         for name in challengers:
-            if name.lower() in before and losers:
+            if norm(name) in before and losers:
                 slots[losers.pop(0)] = name
             else:
                 pending.append(name)

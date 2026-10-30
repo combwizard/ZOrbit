@@ -41,7 +41,7 @@ The full documentation is at **[zorbit.lol/docs](https://zorbit.lol/docs/)**: ev
 - **ZOrbit Studio.** Edit menus with a live preview of the real ring. Drag brushes in from a searchable library with thumbnails, record hotkeys, change colours, size and animation. A Setup screen walks a new install through finding ZBrush and trying the ring, and Import and export moves your menus, settings and tags to another PC.
 - **Twelve open animations**, from instant to a swirling spiral, plus ring size, dead zone and label options.
 - **Starts and stops with ZBrush.** There is nothing to launch by hand.
-- **Safe with your stroke.** A pick that arrives mid-stroke waits until you lift the pen.
+- **Safe with your stroke.** In ZBrush 2026 and newer, a pick that arrives mid-stroke waits until you lift the pen. ZBrush 2022 to 2025 cannot wait and apply it at once.
 - **High-DPI and multi-monitor aware.** The ring stays on screen, even at the screen edge.
 - **Plain JSON menus** in `%APPDATA%\ZOrbit\radial.json`, so you can back them up, share them and keep them in version control.
 

@@ -15,6 +15,7 @@ import io
 import os
 import struct
 import threading
+import time
 from pathlib import Path
 
 try:
@@ -36,6 +37,9 @@ _index: dict[str, dict[str, Path]] = {}
 _install_index: dict[tuple, dict[str, Path]] = {}
 _index_lock = threading.Lock()
 _write_lock = threading.Lock()
+RESCAN_GAP_S = 5.0                  # a missing asset rebuilds its index at most this often
+generation = 0                      # counts index builds; expand.py drops its cached tag fans when it changes
+_built_at: dict[tuple, float] = {}  # (kind, installation or "") -> when its index was last built
 _PNG_SIG = bytes.fromhex("89504e470d0a1a0a")
 _MAX_SIDE = 32768
 
@@ -89,23 +93,38 @@ def exts(kind: str) -> tuple:
     return (".zbp",) if kind == "brush" else EXTS.get(kind, ())
 
 
+def _built(kind: str, ins: str = "") -> None:
+    global generation
+    generation += 1
+    _built_at[(kind, ins)] = time.monotonic()
+
+
 def index(kind: str, refresh: bool = False) -> dict[str, Path]:
     """{lower-case stem: file} of everything ZBrush can load of this kind."""
     if kind == "brush":
-        return _brushes.brush_index(refresh)
+        fresh = refresh or not _brushes.has_index()
+        idx = _brushes.brush_index(refresh)
+        if fresh:
+            _built(kind)
+        return idx
     with _index_lock:
         if kind not in _index or refresh:
             idx: dict[str, Path] = {}
             for _, folder, rec in sources(kind):
                 _brushes._scan(folder, rec, idx, exts(kind))
             _index[kind] = idx
+            _built(kind)
         return _index[kind]
 
 
 def install_index(ins, kind: str) -> dict[str, Path]:
     """Assets of one ZBrush installation only (an older ZBrush may not load a newer version's files)."""
     if kind == "brush":
-        return _brushes.install_index(ins)
+        fresh = not _brushes.has_install_index(ins)
+        idx = _brushes.install_index(ins)
+        if fresh:
+            _built(kind, os.path.normcase(str(ins)))
+        return idx
     key = (kind, os.path.normcase(str(ins)))
     with _index_lock:
         if key not in _install_index:
@@ -113,7 +132,37 @@ def install_index(ins, kind: str) -> dict[str, Path]:
             for _, folder, rec in install_sources(ins, kind):
                 _brushes._scan(folder, rec, idx, exts(kind))
             _install_index[key] = idx
+            _built(kind, key[1])
         return _install_index[key]
+
+
+def rescan(kind: str, install=None) -> bool:
+    """Builds the index of this kind (of this installation) again, because an asset it should have is missing:
+    one saved since the first scan. Not more than once every RESCAN_GAP_S. True when it was rebuilt."""
+    ins = os.path.normcase(str(install)) if install else ""
+    if time.monotonic() - _built_at.get((kind, ins), -RESCAN_GAP_S) < RESCAN_GAP_S:
+        return False
+    if install:
+        if kind == "brush":
+            _brushes.forget_install_index(install)
+        else:
+            _install_index.pop((kind, ins), None)
+        install_index(install, kind)
+    else:
+        index(kind, refresh=True)
+    return True
+
+
+def find_or_rescan(kind: str, name, install=None) -> Path | None:
+    """find(), and when the asset is not there, one fresh scan (rate limited) before giving up."""
+    try:
+        install_index(install, kind) if install else index(kind)    # a first build is then dated, not rescanned
+    except Exception:
+        pass
+    p = find(kind, name, install)
+    if p is None and rescan(kind, install):
+        p = find(kind, name, install)
+    return p
 
 
 def find(kind: str, name, install=None) -> Path | None:

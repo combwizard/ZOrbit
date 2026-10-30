@@ -11,6 +11,22 @@ All notable changes to this project are listed here. The format follows
 - The documentation moved to <https://zorbit.lol/docs/>: the user guide and the longer parts of the README are now
   separate pages with search. Studio's **Setup** screen opens it there.
 
+### Fixed
+
+- A pick made during a stroke no longer applies in the middle of it in ZBrush 2026 and newer: while the mouse button is down the app waits instead of falling back to the bridge key, and the plugin's **Apply** waits too. ZBrush 2022 to 2025 still cannot wait.
+- A ring opened near a screen edge is moved in so the whole ring is on screen, instead of being cut off. Nothing is picked or opened by hover until the cursor has moved inside it.
+- With no `bridge.key` in `radial.json`, the bridge key is F9, as Studio says. A key with Ctrl or Shift, or one that cannot be read, is reported and F9 is used.
+- A `radial.json` that cannot be read when the app starts no longer stops the app: it starts without menus, logs "cannot load radial.json" and picks the file up as soon as it is fixed.
+- A brush, alpha, material or texture saved after the app started is found on the next pick instead of failing with "NOT loaded in ZBrush and no file known" until a restart. Tag fans notice new files too.
+- A submenu slot that points at a menu with no usable items is reported ("submenu 'x' has no usable items") and skipped, instead of closing the ring without a word.
+- "Remove from Recent" and the use counts now treat `Clay Buildup` and `ClayBuildup` as one brush. Older `usage.json` entries are merged when the file is read.
+- A setting name that is misspelt in `radial.json` (for example `ring.raduis` or a menu's `itmes`) is now listed as a problem, with a suggestion. A `swallow` that is not `true` or `false` is listed too.
+- **Reload menus** in the tray no longer logs "menus reloaded" after a file that could not be read.
+- The app logs a line when ZBrush runs as administrator and its hotkeys are ignored for that reason.
+- `request.txt` is only written, and its code page warning only logged, when a ZBrush 2022 to 2025 is installed.
+- ZBrush 2022 to 2025: the plugin's log says "NOT loaded in ZBrush and no file known" like the rest of ZOrbit, and a pick with several steps logs the result of every step, not only the last.
+- Studio: the "your hotkeys ()" hint in the suggestions has no empty brackets. **Add a ZBrush folder** with a ZBrush 2026 or newer explains when it appears on Setup. Status shows a changed bridge mode as soon as you save (it lagged by up to 30 seconds), and Status and Setup use less CPU (no `tasklist` every three seconds, the install scan is kept for five seconds).
+
 ## [0.10.2] - 2026-10-30
 
 ### Fixed

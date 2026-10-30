@@ -29,12 +29,13 @@ The palette was renamed, so a hotkey you bound by hand to the old **Apply** does
 4. If the status says the app is not running, press **Start App**, then read `app_stderr.log` and `radiald.log`.
 5. In Studio, check for the **problems** pill. A menu with no usable items, a duplicate hotkey or a hotkey the app cannot read all stop a ring from opening.
 6. Another program may grab the same key before it reaches the app. Try a different hotkey.
+7. Is ZBrush running as administrator? The app cannot read the name of an elevated program's process, so it cannot tell that ZBrush is the front window, and it ignores the hotkey. `radiald.log` then says "foreground window's process could not be read (is ZBrush running as administrator?); hotkeys ignored". Start ZBrush without "Run as administrator".
 
 ## Picks do nothing
 
 ### The ring opens, but picks do nothing
 
-Check the listener on Studio's Status screen, or in ZBrush under **Zplugin > ZOrbit > Status**. It should say "verified". If it is not, use the fallback: [bind the bridge key](#use-or-test-the-fallback-key) and leave the mode on `auto`. Then read `bridge.log`; it names each action and says whether it worked. Common causes: a `press`, `set` or `toggle` path that does not exist in your ZBrush (logged as "no such interface item"), or a `brush`, `alpha`, `material` or `texture` whose file ZOrbit cannot find (logged as "NOT loaded in ZBrush and no file known").
+Check the listener on Studio's Status screen, or in ZBrush under **Zplugin > ZOrbit > Status**. It should say "verified". If it is not, use the fallback: [bind the bridge key](#use-or-test-the-fallback-key) and leave the mode on `auto`. Then read `bridge.log`; it names each action and says whether it worked. Common causes: a `press`, `set` or `toggle` path that does not exist in your ZBrush (logged as "no such interface item"), or a `brush`, `alpha`, `material` or `texture` whose file ZOrbit cannot find (logged as "NOT loaded in ZBrush and no file known"). A brush you saved after ZOrbit started is found anyway: when a name is missing, ZOrbit looks through your brush, alpha, material and texture folders again before it gives up (at most once every five seconds).
 
 ### ZBrush 2022 to 2025: the ring opens, but picks do nothing
 
@@ -48,7 +49,7 @@ To test it, set `"mode": "key"` temporarily, pick something, and check `bridge.l
 
 ### Picks feel late during a stroke
 
-That is intended. A pick waits until you release the mouse button or lift the pen, so a tool change never lands in the middle of a stroke.
+In ZBrush 2026 and newer that is intended. A pick waits until you release the mouse button or lift the pen, so a tool change never lands in the middle of a stroke. The bridge key fallback waits too: it is pressed half a second after you lift. ZBrush 2022 to 2025 cannot wait. Their plugin applies a pick as soon as the bridge key arrives, even in the middle of a stroke.
 
 ## The browser
 
@@ -86,6 +87,10 @@ There is no thumbnail for it. For a brush, that means no `.zbp` was found. A mat
 ### I broke my menus file
 
 Studio keeps the last version as `radial.json.bak`. If you edit the file by hand and the app cannot read it, it keeps using the last good version and logs the error. When Studio cannot read it either, it opens on a recovery screen that shows the error with its line and column, and offers **Open folder**, **Restore backup** and **Start from defaults** (the unreadable file is kept as `radial.json.broken`). A byte-order mark left by an editor is accepted. Deleting `radial.json` makes the app create a fresh one from the starter menus.
+
+If the file cannot be read when the app starts, the app still starts: the tray icon appears, no ring opens, and `radiald.log` says "cannot load radial.json" with the reason. Fix the file in Studio or by hand; the app reads it again as soon as it changes. **Reload menus** in the tray menu logs "tray: reload failed" with the reason when the file is still unreadable.
+
+A setting name ZOrbit does not know, such as `raduis` for `radius` in `ring` or `itmes` in a menu, is listed as a problem and ignored, with a "did you mean" when a known name is close. A `swallow` that is not `true` or `false` is a problem too, and counts as `true`. A submenu slot that points at a menu with no usable items is listed and skipped.
 
 ### Checking a file from a source checkout
 

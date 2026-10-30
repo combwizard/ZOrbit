@@ -33,6 +33,7 @@ import paths                # noqa: E402
 import radiald              # noqa: E402
 import tags                 # noqa: E402
 import webapi               # noqa: E402
+import win32 as W           # noqa: E402
 import winframe             # noqa: E402
 import zscript_bridge       # noqa: E402
 
@@ -90,10 +91,8 @@ def _tail(path, n=40):
 def _zbrush_running():
     """(running, check_ok): whether a ZBrush.exe process exists, and whether the process check itself worked."""
     try:
-        out = subprocess.run(["tasklist", "/FI", "IMAGENAME eq ZBrush.exe", "/NH"], capture_output=True,
-                             text=True, errors="replace", timeout=5, creationflags=0x08000000).stdout
-        return "zbrush.exe" in (out or "").lower(), True
-    except (OSError, subprocess.SubprocessError, ValueError):
+        return bool(W.pids_named("zbrush.exe")), True      # a process snapshot: no tasklist.exe every 3 seconds
+    except OSError:
         return False, False
 
 
@@ -237,6 +236,7 @@ class Api(webapi.LibraryApi, webapi.TagApi):
             st = os.stat(CONFIG_FILE)
         except OSError as e:
             return {"saved": False, "message": f"radial.json could not be written: {e.strerror or e}"}
+        self._extras = (0.0, "auto", False)            # Status reads the new bridge mode at once
         return {"saved": True, "problems": problems, "time": time.time(), "mtime_ns": st.st_mtime_ns}
 
     def restore_backup(self):
@@ -258,6 +258,7 @@ class Api(webapi.LibraryApi, webapi.TagApi):
             fsutil.write_atomic(CONFIG_FILE, data)
         except OSError as e:
             return {"ok": False, "message": f"radial.json could not be written: {e.strerror or e}"}
+        self._extras = (0.0, "auto", False)
         return {"ok": True, "message": "Restored radial.json from radial.json.bak."}
 
     def reset_config(self):
@@ -384,7 +385,8 @@ class Api(webapi.LibraryApi, webapi.TagApi):
             for line in _tail(hk, 10000):
                 m = re.match(r"\s*\[([^,\]]+),\d+\]\s*(?://\s*(.*))?", line)
                 if m and not m.group(1).upper().startswith(("BRUSH:", "CM")):
-                    add(_title_path(m.group(1)), f"your hotkeys ({(m.group(2) or '').strip()})")
+                    note = (m.group(2) or "").strip()
+                    add(_title_path(m.group(1)), f"your hotkeys ({note})" if note else "your hotkeys")
         for p in ("Tool:Masking:Clear", "Tool:Masking:Inverse", "Tool:Masking:ViewMask", "Transform:Activate Symmetry",
                   "Transform:PolyF", "Transform:Solo", "Tool:Geometry:Divide", "Tool:Geometry:Lower Res",
                   "Tool:Geometry:Higher Res", "Draw:Draw Size", "Draw:Z Intensity", "Stroke:LazyMouse",
@@ -501,9 +503,19 @@ class Api(webapi.LibraryApi, webapi.TagApi):
                 "log": _tail(os.path.join(DATA_DIR, "radiald.log"), 8)}
 
     # --- ZScript bridge for ZBrush 2022-2025 -----------------------------------------------------
+    _scan = (0.0, [])                          # (when, installs.find_installs()): Setup asks every second or so
+
+    def _scanned_installs(self):
+        """installs.find_installs(), kept for a few seconds (it reads the registry and lists folders)."""
+        at, found = self._scan
+        if not at or time.monotonic() - at >= 5:
+            found = installs.find_installs()
+            self._scan = (time.monotonic(), found)
+        return list(found)
+
     def _all_installs(self):
         """Every ZBrush installation: found ones plus folders the user added."""
-        found = installs.find_installs()
+        found = self._scanned_installs()
         seen = {os.path.normcase(e["path"]) for e in found}
         found = [dict(e, added=False) for e in found]
         for p in _read_studio_file().get("zbrush_folders", []):
@@ -579,8 +591,9 @@ class Api(webapi.LibraryApi, webapi.TagApi):
         if not e:
             return {"ok": False, "message": "No ZBrush.exe in that folder."}
         if e["python"]:
-            return {"ok": False, "message": f"{e['name']} has the Python API: it uses the regular bridge, "
-                                           "which the installer already set up."}
+            return {"ok": False, "message": f"{e['name']} has the Python API, so it uses the regular bridge and "
+                                           "nothing needs adding here. It appears on Setup by itself once it has "
+                                           "been started once with the plugin set up."}
         if os.path.normcase(e["path"]) in {os.path.normcase(x["path"]) for x in self._legacy_installs()}:
             return {"ok": True, "message": f"{e['name']} is already listed.", "already": True}
         with _studio_lock:                     # read, change and write as one step

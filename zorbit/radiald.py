@@ -10,7 +10,7 @@ How it works:
     the pen/cursor tracking.
   * The same pick also goes to request.txt for the ZScript bridge of ZBrush 2022-2025 (no Python API, so no
     listener: those always get the bridge key, and brushes, alphas, materials and textures load from their own
-    installation's files).
+    installation's files). It is only written when such an installation exists.
   * Brush picks are counted in usage.json; a menu's auto slots are filled from those counts as it opens.
   * tags.json (the user's tags on brushes, alphas, materials and textures) is watched with radial.json: tag
     slots open a fan of the items with that tag, and a slot is drawn in the colour of its item's first tag
@@ -66,6 +66,9 @@ WM_APP_CANCEL = W.WM_APP + 12         # hook -> control window: Esc
 WM_APP_MASK = W.WM_APP + 13           # hook -> control window: inject the Alt menu-mask key
 WM_APP_BROWSER = W.WM_APP + 14        # hook -> control window: the browser hotkey
 WM_APP_BROWSER_PICK = W.WM_APP + 15   # control window -> itself: a brush was picked in the popout
+ACK_WAIT_S = 0.5                      # a listener pick not picked up in this long falls back to the bridge key
+ACK_HOLD_MAX_S = 30                   # ... but not while the left button is down, for this long at most
+LEGACY_SCAN_S = 60                    # how long the scan for ZBrush 2022-2025 installations is kept
 TIMER_WATCH, TIMER_ACK, TIMER_REHOOK, TIMER_CONFIG, TIMER_BROWSER_PICK, TIMER_PREWARM, TIMER_POPOUT_SHOW = range(1, 8)
 COPYDATA_PICK, COPYDATA_SHOW, COPYDATA_QUIT = 1, 10, 12   # WM_COPYDATA ids: popout -> app, app -> popout
 POPOUT_CLASS = "ZOrbitPopoutCtl"      # the popout's message-only control window
@@ -126,7 +129,11 @@ class App:
         self._pid_install = {}          # pid -> installs.install_of() of the ZBrush.exe behind it
         self._icons = {}
         self._seq = 0
-        self._ack = None                # (seq, deadline) of a message-mode pick awaiting pickup
+        self._ack = None                # [seq, deadline, give up at, logged] of a message-mode pick awaiting pickup
+        self._config_error = None       # why the last load of radial.json failed, else None
+        self._have_cfg = False          # self.cfg came from a radial.json that loaded (not the empty stand-in)
+        self._unreadable = set()        # pids of foreground windows whose process could not be read, logged
+        self._legacy_scan = (0.0, False)    # (when, whether a ZBrush 2022-2025 is installed)
         self._target_misses = 0
         self.usage = usage.Usage()
         self.activity = activity.Activity(os.path.join(DATA_DIR, "activity.json"), log)   # for the Studio's Setup screen
@@ -164,8 +171,18 @@ class App:
             cfg = C.load(self.cfg_path, self.tags)
         except Exception as e:
             self._bad_mtime = mtime                # logged once per broken version, not on every poll
-            log(f"config error, keeping previous config: {e!r}")
+            self._config_error = str(e) or repr(e)
+            if self._have_cfg:
+                log(f"config error, keeping previous config: {e!r}")
+            else:                                  # nothing loaded yet: run with no menus until the file is fixed
+                log(f"cannot load radial.json: {self._config_error}; open Studio to fix it "
+                    f"(the file is re-read as soon as it changes)")
+                self.cfg = C.Config(path=self.cfg_path, mtime=0.0)
+                self.expander = expand.Expander(self.cfg, self.usage, self.tags)
+                self.slots = []
             return
+        self._config_error = None
+        self._have_cfg = True
         self.cfg = cfg
         self.expander = expand.Expander(cfg, self.usage, self.tags)
         self.slots = [m for m in cfg.menus.values() if m.hotkey]
@@ -245,6 +262,10 @@ class App:
             if len(self._pid_exe) > 256:
                 self._pid_exe.clear()
             self._pid_exe[pid] = exe
+        if not exe and pid not in self._unreadable and len(self._unreadable) < 20:
+            self._unreadable.add(pid)
+            log(f"foreground window's process could not be read (is ZBrush running as administrator?); "
+                f"hotkeys ignored (pid {pid})")
         return exe == self.target_exe
 
     def target_install(self) -> dict | None:
@@ -439,7 +460,10 @@ class App:
                 log("tray: opening the Studio")
             elif name == "reload":
                 self.load_config(force=True)
-                log("tray: menus reloaded")
+                if self._config_error:
+                    log(f"tray: reload failed: {self._config_error}")
+                else:
+                    log("tray: menus reloaded")
             elif name == "logs":
                 os.makedirs(paths.DATA_DIR, exist_ok=True)
                 os.startfile(paths.DATA_DIR)
@@ -511,6 +535,8 @@ class App:
                 self.open_menu(sub, at, held=self.held_vk is not None, nested=True)
             elif sub is not None:
                 self.open_menu(sub, W.cursor_pos(), held=False)   # re-centred on the pick
+            else:
+                log(f"submenu '{item.data['menu']}' has no usable items; nothing opened")
             return
         if item.kind in ("auto", "tag"):
             log(f"empty {item.kind} slot picked; nothing sent")
@@ -690,7 +716,7 @@ class App:
             a = dict(a)
             got = C.asset_of(a)
             if got and assets is not None:
-                p = assets.find(got[0], got[1], legacy["path"] if legacy else None)
+                p = assets.find_or_rescan(got[0], got[1], legacy["path"] if legacy else None)
                 a["file"] = str(p).replace("\\", "/") if p else None
             out.append(a)
         return out
@@ -704,12 +730,24 @@ class App:
         with open(tmp, "w", encoding="utf-8") as f:
             json.dump(req, f)
         os.replace(tmp, REQUEST_FILE)              # atomic: the bridge never sees half a request
-        try:
-            for p in zscript_bridge.write_request(self._seq, item.label, actions):
-                log(f"pick #{self._seq}: request.txt: {p}")
-        except OSError as e:
-            log(f"pick #{self._seq}: could not write request.txt: {e!r}")
+        if legacy is not None or self._legacy_installed():      # only ZBrush 2022-2025 read request.txt
+            try:
+                for p in zscript_bridge.write_request(self._seq, item.label, actions):
+                    log(f"pick #{self._seq}: request.txt: {p}")
+            except OSError as e:
+                log(f"pick #{self._seq}: could not write request.txt: {e!r}")
         return self._seq
+
+    def _legacy_installed(self) -> bool:
+        """Whether a ZBrush 2022-2025 (no Python API) is installed; the scan is kept for LEGACY_SCAN_S."""
+        at, found = self._legacy_scan
+        if at == 0.0 or time.monotonic() - at >= LEGACY_SCAN_S:
+            try:
+                found = any(not e["python"] for e in installs.find_installs())
+            except Exception:
+                found = True                       # cannot tell: write it, as before
+            self._legacy_scan = (time.monotonic(), found)
+        return found
 
     def _listener(self):
         try:
@@ -742,7 +780,8 @@ class App:
             log(f"pick #{seq} '{item.label}' -> listener {int(listener.value)} (posted={bool(ok)})")
             if ok:
                 self.activity.note_pick(seq, item, "listener", True, source, self._activity_menu)
-                self._ack = (seq, time.time() + 0.5)
+                now = time.time()
+                self._ack = [seq, now + ACK_WAIT_S, now + ACK_HOLD_MAX_S, False]
                 W.SetTimer(self.ctrl, TIMER_ACK, 100, None)
                 W.nudge_mouse()
                 return
@@ -759,14 +798,23 @@ class App:
         if self._ack is None:
             W.KillTimer(self.ctrl, TIMER_ACK)
             return
-        seq, deadline = self._ack
+        seq, deadline, give_up, logged = self._ack
         pending = os.path.exists(REQUEST_FILE)
         if not pending:
             self._ack = None
             W.KillTimer(self.ctrl, TIMER_ACK)
             self.activity.note_ack(seq, "picked_up")
             return
-        if time.time() < deadline:
+        now = time.time()
+        if now < deadline:
+            return
+        if W.key_down(W.VK_LBUTTON) and now < give_up:
+            # The listener holds a pick back while the left button is down, and a bridge key pressed now would apply
+            # it mid-stroke: wait until the button is up, then give the listener ACK_WAIT_S more.
+            self._ack[1] = now + ACK_WAIT_S
+            if not logged:
+                self._ack[3] = True
+                log(f"pick #{seq}: left mouse button is down; waiting for the stroke to end")
             return
         self._ack = None
         W.KillTimer(self.ctrl, TIMER_ACK)

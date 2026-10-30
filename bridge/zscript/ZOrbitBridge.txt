@@ -41,6 +41,7 @@
 [VarDef, rmB, ""]              // second argument (asset file, set value)
 [VarDef, rmCount, 0]
 [VarDef, rmRes, ""]            // result of the last action
+[VarDef, rmAll, ""]            // the results of every action of the pick, joined with "; "
 [VarDef, rmLast, "none yet"]   // summary of the last pick
 
 // --- reading files line by line ------------------------------------------------------------------
@@ -113,7 +114,7 @@
 			[IPress, "Brush:Load Brush"]
 			[If, [IExists, #rmP], [IPress, #rmP]]
 			[VarSet, rmRes, [StrMerge, "brush ", #rmA, ": loaded from file"]],
-			[VarSet, rmRes, [StrMerge, "brush ", #rmA, ": NOT loaded and no .zbp file known"]]
+			[VarSet, rmRes, [StrMerge, "brush ", #rmA, ": NOT loaded in ZBrush and no file known"]]
 		]
 	]
 	// Still switched: the note only explains a brush that seems not to take outside Edit mode.
@@ -132,7 +133,7 @@
 			[IPress, "Alpha:Import"]
 			[If, [IExists, #rmP], [IPress, #rmP]]
 			[VarSet, rmRes, [StrMerge, "alpha ", #rmA, ": loaded from file"]],
-			[VarSet, rmRes, [StrMerge, "alpha ", #rmA, ": NOT loaded and no file known"]]
+			[VarSet, rmRes, [StrMerge, "alpha ", #rmA, ": NOT loaded in ZBrush and no file known"]]
 		]
 	]
 ]
@@ -147,7 +148,7 @@
 			[IPress, "Material:Load"]
 			[If, [IExists, #rmP], [IPress, #rmP]]
 			[VarSet, rmRes, [StrMerge, "material ", #rmA, ": loaded from file"]],
-			[VarSet, rmRes, [StrMerge, "material ", #rmA, ": NOT loaded and no file known"]]
+			[VarSet, rmRes, [StrMerge, "material ", #rmA, ": NOT loaded in ZBrush and no file known"]]
 		]
 	]
 ]
@@ -162,7 +163,7 @@
 			[IPress, "Texture:Import"]
 			[If, [IExists, #rmP], [IPress, #rmP]]
 			[VarSet, rmRes, [StrMerge, "texture ", #rmA, ": loaded from file"]],
-			[VarSet, rmRes, [StrMerge, "texture ", #rmA, ": NOT loaded and no file known"]]
+			[VarSet, rmRes, [StrMerge, "texture ", #rmA, ": NOT loaded in ZBrush and no file known"]]
 		]
 	]
 ]
@@ -252,7 +253,7 @@
 				[RoutineCall, RM_ReadLine]
 				[VarSet, rmLabel, #rmLine]
 				[VarSet, rmCount, 0]
-				[VarSet, rmRes, "nothing to do"]
+				[VarSet, rmAll, "nothing to do"]
 				[Loop, 100,
 					[If, rmOff >= rmSize, [LoopExit]]
 					[RoutineCall, RM_ReadLine]
@@ -267,6 +268,7 @@
 						[RoutineCall, RM_ReadLine]
 						[VarSet, rmB, #rmLine]
 					]
+					[VarSet, rmRes, [StrMerge, "unknown action ", #rmKind]]
 					[If, rmK == 98, [RoutineCall, RM_Brush]]
 					[If, rmK == 97, [RoutineCall, RM_Alpha]]
 					[If, rmK == 109, [RoutineCall, RM_Material]]
@@ -274,9 +276,13 @@
 					[If, rmK == 112, [RoutineCall, RM_Press]]
 					[If, rmK == 115, [RoutineCall, RM_Set]]
 					[If, rmK == 116, [RoutineCall, RM_Toggle]]
+					[If, rmCount == 0,
+						[VarSet, rmAll, #rmRes],
+						[VarSet, rmAll, [StrMerge, #rmAll, "; ", #rmRes]]
+					]
 					[VarAdd, rmCount, 1]
 				]
-				[VarSet, rmLast, [StrMerge, "#", #rmId, " '", #rmLabel, "': ", #rmRes]],
+				[VarSet, rmLast, [StrMerge, "#", #rmId, " '", #rmLabel, "': ", #rmAll]],
 				[VarSet, rmLast, "unreadable request.txt (deleted)"]
 			],
 			[VarSet, rmLast, "Apply pressed, no pending pick"]

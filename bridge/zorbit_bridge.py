@@ -156,6 +156,11 @@ def _do_action(a: dict) -> str:
 
 def apply_request(sender: str = "") -> None:
     """Button callback and listener entry point: carry out request.json, then delete it."""
+    if (not str(sender or "").startswith("listener") and GetAsyncKeyState(VK_LBUTTON) & 0x8000
+            and S.hwnd and IsWindow(S.hwnd)):
+        SetTimer(S.hwnd, TIMER_RETRY, 40, None)           # the bridge key mid-stroke: wait like a listener pick does
+        log(f"apply ({sender or 'button'}): the left mouse button is down; waiting for the stroke to end")
+        return
     try:
         with open(REQUEST_FILE, encoding="utf-8") as f:
             req = json.load(f)

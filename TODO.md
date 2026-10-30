@@ -49,6 +49,10 @@
 
 ### Bridge
 
+- [ ] A failed pick has no sign on screen (UX audit). Message mode with no listener, ZBrush not in front
+      and an empty auto or tag slot all end in a log line only, and the "file not found" placeholder looks the same as
+      "no thumbnail". Show something (a short toast near the cursor, a different placeholder). It goes with the
+      "Bridge didn't respond" warning item under Support ZBrush 2022-2025 above
 - [x] Brush picks note "(Edit mode is off)" from `Transform:Edit` (both bridges; the pick still goes through)
 - [x] Delete a leftover `request.json`/`request.txt` when the bridge loads, so a pick from a crashed session
       can't run on the next Apply (both bridges)

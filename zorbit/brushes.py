@@ -114,6 +114,19 @@ def brush_index(refresh: bool = False) -> dict[str, Path]:
         return _index
 
 
+def has_index() -> bool:
+    return _index is not None
+
+
+def has_install_index(ins) -> bool:
+    return os.path.normcase(str(ins)) in _install_index
+
+
+def forget_install_index(ins) -> None:
+    with _index_lock:
+        _install_index.pop(os.path.normcase(str(ins)), None)
+
+
 def install_index(ins) -> dict[str, Path]:
     """Brushes of one ZBrush installation only (an older ZBrush may not load a newer version's .zbp)."""
     key = os.path.normcase(str(ins))

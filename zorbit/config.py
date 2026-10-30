@@ -57,6 +57,7 @@ Schema (all keys optional except menus):
 
 Menu ids starting with "tag:" are reserved for the submenus a tag slot opens.
 """
+import difflib
 import json
 import os
 import re
@@ -93,6 +94,8 @@ _NAMED_VK = {
     "`": 0xC0, "~": 0xC0, "-": 0xBD, "=": 0xBB, "[": 0xDB, "]": 0xDD, "\\": 0xDC, ";": 0xBA,
     "'": 0xDE, ",": 0xBC, ".": 0xBE, "/": 0xBF,
 }
+MENU_KEYS = ("title", "hotkey", "swallow", "animation", "fan", "items")
+DEFAULT_BRIDGE_KEY = "F9"          # used when radial.json has no usable bridge.key
 _MODS = {"ctrl": "ctrl", "control": "ctrl", "alt": "alt", "shift": "shift"}
 
 
@@ -132,7 +135,7 @@ class Config:
     path: str
     mtime: float
     bridge_mode: str = "auto"
-    bridge_key: Hotkey | None = None
+    bridge_key: Hotkey | None = field(default_factory=lambda: parse_hotkey(DEFAULT_BRIDGE_KEY))
     browser_key: Hotkey | None = None
     ring: dict = field(default_factory=lambda: json.loads(json.dumps(DEFAULT_RING)))
     menus: dict = field(default_factory=dict)
@@ -168,6 +171,11 @@ def asset_of(action):
         if k in action and isinstance(action[k], str):
             return k, action[k]
     return None
+
+
+def _did_you_mean(key, known) -> str:
+    near = difflib.get_close_matches(str(key), list(known), n=1)
+    return f" (did you mean {near[0]}?)" if near else ""
 
 
 def _check_action(a, errors, where, allow_nested=True) -> bool:
@@ -247,13 +255,14 @@ def load(path: str, tags=None) -> Config:
         errors.append(f"bridge.mode {cfg.bridge_mode!r} unknown; using auto")
         cfg.bridge_mode = "auto"
     if bridge.get("key"):
-        cfg.bridge_key = parse_hotkey(bridge["key"])
-        if cfg.bridge_key is None:
-            errors.append(f"bridge.key {bridge['key']!r} not understood")
-        elif cfg.bridge_key.ctrl or cfg.bridge_key.shift:
+        key = parse_hotkey(bridge["key"])
+        if key is None:
+            errors.append(f"bridge.key {bridge['key']!r} not understood; using {DEFAULT_BRIDGE_KEY}")
+        elif key.ctrl or key.shift:
             errors.append("bridge.key must not use Ctrl or Shift (ZBrush reads them as mask/smooth); "
-                          "use a bare F-key")
-            cfg.bridge_key = None
+                          f"use a bare F-key; using {DEFAULT_BRIDGE_KEY}")
+        else:
+            cfg.bridge_key = key
     ring = raw.get("ring") or {}
     for k, v in ring.items():
         if k == "colors" and isinstance(v, dict):
@@ -289,11 +298,13 @@ def load(path: str, tags=None) -> Config:
                 cfg.ring[k] = v
             else:
                 errors.append(f"ring.{k}: {v!r} unknown; one of {', '.join(_RING_CHOICES[k])}")
+        else:
+            errors.append(f"ring.{k}: unknown setting" + _did_you_mean(k, DEFAULT_RING))
     menus_raw = raw.get("menus") or {}
     if not isinstance(menus_raw, dict) or not menus_raw:
         errors.append("menus: must be a non-empty object of id -> menu")
         menus_raw = {}
-    used_keys = {}
+    built = {}                  # id -> (raw menu, [(item number, Item)]) of the menus with something in them
     for mid, m in menus_raw.items():
         if not isinstance(m, dict):
             errors.append(f"menu {mid}: not an object")
@@ -301,6 +312,9 @@ def load(path: str, tags=None) -> Config:
         if mid.startswith("tag:"):
             errors.append(f"menu {mid}: ids starting with 'tag:' are reserved for tag submenus")
             continue
+        for k in m:
+            if k not in MENU_KEYS:
+                errors.append(f"menu {mid}: unknown setting {k!r}" + _did_you_mean(k, MENU_KEYS))
         items = []
         for i, it in enumerate(m.get("items") or []):
             where = f"menu {mid} item {i + 1}"
@@ -314,12 +328,32 @@ def load(path: str, tags=None) -> Config:
                 errors.append(f"{where}: tag {it['tag']!r} does not exist; the slot stays empty")
             elif tags is not None and kind == "browser" and it["browser"] and not tags.has(it["browser"]):
                 errors.append(f"{where}: tag {it['browser']!r} does not exist; the browser opens unfiltered")
-            items.append(Item(label=str(it.get("label") or _default_label(it, menus_raw, tags)), kind=kind,
-                              data={k: v for k, v in it.items() if k not in ("label", "icon")},
-                              icon=str(it.get("icon") or ""), tag=it["tag"] if kind == "tag" else ""))
+            items.append((i + 1, Item(label=str(it.get("label") or _default_label(it, menus_raw, tags)), kind=kind,
+                                      data={k: v for k, v in it.items() if k not in ("label", "icon")},
+                                      icon=str(it.get("icon") or ""), tag=it["tag"] if kind == "tag" else "")))
         if not items:
             errors.append(f"menu {mid}: no usable items")
             continue
+        built[mid] = (m, items)
+    changed = True              # a submenu slot whose menu was dropped goes too, and may empty its own menu
+    while changed:
+        changed = False
+        for mid in list(built):
+            m, items = built[mid]
+            keep = []
+            for n, it in items:
+                if it.kind == "menu" and it.data["menu"] not in built:
+                    errors.append(f"menu {mid} item {n}: submenu {it.data['menu']!r} has no usable items")
+                    changed = True
+                else:
+                    keep.append((n, it))
+            if not keep:
+                errors.append(f"menu {mid}: no usable items")
+                del built[mid]
+            else:
+                built[mid] = (m, keep)
+    used_keys = {}
+    for mid, (m, items) in built.items():
         hk = None
         if m.get("hotkey"):
             hk = parse_hotkey(m["hotkey"])
@@ -335,9 +369,12 @@ def load(path: str, tags=None) -> Config:
         if anim and anim not in ANIMATIONS:
             errors.append(f"menu {mid}: animation {anim!r} unknown; using ring.animation")
             anim = ""
-        cfg.menus[mid] = Menu(id=mid, title=str(m.get("title") or mid), items=items, hotkey=hk,
-                              swallow=bool(m.get("swallow", True)), animation=anim,
-                              fan=bool(m.get("fan", False)))
+        swallow = m.get("swallow", True)
+        if not isinstance(swallow, bool):
+            errors.append(f"menu {mid}: swallow {swallow!r} must be true or false; using true")
+            swallow = True
+        cfg.menus[mid] = Menu(id=mid, title=str(m.get("title") or mid), items=[it for _, it in items], hotkey=hk,
+                              swallow=swallow, animation=anim, fan=bool(m.get("fan", False)))
     browser = raw.get("browser") or {}
     if isinstance(browser, dict) and browser.get("hotkey"):
         hk = parse_hotkey(browser["hotkey"])

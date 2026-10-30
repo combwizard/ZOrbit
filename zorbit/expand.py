@@ -11,8 +11,8 @@ slots opened up. Used by the app and by the Studio's previews, so both show the 
 A tag menu lists the tag's installed items as a fan: brushes first, most used first, then alphas, materials
 and textures by name. With more than TAG_SLOTS the last slot is "More..." and opens the browser on that tag
 (on the tab of the first item). Item count and order of a menu never change.
-The tag menus are cached until a pick, a usage.json change or a tags.json change; the app builds a new
-Expander whenever it reloads radial.json or tags.json.
+The tag menus are cached until a pick, a usage.json change, a tags.json change or a rebuilt asset index; the
+app builds a new Expander whenever it reloads radial.json or tags.json.
 """
 import dataclasses
 
@@ -33,7 +33,7 @@ class Expander:
         self.cfg = cfg
         self.usage = usage
         self.tags = tags
-        self._cache = {}               # tag key -> ((usage.version, tags.mtime), Menu or None)
+        self._cache = {}               # tag key -> ((usage.version, tags.mtime, assets.generation), Menu or None)
 
     def menu(self, menu):
         """The menu as the ring draws it now. Nothing is saved."""
@@ -58,7 +58,7 @@ class Expander:
         """The fan of a tag's installed items; None if the tag does not exist or has none installed."""
         if assets is None or not self.tags.has(key):
             return None
-        stamp = (self.usage.load().version, self.tags.mtime)
+        stamp = (self.usage.load().version, self.tags.mtime, assets.generation)   # an index rebuilt: new files
         hit = self._cache.get(key)
         if hit is not None and hit[0] == stamp:
             return hit[1]
@@ -80,7 +80,7 @@ class Expander:
                 items.append(C.Item(label="More…", kind="browser", data={"browser": key, "kind": found[0][0]},
                                     color=color))
             menu = C.Menu(id="tag:" + key, title=self.tags.label(key), items=items, fan=True)
-        self._cache[key] = (stamp, menu)
+        self._cache[key] = (stamp[:2] + (assets.generation,), menu)    # the scans above may have built an index
         return menu
 
     # --- colours and tag slots -------------------------------------------------------------------

@@ -306,6 +306,7 @@ class Ring:
         self.hwnd = None
         self.work = None
         self.cs = (0, 0)                           # ring centre on screen
+        self._armed = True                         # False while flicks and hover hand-offs wait (see _fit_centre)
         self._dib = None
         self._last_key = None
         self._base_cache = None
@@ -353,6 +354,8 @@ class Ring:
         work, scale = W.monitor_for_point(x, y)
         self._geometry(scale)
         self.cs, self.work = (x, y), work
+        self._fit_centre()
+        self._armed = self.cs == (x, y)            # moved in from an edge: see _fit_centre
         self._relayout()
         self._prepare()
         self.t0 = time.time()
@@ -369,11 +372,15 @@ class Ring:
         W.SetWindowPos(self.hwnd, W.HWND_TOPMOST, 0, 0, 0, 0,
                        W.SWP_NOMOVE | W.SWP_NOSIZE | W.SWP_NOACTIVATE | W.SWP_SHOWWINDOW)
         W.SetTimer(self.hwnd, TIMER_TICK, 10, None)
+        moved = f", centred at {self.cs} to fit the screen" if self.cs != (x, y) else ""
         self._log(f"ring '{self.menu.id}' shown at ({x},{y}) mode={self.mode} anim={self.anim_name} "
-                  f"scale={scale:.2f}")
+                  f"scale={scale:.2f}{moved}")
 
     def key_released(self) -> None:
         if self.done or self.mode != "hold":
+            return
+        if not self._armed:                        # the ring was moved in from an edge and the cursor has not
+            self._stay_open("released before reaching the moved ring")   # reached it: a release picks nothing
             return
         path, how, node = self._current_hover()
         if node is not None and self._fannable(path):
@@ -415,6 +422,20 @@ class Ring:
         for i in range(self.n):
             a = math.radians(self.step * i)        # 0 at 12 o'clock, clockwise
             self.seats.append((math.sin(a), -math.cos(a)))
+
+    def _fit_centre(self):
+        """Moves the ring centre in from a screen edge so the whole ring disc is on the work area (the window is
+        clamped there anyway; the ring itself would be cut off). The cursor then starts off-centre: _armed keeps
+        that from picking anything."""
+        wk = self.work
+        if wk is None:
+            return
+        hr = self.rsize // 2
+        (lo_x, hi_x), (lo_y, hi_y) = (wk.left + hr, wk.right - hr), (wk.top + hr, wk.bottom - hr)
+        x, y = self.cs
+        x = (lo_x + hi_x) // 2 if lo_x > hi_x else min(max(x, lo_x), hi_x)
+        y = (lo_y + hi_y) // 2 if lo_y > hi_y else min(max(y, lo_y), hi_y)
+        self.cs = (x, y)
 
     def _relayout(self):
         """Window origin and size for the ring plus its open fans, kept on the monitor's work area. Without a
@@ -1231,7 +1252,13 @@ class Ring:
         if self.mode == "click" and not over and (W.key_down(W.VK_LBUTTON) or W.key_down(0x02)):
             self._finish(None, "clicked outside")
             return
-        if self._flick_or_hand_off(lx, ly, path, how):
+        if not self._armed:
+            # The ring was moved in from a screen edge, so it opened with the cursor off-centre, outside the flick
+            # radius or on a slot: nothing is picked or opened by hover until the cursor has been inside and off
+            # every slot.
+            self._armed = how not in ("disc", "wedge") and math.hypot(
+                lx - self.centre[0], ly - self.centre[1]) < self.flick_r
+        if self._armed and self._flick_or_hand_off(lx, ly, path, how):
             return
         self._update_open(path, how, now)
         hover = path if how in ("disc", "sector") else None
