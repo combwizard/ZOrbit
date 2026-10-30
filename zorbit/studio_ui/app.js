@@ -2,7 +2,7 @@
    Plain JS, no dependencies. The config object (S.cfg) is the single source of truth; every backend call
    receives the whole thing. Sections: helpers, state + config logic, backend loaders (ring / frames / thumbs),
    UI primitives (toast, modal, popover, drag and drop, combobox, hotkey recorder), then the four screens.
-   The same file drives the brush browser popout (popout.html sets window.__ZORBIT_MODE__ = 'popout'): makeBrowser takes a
+   The same file drives the browser popout (popout.html sets window.__ZORBIT_MODE__ = 'popout'): makeBrowser takes a
    `host` that says what a pick does, and buildPopout wraps it in the popout's header. */
 (() => {
 'use strict';
@@ -86,9 +86,17 @@ const ICONS = {
   k_steps: '<path d="M12 4l8 4-8 4-8-4z"/><path d="M4 12l8 4 8-4M4 16l8 4 8-4"/>',
   k_menu: '<circle cx="12" cy="12" r="8.500"/><path d="M10 8.500l5 3.500-5 3.500z" fill="currentColor"/>',
   k_auto: '<path d="M19.500 12a7.500 7.500 0 0 1-13 5.100M4.500 12a7.500 7.500 0 0 1 13-5.100"/><path d="M17.500 3.500v3.400h-3.400M6.500 20.500v-3.400h3.400"/>',
+  k_alpha: '<circle cx="12" cy="12" r="8.500"/><circle cx="12" cy="12" r="3.200" fill="currentColor" stroke="none" opacity=".5"/>',
+  k_material: '<circle cx="12" cy="12" r="8"/><path d="M7.500 15.500a6 6 0 0 0 9-6.500"/><circle cx="9.300" cy="9.300" r="1.300" fill="currentColor" stroke="none"/>',
+  k_texture: '<rect x="4.500" y="4.500" width="15" height="15" rx="1.300"/><path d="M12 4.500v15M4.500 12h15"/><path d="M4.500 4.500h7.500v7.500H4.500zM12 12h7.500v7.500H12z" fill="currentColor" stroke="none" opacity=".45"/>',
+  side_l: '<rect x="3.5" y="4.5" width="17" height="15" rx="2"/><path d="M9 4.5v15"/>',
+  side_r: '<rect x="3.5" y="4.5" width="17" height="15" rx="2"/><path d="M15 4.5v15"/>',
+  swap_h: '<path d="M4 9h15M15 5l4 4-4 4M20 15H5M9 11l-4 4 4 4"/>',
   k_browser: '<rect x="4.500" y="4.500" width="6" height="6" rx="1.300"/><rect x="13.500" y="4.500" width="6" height="6" rx="1.300"/><rect x="4.500" y="13.500" width="6" height="6" rx="1.300"/><rect x="13.500" y="13.500" width="6" height="6" rx="1.300"/>',
   tag: '<path d="M20.600 13.400l-7.200 7.200a2 2 0 0 1-2.800 0L3 13V3h10l7.600 7.600a2 2 0 0 1 0 2.800z"/><circle cx="7.500" cy="7.500" r="1.300" fill="currentColor" stroke="none"/>',
   pin: '<path d="M9 4h6l-.8 5.500L17 13H7l2.800-3.500z"/><path d="M12 13v7"/>',
+  star: '<path d="M12 2.800l2.900 5.900 6.500.9-4.700 4.600 1.100 6.500L12 17.600l-5.800 3.100 1.100-6.500L2.600 9.600l6.500-.9z"/>',
+  clock: '<circle cx="12" cy="12" r="8.500"/><path d="M12 7.500V12l3 2"/>',
   logo: '<circle cx="12" cy="12" r="2.200" fill="currentColor" stroke="none"/><circle cx="12" cy="3.800" r="1.700"/><circle cx="19.100" cy="7.900" r="1.700"/><circle cx="19.100" cy="16.100" r="1.700"/><circle cx="12" cy="20.200" r="1.700"/><circle cx="4.900" cy="16.100" r="1.700"/><circle cx="4.900" cy="7.900" r="1.700"/>',
 };
 function icon(name, size = 16, cls = '') {
@@ -102,18 +110,33 @@ function iconBtn(name, title, onclick, cls = '') {
 function setText(el, t) { if (el.textContent !== t) el.textContent = t; }
 
 /* ================================================================== state */
-const ACTIONS = ['brush', 'press', 'set', 'toggle', 'steps', 'menu', 'auto', 'tag', 'browser'];
+const ACTIONS = ['brush', 'alpha', 'material', 'texture', 'press', 'set', 'toggle', 'steps', 'menu', 'auto', 'tag', 'browser'];
 const KIND = {
   brush: { label: 'Brush', icon: 'k_brush', hint: 'Select a brush' },
+  alpha: { label: 'Alpha', icon: 'k_alpha', hint: 'Select an alpha' },
+  material: { label: 'Material', icon: 'k_material', hint: 'Select a material' },
+  texture: { label: 'Texture', icon: 'k_texture', hint: 'Select a texture' },
   press: { label: 'Press', icon: 'k_press', hint: 'Press any ZBrush button' },
   set: { label: 'Set', icon: 'k_set', hint: 'Set a slider or value' },
   toggle: { label: 'Toggle', icon: 'k_toggle', hint: 'Flip a switch' },
   steps: { label: 'Steps', icon: 'k_steps', hint: 'Run several actions in order' },
   menu: { label: 'Submenu', icon: 'k_menu', hint: 'Open another ring' },
   auto: { label: 'Auto', icon: 'k_auto', hint: 'A slot filled with a brush you pick often' },
-  tag: { label: 'Tag', icon: 'tag', hint: 'Every brush with a tag, most used first' },
-  browser: { label: 'Browser', icon: 'k_browser', hint: 'Open the brush browser' },
+  tag: { label: 'Tag', icon: 'tag', hint: 'Every item with a tag: brushes first, most used first, then alphas, materials and textures' },
+  browser: { label: 'Browser', icon: 'k_browser', hint: 'Open the browser' },
 };
+/* The kinds of asset the library holds (brushes, alphas, materials, textures) and their wording; every "brush/brushes" string reads from here. */
+const KINDS = {
+  brush:    { one: 'brush',    many: 'brushes',   tab: 'Brushes',   ext: '.zbp', eg: 'ClayBuildup' },
+  alpha:    { one: 'alpha',    many: 'alphas',    tab: 'Alphas',    ext: '.psd', eg: 'Alpha 058' },
+  material: { one: 'material', many: 'materials', tab: 'Materials', ext: '.zmt', eg: 'SkinShade4' },
+  texture:  { one: 'texture',  many: 'textures',  tab: 'Textures',  ext: '.psd', eg: 'Txtr01' },
+};
+const LIB_KINDS = Object.keys(KINDS);
+const isLib = k => typeof k === 'string' && Object.prototype.hasOwnProperty.call(KINDS, k);
+const K = k => (isLib(k) ? KINDS[k] : KINDS.brush);
+const aOrAn = w => (/^[aeiou]/i.test(w) ? 'an ' : 'a ') + w;
+const emptyLib = () => ({ items: [], sorted: [], byName: new Map(), state: 'idle', loaded: false, busy: false, sources: [], zbrushFound: true, error: null, _tree: null, _tc: null });
 const ANIM_INFO = {
   smooth: 'Slots scale in together with a slight overshoot.',
   bounce: 'Bigger, springier overshoot.',
@@ -147,20 +170,19 @@ const FALLBACK_RANGES = { radius: [60, 400], slot: [32, 160], dead_zone: [10, 12
   tag_band_opacity: [0, 1], tag_glow_opacity: [0, 1], tag_tint_opacity: [0, 1] };
 
 const params = new URLSearchParams(location.search);
-const POPOUT = window.__ZORBIT_MODE__ === 'popout';       // the brush browser popout (popout.html), not the Studio
+const POPOUT = window.__ZORBIT_MODE__ === 'popout';       // the browser popout (popout.html), not the Studio
 const S = {
   cfg: null, savedStr: '', path: '', defaults: FALLBACK_DEFAULTS, opts: null,
   problems: [], problemsOpen: false, problemMenus: new Set(), problemItems: new Map(), problemTips: new Map(),
   scroll: {}, shown: false,
   screen: 'menus', menuId: null, itemIdx: null, tab: 'item',
   cameFrom: null,                              // { menuId, itemIdx }: where a submenu was opened from (drives the Back chip)
-  library: [], libSorted: [], libByName: new Map(), libState: 'loading', suggestions: [],
-  libSources: [], zbrushFound: true, libError: null, libBusy: false,
+  suggestions: [],
   version: 0, hist: [], histI: 0,
   tags: [], tagMap: new Map(), itemTags: {}, tagMtime: null, tagsErr: '', tagsLoaded: false, tagsPath: '', palette: null,   // see "tags" below
-  lib: { cat: 'All', q: '', size: 112 },
-  dock: { cat: 'All', q: '' },
-  pop: { cat: 'All', q: '', size: 96 }, popOnTop: true,   // the popout's browser state, and whether its window stays above others
+  lib: { kind: 'brush', cat: 'All', q: '', size: 112 },
+  dock: { kind: 'brush', cat: 'All', q: '' },
+  pop: { kind: 'brush', cat: 'All', q: '', size: 96 }, popOnTop: true, popSide: 'left', popColumn: true,   // the popout's browser state, whether its window stays above others, and the side of its folders column
   status: null,
   prefs: { show_licence: true, setup_done: true },   // setup_done: boot tests === false, so a failed get_prefs never sends anyone to Setup
   ready: false, fatal: false,                 // ready after the first screen is up; fatal when the recovery screen is showing
@@ -169,9 +191,20 @@ const S = {
 };
 const R = {};               // region renderers registered by the visible screen
 
+/* Per-kind library state: S.libs[kind] (see emptyLib). lib(kind) never throws, ensureLib(kind) loads a kind the first time it is shown. */
+S.libs = Object.fromEntries(LIB_KINDS.map(k => [k, emptyLib()]));
+const lib = kind => S.libs[kind] || S.libs.brush;
+const ensureLib = kind => { const L = lib(kind); if (!L.loaded && !L.busy) loadLibrary(kind); };
+
+/* Per-kind usage (get_usage): the picks of the Recent folder, newest first, and the scores that order Favourites. recentSet holds nameKey()s,
+   recentT maps a nameKey() to the time of its last pick. Not to be confused with usageMap(), which is where the menus use an item. */
+const emptyUsage = () => ({ recent: [], recentSet: new Set(), recentT: new Map(), scores: {}, loaded: false, sig: '', mtime: null });
+S.usage = Object.fromEntries(LIB_KINDS.map(k => [k, emptyUsage()]));
+const usageOf = kind => S.usage[kind] || S.usage.brush;
+
 const kindOf = it => ACTIONS.find(k => it && k in it) || 'brush';
 const targetOf = it => { const k = kindOf(it); return k === 'steps' ? '' : String(it[k] ?? ''); };
-const isPath = s => /[\\/]/.test(s) || /\.(png|zbp)$/i.test(s);
+const isPath = s => /[\\/]/.test(s) || /\.(png|zbp|zmt|psd|jpg|jpeg|bmp|tif|tiff)$/i.test(s);
 const ring = () => S.cfg.ring || {};
 const ringNum = k => { const v = ring()[k]; return typeof v === 'number' ? v : S.defaults[k]; };
 const ranges = () => (S.opts && S.opts.ring_ranges) || FALLBACK_RANGES;
@@ -181,7 +214,7 @@ const curItem = () => { const m = curMenu(); return m && S.itemIdx !== null ? m.
 
 function defaultLabel(it) {
   const k = kindOf(it);
-  if (k === 'brush') return String(it.brush || '');
+  if (isLib(k)) return String(it[k] || '');
   if (k === 'menu') { const m = S.cfg.menus[it.menu]; return (m && m.title) || String(it.menu || ''); }
   if (k === 'steps') return 'Steps';
   if (k === 'auto') return 'Auto';
@@ -204,7 +237,7 @@ function actionValid(a, nested) {
     return a.steps.every(s => actionValid(s, true) && !('menu' in s) && !('steps' in s) && !('auto' in s) && !('tag' in s) && !('browser' in s));   // steps cannot open menus, nest steps, be auto slots or open tags or the browser
   }
   if (k === 'auto') return a.auto === 'brush';
-  if (k === 'browser') return typeof a.browser === 'string';          // '' = all brushes
+  if (k === 'browser') return typeof a.browser === 'string' && (a.kind === undefined || isLib(a.kind));          // '' = every item; kind: which tab it opens on
   return typeof a[k] === 'string' && a[k].trim() !== '';
 }
 /* A tag slot whose tag does not exist stays usable: the loader keeps it as an empty slot and the Problems panel warns. */
@@ -222,19 +255,23 @@ function makeItem(kind, target, extra = {}) {
   if (kind === 'steps') it.steps = extra.steps || [];
   else if (kind === 'auto') it.auto = 'brush';
   else it[kind] = target || '';
+  if (kind === 'browser' && isLib(extra.kind) && extra.kind !== 'brush') it.kind = extra.kind;
   if (kind === 'set') it.value = extra.value !== undefined ? extra.value : '';
   if (extra.label) it.label = extra.label;
   if (extra.icon) it.icon = extra.icon;
   return it;
 }
-/* A target lives in one of three namespaces: brush names, ZBrush item paths (press, set, toggle) and menu ids.
+/* A target lives in one of these namespaces: each library kind's names, ZBrush item paths (press, set, toggle), menu ids and tags.
    Switching kind keeps a target only inside its own namespace, so a brush name never lands in a path field. */
-const nsOf = k => (k === 'brush' ? 'brush' : k === 'menu' ? 'menu' : k === 'tag' || k === 'browser' ? 'tag' : 'path');
-const TARGET_NOUN = { brush: 'brush', press: 'button path', set: 'value path', toggle: 'switch path', menu: 'submenu', tag: 'tag', browser: 'tag filter' };
+const nsOf = k => (isLib(k) ? k : k === 'menu' ? 'menu' : k === 'tag' || k === 'browser' ? 'tag' : 'path');
+const TARGET_NOUN = { brush: 'brush', alpha: 'alpha', material: 'material', texture: 'texture', press: 'button path', set: 'value path', toggle: 'switch path', menu: 'submenu', tag: 'tag', browser: 'tag filter' };
 /* Brush names are compared ignoring case and spaces (the guide says neither matters). */
 const nameKey = s => String(s === undefined || s === null ? '' : s).toLowerCase().replace(/\s+/g, '');
-/* A brush's key in tags.json: 'brush:' and its name in lower case without spaces (tags.item_key in Python). */
-const tagKey = s => 'brush:' + nameKey(s);
+/* An asset's key in tags.json: its kind, a colon and its name in lower case without spaces (tags.item_key in Python). */
+const tagKey = (kind, s) => kind + ':' + nameKey(s);
+/* The built-in Favourites tag (always the first tag, cannot be renamed, merged or deleted). It is not a colour cue: see firstTag. */
+const FAV = 'favourite';
+const libOpts = kind => lib(kind).sorted.map(b => ({ value: b.name, sub: b.category }));
 const hasText = v => String(v === undefined || v === null ? '' : v).trim() !== '';
 const joinList = a => (a.length < 2 ? a.join('') : a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1]);
 /* Kinds that cannot be a step (and so are dropped when an item becomes Steps). */
@@ -282,11 +319,11 @@ function usageMap() {
   const m = new Map();
   for (const [id, menu] of Object.entries(S.cfg.menus)) {
     (menu.items || []).forEach((it, i) => {
-      const names = [];
-      if (it && it.brush) names.push(it.brush);
-      if (it && Array.isArray(it.steps)) it.steps.forEach(s => s && s.brush && names.push(s.brush));
-      for (const n of names) {
-        const k = nameKey(n);
+      const keys = [];
+      const add = a => { for (const kd of LIB_KINDS) if (a && a[kd]) keys.push(tagKey(kd, a[kd])); };
+      add(it);
+      if (it && Array.isArray(it.steps)) it.steps.forEach(add);
+      for (const k of keys) {
         if (!m.has(k)) m.set(k, []);
         m.get(k).push({ menuId: id, index: i });
       }
@@ -313,7 +350,7 @@ function hotkeyOwner(str, exceptId) {
   if (exceptId !== BROWSER && b && typeof b === 'object' && hkNorm(b.hotkey) === n) return BROWSER;
   return null;
 }
-const ownerName = id => (id === BROWSER ? 'the brush browser' : '“' + (S.cfg.menus[id].title || id) + '”');
+const ownerName = id => (id === BROWSER ? 'the browser' : '“' + (S.cfg.menus[id].title || id) + '”');
 function hkChips(str, cls = '') {
   const w = h('span', { class: 'hk ' + cls });
   String(str).split(/\+(?=.)/).forEach(p => w.append(h('kbd', null, p)));
@@ -462,37 +499,37 @@ function popover(anchor, entries) {
 /* ================================================================== thumbnails */
 const Thumbs = {
   cache: new Map(), waiting: new Map(), queue: new Map(), timer: null, busy: false,
-  key: (name, res) => res + '|' + name,                          // a thumbnail is cached per size
-  request(name, res, cb, el) {
-    const k = this.key(name, res);
+  key: (name, res, kind) => kind + '|' + res + '|' + name,       // a thumbnail is cached per kind and size
+  request(name, res, kind, cb, el) {
+    const k = this.key(name, res, kind);
     if (this.cache.has(k)) { cb(this.cache.get(k)); return; }
     if (!this.waiting.has(k)) this.waiting.set(k, []);
     this.waiting.get(k).push({ cb, el });
-    this.queue.set(k, { name, res });
+    this.queue.set(k, { name, res, kind });
     if (!this.timer) this.timer = setTimeout(() => this.flush(), 30);
   },
-  forgetMisses() { for (const [k, v] of Array.from(this.cache)) if (!v) this.cache.delete(k); },
+  forgetMisses(kind) { for (const [k, v] of Array.from(this.cache)) if (!v && (!kind || k.startsWith(kind + '|'))) this.cache.delete(k); },
   async flush() {
     this.timer = null;
     if (this.busy) { this.timer = setTimeout(() => this.flush(), 10); return; }   // one call in flight at a time: the slider cannot stack them
     const batch = [];
-    let res = 0;
-    for (const [k, q] of this.queue) {                            // FIFO, up to 40 names of one size per call
+    let res = 0, kind = '';
+    for (const [k, q] of this.queue) {                            // FIFO, up to 40 names of one size and kind per call
       if (batch.length >= 40) break;
-      if (res && q.res !== res) continue;
+      if (res && (q.res !== res || q.kind !== kind)) continue;
       this.queue.delete(k);
       const all = this.waiting.get(k) || [];
       const live = all.filter(w => !w.el || w.el.isConnected);
       all.filter(w => !live.includes(w)).forEach(w => w.cb(null, true));   // its card is gone: let it ask again if it comes back
       if (!live.length) { this.waiting.delete(k); continue; }
       this.waiting.set(k, live);
-      res = q.res; batch.push({ k, name: q.name });
+      res = q.res; kind = q.kind; batch.push({ k, name: q.name });
     }
     if (this.queue.size) this.timer = setTimeout(() => this.flush(), 10);
     if (!batch.length) return;
     let out = null;
     this.busy = true;
-    try { out = (await call('get_thumbs', batch.map(b => b.name), res)) || {}; } catch (e) { out = null; }
+    try { out = (await call('get_thumbs', batch.map(b => b.name), res, kind)) || {}; } catch (e) { out = null; }
     this.busy = false;
     for (const { k, name } of batch) {
       const ws = this.waiting.get(k) || [];
@@ -518,9 +555,9 @@ function initials(name) {
 }
 /* Round/square brush thumbnail with shimmer placeholder and an initials fallback. `lazy` is an observer from makeLazyIO:
    the thumbnail is fetched when it nears the scroller's view. `res` is the pixel size asked of the backend (128 or 256). */
-function thumb(name, { size = 28, lazy = null, cls = '', res = 128 } = {}) {
+function thumb(name, { size = 28, lazy = null, cls = '', res = 128, kind = 'brush' } = {}) {
   const el = h('span', { class: 'thumb ' + cls, style: { '--sz': size + 'px' } });
-  el._res = res;
+  el._res = res; el._kind = kind;
   const done = (url, failed) => {
     el.classList.remove('loading');
     if (url) { el.classList.remove('fallback'); el.replaceChildren(h('img', { src: url, alt: '', draggable: 'false' })); }
@@ -531,9 +568,9 @@ function thumb(name, { size = 28, lazy = null, cls = '', res = 128 } = {}) {
     }, 3000);
   };
   if (!name) { done(null); return el; }
-  const load = () => { const r = el._res; Thumbs.request(name, r, (url, failed) => { if (r === el._res) done(url, failed); }, el); };
+  const load = () => { const r = el._res; Thumbs.request(name, r, el._kind, (url, failed) => { if (r === el._res) done(url, failed); }, el); };
   if (lazy) { el._io = lazy; el._load = load; }                    // kept even when the picture is already cached, so a size change can refetch it
-  const k = Thumbs.key(name, res);
+  const k = Thumbs.key(name, res, kind);
   if (Thumbs.cache.has(k)) { done(Thumbs.cache.get(k)); return el; }
   el.classList.add('loading');
   if (lazy) lazy.observe(el); else load();
@@ -547,11 +584,11 @@ function rethumb(el, res) {
 }
 function itemThumb(it, size = 30) {
   const k = kindOf(it);
-  let name = null;
+  let name = null, kind = 'brush';                                 // an icon override is always a brush name
   if (it.icon && !isPath(it.icon)) name = it.icon;
-  else if (!it.icon && k === 'brush') name = it.brush;
-  else if (!it.icon && k === 'steps') { const b = (it.steps || []).find(s => s && s.brush); if (b) name = b.brush; }
-  if (name) return thumb(name, { size });
+  else if (!it.icon && isLib(k)) { name = it[k]; kind = k; }
+  else if (!it.icon && k === 'steps') for (const s of it.steps || []) { const sk = s && LIB_KINDS.find(x => s[x]); if (sk) { name = s[sk]; kind = sk; break; } }
+  if (name) return thumb(name, { size, kind });
   const g = h('span', { class: 'thumb glyph k-' + k, style: { '--sz': size + 'px' } }, icon(KIND[k].icon, Math.round(size * 0.52)));
   return g;
 }
@@ -706,27 +743,31 @@ const DnD = {
 window.addEventListener('click', e => { if (DnD.recent) { e.stopPropagation(); e.preventDefault(); } }, true);
 
 /* ---------- drag and drop between windows (HTML5)
-   The brush browser popout is a window of another process, so its drags cannot be pointer events. Its cards are draggable the
-   native way and carry the name as BRUSH_MIME (and as "zorbit:brush:<name>" in text/plain, for a drag that loses custom types). The
-   Studio takes them in here and hands them to the same zones the pointer drags use, so a brush from the popout lands exactly like one
-   from the Library. While a drag is over the page only the types can be read, not the data. */
-const BRUSH_MIME = 'application/x-zorbit-brush', BRUSH_TEXT = 'zorbit:brush:';
+   The browser popout is a window of another process, so its drags cannot be pointer events. Its cards are draggable the native way and
+   carry the item as ITEM_MIME (JSON {kind, name}) and as "zorbit:<kind>:<name>" in text/plain, for a drag that loses custom types.
+   LEGACY_MIME (a bare brush name, from a popout of an older version) is still read. The Studio takes them in here and hands them to the
+   same zones the pointer drags use, so an item from the popout lands exactly like one from the Library. While a drag is over the page
+   only the types can be read, not the data: so the kind of a drag in flight is unknown until it drops (the zones do not look at it). */
+const ITEM_MIME = 'application/x-zorbit-item', LEGACY_MIME = 'application/x-zorbit-brush', ITEM_TEXT = 'zorbit:';
 DnD.native = {
   zone: null, idle: 0,
-  mine: dt => !!dt && Array.from(dt.types || []).includes(BRUSH_MIME),
-  name(dt) {                                                 // only at drop time; anything that is not ours gives null
-    let n = '';
+  mine: dt => !!dt && Array.from(dt.types || []).some(t => t === ITEM_MIME || t === LEGACY_MIME),
+  item(dt) {                                                 // only at drop time; anything that is not ours gives null, else {kind, name}
+    let kind = '', name = '';
     try {
-      n = dt.getData(BRUSH_MIME);
-      if (!n) { const t = dt.getData('text/plain'); if (t && t.startsWith(BRUSH_TEXT)) n = t.slice(BRUSH_TEXT.length); }
-    } catch (e) { n = ''; }
-    n = String(n || '').trim();
-    return n && n.length <= 260 && !/[\x00-\x1f]/.test(n) ? n : null;
+      const j = dt.getData(ITEM_MIME);
+      if (j) { try { const o = JSON.parse(j); if (o && typeof o === 'object') { kind = o.kind; name = o.name; } } catch (e) { /* not JSON: try the next form */ } }
+      if (!name) { const n = dt.getData(LEGACY_MIME); if (n) { kind = 'brush'; name = n; } }
+      if (!name) { const m = /^zorbit:([a-z]+):(.+)$/s.exec(dt.getData('text/plain') || ''); if (m) { kind = m[1]; name = m[2]; } }
+    } catch (e) { return null; }
+    name = typeof name === 'string' ? name.trim() : '';
+    return isLib(kind) && name && name.length <= 260 && !/[\x00-\x1f]/.test(name) ? { kind, name } : null;
   },
-  over(x, y, ev) {                                           // true when a zone would take the brush
-    const z = DnD.findZone(x, y, { type: 'brush', name: '' });
+  over(x, y, ev) {                                           // true when a zone would take the item
+    const p = { type: 'asset', kind: null, name: '' };
+    const z = DnD.findZone(x, y, p);
     if (z !== this.zone) { this.leave(); this.zone = z; }
-    if (z) z._dz.over({ type: 'brush', name: '' }, x, y, ev);
+    if (z) z._dz.over(p, x, y, ev);
     clearTimeout(this.idle); this.idle = setTimeout(() => this.leave(), 2500);  // a drag that ends away from us sends nothing more (long: a still cursor may get no dragover)
     return !!z;
   },
@@ -735,10 +776,11 @@ DnD.native = {
     const z = this.zone; this.zone = null;
     if (z && z._dz.leave) z._dz.leave();
   },
-  drop(name, x, y, ev) {
-    const z = DnD.findZone(x, y, { type: 'brush', name });
+  drop(item, x, y, ev) {
+    const p = { type: 'asset', ...item };
+    const z = DnD.findZone(x, y, p);
     this.leave();
-    if (z && name) z._dz.drop({ type: 'brush', name }, x, y, ev);
+    if (z && item && item.name) z._dz.drop(p, x, y, ev);
     return !!z;
   },
 };
@@ -766,10 +808,10 @@ DnD.native = {
     if ((x === 0 && y === 0) || x < 0 || y < 0 || x >= innerWidth || y >= innerHeight) DnD.native.leave();   // truly outside: an edge pixel is still ours
   }, true);
   document.addEventListener('drop', e => {
-    const dt = e.dataTransfer, name = !POPOUT && S.ready && !S.fatal && dt ? DnD.native.name(dt) : null;   // the plain text form counts too
-    if (name || ours(dt)) {
+    const dt = e.dataTransfer, item = !POPOUT && S.ready && !S.fatal && dt ? DnD.native.item(dt) : null;   // the plain text form counts too
+    if (item || ours(dt)) {
       e.preventDefault();
-      if (name) DnD.native.drop(name, e.clientX, e.clientY, e); else DnD.native.leave();
+      if (item) DnD.native.drop(item, e.clientX, e.clientY, e); else DnD.native.leave();
       return;
     }
     DnD.native.leave();
@@ -822,7 +864,7 @@ function combo(input, getOpts, o = {}) {
     if (active >= items.length) active = -1;
     list.replaceChildren(...items.map((it, i) => h('div', { class: 'combo-opt' + (i === active ? ' active' : ''), id: oid(i), role: 'option', 'aria-selected': i === active ? 'true' : 'false',
       onmousedown: e => { e.preventDefault(); pick(i); } },
-      o.brush ? thumb(it.value, { size: 24 }) : null,
+      o.thumb ? thumb(it.value, { size: 24, kind: o.thumb }) : null,
       h('span', { class: 'combo-main' }, h('b', { class: o.mono ? 'mono' : '' }, it.label || it.value), it.sub ? h('small', null, it.sub) : null))));
     position(); sync();
   };
@@ -860,7 +902,6 @@ function matchOpts(all, q, cap = 60) {
   }
   return starts.concat(rest).slice(0, cap);
 }
-const brushOpts = () => S.libSorted.map(b => ({ value: b.name, sub: b.category }));
 const pathOpts = () => S.suggestions.map(s => ({ value: s.path, sub: s.source }));
 const menuOpts = () => Object.entries(S.cfg.menus).map(([id, m]) => ({ value: id, label: id, sub: m.title }));
 
@@ -1127,12 +1168,12 @@ function addItem(kind, at = null) {
   const row = $('.irow.sel'); if (row) row.scrollIntoView({ block: 'nearest' });
   const t = $('[data-focus="target"]'); if (t) t.focus();
 }
-function insertBrush(menuId, name, at = null, silent = false) {
-  const m = S.cfg.menus[menuId]; if (!m) return;
+function insertAsset(menuId, kind, name, at = null, silent = false) {
+  const m = S.cfg.menus[menuId]; if (!m || !isLib(kind)) return;
   const i = at === null || at > m.items.length ? m.items.length : at;
   const sel = menuId === S.menuId ? curItem() : null;
   if (!silent) sealSnap();
-  m.items.splice(i, 0, { brush: name });
+  m.items.splice(i, 0, { [kind]: name });
   if (sel) S.itemIdx = m.items.indexOf(sel);
   commit({ inspector: true }); if (R.head) R.head();
   flashRow(menuId, i);
@@ -1193,7 +1234,7 @@ function transferItem(fromId, index, toId, copy) {
   undoToast(`${copy ? 'Copied' : 'Moved'} "${label}" to "${dstName}"`);
 }
 function dropOnMenu(menuId, payload, at) {
-  if (payload.type === 'brush') insertBrush(menuId, payload.name, at);
+  if (payload.type === 'asset') insertAsset(menuId, payload.kind, payload.name, at);
   else if (payload.type === 'item' && payload.menuId === menuId) moveItem(menuId, payload.index, at === null ? S.cfg.menus[menuId].items.length : at);
 }
 
@@ -1290,17 +1331,17 @@ function buildMenusScreen(root) {
       });
       DnD.source(row, () => ({ type: 'menu', id }), () => h('span', { class: 'ghost-chip' }, icon('menus', 14), m.title || id));
       DnD.zone(row, {
-        accept: p => p.type === 'brush' || (p.type === 'menu' && p.id !== id) || (p.type === 'item' && p.menuId !== id),
+        accept: p => p.type === 'asset' || (p.type === 'menu' && p.id !== id) || (p.type === 'item' && p.menuId !== id),
         over: (p, x, y, ev) => {
           const r = row.getBoundingClientRect();
           row.classList.remove('drop-brush', 'drop-copy', 'ins-before', 'ins-after');
-          if (p.type === 'brush') row.classList.add('drop-brush');
+          if (p.type === 'asset') row.classList.add('drop-brush');
           else if (p.type === 'item') { row.classList.add('drop-brush'); if (ev && ev.ctrlKey) row.classList.add('drop-copy'); }   // Ctrl copies instead of moving
           else row.classList.add(y < r.top + r.height / 2 ? 'ins-before' : 'ins-after');
         },
         leave: () => row.classList.remove('drop-brush', 'drop-copy', 'ins-before', 'ins-after'),
         drop: (p, x, y, ev) => {
-          if (p.type === 'brush') insertBrush(id, p.name, null);
+          if (p.type === 'asset') insertAsset(id, p.kind, p.name, null);
           else if (p.type === 'item') transferItem(p.menuId, p.index, id, !!(ev && ev.ctrlKey));
           else { const r = row.getBoundingClientRect(); const ids2 = Object.keys(S.cfg.menus); const before = y < r.top + r.height / 2 ? id : ids2[ids2.indexOf(id) + 1]; moveMenu(p.id, before || null); }
         },
@@ -1372,7 +1413,7 @@ function buildMenusScreen(root) {
     if (S.tab !== 'brushes') R.badges = null;
   };
   R.playAnim = () => stageBox.playAnim();
-  R.libRefresh = () => { if (dock) dock.refresh(); };
+  R.libRefresh = kind => { if (dock && kind === S.dock.kind) dock.refresh(); };
 
   R.head(); R.menuList(); R.itemList(); R.right();
   stageBox.start();
@@ -1387,7 +1428,7 @@ function renderItemList(box, menuId, compact) {
     r.classList.toggle('sel', on); r.setAttribute('aria-selected', on ? 'true' : 'false');
   });
   // Rebuilt only when a row would look different; a plain selection change just moves the `sel` class, so focus stays put.
-  const sig = m ? JSON.stringify([menuId, compact, (m.items || []).map(it => [itemLabel(it), itemUsable(it), it, kindOf(it) === 'brush' ? (firstTag(it.brush) || {}).color || '' : keyTag(it) ? [keyTag(it).label, keyTag(it).color] : ''])]) : 'none';
+  const sig = m ? JSON.stringify([menuId, compact, (m.items || []).map(it => [itemLabel(it), itemUsable(it), it, isLib(kindOf(it)) ? (firstTag(kindOf(it), it[kindOf(it)]) || {}).color || '' : keyTag(it) ? [keyTag(it).label, keyTag(it).color] : ''])]) : 'none';
   if (sig === box._sig) { refreshSel(); box._sel = compact ? null : S.itemIdx; return; }
   box._sig = sig;
   const switched = box._menu !== menuId, keepTop = box.scrollTop, prevSel = box._sel;
@@ -1397,7 +1438,7 @@ function renderItemList(box, menuId, compact) {
   box.replaceChildren();
   if (!m) { box.append(emptyState('menus', 'No menu selected', '')); return; }
   if (!m.items.length) {
-    box.append(emptyState('plus', 'No items yet', compact ? 'Drag a brush here or press + on a card.' : 'Drag a brush here from the Library tab, or use Add item.'));
+    box.append(emptyState('plus', 'No items yet', compact ? 'Drag an item here or press + on a card.' : 'Drag an item here from the Library tab, or use Add item.'));
   }
   m.items.forEach((it, i) => {
     const k = kindOf(it), ok = itemUsable(it);
@@ -1406,8 +1447,8 @@ function renderItemList(box, menuId, compact) {
       compact ? null : h('span', { class: 'grip', 'aria-hidden': 'true' }, icon('grip', 14)),
       h('span', { class: 'inum mono' }, String(i + 1)),
       itemThumb(it, compact ? 26 : 32),
-      h('span', { class: 'imain' }, h('span', { class: 'iname' }, k === 'brush' ? tagDot(it.brush) : keyTag(it) ? keyDot(keyTag(it)) : null, itemLabel(it)),
-        compact ? null : h('span', { class: 'isub mono' }, k === 'auto' ? 'filled from your picks' : k === 'tag' ? (it.tag ? 'all brushes tagged ' + tagName(it.tag) : '(not set)') : k === 'browser' ? 'opens the brush browser' + (it.browser ? ' for ' + tagName(it.browser) : '') : k === 'steps' ? `${(it.steps || []).length} step${(it.steps || []).length === 1 ? '' : 's'}` : (k === 'set' ? `${targetOf(it)} = ${it.value}` : targetOf(it) || '(not set)'))),
+      h('span', { class: 'imain' }, h('span', { class: 'iname' }, isLib(k) ? tagDot(k, it[k]) : keyTag(it) ? keyDot(keyTag(it)) : null, itemLabel(it)),
+        compact ? null : h('span', { class: 'isub mono' }, k === 'auto' ? 'filled from your picks' : k === 'tag' ? (it.tag ? 'all items tagged ' + tagName(it.tag) : '(not set)') : k === 'browser' ? 'opens the ' + K(it.kind).one + ' browser' + (it.browser ? ' for ' + tagName(it.browser) : '') : k === 'steps' ? `${(it.steps || []).length} step${(it.steps || []).length === 1 ? '' : 's'}` : (k === 'set' ? `${targetOf(it)} = ${it.value}` : targetOf(it) || '(not set)'))),
       h('span', { class: 'ikind', title: KIND[k].hint }, icon(KIND[k].icon, 13), compact ? null : KIND[k].label),
       itemWarn(menuId, i, ok),
       h('span', { class: 'iacts' },
@@ -1440,7 +1481,7 @@ function renderItemList(box, menuId, compact) {
   };
   const clear = () => { $$('.ins-before', box).forEach(r => r.classList.remove('ins-before')); box.classList.remove('ins-end', 'drop-over'); };
   DnD.zone(box, {
-    accept: p => p.type === 'brush' || (p.type === 'item' && p.menuId === menuId),
+    accept: p => p.type === 'asset' || (p.type === 'item' && p.menuId === menuId),
     over: (p, x, y) => {
       clear(); box.classList.add('drop-over');
       const j = insertIndex(y), rows = $$('.irow', box);
@@ -1473,7 +1514,7 @@ function buildStage() {
   const info = h('div', { class: 'stage-info' });
   const busy = h('span', { class: 'stage-busy', title: 'Updating preview' });
   const playBtn = h('button', { class: 'btn small stage-play', type: 'button' });
-  const tip = h('div', { class: 'stage-tip' }, 'Hover to preview, click to select, drag slots or brushes between slots');
+  const tip = h('div', { class: 'stage-tip' }, 'Hover to preview, click to select, drag slots or items between slots');
   const trash = h('div', { class: 'stage-trash', 'aria-hidden': 'true' }, icon('trash', 14), 'Delete');     // only there while an item of this menu is being dragged
   const el = h('div', { class: 'stage', tabindex: '0', 'aria-label': 'Ring preview. Use arrow keys to move between items.' },
     h('div', { class: 'stage-rings', 'aria-hidden': 'true' }), wrap, emptyEl, errEl, info, tip, busy, playBtn, trash);
@@ -1512,7 +1553,7 @@ function buildStage() {
     const m = curMenu(); if (!m) return null;
     const at = hoverRing !== null ? idxs[hoverRing] : S.itemIdx, j = idxs.indexOf(at);
     const it = j >= 0 ? m.items[at] : null, t = it && 'menu' in it ? S.cfg.menus[it.menu] : null;
-    if (it && 'tag' in it) return tagBrushCount(it.tag) > 0 ? [j] : null;     // the expander turns it into a fan submenu of its brushes
+    if (it && 'tag' in it) return tagItemCount(it.tag) > 0 ? [j] : null;     // the expander turns it into a fan submenu of its items
     return t && t.fan === true && it.menu !== S.menuId ? [j] : null;
   }
   function buildMarks() {
@@ -1551,7 +1592,7 @@ function buildStage() {
       info.replaceChildren(h('b', null, gap.text)); info.classList.add('on');
     } else if (hoverRing !== null && m && m.items[idxs[hoverRing]]) {
       const it = m.items[idxs[hoverRing]];
-      info.replaceChildren(h('b', null, itemLabel(it)), h('span', { class: 'mono' }, ' ' + KIND[kindOf(it)].label.toLowerCase() + (['steps', 'auto'].includes(kindOf(it)) ? '' : kindOf(it) === 'tag' ? ' / ' + tagName(it.tag) : kindOf(it) === 'browser' ? ' / ' + (it.browser ? tagName(it.browser) : 'all brushes') : ' / ' + targetOf(it))));
+      info.replaceChildren(h('b', null, itemLabel(it)), h('span', { class: 'mono' }, ' ' + KIND[kindOf(it)].label.toLowerCase() + (['steps', 'auto'].includes(kindOf(it)) ? '' : kindOf(it) === 'tag' ? ' / ' + tagName(it.tag) : kindOf(it) === 'browser' ? ' / ' + (it.browser ? tagName(it.browser) : 'all ' + K(it.kind).many) : ' / ' + targetOf(it))));
       info.classList.add('on');
     } else info.classList.remove('on');
   }
@@ -1639,7 +1680,7 @@ function buildStage() {
     if (!has) {
       emptyEl.append(m.items.length
         ? emptyState('alert', 'No usable items yet', 'Fill in the target of each item (see the problems panel). Incomplete items are skipped by the app.')
-        : emptyState('plus', 'This menu is empty', 'Add a brush from the Library tab or create an item. The ring appears as soon as it has one.', { text: 'Add item', fn: () => addItem('brush') }));
+        : emptyState('plus', 'This menu is empty', 'Add an item from the Library tab or create one. The ring appears as soon as it has one.', { text: 'Add item', fn: () => addItem('brush') }));
       return;
     }
     buildMarks();
@@ -1674,7 +1715,7 @@ function buildStage() {
     if (!el.isConnected) { window.removeEventListener('zorbit-dnd', onDnd); return; }
     if (DnD.active) setHover(null);
     const p = DnD.active && DnD.active.payload, m = curMenu();
-    const can = !!p && !!m && p.type === 'item' && p.menuId === S.menuId && !!m.items[p.index];      // brushes cannot be deleted, only items
+    const can = !!p && !!m && p.type === 'item' && p.menuId === S.menuId && !!m.items[p.index];      // library items cannot be deleted, only ring items
     el.classList.toggle('can-trash', can); trash.setAttribute('aria-hidden', can ? 'false' : 'true');
     if (!can) trash.classList.remove('over');
     paintMarks();
@@ -1691,7 +1732,7 @@ function buildStage() {
     return n === 1 ? (move ? 'Move after ' : 'Insert after ') + slotLabel(0) : (move ? 'Move between ' : 'Insert between ') + slotLabel(k - 1) + ' and ' + slotLabel(k % n);
   }
   DnD.zone(el, {
-    accept: p => !!curMenu() && (!!idxs.length ? (p.type === 'brush' || (p.type === 'item' && p.menuId === S.menuId)) : p.type === 'brush'),   // no menu: nothing to add to
+    accept: p => !!curMenu() && (!!idxs.length ? (p.type === 'asset' || (p.type === 'item' && p.menuId === S.menuId)) : p.type === 'asset'),   // no menu: nothing to add to
     over: (p, x, y) => {
       const k = gapAt(x, y), noop = staysPut(p, k);
       if (k !== (gap ? gap.k : null) || (gap && gap.noop !== noop)) {
@@ -1707,7 +1748,7 @@ function buildStage() {
         if (!staysPut(p, k) && at !== p.index && at !== p.index + 1) moveItem(S.menuId, p.index, at);
         return;
       }
-      insertBrush(S.menuId, p.name, at);
+      insertAsset(S.menuId, p.kind, p.name, at);
     },
   });
   /* The trash: an item dropped here is deleted, with the same undo toast as the Delete key. As a child of the stage it is the nearer zone, so the ring's gap bar gives way to it. */
@@ -1764,9 +1805,10 @@ function buildItemInspector() {
   if (k === 'tag' || k === 'browser') {
     box.append(tagTargetField(it, k, updateHead));
   } else if (k !== 'steps') {
-    const placeholders = { brush: 'Search brushes, e.g. ClayBuildup', press: 'Item path, e.g. Tool:Masking:Clear', set: 'Item path, e.g. Draw:Draw Size', toggle: 'Item path, e.g. Transform:Activate Symmetry', menu: 'Pick a menu' };
+    const placeholders = { ...Object.fromEntries(LIB_KINDS.map(lk => [lk, 'Search ' + K(lk).many + ', e.g. ' + K(lk).eg])), press: 'Item path, e.g. Tool:Masking:Clear', set: 'Item path, e.g. Draw:Draw Size', toggle: 'Item path, e.g. Transform:Activate Symmetry', menu: 'Pick a menu' };
     let touched = false;                                   // "required" hints wait until the field has been edited or left once
     let inp, openBtn = null;
+    if (isLib(k)) ensureLib(k);                            // its load repaints this inspector (loadLibrary)
     if (k === 'menu') {
       // A pick list rather than free text: only real menus, never this one (a menu cannot open itself).
       const cur = String(it.menu ?? '');
@@ -1780,20 +1822,22 @@ function buildItemInspector() {
       inp.addEventListener('blur', () => { touched = true; updateHint(); });
       openBtn = iconBtn('chevR', 'Open this submenu', () => openSubmenu(it.menu, S.itemIdx));
     } else {
-      inp = textInput(targetOf(it), v => { touched = true; it[k] = v.trim(); commit(); updateHint(); updateHead(); }, { mono: k !== 'brush', placeholder: placeholders[k], focus: 'target', label: 'Target' });
+      inp = textInput(targetOf(it), v => { touched = true; it[k] = v.trim(); commit(); updateHint(); updateHead(); }, { mono: !isLib(k), placeholder: placeholders[k], focus: 'target', label: 'Target' });
       inp.addEventListener('change', () => { it[k] = inp.value.trim(); inp.value = it[k]; commit(); updateHint(); });
       inp.addEventListener('blur', () => { touched = true; updateHint(); });
-      combo(inp, q => matchOpts(k === 'brush' ? brushOpts() : pathOpts(), q), { brush: k === 'brush', mono: k !== 'brush' });
+      combo(inp, q => matchOpts(isLib(k) ? libOpts(k) : pathOpts(), q), { thumb: isLib(k) ? k : null, mono: !isLib(k) });
     }
-    const tlabel = { brush: 'Brush', press: 'Button path', set: 'Slider or value path', toggle: 'Switch path', menu: 'Submenu' }[k];
-    const wrap = h('div', { class: 'target-row' }, k === 'brush' ? h('span', { class: 'tthumb' }) : null, inp, openBtn);
+    const tlabel = isLib(k) ? KIND[k].label : { press: 'Button path', set: 'Slider or value path', toggle: 'Switch path', menu: 'Submenu' }[k];
+    const wrap = h('div', { class: 'target-row' }, isLib(k) ? h('span', { class: 'tthumb' }) : null, inp, openBtn);
     box.append(field(tlabel, wrap, hintEl));
     function updateHint() {
       const v = targetOf(it).trim(); hintEl.className = 'fhint'; hintEl.replaceChildren();
       if (!v && touched) { hintEl.classList.add('bad'); hintEl.append('A target is required. '); }
-      if (k === 'brush') {
-        const tt = $('.tthumb', wrap); if (tt) tt.replaceChildren(thumb(v || null, { size: 30 }));
-        if (v && S.libState === 'ready' && S.library.length && !S.libByName.has(nameKey(v))) { hintEl.classList.add('warn'); hintEl.append('Not found in your brush library. ZBrush needs a .zbp with this name.'); }
+      if (isLib(k)) {
+        const tt = $('.tthumb', wrap); if (tt) tt.replaceChildren(thumb(v || null, { size: 30, kind: k }));
+        const L = lib(k), W = K(k);
+        if (L.state === 'loading' || L.state === 'idle') hintEl.append('Reading your ' + W.one + ' library...');
+        else if (v && L.state === 'ready' && L.items.length && !L.byName.has(nameKey(v))) { hintEl.classList.add('warn'); hintEl.append(`Not found in your ${W.one} library. ZBrush needs ${aOrAn(W.ext)} file with this name.`); }
         else if (!v) hintEl.append('Type to search your library.');
       } else if (k === 'menu') {
         const t = S.cfg.menus[v];
@@ -1831,18 +1875,18 @@ function buildItemInspector() {
       paintVal();
     }
   } else {
-    box.append(field('Steps', buildSteps(it), 'Run in order. Steps can set brushes, press buttons, set values and flip switches (no submenus).'));
+    box.append(field('Steps', buildSteps(it), 'Steps can select brushes, alphas, materials and textures, press buttons, set values and flip switches (no submenus).'));
   }
 
   const iconInp = textInput(it.icon || '', v => { if (v.trim()) it.icon = v.trim(); else delete it.icon; commit(); updateIcon(); }, { placeholder: 'Optional: brush name or path to a .png / .zbp', label: 'Icon override', mono: !!it.icon && isPath(it.icon) });
-  combo(iconInp, q => matchOpts(brushOpts(), q), { brush: true });
+  combo(iconInp, q => matchOpts(libOpts('brush'), q), { thumb: 'brush' });
   const iconPrev = h('span', { class: 'tthumb' });
   function updateIcon() { const v = (it.icon || '').trim(); iconPrev.replaceChildren(v && !isPath(v) ? thumb(v, { size: 30 }) : h('span', { class: 'thumb glyph', style: { '--sz': '30px' } }, icon(v ? 'k_press' : 'k_brush', 15))); iconPrev.style.opacity = v ? '1' : '.45'; }
   updateIcon();
   box.append(sectionTitle('Appearance'),
     field('Label', labelInp, 'Shown under the icon. Leave empty to use the default.'),
-    field('Icon', h('div', { class: 'target-row' }, iconPrev, iconInp), k === 'brush'
-      ? 'By default the icon comes from the brush. Use a brush name or a full path to a .png or .zbp to override it.'
+    field('Icon', h('div', { class: 'target-row' }, iconPrev, iconInp), isLib(k)
+      ? `By default the icon comes from the ${K(k).one}. Use a brush name or a full path to a .png or .zbp to override it.`
       : 'Use a brush name or a full path to a .png or .zbp as the icon.'));
   return box;
 }
@@ -1859,6 +1903,7 @@ function autoNow(m, i) {
   return el;
 }
 
+const STEP_KINDS = ['brush', 'alpha', 'material', 'texture', 'press', 'set', 'toggle'];
 function buildSteps(it) {
   const host = h('div', { class: 'steps' });
   const render = () => {
@@ -1874,11 +1919,12 @@ function buildSteps(it) {
         it.steps[j] = makeItem(nk, keep); commit({ inspector: false }); render();
         if (lost.length) undoToast(`Step ${j + 1} is now ${KIND[nk].label}. Dropped ${joinList(lost)}.`, { ms: 6500 });
       } },
-        ['brush', 'press', 'set', 'toggle'].map(x => h('option', { value: x, selected: x === sk }, KIND[x].label)));
-      const tin = textInput(targetOf(st), v => { st[sk] = v; commit(); }, { mono: sk !== 'brush', placeholder: sk === 'brush' ? 'Brush name' : 'Item path', label: 'Step ' + (j + 1) + ' target' });
+        STEP_KINDS.map(x => h('option', { value: x, selected: x === sk }, KIND[x].label)));
+      const tin = textInput(targetOf(st), v => { st[sk] = v; commit(); }, { mono: !isLib(sk), placeholder: isLib(sk) ? KIND[sk].label + ' name' : 'Item path', label: 'Step ' + (j + 1) + ' target' });
       tin.addEventListener('change', () => { st[sk] = tin.value.trim(); tin.value = st[sk]; commit(); });
       tin.classList.add('stgt');
-      combo(tin, q => matchOpts(sk === 'brush' ? brushOpts() : pathOpts(), q), { brush: sk === 'brush', mono: sk !== 'brush' });
+      if (isLib(sk)) ensureLib(sk);
+      combo(tin, q => matchOpts(isLib(sk) ? libOpts(sk) : pathOpts(), q), { thumb: isLib(sk) ? sk : null, mono: !isLib(sk) });
       const vhint = h('div', { class: 'fhint bad svhint', hidden: true });
       const row = h('div', { class: 'step' }, h('span', { class: 'snum mono' }, String(j + 1)), sel, tin,
         sk === 'set' ? (() => {
@@ -1899,7 +1945,7 @@ function buildSteps(it) {
       host.append(row);
     });
     if (!it.steps.length) host.append(h('div', { class: 'fhint bad' }, 'Add at least one step.'));
-    host.append(h('div', { class: 'step-add' }, h('span', { class: 'micro' }, 'Add'), ['brush', 'press', 'set', 'toggle'].map(x =>
+    host.append(h('div', { class: 'step-add' }, h('span', { class: 'micro' }, 'Add'), STEP_KINDS.map(x =>
       h('button', { class: 'btn small', type: 'button', onclick: () => { it.steps.push(makeItem(x, '')); commit(); render(); const ins = $$('.step .inp.mono, .step input', host); const last = $$('.step', host).pop(); if (last) $$('input', last)[0].focus(); } }, icon(KIND[x].icon, 12), KIND[x].label))));
   };
   render();
@@ -1984,20 +2030,28 @@ const browsers = new Map();            // browser state object (S.lib, S.dock) -
 let tagMgr = null, tagPick = null;     // repaint hooks of the open tag manager and tag picker
 const plural = (n, w) => n + ' ' + w + (n === 1 ? '' : /(s|sh|ch|x)$/.test(w) ? 'es' : 's');
 
-const tagsOf = name => { const l = S.itemTags[tagKey(name)]; return l ? l.filter(k => S.tagMap.has(k)) : []; };
-const firstTag = name => { const l = tagsOf(name); return l.length ? S.tagMap.get(l[0]) : null; };
-/* The colour dot of a brush's first tag (null when it has none), for the item list. */
-function tagDot(name) {
-  const t = firstTag(name);
+const tagsOf = (kind, name) => { const l = S.itemTags[tagKey(kind, name)]; return l ? l.filter(k => S.tagMap.has(k)) : []; };
+const isFav = (kind, name) => tagsOf(kind, name).includes(FAV);
+/* An asset's colour cue: its first tag other than Favourites (null when it has none). Favourites shows as a star instead. */
+const firstTag = (kind, name) => { const k = tagsOf(kind, name).find(x => x !== FAV); return k ? S.tagMap.get(k) : null; };
+/* The tags in the order lists show them: Favourites first, then the others as the backend sends them. */
+const tagsFavFirst = () => S.tags.filter(t => t.key === FAV).concat(S.tags.filter(t => t.key !== FAV));
+/* The colour dot of an asset's first tag (null when it has none), for the item list. */
+function tagDot(kind, name) {
+  const t = firstTag(kind, name);
   return t ? h('i', { class: 'tdot', style: { '--tag': t.color }, title: 'Tag: ' + t.label }) : null;
 }
+/* The gold star that stands in for the dot on Favourites (chips, the picker, the item list); its colour is the tag's (--fav, see applyTagSnapshot). */
+const starGlyph = (size = 11) => h('i', { class: 'tdot star', 'aria-hidden': 'true' }, icon('star', size));
 /* The tag a Tag or Browser item points at (null for other kinds, an empty filter or an unknown key), and its colour dot. */
 const keyTag = it => { const key = it && (('tag' in it) ? it.tag : ('browser' in it) ? it.browser : ''); return key ? S.tagMap.get(key) || null : null; };
-const keyDot = t => h('i', { class: 'tdot', style: { '--tag': t.color }, title: 'Tag: ' + t.label });
-/* How many brushes a tag has to show: the installed ones once the library is read, else what tags.json says. */
-function tagBrushCount(key) {
+const keyDot = t => t.key === FAV ? h('i', { class: 'tdot star', title: 'Tag: ' + t.label }, icon('star', 11)) : h('i', { class: 'tdot', style: { '--tag': t.color }, title: 'Tag: ' + t.label });
+/* How many items (of any kind) a tag has to show: the installed ones once every library is read, else what tags.json says.
+   A kind whose library is not loaded yet has an unknown count, so a partial sum would undercount: until all four are
+   loaded the answer is tags.json's total (it covers every kind, installed or not). */
+function tagItemCount(key) {
   if (!S.tagMap.has(key)) return 0;
-  if (S.libState === 'ready') return tagCounts().byKey.get(key) || 0;
+  if (LIB_KINDS.every(k => lib(k).state === 'ready')) return LIB_KINDS.reduce((n, k) => n + (tagCounts(k).byKey.get(key) || 0), 0);
   return S.tagMap.get(key).count || 0;
 }
 let tagField = null;                   // repaint hook of the tag picker in the item inspector
@@ -2013,7 +2067,7 @@ function tagTargetField(it, k, updateHead) {
     onchange: () => { touched = true; it[k] = sel.value; commit(); paint(); updateHead(); } });
   sel.addEventListener('blur', () => { touched = true; paintHint(); });
   const paintHint = () => {
-    const cur = String(it[k] ?? ''), t = S.tagMap.get(cur), n = tagBrushCount(cur);
+    const cur = String(it[k] ?? ''), t = S.tagMap.get(cur), n = tagItemCount(cur);
     hint.className = 'fhint'; hint.replaceChildren();
     if (cur && !t && S.tagsLoaded) {
       hint.classList.add('warn');
@@ -2022,40 +2076,55 @@ function tagTargetField(it, k, updateHead) {
       if (touched) hint.classList.add('bad');
       hint.append('Pick a tag. ');
     } else if (isTag) {
-      if (t && !n) { hint.classList.add('warn'); hint.append('No brush has this tag yet; the slot stays empty until one does. '); }
-      else hint.append('Opens a submenu of ', h('b', null, plural(n, 'brush')), ', most used first. ');
-    } else hint.append(t ? 'Opens the brush browser popout, filtered to this tag. ' : 'Opens the brush browser popout with every brush. Pick a tag to filter it. ');
+      if (t && !n) { hint.classList.add('warn'); hint.append('No item has this tag yet; the slot stays empty until one does. '); }
+      else hint.append('Opens a submenu of ', h('b', null, plural(n, 'item')), ': brushes first (most used first), then alphas, materials and textures. ');
+    } else hint.append(t ? `Opens the browser on ${K(it.kind).tab}, filtered to this tag. ` : `Opens the browser on ${K(it.kind).tab} with every ${K(it.kind).one}. Pick a tag to filter it. `);
     hint.append(h('button', { class: 'link', type: 'button', onmousedown: e => e.preventDefault(), onclick: () => openTagManager() }, 'Manage tags...'));
   };
   const paint = () => {
     const cur = String(it[k] ?? ''), t = S.tagMap.get(cur), opts = [];
-    if (!isTag) opts.push(h('option', { value: '' }, 'All brushes'));
+    if (!isTag) opts.push(h('option', { value: '' }, 'All ' + K(it.kind).many));
     else if (!cur) opts.push(h('option', { value: '' }, 'Pick a tag...'));
     if (cur && !t) opts.unshift(h('option', { value: cur }, S.tagsLoaded ? `Unknown tag '${cur}'` : cur));
-    for (const x of S.tags) opts.push(h('option', { value: x.key }, `${x.label} (${plural(x.count || 0, 'brush')})`));
+    for (const x of tagsFavFirst()) opts.push(h('option', { value: x.key }, `${x.label} (${plural(x.count || 0, 'item')})`));
     sel.replaceChildren(...opts);
     sel.value = cur;
+    const star = !!t && t.key === FAV;                      // Favourites shows a star in place of the dot
     dot.classList.toggle('none', !t);
+    dot.classList.toggle('star', star);
+    dot.replaceChildren(...(star ? [icon('star', 13)] : []));
     if (t) dot.style.setProperty('--tag', t.color); else dot.style.removeProperty('--tag');
     paintHint();
   };
+  if (isTag) LIB_KINDS.forEach(ensureLib);                // tagItemCount is exact once every library is read (loadLibrary repaints this field)
   paint();
   tagField = { sel, paint };
-  return field(isTag ? 'Tag' : 'Tag filter', h('div', { class: 'target-row' }, dot, sel), hint);
+  const tagRow = field(isTag ? 'Tag' : 'Tag filter', h('div', { class: 'target-row' }, dot, sel), hint);
+  if (isTag) return tagRow;
+  // A Browser slot also says which tab the browser opens on (item.kind; absent means brushes).
+  const kindSel = h('select', { class: 'inp sel', 'aria-label': 'Browser tab', onchange: () => {
+    const v = kindSel.value;
+    if (v === 'brush') delete it.kind; else it.kind = v;
+    commit(); paint(); updateHead();
+  } }, LIB_KINDS.map(lk => h('option', { value: lk, selected: lk === (it.kind || 'brush') }, KINDS[lk].tab)));
+  kindSel.value = it.kind || 'brush';
+  const frag = document.createDocumentFragment();
+  frag.append(tagRow, field('Shows', kindSel, 'Which tab the browser opens on.'));
+  return frag;
 }
 
-/* How many installed brushes each tag is on, and how many carry none (the sidebar's counts). */
-function tagCounts() {
-  if (S._tc && S._tcItems === S.itemTags && S._tcMap === S.tagMap && S._tcLib === S.library) return S._tc;
+/* How many installed items of one kind each tag is on, and how many carry none (the sidebar's counts). */
+function tagCounts(kind) {
+  const L = lib(kind), c = L._tc;
+  if (c && c.items === S.itemTags && c.map === S.tagMap && c.src === L.items) return c;
   const byKey = new Map();
   let untagged = 0;
-  for (const b of S.library) {
-    const ks = tagsOf(b.name);
-    if (!ks.length) untagged++;
+  for (const b of L.items) {
+    const ks = tagsOf(kind, b.name);
+    if (!ks.some(k => k !== FAV)) untagged++;              // "Untagged" means no ordinary tag: an item with only Favourites counts
     for (const k of ks) byKey.set(k, (byKey.get(k) || 0) + 1);
   }
-  S._tc = { byKey, untagged }; S._tcItems = S.itemTags; S._tcMap = S.tagMap; S._tcLib = S.library;
-  return S._tc;
+  return (L._tc = { byKey, untagged, items: S.itemTags, map: S.tagMap, src: L.items });
 }
 /* How many ring items point at a tag ({"tag": key}). */
 function tagRingUses(key) {
@@ -2078,6 +2147,9 @@ function applyTagSnapshot(res, mutated = false) {
   if (err && err !== S.tagsErr) toast(err, { tone: 'warn', ms: 5000 });
   S.tags = res.tags; S.tagMap = new Map(res.tags.map(t => [t.key, t]));
   S.itemTags = res.items && typeof res.items === 'object' ? res.items : {};
+  const favTag = S.tagMap.get(FAV);                         // the star's colour follows the Favourites tag (its colour can be changed)
+  if (favTag && /^#[0-9a-f]{6}$/i.test(favTag.color || '')) document.documentElement.style.setProperty('--fav', favTag.color);
+  else document.documentElement.style.removeProperty('--fav');
   if (Array.isArray(res.palette) && res.palette.length) S.palette = res.palette;
   if (res.path) S.tagsPath = String(res.path);
   S.tagMtime = res.mtime_ns === undefined ? S.tagMtime : res.mtime_ns;
@@ -2114,19 +2186,20 @@ function tagsChanged() {
   previewSoon();
 }
 
-/* A popover for tagging brushes: one checkable row per tag (ticked when all of the brushes carry it, a dash when some do),
-   and a field that makes a new tag and puts it on them. `at` is the pointer position for a right-click. */
-function tagPicker(anchor, names, at = null) {
+/* A popover for tagging items of one kind: one checkable row per tag (ticked when all of them carry it, a dash when some do),
+   and a field that makes a new tag and puts it on them. `at` is the pointer position for a right-click. `extras` are more rows
+   under the tags, each { icon, label, fn } (the Recent folder adds "Remove from Recent"); a click closes the picker, then runs fn. */
+function tagPicker(anchor, kind, names, at = null, extras = null) {
   if (!names.length) return;
   if (openPopover) { const same = openPopover.anchor === anchor; openPopover(); if (same && !at) return; }
-  const keys = names.map(tagKey);
+  const keys = names.map(n => tagKey(kind, n));
   const list = h('div', { class: 'tp-list', role: 'group', 'aria-label': 'Tags' });
   const input = h('input', { class: 'inp tp-new', type: 'text', maxlength: 40, placeholder: 'New tag...', 'aria-label': 'New tag name', spellcheck: 'false', autocomplete: 'off' });
-  const title = names.length === 1 ? names[0] : names.length + ' brushes';
+  const title = names.length === 1 ? names[0] : names.length + ' ' + K(kind).many;
   const pop = h('div', { class: 'popover tagpick', role: 'dialog', 'aria-label': 'Tags for ' + title },
     h('div', { class: 'tp-head' }, icon('tag', 13), h('b', null, title)), list, h('div', { class: 'tp-add' }, input));
   const stateOf = t => {
-    const n = names.filter(nm => tagsOf(nm).includes(t.key)).length;
+    const n = names.filter(nm => tagsOf(kind, nm).includes(t.key)).length;
     return n === 0 ? 'none' : n === names.length ? 'all' : 'some';
   };
   const row = t => {
@@ -2134,11 +2207,13 @@ function tagPicker(anchor, names, at = null) {
     return h('button', { class: 'tp-row' + (st === 'all' ? ' on' : ''), type: 'button', role: 'menuitemcheckbox', 'aria-checked': st === 'all' ? 'true' : st === 'some' ? 'mixed' : 'false', dataset: { k: t.key },
       onclick: () => tagCall('tag_items', keys, st === 'all' ? [] : [t.key], st === 'all' ? [t.key] : []) },
       h('span', { class: 'tcheck' }, st === 'all' ? icon('check', 11) : st === 'some' ? h('i', { class: 'tdash' }) : null),
-      h('i', { class: 'tdot', style: { '--tag': t.color } }), h('span', { class: 'tc-name' }, t.label), h('span', { class: 'tc-n mono' }, String(t.count)));
+      t.key === FAV ? starGlyph(13) : h('i', { class: 'tdot', style: { '--tag': t.color } }), h('span', { class: 'tc-name' }, t.label), h('span', { class: 'tc-n mono' }, String(t.count)));
   };
+  const extraRow = (x, i) => h('button', { class: 'tp-row tp-extra', type: 'button', role: 'menuitem', dataset: { k: '@x' + i }, onclick: () => { close(); x.fn(); } },
+    h('span', { class: 'tcheck none' }, icon(x.icon, 12)), h('span', { class: 'tc-name' }, x.label));
   const paint = () => {
     const act = document.activeElement, fk = act && list.contains(act) ? act.dataset.k : null;
-    list.replaceChildren(...(S.tags.length ? S.tags.map(row) : [h('div', { class: 'tp-empty fhint' }, 'No tags yet. Type a name below to make one.')]));
+    list.replaceChildren(...(S.tags.length ? tagsFavFirst().map(row) : [h('div', { class: 'tp-empty fhint' }, 'No tags yet. Type a name below to make one.')]), ...(extras || []).map(extraRow));
     if (fk) { const r = $$('.tp-row', list).find(x => x.dataset.k === fk); if (r) r.focus(); }
   };
   input.addEventListener('keydown', async e => {
@@ -2192,7 +2267,7 @@ function tagPicker(anchor, names, at = null) {
 /* The tag manager: rename, recolour, merge and delete tags, and make new ones. Every change is saved at once. */
 function openTagManager() {
   const list = h('div', { class: 'tm-list' });
-  const empty = h('div', { class: 'tm-empty fhint' }, 'No tags yet. Add one below, or select brushes in the Library and press Tag.');
+  const empty = h('div', { class: 'tm-empty fhint' }, 'No tags yet. Add one below, or select items in the Library and press Tag.');
   const warn = h('div', { class: 'fhint bad tm-warn', role: 'alert', hidden: true });
   const say = h('div', { class: 'fhint tm-say', role: 'status' });
   const rows = new Map();
@@ -2253,21 +2328,26 @@ function openTagManager() {
     });
     const remove = async () => {
       const uses = tagRingUses(tag.key);
-      const text = (tag.count ? 'It is on ' + plural(tag.count, 'brush') + (uses ? ', used by ' + plural(uses, 'ring item') : '') : 'It is not on any brush' + (uses ? ', but ' + plural(uses, 'ring item') + (uses === 1 ? ' uses' : ' use') + ' it' : '')) + '. Brushes keep working.' + (POPOUT ? ' Ring slots that use it stay empty until you pick another tag.' : '');
+      const text = (tag.count ? 'It is on ' + plural(tag.count, 'item') + (uses ? ', used by ' + plural(uses, 'ring item') : '') : 'It is not on any item' + (uses ? ', but ' + plural(uses, 'ring item') + (uses === 1 ? ' uses' : ' use') + ' it' : '')) + '. The items keep working.' + (POPOUT ? ' Ring slots that use it stay empty until you pick another tag.' : '');
       const ok = await modal({ title: 'Delete tag "' + tag.label + '"?', body: h('p', null, text),
         actions: [{ text: 'Cancel', value: false, focus: true }, { text: 'Delete tag', value: true, kind: 'danger' }] });
       if (ok) await tagCall('delete_tag', tag.key);
       openTagManager();                                   // the confirm replaced this dialog: bring it back
     };
-    const el = h('div', { class: 'tm-row', dataset: { key: tag.key } }, h('div', { class: 'tm-line' }, sw, inp, n, del), pal, msg);
+    const gap = h('span', { class: 'tm-gap', 'aria-hidden': 'true' });       // where a built-in tag's delete button would be
+    const el = h('div', { class: 'tm-row', dataset: { key: tag.key } }, h('div', { class: 'tm-line' }, sw, inp, n, del, gap), pal, msg);
     el._update = t => {
       tag = t;
+      const fixed = t.builtin === true || t.key === FAV;                      // Favourites: the colour can change, the name and the tag cannot
+      inp.readOnly = fixed; del.hidden = fixed; gap.hidden = !fixed;
+      el.classList.toggle('builtin', fixed);
+      inp.title = fixed ? t.label + ' is built in: it cannot be renamed or deleted.' : '';
       sw.style.setProperty('--tag', t.color);
       sw.title = 'Colour of ' + t.label + ': ' + t.color + '. Click to change it.';
       sw.setAttribute('aria-label', 'Colour of ' + t.label + ', ' + t.color);
       if (document.activeElement !== inp) inp.value = t.label;
       inp.setAttribute('aria-label', 'Name of the tag ' + t.label);
-      setText(n, plural(t.count, 'brush'));
+      setText(n, plural(t.count, 'item'));
       del.title = 'Delete ' + t.label; del.setAttribute('aria-label', 'Delete the tag ' + t.label);
       $('.tm-pcs', pal).replaceChildren(...swatches());
       if (document.activeElement !== hex) hex.value = t.color.toUpperCase();
@@ -2278,7 +2358,7 @@ function openTagManager() {
   const paint = () => {
     warn.hidden = !S.tagsErr; setText(warn, S.tagsErr || '');
     for (const [k, el] of rows) if (!S.tagMap.has(k)) { el.remove(); rows.delete(k); }
-    const want = S.tags.map(t => {
+    const want = tagsFavFirst().map(t => {
       let el = rows.get(t.key);
       if (!el) { el = makeRow(t); rows.set(t.key, el); } else el._update(t);
       return el;
@@ -2291,18 +2371,74 @@ function openTagManager() {
   tagMgr = me;
   paint();
   const body = h('div', { class: 'tagmgr' },
-    h('p', { class: 'fhint' }, 'Tags group your brushes. A brush can carry several; the first one is its colour. Tags save as you go; they are not part of Save or Undo.'),
+    h('p', { class: 'fhint' }, 'Tags group your brushes, alphas, materials and textures. An item can carry several; the first one is its colour. Favourites is built in and shows as a star instead. Tags save as you go; they are not part of Save or Undo.'),
     warn, empty, list,
     h('div', { class: 'tm-add' }, newInp, h('button', { class: 'btn small', type: 'button', onclick: addTag }, icon('plus', 13), 'Add')), say);
   return modal({ title: 'Tags', body, actions: [{ text: 'Done', value: true, kind: 'primary', focus: true }] }).then(() => { if (tagMgr === me) tagMgr = null; });
 }
 const manageTagsBtn = (cls = 'btn small') => h('button', { class: cls, type: 'button', onclick: () => openTagManager() }, icon('tag', 13), 'Manage tags...');
 
-/* ================================================================== brush browser (Library screen + Menus dock) */
-function catTree() {
-  if (S._tree && S._treeLib === S.library) return S._tree;
+/* ================================================================== browser (Library screen + Menus dock + popout) */
+/* One tab per kind of asset. get() is the kind on show, set(kind) switches to another; paint() follows a change made elsewhere.
+   Left and Right move between the tabs (and switch, as the tab bar of a tab list does). */
+function kindTabs(get, set, cls = '') {
+  const btns = new Map(LIB_KINDS.map(k => [k, h('button', { class: 'ktab', type: 'button', role: 'tab', dataset: { kind: k }, onclick: () => set(k) }, KINDS[k].tab)]));
+  const el = h('div', { class: 'ktabs' + (cls ? ' ' + cls : ''), role: 'tablist', 'aria-label': 'Library' }, Array.from(btns.values()));
+  const paint = () => {
+    const cur = get();
+    for (const [k, b] of btns) { const on = k === cur; b.classList.toggle('on', on); b.setAttribute('aria-selected', on ? 'true' : 'false'); b.tabIndex = on ? 0 : -1; }
+  };
+  el.addEventListener('keydown', e => {
+    if ((e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') || e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
+    const n = LIB_KINDS.length, to = LIB_KINDS[(Math.max(0, LIB_KINDS.indexOf(get())) + (e.key === 'ArrowRight' ? 1 : n - 1)) % n];
+    e.preventDefault(); e.stopPropagation();                  // the popout's arrow keys move the highlight over the cards: not from here
+    set(to); btns.get(to).focus();
+  });
+  paint();
+  return { el, paint };
+}
+
+/* ---------- usage: what the Recent folder lists and how Favourites are ordered (get_usage / forget_recent) */
+const usageCat = cat => cat === '@fav' || cat === '@recent';
+const usageFlight = {};                                      // kind -> the get_usage call in flight, so a burst of triggers makes one call
+/* Takes a get_usage or forget_recent answer. Returns true when anything the browsers show changed. */
+function applyUsage(kind, res) {
+  if (!res || res.ok === false || !Array.isArray(res.recent)) return false;
+  const u = usageOf(kind);
+  if (u.loaded && typeof res.mtime_ns === 'number' && typeof u.mtime === 'number' && res.mtime_ns < u.mtime) return false;   // an older answer never replaces a newer one
+  const scores = res.scores && typeof res.scores === 'object' ? res.scores : {};
+  const sig = JSON.stringify([res.recent, scores]), changed = !u.loaded || sig !== u.sig;
+  u.recent = res.recent; u.scores = scores; u.sig = sig; u.loaded = true;
+  u.mtime = typeof res.mtime_ns === 'number' ? res.mtime_ns : u.mtime;
+  u.recentSet = new Set(res.recent.map(r => nameKey(r.name)));
+  u.recentT = new Map(res.recent.map(r => [nameKey(r.name), +r.t || 0]));
+  if (changed) for (const b of browsers.values()) if (b.kind() === kind) b.updateUsage();
+  return changed;
+}
+function loadUsage(kind) {
+  if (!isLib(kind)) return Promise.resolve();
+  if (usageFlight[kind]) return usageFlight[kind];
+  return (usageFlight[kind] = (async () => {
+    let res = null;
+    try { res = await call('get_usage', kind); } catch (e) { res = null; }
+    applyUsage(kind, res);
+  })().finally(() => { delete usageFlight[kind]; }));
+}
+/* Every kind a browser is showing: on window focus (the other window may have picked something) and when the popout is shown. */
+function reloadUsage() { for (const k of new Set(Array.from(browsers.values()).map(b => b.kind()))) loadUsage(k); }
+/* "Remove from Recent" for one or several items of a kind. */
+async function forgetRecent(kind, names) {
+  let res = null;
+  try { for (const n of names) res = await call('forget_recent', kind, n); } catch (e) { res = null; }
+  if (res && res.ok !== false && Array.isArray(res.recent)) applyUsage(kind, res);
+  else { toast((res && res.error) || 'Could not remove it from Recent.', { tone: 'warn', ms: 3800 }); loadUsage(kind); }
+}
+
+function catTree(kind) {
+  const L = lib(kind);
+  if (L._tree) return L._tree;                               // loadLibrary clears it
   const counts = new Map();
-  S.library.forEach(b => counts.set(b.category, (counts.get(b.category) || 0) + 1));
+  L.items.forEach(b => counts.set(b.category, (counts.get(b.category) || 0) + 1));
   const groups = new Map();
   for (const [cat, c] of counts) {
     const parts = cat.split('/'), top = parts[0];
@@ -2312,118 +2448,131 @@ function catTree() {
     if (parts.length === 1) g.own += c; else g.kids.push({ id: cat, label: parts.slice(1).join(' / '), count: c });
   }
   groups.forEach(g => g.kids.sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base' })));
-  S._tree = Array.from(groups.values()); S._treeLib = S.library;
-  return S._tree;
+  return (L._tree = Array.from(groups.values()));
 }
-function catMatch(b, cat, host) {
+function catMatch(b, cat, host, kind) {
   if (cat === 'All') return true;
-  if (cat === '@used') return !!(host.badge && host.badge(b.name));
+  if (cat === '@used') return !!(host.badge && host.badge(b.name, kind));
+  if (cat === '@fav') return isFav(kind, b.name);
+  if (cat === '@recent') return usageOf(kind).recentSet.has(nameKey(b.name));
   return b.category === cat || b.category.startsWith(cat + '/');
 }
 const resFor = px => (px > 160 ? 256 : 128);     // above 160 CSS px a 128 px thumbnail starts to look soft
 
-/* Adds a brush to the menu being edited. A brush the menu already has is not added silently. */
-function addBrushToCurrent(name) {
+/* Adds a brush, alpha, material or texture to the menu being edited. One the menu already has is not added silently. */
+function addToCurrent(kind, name) {
   const m = curMenu();
   if (!m) { toast('Create or select a menu first.', { tone: 'warn' }); return; }
   const id = S.menuId, title = m.title || id;
-  if ((usageMap().get(nameKey(name)) || []).some(u => u.menuId === id)) {
-    toast(`"${name}" is already in "${title}"`, { tone: 'warn', action: { text: 'Add anyway', fn: () => insertBrush(id, name, null) } });
+  if ((usageMap().get(kind + ':' + nameKey(name)) || []).some(u => u.menuId === id)) {
+    toast(`"${name}" is already in "${title}"`, { tone: 'warn', action: { text: 'Add anyway', fn: () => insertAsset(id, kind, name, null) } });
     return;
   }
-  insertBrush(id, name, null);
+  insertAsset(id, kind, name, null);
 }
 
-/* Adds several brushes to the menu being edited as one undoable step; the ones it already has are skipped. */
-function addBrushesToCurrent(names) {
+/* Adds several of one kind to the menu being edited as one undoable step; the ones it already has are skipped. */
+function addManyToCurrent(kind, names) {
   const m = curMenu();
   if (!m) { toast('Create or select a menu first.', { tone: 'warn' }); return; }
   const id = S.menuId, title = m.title || id, used = usageMap();
-  const fresh = names.filter(n => !(used.get(nameKey(n)) || []).some(u => u.menuId === id));
+  const fresh = names.filter(n => !(used.get(kind + ':' + nameKey(n)) || []).some(u => u.menuId === id));
   if (!fresh.length) { toast(`All ${names.length} are already in "${title}"`, { tone: 'warn' }); return; }
   sealSnap();
-  fresh.forEach(n => insertBrush(id, n, null, true));
+  fresh.forEach(n => insertAsset(id, kind, n, null, true));
   const skipped = names.length - fresh.length;
-  undoToast(`Added ${plural(fresh.length, 'brush')} to "${title}"` + (skipped ? ` (${skipped} already there)` : ''));
+  undoToast(`Added ${plural(fresh.length, K(kind).one)} to "${title}"` + (skipped ? ` (${skipped} already there)` : ''));
 }
 
-/* What a brush browser does with a pick, and what it knows about menus. The Studio's browser adds brushes to the menu being edited
-   and marks the ones a menu already has; the popout's selects the brush in ZBrush and knows nothing of menus.
+/* What a browser does with a pick, and what it knows about menus. The Studio's browser adds the item to the menu being edited and marks
+   the ones a menu already has; the popout's selects it in ZBrush and knows nothing of menus. Every callback gets the kind on show
+   ('brush', 'alpha', 'material' or 'texture') as its LAST argument.
      dnd             cards can be dragged onto the Studio's drop zones
-     primaryIcon     the icon of the pick button on a card and of the strip's button
-     primaryLabel()  the strip button's text ("Add to Brushes", "Select in ZBrush")
-     canPrimary(n)   whether n selected brushes can be picked together
-     primary(name)   the pick: a double-click, Enter, the strip button or a card's button
-     primaryMany(names)  the same for a selection of several (a single name goes to primary)
-     cardTitle(), cardLabel(name), enterHint   the card button's tooltip, a card's spoken label and the Enter hint in it
-     hint()          nodes for the line under the search box
+     primaryIcon(kind)   the icon of the pick button on a card and of the strip's button
+     primaryLabel(kind)  the strip button's text ("Add to Brushes", "Select in ZBrush")
+     canPrimary(n, kind) whether n selected items can be picked together
+     primary(name, kind) the pick: a double-click, Enter, the strip button or a card's button
+     primaryMany(names, kind)  the same for a selection of several (a single name goes to primary)
+     cardTitle(kind), cardLabel(name, kind), enterHint   the card button's tooltip, a card's spoken label and the Enter hint in it
+     hint(kind)      nodes for the line under the search box
      tools()         optional: a node for the end of the toolbar
-     badge           null (no "In my menus" folder, no badges) or badge(name) -> { n, titles } | null
-     onSize(px)      optional: the thumbnail size changed */
+     badge           null (no "In my menus" folder, no badges) or badge(name, kind) -> { n, titles } | null
+     onSize(px)      optional: the thumbnail size changed
+     onKind(kind)    optional: the browser switched to another kind */
 const STUDIO_HOST = {
   dnd: true,
-  tools: () => h('button', { class: 'btn small', type: 'button', title: 'Open the brush browser in its own window', onclick: openBrowserWindow }, icon('k_browser', 13), 'Brush browser'),
-  primaryIcon: 'plus',
+  tools: () => h('button', { class: 'btn small', type: 'button', title: 'Open the browser in its own window', onclick: openBrowserWindow }, icon('k_browser', 13), 'Browser'),
+  primaryIcon: () => 'plus',
   primaryLabel() { const m = curMenu(); return m ? 'Add to ' + (m.title || S.menuId) : 'No menu to add to'; },
   canPrimary() { return !!curMenu(); },
-  primary: name => addBrushToCurrent(name),
-  primaryMany(names) { if (names.length === 1) addBrushToCurrent(names[0]); else if (names.length) addBrushesToCurrent(names); },
+  primary: (name, kind) => addToCurrent(kind, name),
+  primaryMany(names, kind) { if (names.length === 1) addToCurrent(kind, names[0]); else if (names.length) addManyToCurrent(kind, names); },
   cardTitle() { const m = curMenu(); return 'Add to ' + ((m && m.title) || 'current menu'); },
-  cardLabel: name => 'Add ' + name + ' to the current menu',
+  cardLabel: (name, kind) => 'Add ' + name + ' to the current menu',
   enterHint: 'Press Enter to add to the current menu.',
-  hint() {
+  hint(kind) {
     const m = curMenu(), n = m ? (m.title || S.menuId) : '';
-    return ['Click a brush to select it, then Add to ', h('b', null, n || 'a menu'), '; or drag it onto a menu, the ring or the item list. Double-click or Enter adds it too. Ctrl-click or Shift-click selects several; right-click tags.'];
+    return ['Click ' + aOrAn(K(kind).one) + ' to select it, then Add to ', h('b', null, n || 'a menu'), '; or drag it onto a menu, the ring or the item list. Double-click or Enter adds it too. Ctrl-click or Shift-click selects several; right-click tags.'];
   },
-  badge(name) {
-    const u = usageMap().get(nameKey(name));
+  badge(name, kind) {
+    const u = usageMap().get(tagKey(kind, name));
     return u ? { n: u.length, titles: Array.from(new Set(u.map(x => (S.cfg.menus[x.menuId] || {}).title || x.menuId))) } : null;
   },
 };
 
-/* The brush browser in its own window (the Library toolbar, Settings): the app shows it if it is running, else a new one starts. It needs neither ZBrush nor the app. */
+/* The browser in its own window (the Library toolbar, Settings): the app shows it if it is running, else a new one starts. It needs neither ZBrush nor the app. */
 async function openBrowserWindow() {
   let r;
   try { r = await call('open_browser'); } catch (e) { r = { ok: false, error: (e && e.message) || String(e) }; }
-  if (!r || !r.ok) toast((r && r.error) || 'Could not open the brush browser.', { tone: 'warn', ms: 3800 });
+  if (!r || !r.ok) toast((r && r.error) || 'Could not open the browser.', { tone: 'warn', ms: 3800 });
 }
 
-/* ---------- finding brushes: rescan button and the empty states */
+/* ---------- finding items: rescan button and the empty states */
 function paintRescanBtn(b) {
-  b.disabled = S.libBusy;
-  b.setAttribute('aria-busy', S.libBusy ? 'true' : 'false');
-  b.replaceChildren(S.libBusy ? h('span', { class: 'spin' }) : icon('refresh', 13), b.dataset.label);
+  const busy = lib(b.dataset.kind).busy;
+  b.title = 'Look for ' + K(b.dataset.kind).one + ' files again';
+  b.disabled = busy;
+  b.setAttribute('aria-busy', busy ? 'true' : 'false');
+  b.replaceChildren(busy ? h('span', { class: 'spin' }) : icon('refresh', 13), b.dataset.label);
 }
 function paintRescan() { $$('.rescan-btn').forEach(paintRescanBtn); }
-function rescanBtn(label = 'Rescan') {
-  const b = h('button', { class: 'btn small rescan-btn', type: 'button', title: 'Look for brush files again', dataset: { label }, onclick: rescanLibrary });
+function rescanBtn(kind, label = 'Rescan') {
+  const b = h('button', { class: 'btn small rescan-btn', type: 'button', title: 'Look for ' + K(kind).one + ' files again', dataset: { label, kind }, onclick: () => rescanLibrary(kind) });
   paintRescanBtn(b);
   return b;
 }
-async function rescanLibrary() {
-  if (S.libBusy) return;
-  await loadLibrary(true);
-  if (S.libState === 'error') { toast(S.libError || 'Could not read the brush folders.', { tone: 'warn', ms: 4500 }); return; }
-  const n = S.library.length;
-  toast(`Found ${n} brush${n === 1 ? '' : 'es'}`, n ? {} : { tone: 'warn' });
+async function rescanLibrary(kind) {
+  const L = lib(kind), w = K(kind);
+  if (L.busy) return;
+  await loadLibrary(kind, true);
+  if (L.state === 'error') { toast(L.error || 'Could not read the ' + w.one + ' folders.', { tone: 'warn', ms: 4500 }); return; }
+  const n = L.items.length;
+  toast('Found ' + plural(n, w.one), n ? {} : { tone: 'warn' });
 }
-/* What the grid says when there is no library to show: a read error, no ZBrush, or no .zbp files in the folders searched. */
-function libEmptyState() {
+/* What the grid says when there is no library to show: a read error, no ZBrush, or no files in the folders searched. */
+function libEmptyState(kind) {
+  const L = lib(kind), w = K(kind);
   let el;
-  if (S.libState === 'error') el = emptyState('alert', 'Could not read the brush library', S.libError || 'The backend could not list your ZBrush brush folders.');
-  else if (!S.zbrushFound) el = emptyState('library', 'No brushes to show', 'ZBrush was not found. Studio reads the brush folders of a ZBrush that has run at least once.');
+  if (L.state === 'error') el = emptyState('alert', 'Could not read the ' + w.one + ' library', L.error || 'The backend could not list your ZBrush ' + w.one + ' folders.');
+  else if (!L.zbrushFound) el = emptyState('library', 'No ' + w.many + ' to show', 'ZBrush was not found. Studio reads the ' + w.one + ' folders of a ZBrush that has run at least once.');
   else {
-    el = emptyState('library', 'No brushes found', 'No .zbp files in these folders:');
-    if (S.libSources.length) el.append(h('ul', { class: 'src-list mono' }, S.libSources.map(s => h('li', { class: s.exists ? '' : 'miss' },
+    el = emptyState('library', 'No ' + w.many + ' found', 'No ' + w.ext + ' files in these folders:');
+    if (L.sources.length) el.append(h('ul', { class: 'src-list mono' }, L.sources.map(s => h('li', { class: s.exists ? '' : 'miss' },
       h('span', { class: 'src-path' }, s.path), h('span', { class: 'src-n' }, ' ' + s.count + (s.count === 1 ? ' file' : ' files')), s.exists ? null : h('em', null, ' (missing)')))));
   }
-  el.append(rescanBtn(S.libState === 'error' ? 'Retry' : 'Rescan'));
+  el.append(rescanBtn(kind, L.state === 'error' ? 'Retry' : 'Rescan'));
   return el;
 }
 
-function makeBrowser({ compact, st, host = STUDIO_HOST }) {
+/* kindUi: where the kind tabs go. 'tabs' (the default of the full browser) draws them above the toolbar, 'compact' (the dock's default)
+   draws a tighter row, 'none' draws none: the host mounts its own (the popout's header) and calls setKind. */
+function makeBrowser({ compact, st, host = STUDIO_HOST, kindUi = compact ? 'compact' : 'tabs' }) {
   const root = h('div', { class: 'browser ' + (compact ? 'compact' : 'full') });
-  const search = h('input', { class: 'inp', type: 'text', placeholder: 'Search brushes...', value: st.q, 'aria-label': 'Search brushes', spellcheck: 'false', autocomplete: 'off' });
+  if (!isLib(st.kind)) st.kind = 'brush';
+  ensureLib(st.kind);
+  const L = () => lib(st.kind);                                  // the library of the kind on show
+  const W = () => KINDS[st.kind];                                // its wording
+  const search = h('input', { class: 'inp', type: 'text', value: st.q, spellcheck: 'false', autocomplete: 'off' });   // placeholder and label: paintStrings
   const clearBtn = h('button', { class: 'ibtn', type: 'button', title: 'Clear search', 'aria-label': 'Clear search', hidden: !st.q, onclick: () => { clearQuery(); renderGrid(); search.focus(); } }, icon('x', 13));
   const count = h('span', { class: 'b-count mono' });
   const grid = h('div', { class: 'bgrid' });
@@ -2435,11 +2584,11 @@ function makeBrowser({ compact, st, host = STUDIO_HOST }) {
   side.append(catsBox, tagSec);
   const lazy = makeLazyIO(scroll);
   let token = 0, curRes = compact ? 128 : resFor(st.size), lastSig = '';
-  const sel = new Set();                 // names of the selected brushes
+  const sel = new Set();                 // names of the selected items
   let anchor = null;                     // the last plain or Ctrl click: where a Shift-click range starts
   if (!st.open) st.open = new Set();
   if (!(st.tags instanceof Set)) st.tags = new Set();     // the tags to show (any of them), kept on the state like st.cat
-  st.untagged = !!st.untagged;                            // the virtual "Untagged" chip: brushes without any tag
+  st.untagged = !!st.untagged;                            // the virtual "Untagged" chip: items without any tag
   if (st.cat.includes('/')) st.open.add(st.cat.split('/')[0]);   // a folder chosen from outside (a link) starts unfolded
 
   const searchBox = h('label', { class: 'searchbox' }, icon('search', 14), search, clearBtn);
@@ -2449,23 +2598,34 @@ function makeBrowser({ compact, st, host = STUDIO_HOST }) {
   let autoHl = false;                    // the selection is only the highlight put on the first match (the popout), so Esc leaves it alone
   function clearQuery() { onSearch.cancel(); search.value = ''; st.q = ''; clearBtn.hidden = true; }
 
-  /* The selected brushes and their action strip. A click selects one brush, Ctrl-click adds or removes one, Shift-click selects a
-     range of the brushes on show. The strip tags them or adds them to the menu being edited. */
+  /* The selected items and their action strip. A click selects one, Ctrl-click adds or removes one, Shift-click selects a
+     range of the items on show. The strip tags them or adds them to the menu being edited. */
   const hint = h('div', { class: 'b-hint' });
-  const addBtn = h('button', { class: 'btn primary small as-add', type: 'button', onclick: () => host.primaryMany(Array.from(sel)) });
-  const tagBtn = h('button', { class: 'btn small as-tag', type: 'button', title: 'Tag the selected brushes', 'aria-label': 'Tag the selected brushes', onclick: () => tagPicker(tagBtn, Array.from(sel)) },
+  const addBtn = h('button', { class: 'btn primary small as-add', type: 'button', onclick: () => host.primaryMany(Array.from(sel), st.kind) });
+  const tagBtn = h('button', { class: 'btn small as-tag', type: 'button', onclick: () => tagPicker(tagBtn, st.kind, Array.from(sel)) },
     icon('tag', 13), compact ? null : 'Tag...');
+  const favBtn = h('button', { class: 'btn small as-fav', type: 'button', 'aria-pressed': 'false', onclick: () => toggleFavs(Array.from(sel)) }, icon('star', 13));
   const stripThumb = h('span', { class: 'as-thumb' }), stripName = h('b'), stripCat = h('small');
-  const strip = h('div', { class: 'add-strip', hidden: true, role: 'region', 'aria-label': 'Selected brushes' },
-    stripThumb, h('div', { class: 'as-name' }, stripName, stripCat), tagBtn, addBtn, iconBtn('x', 'Clear selection', () => setSel(null)));
+  const strip = h('div', { class: 'add-strip', hidden: true, role: 'region' },
+    stripThumb, h('div', { class: 'as-name' }, stripName, stripCat), favBtn, tagBtn, addBtn, iconBtn('x', 'Clear selection', () => setSel(null)));
+  /* Favourites go through the same tag call as any tag, so its answer repaints every browser (tagsChanged). */
+  const setFavs = (names, on) => (names.length ? tagCall('tag_items', names.map(n => tagKey(st.kind, n)), on ? [FAV] : [], on ? [] : [FAV]) : Promise.resolve());
+  const toggleFavs = names => setFavs(names, !names.every(n => isFav(st.kind, n)));
+  /* The strip's star: pressed while every selected item is a favourite. */
+  function paintFavBtn() {
+    const names = Array.from(sel), all = names.length > 0 && names.every(n => isFav(st.kind, n));
+    const text = (all ? 'Remove the selected ' + W().many + ' from Favourites' : 'Add the selected ' + W().many + ' to Favourites') + ' (Ctrl+D)';
+    favBtn.classList.toggle('on', all); favBtn.setAttribute('aria-pressed', all ? 'true' : 'false');
+    favBtn.title = text; favBtn.setAttribute('aria-label', text);
+  }
   function paintTarget() {
-    const label = host.primaryLabel();
-    hint.replaceChildren(...host.hint());
-    if (addBtn.dataset.label !== label) {
-      addBtn.dataset.label = label; addBtn.title = label;
-      addBtn.replaceChildren(icon(host.primaryIcon, 13), h('span', { class: 'as-add-txt' }, label));
+    const label = host.primaryLabel(st.kind), ic = host.primaryIcon(st.kind);
+    hint.replaceChildren(...host.hint(st.kind));
+    if (addBtn.dataset.label !== label || addBtn.dataset.icon !== ic) {
+      addBtn.dataset.label = label; addBtn.dataset.icon = ic; addBtn.title = label;
+      addBtn.replaceChildren(icon(ic, 13), h('span', { class: 'as-add-txt' }, label));
     }
-    addBtn.disabled = !host.canPrimary(sel.size);
+    addBtn.disabled = !host.canPrimary(sel.size, st.kind);
   }
   /* Repaints the cards and the strip from `sel`; `focusName` is the card to give focus. */
   function paintSel(focusName = null) {
@@ -2477,16 +2637,17 @@ function makeBrowser({ compact, st, host = STUDIO_HOST }) {
     });
     strip.hidden = sel.size === 0;
     if (sel.size === 1) {
-      const b = S.libByName.get(nameKey(sel.values().next().value));
-      if (b) { stripThumb.replaceChildren(thumb(b.name, { size: 34 })); setText(stripName, b.name); setText(stripCat, b.category); }
+      const b = L().byName.get(nameKey(sel.values().next().value));
+      if (b) { stripThumb.replaceChildren(thumb(b.name, { size: 34, kind: st.kind })); setText(stripName, b.name); setText(stripCat, b.category); }
     } else if (sel.size > 1) {
       stripThumb.replaceChildren(h('span', { class: 'as-multi' }, String(sel.size)));
-      setText(stripName, sel.size + ' selected'); setText(stripCat, host.canPrimary(sel.size) ? 'Ctrl-click or Shift-click to change' : 'ZBrush takes one brush at a time');
+      setText(stripName, sel.size + ' selected'); setText(stripCat, host.canPrimary(sel.size, st.kind) ? 'Ctrl-click or Shift-click to change' : `ZBrush takes one ${W().one} at a time`);
     }
-    addBtn.disabled = !host.canPrimary(sel.size);
+    addBtn.disabled = !host.canPrimary(sel.size, st.kind);
+    paintFavBtn();
   }
   function setSel(name, focusCard = false) {
-    const b = name ? S.libByName.get(nameKey(name)) : null;
+    const b = name ? L().byName.get(nameKey(name)) : null;
     sel.clear(); anchor = b ? b.name : null;
     if (b) sel.add(b.name);
     paintSel(focusCard && b ? b.name : null);
@@ -2495,17 +2656,19 @@ function makeBrowser({ compact, st, host = STUDIO_HOST }) {
     if (e.key === 'Escape' && sel.size && !autoHl && !S.problemsOpen && !e.defaultPrevented) { e.preventDefault(); setSel(null); }
   });
   scroll.addEventListener('click', e => { if (sel.size && !e.target.closest('.bcard, button, a, input')) setSel(null); });
-  scroll.addEventListener('keydown', e => {       // Ctrl+A in the grid selects every brush on show
+  scroll.addEventListener('keydown', e => {       // Ctrl+A in the grid selects every item on show
     if (!(e.ctrlKey || e.metaKey) || e.altKey || e.key.toLowerCase() !== 'a' || e.target.closest('input, textarea')) return;
     e.preventDefault();
     sel.clear(); for (const b of filtered()) sel.add(b.name);
     paintSel();
   });
-  let tools, catSel = null;
+  let tools, catSel = null, rescan = null, dockHint = null;
+  const tabs = kindUi === 'none' ? null : kindTabs(() => st.kind, kind => setKind(kind), kindUi === 'compact' ? 'compact' : '');
   if (compact) {
-    catSel = h('select', { class: 'inp sel', 'aria-label': 'Category', onchange: () => { st.cat = catSel.value; renderGrid(); } });
+    catSel = h('select', { class: 'inp sel', 'aria-label': 'Category', onchange: () => { setCat(catSel.value); renderGrid(); } });
     tools = h('div', { class: 'b-tools' }, searchBox, catSel);
-    root.append(h('div', { class: 'dock-hint' }, 'Click a brush and press Add, or drag it onto the ring or the list.'), tools, tagRow, count, scroll, strip);
+    dockHint = h('div', { class: 'dock-hint' });
+    root.append(...[tabs && tabs.el, dockHint, tools, tagRow, count, scroll, strip].filter(Boolean));
   } else {
     const size = h('input', { type: 'range', min: 84, max: 220, step: 4, value: st.size, 'aria-label': 'Thumbnail size' });
     const paint = () => size.style.setProperty('--pct', ((st.size - 84) / (220 - 84)) * 100 + '%');
@@ -2516,23 +2679,32 @@ function makeBrowser({ compact, st, host = STUDIO_HOST }) {
       if (r !== curRes) { curRes = r; $$('.bcard .thumb', grid).forEach(t => rethumb(t, r)); }
     });
     paint(); grid.style.setProperty('--card', st.size + 'px');
-    tools = h('div', { class: 'b-tools' }, searchBox, h('div', { class: 'size-ctl' }, icon('library', 13), size), rescanBtn(), host.tools ? host.tools() : null);
-    root.append(side, h('div', { class: 'lib-main' }, tools, h('div', { class: 'b-sub' }, hint, count), scroll, strip));
+    rescan = rescanBtn(st.kind);
+    tools = h('div', { class: 'b-tools' }, searchBox, h('div', { class: 'size-ctl' }, icon('library', 13), size), rescan, host.tools ? host.tools() : null);
+    root.append(side, h('div', { class: 'lib-main' }, tabs ? tabs.el : null, tools, h('div', { class: 'b-sub' }, hint, count), scroll, strip));
   }
 
-  /* --- tag filter: a brush shows when it carries any chosen tag; "Untagged" shows the brushes without a tag */
+  /* --- tag filter: an item shows when it carries any chosen tag; "Untagged" shows the items without a tag */
   const tagFilterOn = () => st.untagged || st.tags.size > 0;
   function pruneTagSel() { if (S.tagsLoaded) for (const k of Array.from(st.tags)) if (!S.tagMap.has(k)) st.tags.delete(k); }
   const tagMatch = b => {
     if (!tagFilterOn()) return true;
-    const ks = tagsOf(b.name);
-    return st.untagged ? !ks.length : ks.some(k => st.tags.has(k));
+    const ks = tagsOf(st.kind, b.name);
+    return st.untagged ? !ks.some(k => k !== FAV) : ks.some(k => st.tags.has(k));     // untagged: no ordinary tag (see tagCounts)
   };
+  /* The items on show: in name order, except Favourites (most used first, by the usage scores) and Recent (newest pick first).
+     L().sorted is in name order and sort is stable, so ties keep it. */
   const filtered = () => {
     pruneTagSel();
     const q = st.q.trim().toLowerCase(), terms = q ? q.split(/\s+/) : [];
-    return S.libSorted.filter(b => catMatch(b, st.cat, host) && (!terms.length || terms.every(t => b.name.toLowerCase().includes(t))) && tagMatch(b));
+    const list = L().sorted.filter(b => catMatch(b, st.cat, host, st.kind) && (!terms.length || terms.every(t => b.name.toLowerCase().includes(t))) && tagMatch(b));
+    const u = usageOf(st.kind);
+    if (st.cat === '@fav') list.sort((a, b) => (u.scores[b.name.toLowerCase()] || 0) - (u.scores[a.name.toLowerCase()] || 0));
+    else if (st.cat === '@recent') list.sort((a, b) => (u.recentT.get(nameKey(b.name)) || 0) - (u.recentT.get(nameKey(a.name)) || 0));
+    return list;
   };
+  /* Picks a folder; the two usage folders read get_usage afresh. */
+  function setCat(cat) { st.cat = cat; if (usageCat(cat)) loadUsage(st.kind); }
   function toggleTag(key) {
     if (key === '@untagged') { st.untagged = !st.untagged; if (st.untagged) st.tags.clear(); }
     else { st.untagged = false; if (st.tags.has(key)) st.tags.delete(key); else st.tags.add(key); }
@@ -2544,30 +2716,31 @@ function makeBrowser({ compact, st, host = STUDIO_HOST }) {
     const host = compact ? tagRow : tagSec;
     const act = document.activeElement, fr = act && host.contains(act) ? act.closest('[data-tk]') : null, fk = fr ? fr.dataset.tk : null;
     pruneTagSel();
-    const counts = tagCounts();
+    const counts = tagCounts(st.kind);
     const chip = (key, label, n, color) => {
       const on = key === '@untagged' ? st.untagged : st.tags.has(key);
-      return h('button', { class: 'tagchip' + (on ? ' on' : ''), type: 'button', 'aria-pressed': on ? 'true' : 'false', title: label + ' (' + plural(n, 'brush') + ')', style: color ? { '--tag': color } : null,
+      return h('button', { class: 'tagchip' + (on ? ' on' : ''), type: 'button', 'aria-pressed': on ? 'true' : 'false', title: label + ' (' + plural(n, W().one) + ')', style: color ? { '--tag': color } : null,
         dataset: { tk: key }, onclick: () => toggleTag(key) },
         h('i', { class: 'tdot' + (color ? '' : ' none') }), h('span', { class: 'tc-name' }, label), h('span', { class: 'tc-n mono' }, String(n)));
     };
-    const chips = S.tags.map(t => chip(t.key, t.label, counts.byKey.get(t.key) || 0, t.color));
-    if (S.tags.length) chips.push(chip('@untagged', 'Untagged', counts.untagged, null));
+    const own = S.tags.filter(t => t.key !== FAV);                // Favourites has its own folder, not a chip
+    const chips = own.map(t => chip(t.key, t.label, counts.byKey.get(t.key) || 0, t.color));
+    if (own.length) chips.push(chip('@untagged', 'Untagged', counts.untagged, null));
     const clear = tagFilterOn() ? h('button', { class: 'link tag-clear', type: 'button', onclick: clearTagFilter }, 'Clear') : null;
     if (compact) {
-      tagRow.hidden = !S.tags.length;
+      tagRow.hidden = !own.length;
       tagRow.replaceChildren(...[...chips, clear, h('button', { class: 'ibtn tag-manage', type: 'button', title: 'Manage tags...', 'aria-label': 'Manage tags', onclick: () => openTagManager() }, icon('tag', 14))].filter(Boolean));
     } else {
       tagSec.replaceChildren(...[h('div', { class: 'tag-head' }, h('span', { class: 'micro side-title' }, 'Tags'), clear),
-        S.tags.length ? h('div', { class: 'tagchips' }, chips) : h('div', { class: 'tag-none fhint' }, 'No tags yet. Select brushes and press Tag to make one.'),
+        own.length ? h('div', { class: 'tagchips' }, chips) : h('div', { class: 'tag-none fhint' }, `No tags yet. Select ${W().many} and press Tag to make one.`),
         S.tagsErr ? h('div', { class: 'fhint bad' }, S.tagsErr) : null,
         manageTagsBtn('btn small tag-manage')].filter(Boolean));
     }
     if (fk !== null) { const t = $$('[data-tk]', host).find(x => x.dataset.tk === fk); if (t) t.focus(); }
   }
-  const usedCount = () => { let n = 0; if (host.badge) for (const b of S.library) if (host.badge(b.name)) n++; return n; }; // the "In my menus" folder
+  const usedCount = () => { let n = 0; if (host.badge) for (const b of L().items) if (host.badge(b.name, st.kind)) n++; return n; }; // the "In my menus" folder
   function paintBadge(card) {
-    const u = host.badge ? host.badge(card.dataset.name) : null;
+    const u = host.badge ? host.badge(card.dataset.name, st.kind) : null;
     card.classList.toggle('used', !!u);
     let bd = $('.bbadge', card);
     if (!u) { if (bd) bd.remove(); return; }
@@ -2577,28 +2750,45 @@ function makeBrowser({ compact, st, host = STUDIO_HOST }) {
     bd.title = 'Used in: ' + u.titles.join(', ');
     if (u.n < 2) bd.replaceChildren(icon('check', 10));
   }
-  /* Up to three dots (the first tag first) bottom-left of the thumbnail, and --tag, the first tag's colour, for the card's stripe. */
+  /* Up to three dots (the first tag first) bottom-left of the thumbnail, and --tag, the first tag's colour, for the card's stripe.
+     Favourites is not among them: it is the star (paintFav). */
   function paintTags(card) {
-    const name = card.dataset.name, b = S.libByName.get(nameKey(name));
-    const ks = tagsOf(name).map(k => S.tagMap.get(k)), box = $('.bthumb', card);
+    const name = card.dataset.name, b = L().byName.get(nameKey(name)), fav = isFav(st.kind, name);
+    const ks = tagsOf(st.kind, name).filter(k => k !== FAV).map(k => S.tagMap.get(k)), box = $('.bthumb', card);
     let dots = $('.tagdots', box);
     const tagText = ks.length ? 'Tags: ' + ks.map(t => t.label).join(', ') : '';
-    card.title = name + (b ? '\n' + b.category : '') + (tagText ? '\n' + tagText : '');
-    card.setAttribute('aria-label', name + '.' + (tagText ? ' ' + tagText + '.' : '') + ' ' + host.enterHint);
+    card.title = name + (b ? '\n' + b.category : '') + (fav ? '\nFavourite' : '') + (tagText ? '\n' + tagText : '');
+    card.setAttribute('aria-label', name + '.' + (fav ? ' Favourite.' : '') + (tagText ? ' ' + tagText + '.' : '') + ' ' + host.enterHint + (fav ? ' Ctrl+D removes it from Favourites.' : ' Ctrl+D adds it to Favourites.'));
     card.classList.toggle('tagged', ks.length > 0);
     if (!ks.length) { card.style.removeProperty('--tag'); if (dots) dots.remove(); return; }
     card.style.setProperty('--tag', ks[0].color);
     if (!dots) { dots = h('span', { class: 'tagdots', 'aria-hidden': 'true' }); box.append(dots); }
     dots.replaceChildren(...ks.slice(0, 3).map(t => h('i', { class: 'tdot', style: { '--tag': t.color } })));
   }
+  /* The star at the top-right of the thumbnail: a filled gold star while the item is a favourite (always shown), an outline on hover
+     otherwise. A real button, so the popout does not start a drag from it. On a card in a multi-selection it acts on the whole selection. */
+  function paintFav(card) {
+    const name = card.dataset.name, on = isFav(st.kind, name), box = $('.bthumb', card);
+    let btn = $('.bstar', box);
+    if (!btn) {
+      btn = h('button', { class: 'bstar', type: 'button',
+        onclick: e => { e.stopPropagation(); const n = card.dataset.name; setFavs(sel.size > 1 && sel.has(n) ? Array.from(sel) : [n], !isFav(st.kind, n)); },
+        ondblclick: e => e.stopPropagation() }, icon('star', 14));          // a double-click must not pick the item
+      box.append(btn);
+    }
+    const text = on ? 'Remove from Favourites' : 'Add to Favourites';
+    btn.classList.toggle('on', on);
+    btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+    btn.title = text; btn.setAttribute('aria-label', text + ': ' + name);
+  }
   function makeCard(b) {
     const on = sel.has(b.name);
     const card = h('div', { class: 'bcard' + (on ? ' sel' : ''), tabindex: '0', role: 'button', 'aria-pressed': on ? 'true' : 'false', dataset: { name: b.name } },
-      h('div', { class: 'bthumb' }, thumb(b.name, { size: 0, lazy, cls: 'fill', res: curRes }),
-        h('button', { class: 'badd', type: 'button', title: host.cardTitle(), 'aria-label': host.cardLabel(b.name), onclick: e => { e.stopPropagation(); host.primary(b.name); } }, icon(host.primaryIcon, 14))),
+      h('div', { class: 'bthumb' }, thumb(b.name, { size: 0, lazy, cls: 'fill', res: curRes, kind: st.kind }),
+        h('button', { class: 'badd', type: 'button', title: host.cardTitle(st.kind), 'aria-label': host.cardLabel(b.name, st.kind), onclick: e => { e.stopPropagation(); host.primary(b.name, st.kind); } }, icon(host.primaryIcon(st.kind), 14))),
       h('div', { class: 'bname' }, b.name));
     card.addEventListener('click', e => {
-      if (e.shiftKey && anchor && S.libByName.has(nameKey(anchor))) {      // a range over the brushes on show, from the last plain click
+      if (e.shiftKey && anchor && L().byName.has(nameKey(anchor))) {      // a range over the items on show, from the last plain click
         const names = filtered().map(x => x.name), a = names.indexOf(anchor), z = names.indexOf(b.name);
         if (a >= 0 && z >= 0) {
           if (!(e.ctrlKey || e.metaKey)) sel.clear();
@@ -2614,23 +2804,25 @@ function makeBrowser({ compact, st, host = STUDIO_HOST }) {
       }
       setSel(b.name, true);
     });
-    card.addEventListener('dblclick', e => { if (!e.ctrlKey && !e.shiftKey && !e.metaKey) host.primary(b.name); });
-    card.addEventListener('contextmenu', e => {                              // tag this brush, or the whole selection when it is in it
+    card.addEventListener('dblclick', e => { if (!e.ctrlKey && !e.shiftKey && !e.metaKey) host.primary(b.name, st.kind); });
+    card.addEventListener('contextmenu', e => {                              // tag this item, or the whole selection when it is in it
       e.preventDefault();
-      tagPicker(card, sel.size > 1 && sel.has(b.name) ? Array.from(sel) : [b.name], { x: e.clientX, y: e.clientY });
+      const names = sel.size > 1 && sel.has(b.name) ? Array.from(sel) : [b.name], kind = st.kind;
+      tagPicker(card, kind, names, { x: e.clientX, y: e.clientY },
+        st.cat === '@recent' ? [{ icon: 'clock', label: 'Remove from Recent', fn: () => forgetRecent(kind, names) }] : null);
     });
     card.addEventListener('keydown', e => {
       if (e.target !== card) return;
       if (e.key === 'Enter') {
         e.preventDefault();
-        if (sel.size > 1 && sel.has(b.name)) host.primaryMany(Array.from(sel)); else { setSel(b.name); host.primary(b.name); }
+        if (sel.size > 1 && sel.has(b.name)) host.primaryMany(Array.from(sel), st.kind); else { setSel(b.name); host.primary(b.name, st.kind); }
       } else if (e.key === ' ') {
         e.preventDefault();
         if (e.ctrlKey || e.metaKey) { if (sel.has(b.name)) sel.delete(b.name); else sel.add(b.name); anchor = b.name; paintSel(); } else setSel(b.name);
       }
     });
-    if (host.dnd) DnD.source(card, () => ({ type: 'brush', name: b.name }), () => h('span', { class: 'ghost-chip' }, thumb(b.name, { size: 26 }), b.name));
-    if (host.nativeDrag) {                                                   // the popout: a drag the other window can take (see BRUSH_MIME)
+    if (host.dnd) DnD.source(card, () => ({ type: 'asset', kind: st.kind, name: b.name }), () => h('span', { class: 'ghost-chip' }, thumb(b.name, { size: 26, kind: st.kind }), b.name));
+    if (host.nativeDrag) {                                                   // the popout: a drag the other window can take (see ITEM_MIME)
       card.setAttribute('draggable', 'true');
       let downOnButton = false;                                              // a press on the card's own button picks, it never drags
       card.addEventListener('pointerdown', e => { downOnButton = !!(e.target.closest && e.target.closest('button')); });
@@ -2639,18 +2831,19 @@ function makeBrowser({ compact, st, host = STUDIO_HOST }) {
         if (e.target !== card || !e.dataTransfer) return;
         const dt = e.dataTransfer, t = $('.thumb', card);
         dt.effectAllowed = 'copy';
-        dt.setData(BRUSH_MIME, b.name);
-        dt.setData('text/plain', BRUSH_TEXT + b.name);
+        dt.setData(ITEM_MIME, JSON.stringify({ kind: st.kind, name: b.name }));
+        dt.setData('text/plain', ITEM_TEXT + st.kind + ':' + b.name);
         if (t) { const r = t.getBoundingClientRect(); dt.setDragImage(t, Math.round(r.width / 2), Math.round(r.height / 2)); }
       });
     }
     paintBadge(card);
     paintTags(card);
+    paintFav(card);
     return card;
   }
   function paintCount(list) {
     const f = tagFilterOn();
-    let t = list.length + (list.length === 1 ? ' brush' : ' brushes') + (st.cat !== 'All' || st.q || f ? ' of ' + S.library.length : '');
+    let t = list.length + ' ' + (list.length === 1 ? W().one : W().many) + (st.cat !== 'All' || st.q || f ? ' of ' + L().items.length : '');
     if (f) t += ' · ' + (st.untagged ? 'untagged' : plural(st.tags.size, 'tag'));
     setText(count, t);
   }
@@ -2659,16 +2852,16 @@ function makeBrowser({ compact, st, host = STUDIO_HOST }) {
     const my = ++token;
     grid.replaceChildren();
     lastSig = '';
-    if (S.libState === 'loading') {
+    if (L().state === 'loading' || L().state === 'idle') {
       setText(count, 'Scanning...');
       for (let i = 0; i < 24; i++) grid.append(h('div', { class: 'bcard skel' }, h('div', { class: 'bthumb' }, h('span', { class: 'thumb fill loading' })), h('div', { class: 'bname' }, ' ')));
       return;
     }
-    const gone = Array.from(sel).filter(n => !S.libByName.has(nameKey(n)));
+    const gone = Array.from(sel).filter(n => !L().byName.has(nameKey(n)));
     if (gone.length) { gone.forEach(n => sel.delete(n)); paintSel(); }
-    if (S.libState === 'error' || !S.library.length) {
-      setText(count, '0 brushes');
-      grid.append(h('div', { class: 'grid-empty' }, libEmptyState()));
+    if (L().state === 'error' || !L().items.length) {
+      setText(count, `0 ${W().many}`);
+      grid.append(h('div', { class: 'grid-empty' }, libEmptyState(st.kind)));
       return;
     }
     const list = filtered();
@@ -2677,16 +2870,20 @@ function makeBrowser({ compact, st, host = STUDIO_HOST }) {
     if (!list.length) {
       let e;
       if (tagFilterOn()) {
-        e = emptyState('tag', st.untagged ? 'Every brush here has a tag' : 'No brushes with ' + (st.tags.size === 1 ? 'that tag' : 'those tags'),
-          st.q || st.cat !== 'All' ? 'The search and the folder narrow it too.' : 'Select brushes and press Tag, or right-click a brush.', { text: 'Clear the tag filter', fn: clearTagFilter });
+        e = emptyState('tag', st.untagged ? `Every ${W().one} here has a tag` : `No ${W().many} with ` + (st.tags.size === 1 ? 'that tag' : 'those tags'),
+          st.q || st.cat !== 'All' ? 'The search and the folder narrow it too.' : `Select ${W().many} and press Tag, or right-click ${aOrAn(W().one)}.`, { text: 'Clear the tag filter', fn: clearTagFilter });
       } else if (st.q) {
-        const where = st.cat === '@used' ? 'In my menus' : st.cat.split('/').join(' / ');
-        e = emptyState('search', `No brushes match "${st.q}"`, st.cat !== 'All' ? `Only "${where}" was searched.` : 'Check the spelling.');
+        const where = st.cat === '@used' ? 'In my menus' : st.cat === '@fav' ? 'Favourites' : st.cat === '@recent' ? 'Recent' : st.cat.split('/').join(' / ');
+        e = emptyState('search', `No ${W().many} match "${st.q}"`, st.cat !== 'All' ? `Only "${where}" was searched.` : 'Check the spelling.');
         e.append(h('div', { class: 'btn-row' },
           h('button', { class: 'btn small', type: 'button', onclick: () => { clearQuery(); renderAll(); } }, 'Clear search'),
           st.cat !== 'All' ? h('button', { class: 'btn small primary', type: 'button', onclick: () => { st.cat = 'All'; renderAll(); } }, 'Search all folders') : null));
+      } else if (st.cat === '@fav') {
+        e = emptyState('star', 'No favourites yet', `Hover ${aOrAn(W().one)} and press its star, or press Ctrl+D.`, { text: `Show all ${W().many}`, fn: () => { st.cat = 'All'; renderAll(); } });
+      } else if (st.cat === '@recent') {
+        e = emptyState('clock', 'Nothing picked yet', 'Items you pick in ZBrush show up here, newest first.', { text: `Show all ${W().many}`, fn: () => { st.cat = 'All'; renderAll(); } });
       } else {
-        e = emptyState('search', 'Nothing in this category', st.cat === '@used' ? 'Brushes you put into a menu show up here.' : '', { text: 'Show all brushes', fn: () => { st.cat = 'All'; renderAll(); } });
+        e = emptyState('search', 'Nothing in this category', st.cat === '@used' ? `${W().tab} you put into a menu show up here.` : '', { text: `Show all ${W().many}`, fn: () => { st.cat = 'All'; renderAll(); } });
       }
       grid.append(h('div', { class: 'grid-empty' }, e));
       return;
@@ -2702,9 +2899,11 @@ function makeBrowser({ compact, st, host = STUDIO_HOST }) {
     chunk();
   }
   function renderCats() {
-    const tree = catTree();
+    const tree = catTree(st.kind);
+    const favN = tagCounts(st.kind).byKey.get(FAV) || 0;                                   // the Favourites and Recent folders: no host.badge needed
+    const u = usageOf(st.kind), recentN = u.recent.filter(r => L().byName.has(nameKey(r.name))).length;   // only the picks still in the library, as the grid shows
     if (compact) {
-      const opts = [['All', `All brushes (${S.library.length})`], host.badge ? ['@used', `In my menus (${usedCount()})`] : null].filter(Boolean);
+      const opts = [['@fav', `Favourites (${favN})`], ['@recent', `Recent (${recentN})`], ['All', `All ${W().many} (${L().items.length})`], host.badge ? ['@used', `In my menus (${usedCount()})`] : null].filter(Boolean);
       tree.forEach(g => { opts.push([g.id, `${g.id} (${g.count})`]); g.kids.forEach(k => opts.push([k.id, `   ${g.id} / ${k.label} (${k.count})`])); });
       catSel.replaceChildren(...opts.map(([v, t]) => h('option', { value: v, selected: v === st.cat }, t)));
       return;
@@ -2715,18 +2914,19 @@ function makeBrowser({ compact, st, host = STUDIO_HOST }) {
       const toggle = () => { st.open.has(id) ? st.open.delete(id) : st.open.add(id); renderCats(); };
       const activate = () => {
         if (o.hasKids && st.cat === id) { toggle(); return; }                // a click on the selected folder folds or unfolds it
-        st.cat = id;
+        setCat(id);
         if (o.hasKids) st.open.add(id);
         renderAll();
       };
       const r = h('div', { class: 'cat' + (st.cat === id ? ' on' : '') + (o.kid ? ' kid' : '') + (o.group ? ' group' : ''), role: 'option', tabindex: '0', 'aria-selected': st.cat === id ? 'true' : 'false', title: label, dataset: { id },
         onclick: activate, onkeydown: e => { if (e.target === r && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); activate(); } } },
         o.hasKids ? h('button', { class: 'cat-chev' + (st.open.has(id) ? ' open' : ''), type: 'button', 'aria-label': (st.open.has(id) ? 'Collapse ' : 'Expand ') + label, 'aria-expanded': st.open.has(id) ? 'true' : 'false',
-          onclick: e => { e.stopPropagation(); toggle(); } }, icon('chevR', 12)) : h('span', { class: 'cat-chev none' }),
+          onclick: e => { e.stopPropagation(); toggle(); } }, icon('chevR', 12)) : h('span', { class: 'cat-chev none' + (o.ico ? ' cat-ico' : '') }, o.ico ? icon(o.ico, 13) : null),
         h('span', { class: 'cat-name' }, label), h('span', { class: 'cat-n mono' }, String(n)));
       return r;
     };
-    const rows = [h('div', { class: 'micro side-title' }, 'Folders'), row('All', 'All', S.library.length), host.badge ? row('@used', 'In my menus', usedCount()) : null].filter(Boolean);
+    const rows = [h('div', { class: 'micro side-title' }, 'Folders'), row('@fav', 'Favourites', favN, { ico: 'star' }), row('@recent', 'Recent', recentN, { ico: 'clock' }),
+      row('All', 'All', L().items.length), host.badge ? row('@used', 'In my menus', usedCount()) : null].filter(Boolean);
     tree.forEach(g => {
       const hasKids = g.kids.length > 0;
       rows.push(row(g.id, g.id, g.count, { group: true, hasKids }));
@@ -2739,7 +2939,7 @@ function makeBrowser({ compact, st, host = STUDIO_HOST }) {
       if (t) t.focus();
     }
   }
-  function renderAll() { if (S.libState === 'ready') renderCats(); renderTags(); renderGrid(); }
+  function renderAll() { if (L().state === 'ready') renderCats(); renderTags(); renderGrid(); }
 
   /* --- keyboard help for the popout: a highlight that follows the arrow keys and Enter picks */
   function highlightFirst() {
@@ -2765,30 +2965,75 @@ function makeBrowser({ compact, st, host = STUDIO_HOST }) {
   function pickSelected() {
     const names = Array.from(sel);
     if (!names.length) return false;
-    if (names.length === 1) host.primary(names[0]); else host.primaryMany(names);
+    if (names.length === 1) host.primary(names[0], st.kind); else host.primaryMany(names, st.kind);
     return true;
   }
   /* A fresh look: no search, no folder, only the given tag (or none), the first match highlighted. */
   function setFilter(tag) {
-    clearQuery(); st.untagged = false; st.cat = 'All'; st.tags = new Set(tag ? [tag] : []);
+    clearQuery(); st.untagged = false; st.tags = new Set(tag && tag !== FAV ? [tag] : []);
+    setCat(tag === FAV ? '@fav' : 'All');                       // Favourites is a folder, not a chip
     renderAll(); highlightFirst(); scroll.scrollTop = 0;
   }
 
+  /* Every word that names the kind on show: the ones set once here, and the repaint of the lists reads W() as it goes. */
+  function paintStrings() {
+    const w = W(), tagText = `Tag the selected ${w.many}`;
+    search.placeholder = `Search ${w.many}...`; search.setAttribute('aria-label', `Search ${w.many}`);
+    tagBtn.title = tagText; tagBtn.setAttribute('aria-label', tagText);
+    strip.setAttribute('aria-label', `Selected ${w.many}`);
+    if (dockHint) setText(dockHint, `Click ${aOrAn(w.one)} and press Add, or drag it onto the ring or the list.`);
+  }
+  /* Switches to another kind: its own folders and selection, the same search text and tag filter. */
+  function setKind(kind) {
+    if (kind === st.kind || !isLib(kind)) return;
+    st.kind = kind;
+    sel.clear(); anchor = null; autoHl = false;
+    st.cat = 'All'; st.open = new Set();
+    if (tabs) tabs.paint();
+    paintStrings();
+    if (rescan) { rescan.dataset.kind = kind; paintRescanBtn(rescan); }
+    paintSel(); paintTarget();
+    if (L().state !== 'ready') { catsBox.replaceChildren(); if (catSel) catSel.replaceChildren(); }   // not the last kind's folders
+    renderAll();
+    scroll.scrollTop = 0;
+    ensureLib(kind);                                           // its load repaints through R.libRefresh
+    loadUsage(kind);                                           // its Recent folder and Favourites order
+    if (host.onKind) host.onKind(kind);
+  }
+
+  paintStrings();
   renderAll(); paintTarget();
+  loadUsage(st.kind);                                          // the Recent count, and the order when a link opened Favourites or Recent
   const api = {
     el: root, scroller: () => scroll,
+    kind: () => st.kind, setKind,
     refresh() { renderAll(); paintTarget(); },
     focusSearch(select = true) { search.focus(); if (select) search.select(); },
     typeChar(ch) { search.value += ch; search.dispatchEvent(new Event('input', { bubbles: true })); },
     inSearch: el => !!el && el.closest && !!el.closest('.searchbox'),
     searchValue: () => search.value,
     highlightFirst, move, pickSelected, setFilter,
-    updateBadges() { $$('.bcard[data-name]', grid).forEach(paintBadge); paintTarget(); if (S.libState === 'ready') { renderCats(); if (st.cat === '@used') renderGrid(); } },
-    /* After a tag change: dots, chips, and the grid itself when the tag filter now shows other brushes. */
+    updateBadges() { $$('.bcard[data-name]', grid).forEach(paintBadge); paintTarget(); if (L().state === 'ready') { renderCats(); if (st.cat === '@used') renderGrid(); } },
+    /* After a tag change: dots, chips, and the grid itself when the tag filter now shows other items. */
     updateTags() {
-      $$('.bcard[data-name]', grid).forEach(paintTags);
-      renderTags();
-      if (S.libState === 'ready' && filtered().map(b => b.name).join('\n') !== lastSig) { const top = scroll.scrollTop; renderGrid(); scroll.scrollTop = top; }
+      $$('.bcard[data-name]', grid).forEach(c => { paintTags(c); paintFav(c); });
+      renderTags(); paintFavBtn();
+      if (L().state === 'ready') renderCats();                 // the Favourites count
+      if (L().state === 'ready' && filtered().map(b => b.name).join('\n') !== lastSig) { const top = scroll.scrollTop; renderGrid(); scroll.scrollTop = top; }
+    },
+    /* After get_usage / forget_recent: the Recent count, and the grid when Favourites or Recent is on show and its order or members changed. */
+    updateUsage() {
+      if (L().state !== 'ready') return;
+      renderCats();
+      if (usageCat(st.cat) && filtered().map(b => b.name).join('\n') !== lastSig) { const top = scroll.scrollTop; renderGrid(); scroll.scrollTop = top; }
+    },
+    /* Ctrl+D: stars (or unstars) the selection, or the card named when it is not part of the selection. False when there is nothing to act on. */
+    toggleFav(name = null) {
+      const shown = new Set(filtered().map(b => b.name));      // a selection can outlive a folder change: only act on what is on screen
+      const names = name && !sel.has(name) ? [name] : Array.from(sel).filter(n => shown.has(n));
+      if (!names.length) return false;
+      toggleFavs(names);
+      return true;
     },
   };
   browsers.set(st, api);
@@ -2800,7 +3045,7 @@ function buildLibraryScreen(root) {
   const browser = makeBrowser({ compact: false, st: S.lib });
   const target = h('aside', { class: 'col lib-target' });
   root.replaceChildren(browser.el, target);
-  R.libRefresh = () => browser.refresh();
+  R.libRefresh = kind => { if (kind === S.lib.kind) browser.refresh(); };
   R.badges = () => browser.updateBadges();
   R.libTarget = () => {
     const hadSel = !!document.activeElement && document.activeElement.matches && document.activeElement.matches('.target-sel select') && target.contains(document.activeElement);
@@ -3098,12 +3343,12 @@ function buildSettingsScreen(root) {
     const tnote = h('div', { class: 'fhint' });
     const tbox = h('div', { class: 'mini-stage' }, h('div', { class: 'stage-rings', 'aria-hidden': 'true' }), h('div', { class: 'mini-wrap' }, timg), tcap);
     // The current menu when it has a tagged brush to show, else the backend's sample ring.
-    const hasTagged = m => !!m && (m.items || []).some(it => kindOf(it) === 'brush' && firstTag(it.brush));
+    const hasTagged = m => !!m && (m.items || []).some(it => { const ik = kindOf(it); return isLib(ik) && firstTag(ik, it[ik]); });
     let tTok = 0;
     const paintTagPrev = async () => {
       const sample = !hasTagged(curMenu()), tok = ++tTok, ver = S.version;
       tcap.textContent = sample ? 'Sample ring' : 'Preview: ' + (curMenu().title || S.menuId);
-      tnote.textContent = sample ? 'This menu has no tagged brushes yet, so the sample puts your tags on a few library brushes.' : '';
+      tnote.textContent = sample ? 'This menu has no tagged items yet, so the sample puts your tags on a few library brushes.' : '';
       const res = await RingLoader.get(sample ? SAMPLE_MENU : S.menuId, null, null, 'tags');
       if (tok !== tTok || !res || ver !== S.version) return;
       if (res.image) timg.src = res.image;
@@ -3206,17 +3451,17 @@ function buildSettingsScreen(root) {
     zpaint();
 
     /* --- tags (saved as they change in tags.json, not part of the menus file) */
-    page.append(card('Tags', 'Labels for your brushes. Saved straight away.',
+    page.append(card('Tags', 'Labels for your brushes, alphas, materials and textures. Saved straight away.',
       h('div', { class: 'field row' }, h('div', { class: 'grow' }, h('span', { class: 'flabel' }, 'Brush tags'),
-        h('div', { class: 'fhint' }, 'Tags group your brushes so you can filter the Library by them. A brush can carry several. Tags are not part of Save or Undo.'),
+        h('div', { class: 'fhint' }, 'Tags group your brushes, alphas, materials and textures so you can filter the Library by them. An item can carry several. Tags are not part of Save or Undo.'),
         h('div', { class: 'fhint mono tag-path', hidden: !S.tagsPath }, S.tagsPath)),
         manageTagsBtn('btn'))));
 
-    /* --- brush browser (browser.hotkey; the object is dropped again when it ends up empty) */
+    /* --- browser (browser.hotkey; the object is dropped again when it ends up empty) */
     const browserObj = () => { if (!S.cfg.browser || typeof S.cfg.browser !== 'object') S.cfg.browser = {}; return S.cfg.browser; };
     const bOwner = hotkey => (hotkey ? hotkeyOwner(hotkey, BROWSER) : null);
     const bsay = owner => (owner ? `Also used by ${ownerName(owner)}. That menu wins, so this hotkey will not open the browser.` : '');
-    const bhk = hotkeyField({ what: 'Brush browser hotkey', value: (S.cfg.browser && typeof S.cfg.browser === 'object' && S.cfg.browser.hotkey) || '', placeholder: 'No hotkey (open it from a Browser slot)', onChange: str => {
+    const bhk = hotkeyField({ what: 'Browser hotkey', value: (S.cfg.browser && typeof S.cfg.browser === 'object' && S.cfg.browser.hotkey) || '', placeholder: 'No hotkey (open it from a Browser slot)', onChange: str => {
       const b = browserObj();
       if (str) b.hotkey = str; else delete b.hotkey;
       if (!Object.keys(b).length) delete S.cfg.browser;
@@ -3224,9 +3469,9 @@ function buildSettingsScreen(root) {
       bhk.say(bsay(owner), 'warn');
       commit();
     } });
-    page.append(card('Brush browser', 'A window of its own',
-      h('div', { class: 'browser-key' }, field('Hotkey', bhk, 'Shows the brush browser; pressed over it, it gives ZBrush the keyboard back. The browser also opens from a Browser slot and the tray menu.')),
-      h('div', { class: 'browser-open' }, h('button', { class: 'btn small', type: 'button', title: 'Open the brush browser in its own window', onclick: openBrowserWindow }, icon('k_browser', 13), 'Open the brush browser'))));
+    page.append(card('Browser', 'A window of its own',
+      h('div', { class: 'browser-key' }, field('Hotkey', bhk, 'Shows the browser; pressed over it, it gives ZBrush the keyboard back. The browser also opens from a Browser slot and the tray menu.')),
+      h('div', { class: 'browser-open' }, h('button', { class: 'btn small', type: 'button', title: 'Open the browser in its own window', onclick: openBrowserWindow }, icon('k_browser', 13), 'Open the browser'))));
     { const o0 = bOwner(S.cfg.browser && S.cfg.browser.hotkey); if (o0) bhk.say(bsay(o0), 'warn'); }
 
     /* --- studio (preferences of this window, saved immediately, not part of the menus file) */
@@ -3259,6 +3504,15 @@ function buildSettingsScreen(root) {
           if (v) checkNow(); else { updTok++; updNote.textContent = ''; if (window.RadialUpdate) window.RadialUpdate.check(); }
           return true;
         }, 'Check for updates'))));
+
+    /* --- import and export (one file with the menus, the ring settings and the tags) */
+    const ioBtns = [
+      h('button', { class: 'btn small', type: 'button', title: 'Save the menus, ring settings and tags to a file', onclick: () => ioRun(ioBtns, exportSettings) }, icon('folder', 12), 'Export...'),
+      h('button', { class: 'btn small', type: 'button', title: 'Load menus, ring settings and tags from a file', onclick: () => ioRun(ioBtns, importSettings) }, icon('folder', 12), 'Import...')];
+    page.append(card('Import and export', 'Back up your setup or move it to another PC.',
+      h('div', { class: 'field row' }, h('div', { class: 'grow' }, h('span', { class: 'flabel' }, 'Settings file'),
+        h('div', { class: 'fhint' }, 'The file holds your menus, the ring settings and your tags. The Studio window preferences and the usage counts are not included, as they belong to this PC. Export saves what is on screen, unsaved changes included. Import shows what is in a file first, and the menus and settings it loads can be undone.')),
+        h('div', { class: 'btn-row' }, ...ioBtns))));
     R.preview();
   };
   R.settings = () => { build(); buildToc(); };
@@ -3799,9 +4053,9 @@ function describeProblem(raw) {
   if ((m = /^bridge\.mode (.+) unknown; using auto$/s.exec(raw))) return out(`Bridge mode ${unq(m[1])} is unknown; Auto is used instead`, bridge);
   if ((m = /^bridge\.key (.+) not understood$/s.exec(raw))) return out(`The bridge key ${unq(m[1])} is not understood`, bridge);
   if (raw.startsWith('bridge.key ')) return out('The bridge key ' + raw.slice('bridge.key '.length), bridge);
-  const browserCard = { kind: 'settings', card: 'set-brush-browser' };
-  if ((m = /^browser\.hotkey (.+) not understood$/s.exec(raw))) return out(`The brush browser hotkey ${unq(m[1])} is not understood`, browserCard);
-  if ((m = /^browser\.hotkey (.+) already used by menu (.+)$/s.exec(raw))) return out(`The brush browser hotkey ${unq(m[1])} is also used by ${titleOf(m[2])}; that menu wins, so the browser will not open with it`, browserCard);
+  const browserCard = { kind: 'settings', card: 'set-browser' };
+  if ((m = /^browser\.hotkey (.+) not understood$/s.exec(raw))) return out(`The browser hotkey ${unq(m[1])} is not understood`, browserCard);
+  if ((m = /^browser\.hotkey (.+) already used by menu (.+)$/s.exec(raw))) return out(`The browser hotkey ${unq(m[1])} is also used by ${titleOf(m[2])}; that menu wins, so the browser will not open with it`, browserCard);
   if (raw.startsWith('browser: ')) return out('The browser settings are not valid: ' + raw.slice('browser: '.length), browserCard);
   if (raw.startsWith('menus: must be a non-empty object')) return out('There are no menus yet; add one', { kind: 'screen', screen: 'menus' });
   if (raw.startsWith('no menu has a hotkey')) {
@@ -3937,6 +4191,68 @@ async function reloadFromDisk() {
   toast('Reloaded the file from disk.', { tone: 'ok', ms: 2600 });
   return true;
 }
+/* ---- import and export: one file with the menus, the ring settings and the tags (the backend does the file work) */
+let ioBusy = false;
+async function ioRun(btns, fn) {
+  if (ioBusy) return;
+  ioBusy = true; btns.forEach(b => { b.disabled = true; });
+  try { await fn(); } finally { ioBusy = false; btns.forEach(b => { b.disabled = false; }); }
+}
+async function exportSettings() {
+  if (!S.cfg || S.fatal || !S.ready) return;
+  let res;
+  try { res = await call('export_settings', S.cfg); } catch (e) { toast('Could not export: ' + (e.message || e), { tone: 'err' }); return; }
+  if (!res || res.cancelled) return;
+  toast(res.message || (res.ok ? 'Exported the settings' + (res.path ? ' to ' + res.path : '.') : 'The export did not work.'), { tone: res.ok ? 'ok' : 'warn', ms: 5000 });
+}
+async function importSettings() {
+  if (!S.cfg || S.fatal || !S.ready) return;
+  let info;
+  try { info = await call('pick_import'); } catch (e) { toast('Could not read the file: ' + (e.message || e), { tone: 'err' }); return; }
+  if (!info || info.cancelled) return;
+  if (!info.ok) { toast(info.message || 'That file could not be imported.', { tone: 'warn', ms: 5000 }); return; }
+  const hasCfg = !!info.has_config, hasTags = !!info.has_tags;
+  const name = String(info.path || '').split(/[\\/]/).pop() || 'this file';
+  const n = (v, one, many) => { v = +v || 0; return v + ' ' + (v === 1 ? one : many); };
+  const counts = [];
+  if (hasCfg) counts.push(n(info.menus, 'menu', 'menus'));
+  if (hasTags) counts.push(n(info.tags, 'tag', 'tags') + (info.new_tags ? `, ${info.new_tags} not among yours yet` : ''));
+  const probs = (info.problems || []).map(String), shown = probs.slice(0, 5);
+  const merge = { text: 'Merge tags', value: 'merge', kind: 'primary', focus: true }, replace = { text: 'Replace tags', value: 'replace', kind: 'danger-ghost' };
+  const mode = await modal({ title: `Import settings from ${name}?`,
+    body: h('div', { class: 'changes' },
+      h('p', { class: 'modal-path mono' }, info.path || name),
+      h('p', null, counts.length ? 'The file holds ' + counts.join(' and ') + '.' : 'The file holds nothing to import.'),
+      hasCfg ? h('p', null, 'The menus and settings load into the editor. Save keeps them and Undo takes them back.') : h('p', null, 'The editor is not touched.'),
+      hasTags ? h('p', null, 'Tags are saved straight away and are not part of Undo. Merge adds the file’s tags to yours; Replace swaps yours for the file’s and keeps a copy of the old tags file.') : null,
+      probs.length ? h('div', { class: 'changes-list' }, h('div', { class: 'chg-group' }, h('div', { class: 'micro' }, n(probs.length, 'problem', 'problems') + ' in the menus'),
+        h('ul', null, shown.map(p => h('li', null, p)), probs.length > shown.length ? h('li', null, `and ${probs.length - shown.length} more`) : null))) : null),
+    actions: hasTags ? [{ text: 'Cancel', value: null }, merge, replace] : [{ text: 'Cancel', value: null, focus: !hasCfg }, { text: 'Import', value: 'none', kind: 'primary', focus: hasCfg }] });
+  if (!mode) return;
+  let res;
+  try { res = await call('apply_import', mode); } catch (e) { res = { ok: false, message: 'Import failed: ' + (e.message || e) }; }
+  if (mode !== 'none') await loadTags(true);                     // the tags may have changed even when the call reports a problem
+  if (!res || !res.ok) { toast((res && (res.message || res.error)) || 'The import did not work.', { tone: 'warn', ms: 5000 }); return; }
+  if (res.config) {
+    snapSoon.cancel(); validateSoon.cancel(); pushSnap();       // files an edit still waiting, so Undo goes back to it; mtimeNs and savedStr stay as they were
+    S.cfg = res.config;
+    if (!S.cfg.menus || typeof S.cfg.menus !== 'object' || Array.isArray(S.cfg.menus)) S.cfg.menus = {};
+    S.problems = res.problems || [];
+    if (S.problems.length) S.problemsOpen = true;
+    if (!S.cfg.menus[S.menuId]) S.menuId = Object.keys(S.cfg.menus)[0] || null;
+    const m = curMenu();
+    if (!m || S.itemIdx === null || S.itemIdx >= (m.items || []).length) S.itemIdx = null;
+    if (S.itemIdx === null && S.tab === 'item') S.tab = 'menu';
+    commit({ inspector: true }); if (R.head) R.head();
+    renderProblems(); if (R.settings) R.settings(); if (R.libTarget) R.libTarget();
+  }
+  const bits = [];
+  if (res.config) bits.push('Loaded the menus and settings into the editor. Save to keep them.');
+  if (res.tags_message) bits.push(res.tags_message);
+  if (res.config && (res.problems || []).length) bits.push(n(res.problems.length, 'problem', 'problems') + ' to look at.');
+  const msg = bits.join(' ') || 'Imported.', tone = res.config && (res.problems || []).length ? 'warn' : 'ok';
+  if (res.config) undoToast(msg, { tone, ms: 7000 }); else toast(msg, { tone, ms: 5000 });
+}
 function save() {
   if (!S.cfg || S.fatal || !S.ready) return Promise.resolve('skipped');
   if (S.saving) return S.savePromise;
@@ -4059,7 +4375,7 @@ function describeChanges() {
   const after = S.cfg || {};
   const groups = [];
   const q = s => '\u201c' + s + '\u201d';
-  const itemName = it => it.label || it.brush || it.press || it.toggle || it.set || (it.menu ? 'Submenu ' + it.menu : it.steps ? 'Steps' : it.tag ? 'Tag ' + it.tag : 'browser' in it ? 'Browser' + (it.browser ? ' ' + it.browser : '') : 'item');
+  const itemName = it => it.label || it.brush || it.alpha || it.material || it.texture || it.press || it.toggle || it.set || (it.menu ? 'Submenu ' + it.menu : it.steps ? 'Steps' : it.tag ? 'Tag ' + it.tag : 'browser' in it ? 'Browser' + (it.browser ? ' ' + it.browser : '') : 'item');
   const bm = before.menus || {}, am = after.menus || {};
   for (const id of Object.keys(am)) {
     const a = am[id] || {}, b = bm[id];
@@ -4114,7 +4430,7 @@ function describeChanges() {
   if ((bb.key || '') !== (ab.key || '')) bridgeLines.push('Bridge key: ' + (bb.key || 'none') + ' \u2192 ' + (ab.key || 'none'));
   if (bridgeLines.length) groups.push({ area: 'ZBrush bridge', lines: bridgeLines });
   const bwb = before.browser || {}, bwa = after.browser || {};
-  if ((bwb.hotkey || '') !== (bwa.hotkey || '')) groups.push({ area: 'Brush browser', lines: ['Hotkey: ' + (bwb.hotkey || 'none') + ' → ' + (bwa.hotkey || 'none')] });
+  if ((bwb.hotkey || '') !== (bwa.hotkey || '')) groups.push({ area: 'Browser', lines: ['Hotkey: ' + (bwb.hotkey || 'none') + ' → ' + (bwa.hotkey || 'none')] });
   const known = new Set(['menus', 'ring', 'bridge', 'browser']);
   const other = [...new Set([...Object.keys(before), ...Object.keys(after)])].filter(k => !known.has(k) && JSON.stringify(before[k]) !== JSON.stringify(after[k]));
   if (other.length) groups.push({ area: 'Other', lines: other.map(k => 'Changed ' + k) });
@@ -4191,23 +4507,26 @@ function showScreen(name, { fresh = false } = {}) {
 }
 
 /* ================================================================== boot */
-async function loadLibrary(refresh = false) {
-  if (!refresh) S.libState = 'loading';                          // a rescan keeps showing the current brushes until the new list arrives
-  S.libBusy = true; paintRescan();
-  let lib = null;
-  try { lib = await call('get_library', !!refresh); } catch (e) { lib = { error: String((e && e.message) || e) }; }
-  lib = lib || {};
-  S.library = Array.isArray(lib.brushes) ? lib.brushes : [];
-  S.libSources = Array.isArray(lib.sources) ? lib.sources : [];
-  S.zbrushFound = lib.zbrush_found !== false;
-  S.libError = lib.error ? String(lib.error) : null;
-  S.libSorted = S.library.slice().sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base', numeric: true }));
-  S.libByName = new Map(S.library.map(b => [nameKey(b.name), b]));
-  S.libState = S.libError ? 'error' : 'ready';
-  S.libBusy = false;
-  if (refresh) Thumbs.forgetMisses();
-  if (R.libRefresh) R.libRefresh();
-  if (S.screen === 'menus' && R.right) { const keep = S.tab; R.right(); S.tab = keep; }
+/* Reads one kind's library into S.libs[kind]. A rescan (refresh) keeps showing the current items until the new list arrives. */
+async function loadLibrary(kind = 'brush', refresh = false) {
+  const L = lib(kind);
+  if (!refresh) L.state = 'loading';
+  L.busy = true; paintRescan();
+  let r = null;
+  try { r = await call('get_library', !!refresh, kind); } catch (e) { r = { error: String((e && e.message) || e) }; }
+  r = r || {};
+  L.items = Array.isArray(r.items) ? r.items : Array.isArray(r.brushes) ? r.brushes : [];
+  L.sources = Array.isArray(r.sources) ? r.sources : [];
+  L.zbrushFound = r.zbrush_found !== false;
+  L.error = r.error ? String(r.error) : null;
+  L.sorted = L.items.slice().sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base', numeric: true }));
+  L.byName = new Map(L.items.map(b => [nameKey(b.name), b]));
+  L._tree = L._tc = null;
+  L.state = L.error ? 'error' : 'ready';
+  L.loaded = true; L.busy = false;
+  if (refresh) Thumbs.forgetMisses(kind);
+  if (R.libRefresh) R.libRefresh(kind);
+  if (S.screen === 'menus' && R.right && S.tab === 'item') R.right();     // the inspector resolves names against the library
   paintRescan();
 }
 async function loadSuggestions() {
@@ -4268,6 +4587,7 @@ async function boot() {
   else S.tab = params.get('tab') || 'menu';
   if (params.get('q')) S.lib.q = params.get('q');
   if (params.get('cat')) S.lib.cat = params.get('cat');
+  if (isLib(params.get('kind'))) S.lib.kind = params.get('kind');
   if (params.get('dock')) S.dock.cat = params.get('dock');
   setPathHint(S.path);
   updateDirty(); renderProblems();
@@ -4308,6 +4628,8 @@ function init() {
   $('#saveBtn').addEventListener('click', () => save());
   $('#revertBtn').addEventListener('click', revert);
   $('#undoBtn').append(icon('undo', 16)); $('#redoBtn').append(icon('redo', 16));
+  $('#browserBtn').prepend(icon('k_browser', 13));
+  $('#browserBtn').addEventListener('click', openBrowserWindow);   // works before the config loads: the browser needs none
   $('#undoBtn').addEventListener('click', () => { if (S.ready && !S.fatal) undo(); });
   $('#redoBtn').addEventListener('click', () => { if (S.ready && !S.fatal) redo(); });
   $('#problemsBtn').addEventListener('click', () => { S.problemsOpen = !S.problemsOpen; renderProblems(); });
@@ -4325,9 +4647,14 @@ function init() {
     else if (!S.ready || S.fatal) return;
     else if ((e.ctrlKey || e.metaKey) && !e.altKey && !ed && e.key.toLowerCase() === 'z') { e.preventDefault(); e.shiftKey ? redo() : undo(); }
     else if ((e.ctrlKey || e.metaKey) && !e.altKey && !ed && e.key.toLowerCase() === 'y') { e.preventDefault(); redo(); }
+    else if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && !ed && e.key.toLowerCase() === 'd') {     // Ctrl+D stars the card in focus (or the selection it is in)
+      const card = e.target && e.target.closest && e.target.closest('.bcard[data-name]');
+      const b = card && Array.from(browsers.values()).find(x => x.el.contains(card));
+      if (b) { e.preventDefault(); b.toggleFav(card.dataset.name); }
+    }
     else if (e.altKey && !e.ctrlKey && !e.shiftKey && /^[1-6]$/.test(e.key)) { e.preventDefault(); const scr = ['menus', 'library', 'settings', 'status', 'licence', 'setup'][+e.key - 1]; if (scr !== 'licence' || licenceVisible()) showScreen(scr); }
   });
-  window.addEventListener('focus', debounce(() => { if (S.ready && !S.fatal) loadTags(); }, 300));      // tags.json may have changed (the popout, a hand edit)
+  window.addEventListener('focus', debounce(() => { if (S.ready && !S.fatal) { loadTags(); reloadUsage(); } }, 300));      // tags.json may have changed (the popout, a hand edit), and picks add to Recent
   window.addEventListener('focus', debounce(() => { if (S.ready && !S.fatal && S.screen !== 'setup') refreshSetupBadge(); }, 600));   // the Setup screen polls for itself
   window.addEventListener('beforeunload', e => { if (dirtyNow()) { e.preventDefault(); e.returnValue = ''; } });
   const showErr = msg => {
@@ -4344,35 +4671,45 @@ function init() {
 }
 
 /* ================================================================== POPOUT (popout.html) */
-/* The brush browser popout: a window of its own that stays open until it is closed (zorbit/popout.py). Picking a brush selects it in ZBrush
-   through the app and hands the keyboard back to ZBrush. The Python side calls __popoutShow({tag}) each time the window is shown afresh
-   and __popoutFocus() once it has the foreground. */
-let popBrowser = null, popWant, popPicking = false;
+/* The browser popout: a window of its own that stays open until it is closed (zorbit/popout.py). Picking a brush, alpha, material or texture
+   selects it in ZBrush through the app and hands the keyboard back to ZBrush. The Python side calls __popoutShow({tag, kind}) each time the
+   window is shown afresh (kind null keeps the current tab) and __popoutFocus() once it has the foreground. */
+let popBrowser = null, popTabs = null, popWant, popPicking = false;
 const popHide = () => { call('popout_hide').catch(() => {}); };
 const POP_HOST = {
   dnd: false,
   nativeDrag: true,                                  // cards drag out to the Studio window, the OS way
   firstMatch: true,                                  // after a search, the first match is highlighted
-  primaryIcon: 'k_brush',
+  primaryIcon: kind => KIND[kind].icon,
   primaryLabel: () => 'Select in ZBrush',
   canPrimary: n => n === 1,
-  async primary(name) {
+  async primary(name, kind) {
     if (popPicking) return;
     popPicking = true;
     let r;
-    try { r = await call('popout_pick', name); } catch (e) { r = { ok: false, error: 'Could not reach ZOrbit: ' + ((e && e.message) || e) }; }
+    try { r = await call('popout_pick', name, kind); } catch (e) { r = { ok: false, error: 'Could not reach ZOrbit: ' + ((e && e.message) || e) }; }
     popPicking = false;
     if (r && r.ok) toast('Selected ' + name, { tone: 'ok', ms: 1400 });
     else toast((r && r.error) || 'ZOrbit is not running', { tone: 'warn', ms: 3800 });
   },
-  primaryMany() { toast('ZBrush takes one brush at a time. Select a single brush.', { tone: 'warn', ms: 2600 }); },
+  primaryMany(names, kind) { const w = K(kind).one; toast(`ZBrush takes one ${w} at a time. Select a single ${w}.`, { tone: 'warn', ms: 2600 }); },
   cardTitle: () => 'Select in ZBrush',
-  cardLabel: name => 'Select ' + name + ' in ZBrush',
+  cardLabel: (name, kind) => 'Select ' + name + ' in ZBrush',
   enterHint: 'Press Enter to select it in ZBrush.',
-  hint: () => ['Double-click or Enter selects a brush in ZBrush. Type to search, arrows to move, Esc to go back to ZBrush. Right-click tags.'],
+  hint: () => [],                                          // the popout shows no hint line
   badge: null,                                       // no "In my menus" folder, no badges: the popout knows nothing of menus
+  onKind: kind => { if (popTabs) popTabs.paint(); call('popout_set_kind', kind).catch(() => {}); },   // the header tabs follow every switch
   onSize: debounce(px => { call('popout_set_size', px).catch(() => {}); }, 400),
 };
+
+/* The browser's mark (assets/browser.ico): a dark disc with a 2x2 grid of outlined tiles, three in the accent and the last in cyan. */
+function popLogo() {
+  const tile = (x, y, c) => `<rect x="${x}" y="${y}" width="4.5" height="4.5" rx=".8" fill="var(--bg1)" stroke="var(${c})" stroke-width="1"/>`;
+  const s = h('span', { class: 'pop-logo', 'aria-hidden': 'true' });
+  s.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18"><circle cx="12" cy="12" r="10.85" fill="var(--bg1)" stroke="rgba(255,255,255,.16)" stroke-width=".32"/>'
+    + tile(5.6, 5.6, '--accent') + tile(13.9, 5.6, '--accent') + tile(5.6, 13.9, '--accent') + tile(13.9, 13.9, '--cyan') + '</svg>';
+  return s;
+}
 
 function buildPopout(root) {
   const pin = h('button', { class: 'ibtn pin-btn', type: 'button', onclick: () => setOnTop(!S.popOnTop) }, icon('pin', 15));
@@ -4385,22 +4722,48 @@ function buildPopout(root) {
     catch (e) { S.popOnTop = !on; paintPin(); toast('Could not change Keep on top.', { tone: 'warn' }); }
   }
   paintPin();
+  // The folders and tags column: shown or collapsed (popout.json "column"), on the left or the right ("side").
+  // The column button is pressed while the column shows and draws it on its side; the side button only shows with it.
+  const col = h('button', { class: 'ibtn col-btn', type: 'button', onclick: () => setColumn(!S.popColumn) });
+  const side = h('button', { class: 'ibtn side-btn', type: 'button', onclick: () => setSide(S.popSide === 'right' ? 'left' : 'right') }, icon('swap_h', 15));
+  const paintSide = () => {
+    const right = S.popSide === 'right', label = 'Move the folders and tags to the ' + (right ? 'left' : 'right');
+    const colLabel = (S.popColumn ? 'Hide' : 'Show') + ' the folders and tags';
+    side.title = label; side.setAttribute('aria-label', label); side.hidden = !S.popColumn;
+    col.replaceChildren(icon(right ? 'side_r' : 'side_l', 15)); col.title = colLabel; col.setAttribute('aria-label', colLabel);
+    col.setAttribute('aria-pressed', S.popColumn ? 'true' : 'false');
+    root.classList.toggle('side-right', right); root.classList.toggle('col-hidden', !S.popColumn);
+  };
+  async function setColumn(on) {
+    S.popColumn = on; paintSide();
+    try { await call('popout_set_column', on); }
+    catch (e) { S.popColumn = !on; paintSide(); toast('Could not change the folders column.', { tone: 'warn' }); }
+  }
+  async function setSide(s) {
+    const was = S.popSide;
+    S.popSide = s; paintSide();
+    try { await call('popout_set_side', s); }
+    catch (e) { S.popSide = was; paintSide(); toast('Could not move the folders column.', { tone: 'warn' }); }
+  }
+  paintSide();
   const head = h('header', { class: 'pop-head' },
-    h('span', { class: 'pop-logo', 'aria-hidden': 'true' }, icon('logo', 18)), h('h1', { class: 'pop-title' }, 'Brushes'),
-    h('div', { class: 'spacer' }), pin,
+    popLogo(), (popTabs = kindTabs(() => S.pop.kind, k => popBrowser.setKind(k), 'pop')).el,
+    h('div', { class: 'spacer' }), side, col, pin,
     h('div', { class: 'winctl' }, h('button', { class: 'winbtn close', type: 'button', title: 'Close', 'aria-label': 'Close', onclick: popHide }, icon('x', 14))));
-  popBrowser = makeBrowser({ compact: false, st: S.pop, host: POP_HOST });
+  popBrowser = makeBrowser({ compact: false, st: S.pop, host: POP_HOST, kindUi: 'none' });   // the tabs live in the header
   root.replaceChildren(head, h('div', { class: 'pop-body' }, popBrowser.el));
-  R.libRefresh = () => { popBrowser.refresh(); popBrowser.highlightFirst(); };
+  R.libRefresh = kind => { if (kind === S.pop.kind) { popBrowser.refresh(); popBrowser.highlightFirst(); } };
 }
 
 /* Called by popout.py each time the window is shown. Starts from a clean slate: no search, no folder, the given tag only, the first match
    highlighted. A tag the page has not heard of (made in the Studio a moment ago) is looked for once more with a forced reload. */
 window.__popoutShow = o => {
-  const tag = (o && o.tag) || null;
-  if (!popBrowser) { popWant = { tag }; return false; }
-  popBrowser.setFilter(tag);
+  const tag = (o && o.tag) || null, kind = o && isLib(o.kind) ? o.kind : null, reset = !o || o.reset !== false;
+  if (!popBrowser) { popWant = { tag, kind, reset }; return false; }
+  if (kind) popBrowser.setKind(kind);
+  if (reset || tag) popBrowser.setFilter(tag);          // a tab switch alone keeps the search and tag filter
   popBrowser.focusSearch();
+  reloadUsage();                                        // picks made since the window was last shown
   const stale = !!tag && !S.tagMap.has(tag);
   loadTags(stale).then(() => { if (stale && S.tagMap.has(tag)) popBrowser.setFilter(tag); });
   return true;
@@ -4414,10 +4777,14 @@ async function bootPopout() {
   if (state) {
     S.popOnTop = state.on_top !== false;
     if (+state.size >= 84) S.pop.size = clamp(+state.size, 84, 220);
-    if (state.tag) S.pop.tags = new Set([String(state.tag)]);
+    S.popSide = state.side === 'right' ? 'right' : 'left';
+    S.popColumn = state.column !== false;
+    if (state.tag === FAV) S.pop.cat = '@fav';           // Favourites is a folder, not a chip
+    else if (state.tag) S.pop.tags = new Set([String(state.tag)]);
+    if (isLib(state.kind)) S.pop.kind = state.kind;
   }
-  buildPopout($('#app'));
-  loadLibrary(); loadTags();
+  buildPopout($('#app'));                            // makeBrowser loads the library of the starting tab
+  loadTags();
   S.ready = true;
   document.documentElement.classList.add('ready');
   if (popWant) { const w = popWant; popWant = undefined; window.__popoutShow(w); }
@@ -4430,6 +4797,17 @@ function initPopout() {
     if (e.key === 'Escape') {                                                // the search box and the selection take theirs first (they stop or prevent it)
       if (e.defaultPrevented) return;
       e.preventDefault(); call('popout_release_focus').catch(() => {});      // nothing left to clear: the keyboard goes back to ZBrush
+      return;
+    }
+    if (e.key === 'Tab' && e.ctrlKey && !e.metaKey && !e.altKey) {           // Ctrl+Tab / Ctrl+Shift+Tab cycle the tabs
+      const n = LIB_KINDS.length;
+      e.preventDefault(); popBrowser.setKind(LIB_KINDS[(Math.max(0, LIB_KINDS.indexOf(popBrowser.kind())) + (e.shiftKey ? n - 1 : 1)) % n]);
+      return;
+    }
+    if (e.key.toLowerCase() === 'd' && (e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey) {   // Ctrl+D stars the highlighted item (or the selection)
+      e.preventDefault();
+      const card = e.target && e.target.closest && e.target.closest('.bcard[data-name]');
+      popBrowser.toggleFav(card ? card.dataset.name : null);
       return;
     }
     if (e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey) return;
@@ -4451,7 +4829,7 @@ function initPopout() {
   window.addEventListener('contextmenu', e => {                              // the web view's own menu is a window of another
     if (!(e.target && e.target.closest && e.target.closest('.bcard'))) e.preventDefault();   // process and would read as leaving
   });
-  window.addEventListener('focus', debounce(() => { if (S.ready) loadTags(); }, 300));      // tags.json may have changed (the Studio)
+  window.addEventListener('focus', debounce(() => { if (S.ready) { loadTags(); reloadUsage(); } }, 300));      // tags.json may have changed (the Studio), and picks add to Recent
   const log = msg => { console.error(msg); try { call('popout_log', String(msg).slice(0, 500)).catch(() => {}); } catch (e) { /* no backend */ } };
   window.addEventListener('error', e => log('Uncaught: ' + e.message + ' (' + (e.filename || '').split('/').pop() + ':' + e.lineno + ')'));
   window.addEventListener('unhandledrejection', e => log('Unhandled rejection: ' + (e.reason && e.reason.message || e.reason)));

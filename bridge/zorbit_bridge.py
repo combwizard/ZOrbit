@@ -11,6 +11,9 @@ What it does:
                  hotkey on purpose: native bindings proved more reliable.)
       Start App  starts the ZOrbit app if it is not running (it also starts automatically here).
       Status     shows listener, app and last-request state.
+  * Picks come as request.json actions: {"brush"|"alpha"|"material"|"texture": name, "file": path} selects that
+    asset (loading it from the file first when ZBrush does not have it), {"press": path}, {"set": path,
+    "value": v} and {"toggle": path} drive the interface directly.
   * A hidden message-only window on ZBrush's main thread. The app posts WM_APP+1 to it after a pick, so no
     keystroke is needed. Its handle is published in listener.json only after a timer message has proved
     that ZBrush dispatches window messages to Python; if that never happens the app uses the bridge key.
@@ -40,7 +43,11 @@ PALETTE = "Zplugin:ZOrbit"
 WM_APP_PICK = 0x8000 + 1
 WM_TIMER = 0x113
 TIMER_VERIFY, TIMER_RETRY, TIMER_SELECT = 1, 2, 3
-SELECT_TRIES = 25                 # a brush just loaded: look for its button every 40 ms, for up to a second
+SELECT_TRIES = 25                 # an asset just loaded: look for its button every 40 ms, for up to a second
+# kind -> (palette its buttons live in, interface path of the button that loads a file). Maxon's own xmd_bridge
+# plugin selects and loads alphas, materials and textures the same way.
+ASSETS = {"brush": ("Brush", "Brush:Load Brush"), "alpha": ("Alpha", "Alpha:Import"),
+          "material": ("Material", "Material:Load"), "texture": ("Texture", "Texture:Import")}
 VK_LBUTTON = 0x01
 
 
@@ -100,33 +107,38 @@ HWND_MESSAGE = w.HWND(-3)
 
 
 # --- carrying out a pick -------------------------------------------------------------------------
-def _do_brush(a: dict) -> str:
-    name = a["brush"]
-    path = f"Brush:{name}"
+def _do_asset(kind: str, a: dict) -> str:
+    palette, loader = ASSETS[kind]
+    name = a[kind]
+    path = f"{palette}:{name}"
     if zbc.exists(path):
         zbc.press(path)
-        S.select_pending = None                           # a later brush of the same pick wins
-        return f"brush {name}: selected"
+        S.select_pending = None                           # a later asset of the same pick wins
+        return f"{kind} {name}: selected"
     f = a.get("file")
     if f and os.path.isfile(f):
         zbc.set_next_filename(f.replace("\\", "/"))
-        zbc.press("Brush:Load Brush")
+        zbc.press(loader)
         now = zbc.exists(path)
         if now:
             zbc.press(path)
-        # ZBrush finishes adding the new brush only after the pick returns, so a press now may find no button or
+        # ZBrush finishes adding the new item only after the pick returns, so a press now may find no button or
         # not take: the listener presses it again once ZBrush is done (apply_request starts that after the last
         # action). Without a listener (the Apply button only) this is all we can do.
         S.select_pending = (path, SELECT_TRIES)
         later = "; selecting it once ZBrush has added it" if S.hwnd and IsWindow(S.hwnd) else ""
-        return f"brush {name}: loaded from {f}{later} (button there now: {now})"
-    return f"brush {name}: NOT loaded in ZBrush and no .zbp file known"
+        return f"{kind} {name}: loaded from {f}{later} (button there now: {now})"
+    return f"{kind} {name}: NOT loaded in ZBrush and no file known"
 
 
 def _do_action(a: dict) -> str:
-    if "brush" in a:
-        # Still switched: the note only explains a brush that seems not to take outside Edit mode.
-        return _do_brush(a) + ("" if zbc.get("Transform:Edit") else " (Edit mode is off)")
+    for kind in ASSETS:
+        if kind in a:
+            res = _do_asset(kind, a)
+            if kind == "brush":
+                # Still switched: the note only explains a brush that seems not to take outside Edit mode.
+                res += "" if zbc.get("Transform:Edit") else " (Edit mode is off)"
+            return res
     for kind in ("press", "set", "toggle"):
         if kind in a:
             path = a[kind]
@@ -162,7 +174,7 @@ def apply_request(sender: str = "") -> None:
         except OSError:
             pass
         return
-    S.select_pending = None                               # a newer pick wins over a brush still waiting to be selected
+    S.select_pending = None                               # a newer pick wins over an item still waiting to be selected
     if S.hwnd and IsWindow(S.hwnd):
         KillTimer(S.hwnd, TIMER_SELECT)
     results = []
@@ -174,7 +186,7 @@ def apply_request(sender: str = "") -> None:
     S.last = f"#{req.get('id')} '{req.get('label')}' via {sender or 'button'}: " + "; ".join(results)
     log(S.last)
     if getattr(S, "select_pending", None) and S.hwnd and IsWindow(S.hwnd):
-        SetTimer(S.hwnd, TIMER_SELECT, 40, None)          # the brush this pick loaded last, once ZBrush shows it
+        SetTimer(S.hwnd, TIMER_SELECT, 40, None)          # the item this pick loaded last, once ZBrush shows it
     else:
         S.select_pending = None
 
@@ -190,7 +202,8 @@ def _publish_listener():
 
 
 def _select_pending(hwnd):
-    """Presses the button of a brush loaded a moment ago, once ZBrush shows it (never during a stroke)."""
+    """Presses the button of a brush, alpha, material or texture loaded a moment ago, once ZBrush shows it
+    (never during a stroke)."""
     pend = getattr(S, "select_pending", None)
     if pend is None:
         KillTimer(hwnd, TIMER_SELECT)

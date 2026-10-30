@@ -2,8 +2,8 @@
 
   %APPDATA%\\ZOrbit\\radial.json      the user's menus and settings (created from default_menus.json)
   %APPDATA%\\ZOrbit\\tags.json        the user's brush tags
-  %APPDATA%\\ZOrbit\\popout.json      window placement of the brush browser popout
-  %APPDATA%\\ZOrbit\\launch.json      how to start the app, the Studio and the brush browser popout
+  %APPDATA%\\ZOrbit\\popout.json      window placement of the browser popout
+  %APPDATA%\\ZOrbit\\launch.json      how to start the app, the Studio and the browser popout
                                     (read by the ZBrush bridge)
   %LOCALAPPDATA%\\ZOrbit\\            logs, thumbnail cache, request/listener exchange with ZBrush,
                                     activity.json (what the app last did with a ring, for the Setup screen)
@@ -27,6 +27,8 @@ ZSCRIPT_DIR = (os.path.join(RESOURCE_DIR, "zscript") if FROZEN
                else os.path.join(os.path.dirname(PKG_DIR), "bridge", "zscript"))
 DEFAULT_MENUS = os.path.join(RESOURCE_DIR, "default_menus.json")
 ICON = os.path.join(RESOURCE_DIR, "icon.ico") if FROZEN else os.path.join(os.path.dirname(PKG_DIR), "assets", "icon.ico")
+BROWSER_ICON = (os.path.join(RESOURCE_DIR, "browser.ico") if FROZEN
+                else os.path.join(os.path.dirname(PKG_DIR), "assets", "browser.ico"))
 
 DATA_DIR = os.path.join(os.environ.get("LOCALAPPDATA") or os.path.expanduser("~"), "ZOrbit")
 CONFIG_DIR = os.path.join(os.environ.get("APPDATA") or os.path.expanduser("~"), "ZOrbit")
@@ -80,7 +82,7 @@ def bridge_dir() -> str | None:
 
 
 def launch_commands() -> dict:
-    """Command lines that start the background app, the Studio and the brush browser popout from this
+    """Command lines that start the background app, the Studio and the browser popout from this
     installation."""
     if FROZEN:
         exe = sys.executable

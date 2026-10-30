@@ -1,27 +1,31 @@
-"""ZOrbit brush browser popout: a window with the brush library, filtered by tag, that selects the brush you
-pick in ZBrush through the background app. A normal app window: it has a taskbar button, snaps and maximises
-like any other, and stays open until the user closes it. Nothing hides it but the close button and Alt+F4.
+"""ZOrbit browser popout: a window with the brush, alpha, material and texture libraries (one tab each),
+filtered by tag, that selects the item you pick in ZBrush through the background app. A normal app window: it
+has a taskbar button, snaps and maximises like any other, and stays open until the user closes it. Nothing hides
+it but the close button and Alt+F4.
 
 A pywebview window (Windows' built-in Edge WebView2) showing studio_ui/popout.html, in its own process so the
 hotkey can open it in a fraction of a second: the app starts it hidden a few seconds after launch ("pre-warm")
 and from then on only asks it to show. It does not need ZBrush or the app: the Studio, the tray menu and a
 Start menu shortcut open it too, and it stays up when the app quits.
 
-  ZOrbit.exe --popout [--managed] [--show] [--tag KEY] [--zbrush-hwnd N]
+  ZOrbit.exe --popout [--managed] [--show] [--tag KEY] [--kind KIND] [--zbrush-hwnd N]
 
   --managed       started by the app: exits by itself once the app is gone, unless its window is up. A managed
                   popout whose window the user closes only hides it (the app can show it again at once); one that
                   is not managed, or has lost its app, quits when its window is closed
   --show          show the window as soon as the page is up
   --tag KEY       ... filtered to this tag
+  --kind KIND     ... on this tab: brush, alpha, material or texture (default: the tab it was last on, popout.json
+                  "kind")
   --zbrush-hwnd   the ZBrush window to hand the focus back to
 
 Talks to the app with WM_COPYDATA (ids in radiald.py):
-  popout -> ZOrbitControl     1   a pick: {"v": 1, "op": "pick", "kind": "brush", "name": ...}   result 1 taken, 0 refused
-  app -> ZOrbitPopoutCtl     10   SHOW {"tag": key|null, "zbrush_hwnd": N, "toggle": bool}
+  popout -> ZOrbitControl     1   a pick: {"v": 1, "op": "pick", "kind": "brush|alpha|material|texture", "name": ...}
+                                      result 1 taken, 0 refused
+  app -> ZOrbitPopoutCtl     10   SHOW {"tag": key|null, "kind": kind|null, "zbrush_hwnd": N, "toggle": bool}
   app -> ZOrbitPopoutCtl     12   QUIT (ignored while the window is up)
 
-SHOW: a hidden window appears (afresh: no search, this tag only); one that is visible comes to the front; one that
+SHOW: a hidden window appears (afresh: no search, this tag only, on the given tab); one that is visible comes to the front; one that
 is already in front hands the keyboard back to ZBrush when asked to toggle (the hotkey), but never closes. A pick
 and Esc hand the keyboard back to ZBrush too. Keep on top (popout.json "on_top", on by default) is the pin button in the header.
 One instance at a time (Local\\ZOrbitPopout); a second launch passes its arguments on and exits.
@@ -41,6 +45,7 @@ import time
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 
+import config as C          # noqa: E402
 import fsutil               # noqa: E402
 import paths                # noqa: E402
 import radiald              # noqa: E402
@@ -129,9 +134,11 @@ def _update_state(**changes):
 
 
 def _parse(args) -> dict:
-    """--popout [--managed] [--show] [--tag KEY] [--zbrush-hwnd N] [--debug]; an unreadable value is ignored."""
-    o = {"managed": "--managed" in args, "show": "--show" in args, "tag": None, "zbrush": 0, "debug": "--debug" in args}
-    for flag, key in (("--tag", "tag"), ("--zbrush-hwnd", "zbrush")):
+    """--popout [--managed] [--show] [--tag KEY] [--kind KIND] [--zbrush-hwnd N] [--debug]; an unreadable value
+    is ignored."""
+    o = {"managed": "--managed" in args, "show": "--show" in args, "tag": None, "kind": None, "zbrush": 0,
+         "debug": "--debug" in args}
+    for flag, key in (("--tag", "tag"), ("--kind", "kind"), ("--zbrush-hwnd", "zbrush")):
         if flag in args and args.index(flag) + 1 < len(args):
             v = args[args.index(flag) + 1]
             if key == "zbrush":
@@ -139,13 +146,17 @@ def _parse(args) -> dict:
                     o[key] = int(v)
                 except ValueError:
                     pass
+            elif key == "kind":
+                if v in C.ASSET_KINDS:
+                    o[key] = v
             elif v and not v.startswith("--"):
                 o[key] = v
     return o
 
 
-def _show_payload(tag, zbrush, toggle=False) -> bytes:
-    return json.dumps({"tag": tag or None, "zbrush_hwnd": int(zbrush or 0), "toggle": bool(toggle)}).encode("utf-8")
+def _show_payload(tag, zbrush, toggle=False, kind=None) -> bytes:
+    return json.dumps({"tag": tag or None, "kind": kind or None, "zbrush_hwnd": int(zbrush or 0),
+                       "toggle": bool(toggle)}).encode("utf-8")
 
 
 TARGET_EXE = os.environ.get("ZORBIT_POPOUT_TARGET_EXE") or "zbrush.exe"   # the variable is for tests
@@ -185,16 +196,22 @@ class PopoutApi(webapi.LibraryApi, webapi.TagApi):
         self._pop = pop          # underscore: pywebview must not expose (and crawl) it to JS
 
     def popout_get_state(self):
-        """What the page needs before it draws: keep on top, the thumbnail size, the tag it was started with."""
+        """What the page needs before it draws: keep on top, the thumbnail size, which side the folders and tags
+        column is on and whether it is shown, the tag and the tab (kind) it was started with, else the tab it was
+        last on."""
         st = _read_state()
         size = st.get("size")
-        return {"on_top": self._pop.on_top, "size": size if isinstance(size, int) else None, "tag": self._pop.start_tag,
-                "tags_path": radiald.tags_path()}
+        kind = self._pop.start_kind or st.get("kind")
+        side = "right" if st.get("side") == "right" else "left"
+        return {"on_top": self._pop.on_top, "size": size if isinstance(size, int) else None, "side": side,
+                "column": st.get("column") != "hidden",
+                "tag": self._pop.start_tag,
+                "kind": kind if kind in C.ASSET_KINDS else "brush", "tags_path": radiald.tags_path()}
 
-    def popout_pick(self, name):
-        """Selects a brush in ZBrush: hands the focus back to ZBrush, then asks the app. The window stays open.
-        {"ok": bool, "error"}."""
-        return self._pop.pick(str(name or ""))
+    def popout_pick(self, name, kind="brush"):
+        """Selects a brush, alpha, material or texture in ZBrush: hands the focus back to ZBrush, then asks the
+        app. The window stays open. {"ok": bool, "error"}."""
+        return self._pop.pick(str(name or ""), kind)
 
     def popout_hide(self):
         """The close button. Answered at once: the window is closed on another thread, because hiding it from
@@ -219,6 +236,25 @@ class PopoutApi(webapi.LibraryApi, webapi.TagApi):
             return False
         return True
 
+    def popout_set_side(self, side):
+        """Which side of the window the folders and tags column is on: "left" (the default) or "right"."""
+        if side not in ("left", "right"):
+            return False
+        _update_state(side=side)
+        return True
+
+    def popout_set_column(self, shown):
+        """Whether the folders and tags column is shown (popout.json "column": "shown" or "hidden")."""
+        _update_state(column="shown" if shown else "hidden")
+        return True
+
+    def popout_set_kind(self, kind):
+        """The tab the user ended on, shown again the next time the window starts."""
+        if kind not in C.ASSET_KINDS:
+            return False
+        _update_state(kind=kind)
+        return True
+
     def popout_log(self, msg):
         """A line from the page (script errors) into popout.log."""
         _log("page: " + str(msg)[:500])
@@ -231,6 +267,7 @@ class Popout:
     def __init__(self, opts):
         self.opts = opts
         self.start_tag = opts["tag"]
+        self.start_kind = opts["kind"]
         st = _read_state()
         if isinstance(st.get("on_top"), bool):
             self.on_top = st["on_top"]
@@ -247,7 +284,7 @@ class Popout:
         self.prev_fg = 0                     # the window to hand the focus back to
         self._placed = False                 # the window has had its first position
         self._was_max = False                # it was maximised when it was last hidden
-        self._pending = None                 # (tag, zbrush hwnd) to show once ready
+        self._pending = None                 # (tag, zbrush hwnd, kind) to show once ready
         self._lock = threading.RLock()       # show, hide and pick run one at a time
         self._loaded = threading.Event()
         self._ctl_up = threading.Event()
@@ -313,13 +350,15 @@ class Popout:
             msg = json.loads(ctypes.string_at(cds.lpData, cds.cbData).decode("utf-8"))
             tag = msg.get("tag")
             tag = tag if isinstance(tag, str) and tag else None
+            kind = msg.get("kind")
+            kind = kind if kind in C.ASSET_KINDS else None
             zb = msg.get("zbrush_hwnd")
             zb = zb if isinstance(zb, int) and not isinstance(zb, bool) else 0
             toggle = bool(msg.get("toggle"))
         except (ValueError, AttributeError):
             _log("SHOW refused: unreadable payload")
             return 0
-        self._work.put((self.request_show, (tag, zb, toggle)))
+        self._work.put((self.request_show, (tag, zb, toggle, kind)))
         return 1
 
     def _work_main(self):
@@ -361,7 +400,7 @@ class Popout:
                 pend, self._pending = self._pending, None
             _log(f"ready; pending show: {pend}")
             if pend:
-                self.request_show(pend[0], pend[1], False)
+                self.request_show(pend[0], pend[1], False, pend[2])
             if self.managed:
                 threading.Thread(target=self._watch_app, daemon=True, name="popout-managed").start()
         except Exception as e:
@@ -430,26 +469,26 @@ class Popout:
     def _z_order(self):
         return winframe.HWND_TOPMOST if self.on_top else winframe.HWND_NOTOPMOST
 
-    def request_show(self, tag, zb, toggle):
+    def request_show(self, tag, zb, toggle, kind=None):
         """The app asks for the window (SHOW), or the first launch does (--show). Never closes it: a window that is
         hidden appears, one that is up comes to the front, and one that is already in front hands the keyboard
         back to ZBrush when asked to toggle (the hotkey)."""
         with self._lock:
             if not self.ready:                         # still starting: it shows itself when it is up
-                self._pending = (tag, zb)
+                self._pending = (tag, zb, kind)
                 _log(f"SHOW while starting: pending {self._pending}")
                 return
             if not self.visible():
-                self.show(tag, zb)
+                self.show(tag, zb, kind=kind)
             elif self._holds_foreground():
                 self._remember_target(zb)
                 if toggle:
                     _log("SHOW toggle: in front; the keyboard goes back to ZBrush")
                     self.release_focus()
                 else:
-                    self.show(tag, zb, reset=False)    # already in front: the search box gets the cursor
+                    self.show(tag, zb, reset=False, kind=kind)    # already in front: the search box gets the cursor
             else:
-                self.show(tag, zb, reset=False)
+                self.show(tag, zb, reset=False, kind=kind)
 
     def _remember_target(self, zb=0):
         """The window the focus goes back to: the ZBrush window the app named, else ZBrush in front, else the one
@@ -472,18 +511,19 @@ class Popout:
         W.nudge_mouse()                                # a zero move: the pen and cursor tracking wake up in ZBrush
         return True
 
-    def show(self, tag=None, zb=0, reset=True):
+    def show(self, tag=None, zb=0, reset=True, kind=None):
         """Shows the window, takes the focus and puts the cursor in the search box. reset: also tell the page to
         start afresh (empty search, this tag only). Without it the page is left as it is, except that a tag
-        given is applied."""
+        or tab (kind) given is applied."""
         with self._lock:
             if not self.hwnd or self.quitting:
                 return
             was_visible = self.visible()
             self._remember_target(zb)
-            if reset or tag:
+            if reset or tag or kind:
                 try:
-                    self.window.evaluate_js("window.__popoutShow && __popoutShow(" + json.dumps({"tag": tag or None}) + ")")
+                    arg = json.dumps({"tag": tag or None, "kind": kind or None, "reset": bool(reset)})
+                    self.window.evaluate_js("window.__popoutShow && __popoutShow(" + arg + ")")
                 except Exception as e:
                     _log(f"__popoutShow failed: {e!r}")
             if was_visible:
@@ -509,7 +549,7 @@ class Popout:
             # (0xE8 is an unassigned virtual key, so nothing acts on it) counts as that input.
             W.send_keys([(0xE8, False), (0xE8, True)])
             got = winframe.force_foreground(self.hwnd)
-            _log(f"shown (tag={tag}, reset={reset}, prev_fg={self.prev_fg}, was_visible={was_visible}, foreground={got})")
+            _log(f"shown (tag={tag}, kind={kind}, reset={reset}, prev_fg={self.prev_fg}, was_visible={was_visible}, foreground={got})")
             self._focus_page()
 
     def _focus_page(self):
@@ -593,20 +633,23 @@ class Popout:
         # holds the GIL while the UI thread needs it for winframe's window procedure, and both hang.
         _log(f"keep on top: {flag}")
 
-    def pick(self, name) -> dict:
-        """The page picked a brush. The window stays where it is; the focus goes back to ZBrush, because the app
-        selects the brush with ZBrush in front. Runs inside a js_api call: no show, hide or evaluate_js here."""
+    def pick(self, name, kind="brush") -> dict:
+        """The page picked a brush, alpha, material or texture. The window stays where it is; the focus goes back
+        to ZBrush, because the app selects the item with ZBrush in front. Runs inside a js_api call: no show, hide
+        or evaluate_js here."""
+        if kind not in C.ASSET_KINDS:
+            return {"ok": False, "error": f"Unknown kind {kind!r}."}
         if not name:
-            return {"ok": False, "error": "No brush to select."}
+            return {"ok": False, "error": f"No {kind} to select."}
         with self._lock:
             self._back_to_target()
         app = W.find_message_window(APP_CLASS)
-        payload = json.dumps({"v": 1, "op": "pick", "kind": "brush", "name": name}).encode("utf-8")
+        payload = json.dumps({"v": 1, "op": "pick", "kind": kind, "name": name}).encode("utf-8")
         r = W.send_copydata(app, radiald.COPYDATA_PICK, payload) if app else None
-        _log(f"pick {name!r}: app window {app}, result {r}")
+        _log(f"pick {kind} {name!r}: app window {app}, result {r}")
         if r == 1:
             return {"ok": True}
-        return {"ok": False, "error": "ZOrbit is not running" if r is None else "ZOrbit did not take that brush. Is it up to date?"}
+        return {"ok": False, "error": "ZOrbit is not running" if r is None else f"ZOrbit did not take that {kind}. Is it up to date?"}
 
     def quit(self, why=""):
         with self._lock:
@@ -648,8 +691,10 @@ def _forward(opts) -> int:
     for _ in range(30):                                 # the first one creates its control window within a moment of starting
         hwnd = W.find_message_window(radiald.POPOUT_CLASS)
         if hwnd:
-            r = W.send_copydata(hwnd, radiald.COPYDATA_SHOW, _show_payload(opts["tag"], opts["zbrush"]))
-            _log(f"a popout is already running: SHOW forwarded to {hwnd} (tag={opts['tag']}): result {r}")
+            r = W.send_copydata(hwnd, radiald.COPYDATA_SHOW,
+                                _show_payload(opts["tag"], opts["zbrush"], kind=opts["kind"]))
+            _log(f"a popout is already running: SHOW forwarded to {hwnd} (tag={opts['tag']}, "
+                 f"kind={opts['kind']}): result {r}")
             return 0
         time.sleep(0.1)
     _log("a popout is already running, but its control window did not appear")
@@ -665,7 +710,7 @@ def main(args) -> int:
     pop = Popout(opts)
     pop.start_ctl()
     if opts["show"]:
-        pop._pending = (opts["tag"], opts["zbrush"])
+        pop._pending = (opts["tag"], opts["zbrush"], opts["kind"])
     import webview
     _log("pywebview imported")
     try:                                                 # own identity, not Python's
@@ -682,7 +727,9 @@ def main(args) -> int:
     window.events.shown += lambda: _log("window shown")
     window.events.loaded += pop.on_loaded
     winframe.enable_drag_regions()
-    icon = paths.ICON if os.path.isfile(paths.ICON) else None
+    icon = getattr(paths, "BROWSER_ICON", paths.ICON)           # its own mark, not the app's
+    if not os.path.isfile(icon):
+        icon = paths.ICON if os.path.isfile(paths.ICON) else None
     webview.start(pop.worker, debug=opts["debug"], icon=icon)
     pop.stop_ctl()
     kernel32.CloseHandle(mutex)

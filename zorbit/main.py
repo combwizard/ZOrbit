@@ -3,9 +3,10 @@
   ZOrbit.exe                     background app: hotkeys, ring, hand-off to ZBrush, tray icon
   ZOrbit.exe --exit-with-zbrush  same, quitting when ZBrush closes (how the ZBrush bridge starts it)
   ZOrbit.exe --studio            ZOrbit Studio: menu editor, brush library, settings
-  ZOrbit.exe --popout [--managed] [--show] [--tag KEY] [--zbrush-hwnd N]
-                                     the brush browser (the app starts it; --managed: quits with the app
-                                     unless its window is up, --show: open at once, --tag: filtered to a tag)
+  ZOrbit.exe --popout [--managed] [--show] [--tag KEY] [--kind KIND] [--zbrush-hwnd N]
+                                     the browser (the app starts it; --managed: quits with the app unless its
+                                     window is up, --show: open at once, --tag: filtered to a tag, --kind: on
+                                     the brush, alpha, material or texture tab)
   ZOrbit.exe --check             validate the menus file and print it
   ZOrbit.exe --zscript-copy|--zscript-remove <stage> <dest>
                                      internal: the Studio runs this as administrator to put the ZScript

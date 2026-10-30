@@ -11,6 +11,9 @@ plugin that needs an update; installing replaces them and removing removes them 
 
 ZScript cannot read environment variables or JSON, and its strings stop at 255 characters. So both files hold
 one value per line, and paths are absolute, in their 8.3 short form when the long form is not plain ASCII.
+request.txt is the magic line, id and label, then per action its kind and arguments: brush, alpha, material or
+texture with the name and its file (or - when none is known), press with a path, set with a path and a value,
+toggle with a path.
 
 ZBrush 2022-2025 load plugins only from ZStartup\\ZPlugs64 inside the installation, usually under Program
 Files. install()/remove() try a plain copy first and fall back to this program run as administrator
@@ -41,6 +44,7 @@ LEGACY_DATA = "RadialMenuData"
 CFG = "bridge.cfg"
 MAGIC = "ZORBIT 1"
 MAX_LINE = 255                          # longest string ZScript reads in one go
+ASSET_KINDS = ("brush", "alpha", "material", "texture")     # actions that carry a name and a file
 REQUEST_TXT = os.path.join(paths.DATA_DIR, "request.txt")
 STAGE_DIR = os.path.join(paths.DATA_DIR, "zscript_stage")
 ELEVATED_WAIT = 300                     # seconds the Studio waits for the administrator prompt and the copy
@@ -76,8 +80,9 @@ def request_lines(seq, label, actions) -> list[str]:
     """request.txt as lines: the magic line, id, label, then per action its kind and arguments."""
     lines = [MAGIC, str(seq), _line(label)]
     for a in actions:
-        if "brush" in a:
-            lines += ["brush", _line(a["brush"]), _line(ascii_path(a.get("file")))]
+        asset = next((k for k in ASSET_KINDS if k in a), None)
+        if asset:
+            lines += [asset, _line(a[asset]), _line(ascii_path(a.get("file")))]
         elif "set" in a:
             lines += ["set", _line(a["set"]), _value(a.get("value"))]
         elif "press" in a:

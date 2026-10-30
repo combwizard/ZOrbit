@@ -14,7 +14,7 @@
 // bridge.cfg, one value per line: ZORBIT 1 / folder with a trailing backslash / app command line /
 // Studio command line / 1 to start the app on load. ZOrbitData also holds app.lnk and studio.lnk.
 // request.txt: ZORBIT 1 / id / label / then per action its kind and arguments:
-//   brush <name> <.zbp file or ->   press <path>   set <path> <value>   toggle <path>
+//   brush|alpha|material|texture <name> <file or ->   press <path>   set <path> <value>   toggle <path>
 // Both are written by the app with 8.3 paths where needed, since ZScript strings stop at 255 characters.
 // String literals here use forward slashes: a backslash starts an escape such as \n.
 
@@ -32,13 +32,13 @@
 [VarDef, rmN, 0]
 [VarDef, rmLen, 0]
 [VarDef, rmC, 0]              // scratch for RM_Chop only
-[VarDef, rmK, 0]               // first character of the action kind (b p s t)
+[VarDef, rmK, 0]               // first character of the action kind (b a m p s t), 120 for texture
 [VarDef, rmReq, ""]
 [VarDef, rmId, ""]
 [VarDef, rmLabel, ""]
 [VarDef, rmKind, ""]
 [VarDef, rmA, ""]              // first argument of an action
-[VarDef, rmB, ""]              // second argument (brush file, set value)
+[VarDef, rmB, ""]              // second argument (asset file, set value)
 [VarDef, rmCount, 0]
 [VarDef, rmRes, ""]            // result of the last action
 [VarDef, rmLast, "none yet"]   // summary of the last pick
@@ -118,6 +118,53 @@
 	]
 	// Still switched: the note only explains a brush that seems not to take outside Edit mode.
 	[If, [IGet, "Transform:Edit"] == 0, [VarSet, rmRes, [StrMerge, #rmRes, " (Edit mode is off)"]]]
+]
+
+// Alphas, materials and textures work like RM_Brush. Material:Load replaces the selected material slot;
+// that is ZBrush's own behaviour.
+[RoutineDef, RM_Alpha,
+	[VarSet, rmP, [StrMerge, "Alpha:", #rmA]]
+	[If, [IExists, #rmP],
+		[IPress, #rmP]
+		[VarSet, rmRes, [StrMerge, "alpha ", #rmA, ": selected"]],
+		[If, [FileExists, #rmB],
+			[FileNameSetNext, #rmB]
+			[IPress, "Alpha:Import"]
+			[If, [IExists, #rmP], [IPress, #rmP]]
+			[VarSet, rmRes, [StrMerge, "alpha ", #rmA, ": loaded from file"]],
+			[VarSet, rmRes, [StrMerge, "alpha ", #rmA, ": NOT loaded and no file known"]]
+		]
+	]
+]
+
+[RoutineDef, RM_Material,
+	[VarSet, rmP, [StrMerge, "Material:", #rmA]]
+	[If, [IExists, #rmP],
+		[IPress, #rmP]
+		[VarSet, rmRes, [StrMerge, "material ", #rmA, ": selected"]],
+		[If, [FileExists, #rmB],
+			[FileNameSetNext, #rmB]
+			[IPress, "Material:Load"]
+			[If, [IExists, #rmP], [IPress, #rmP]]
+			[VarSet, rmRes, [StrMerge, "material ", #rmA, ": loaded from file"]],
+			[VarSet, rmRes, [StrMerge, "material ", #rmA, ": NOT loaded and no file known"]]
+		]
+	]
+]
+
+[RoutineDef, RM_Texture,
+	[VarSet, rmP, [StrMerge, "Texture:", #rmA]]
+	[If, [IExists, #rmP],
+		[IPress, #rmP]
+		[VarSet, rmRes, [StrMerge, "texture ", #rmA, ": selected"]],
+		[If, [FileExists, #rmB],
+			[FileNameSetNext, #rmB]
+			[IPress, "Texture:Import"]
+			[If, [IExists, #rmP], [IPress, #rmP]]
+			[VarSet, rmRes, [StrMerge, "texture ", #rmA, ": loaded from file"]],
+			[VarSet, rmRes, [StrMerge, "texture ", #rmA, ": NOT loaded and no file known"]]
+		]
+	]
 ]
 
 [RoutineDef, RM_Press,
@@ -211,14 +258,19 @@
 					[RoutineCall, RM_ReadLine]
 					[VarSet, rmKind, #rmLine]
 					[VarSet, rmK, [StrToAsc, #rmKind]]
+					// texture and toggle both start with t; a second letter e means texture, as the code 120.
+					[If, rmK == 116, [If, [StrToAsc, #rmKind, 1] == 101, [VarSet, rmK, 120]]]
 					[RoutineCall, RM_ReadLine]
 					[VarSet, rmA, #rmLine]
 					[VarSet, rmB, ""]
-					[If, (rmK == 98) || (rmK == 115),
+					[If, (rmK == 98) || (rmK == 115) || (rmK == 97) || (rmK == 109) || (rmK == 120),
 						[RoutineCall, RM_ReadLine]
 						[VarSet, rmB, #rmLine]
 					]
 					[If, rmK == 98, [RoutineCall, RM_Brush]]
+					[If, rmK == 97, [RoutineCall, RM_Alpha]]
+					[If, rmK == 109, [RoutineCall, RM_Material]]
+					[If, rmK == 120, [RoutineCall, RM_Texture]]
 					[If, rmK == 112, [RoutineCall, RM_Press]]
 					[If, rmK == 115, [RoutineCall, RM_Set]]
 					[If, rmK == 116, [RoutineCall, RM_Toggle]]

@@ -8,7 +8,7 @@
     already there (other tools put their own folders in the same variable). No admin rights needed.
   - Writes %APPDATA%\ZOrbit\launch.json (by running the app's --check once), which tells the ZBrush
     bridge how to start the app and the Studio from source.
-  - Creates Start menu shortcuts "ZOrbit Studio (dev)" and "ZOrbit Brush Browser (dev)".
+  - Creates Start menu shortcuts "ZOrbit Studio (dev)" and "ZOrbit Browser (dev)".
   - Checks that the Python has the runtime dependencies (requirements.txt).
   ZBrush reads ZBRUSH_PLUGIN_PATH only when it starts, so restart ZBrush afterwards.
   Run with -WhatIf to see what would happen.
@@ -24,8 +24,9 @@ $Root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $BridgeDir = Join-Path $Root 'bridge'
 $Main = Join-Path $Root 'zorbit\main.py'
 $Icon = Join-Path $Root 'assets\icon.ico'
+$BrowserIcon = Join-Path $Root 'assets\browser.ico'
 $Shortcut = Join-Path ([Environment]::GetFolderPath('Programs')) 'ZOrbit Studio (dev).lnk'
-$BrowserShortcut = Join-Path ([Environment]::GetFolderPath('Programs')) 'ZOrbit Brush Browser (dev).lnk'
+$BrowserShortcut = Join-Path ([Environment]::GetFolderPath('Programs')) 'ZOrbit Browser (dev).lnk'
 
 $current = [Environment]::GetEnvironmentVariable('ZBRUSH_PLUGIN_PATH', 'User')
 $entries = @(if ($current) { $current -split ';' | ForEach-Object { $_.Trim() } | Where-Object { $_ } })
@@ -74,8 +75,8 @@ if ($PSCmdlet.ShouldProcess($BrowserShortcut, 'create Start menu shortcut')) {
     $lnk.TargetPath = $Pythonw
     $lnk.Arguments = "-I `"$Main`" --popout --show"
     $lnk.WorkingDirectory = $Root
-    $lnk.IconLocation = $Icon
-    $lnk.Description = 'ZOrbit Brush Browser (running from source)'
+    $lnk.IconLocation = $BrowserIcon
+    $lnk.Description = 'ZOrbit Browser (running from source)'
     $lnk.Save()
     Write-Host "Shortcut: $BrowserShortcut"
 }

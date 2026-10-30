@@ -7,6 +7,7 @@ Started as `ZOrbit.exe --studio` (or `main.py --studio`). One instance at a time
 the first to the front.
 """
 import base64
+import copy
 import ctypes
 import ctypes.wintypes as w
 import io
@@ -45,6 +46,8 @@ VERSION = paths.VERSION
 APP_ID = "ZOrbit.Studio"           # taskbar identity, so the Studio groups under its own icon
 STUDIO_FILE = os.path.join(paths.CONFIG_DIR, "studio.json")   # Studio preferences and window placement
 SAMPLE_SLOTS = 8            # brushes on the tag colours sample ring (preview_tags)
+SETTINGS_FORMAT = 1         # the "zorbit_settings" number of an exported settings file
+IMPORT_MAX_BYTES = 5 * 1024 * 1024    # a settings file is a few hundred KB at most; refuse anything bigger
 RELEASES_API = "https://api.github.com/repos/combwizard/zorbit/releases/latest"
 RELEASES_URL = "https://github.com/combwizard/zorbit/releases"
 
@@ -111,23 +114,42 @@ def _title_path(p: str) -> str:
     return ":".join(seg if not seg.isupper() else seg.title() for seg in p.split(":"))
 
 
+def _retag(cfg: dict, renamed: dict) -> dict:
+    """Points the {"tag": key} and {"browser": key} slots of every menu at the local key when an imported tag
+    joined a local tag of the same name (renamed = {incoming key: local key}). Changes cfg and returns it."""
+    if renamed:
+        for m in (cfg.get("menus") or {}).values():
+            for it in (m.get("items") or []) if isinstance(m, dict) else ():
+                if isinstance(it, dict):
+                    for k in ("tag", "browser"):
+                        if isinstance(it.get(k), str) and it[k] in renamed:
+                            it[k] = renamed[it[k]]
+    return cfg
+
+
+def _plural(n: int, word: str) -> str:
+    return f"{n} {word}" + ("" if n == 1 else "s")
+
+
 class Api(webapi.LibraryApi, webapi.TagApi):
     def __init__(self):
         self._window = None    # underscore: pywebview must not expose (and crawl) it to JS
+        self._pending_import = None    # the file pick_import read, until apply_import uses it
         self._dirty = False            # the page's last report of unsaved changes (set_dirty); informational
         self._allow_close = False      # set by close_now(): the next close goes through
         self._ask_sent = 0.0           # when we last asked the page to show the close dialog
         self._ask_acked = True         # whether the page answered that request
 
     # --- config ----------------------------------------------------------------------------------
-    def _load_dict(self, cfg: dict):
-        """Validates a config dict by loading it through the real loader. Returns (Config, problems)."""
+    def _load_dict(self, cfg: dict, store=None):
+        """Validates a config dict by loading it through the real loader. Returns (Config, problems).
+        store: the TagStore the tag names are checked against; the user's tags when not given."""
         os.makedirs(DATA_DIR, exist_ok=True)
         fd, tmp = tempfile.mkstemp(prefix="studio_", suffix=".json", dir=DATA_DIR)
         try:
             with os.fdopen(fd, "w", encoding="utf-8") as f:
                 json.dump(cfg, f)
-            loaded = C.load(tmp, tags.TagStore(radiald.tags_path()).load())   # tag names checked like the app does
+            loaded = C.load(tmp, store or tags.TagStore(radiald.tags_path()).load())   # tag names checked like the app does
             return loaded, loaded.errors
         except Exception as e:
             return None, [f"config could not be read: {e}"]
@@ -343,7 +365,8 @@ class Api(webapi.LibraryApi, webapi.TagApi):
     def get_options(self):
         """Choices the UI offers: animation modes, label modes, action kinds, defaults."""
         return {"animations": list(C.ANIMATIONS), "labels": list(C.LABEL_MODES), "actions": list(C.ACTION_KEYS),
-                "tag_colors": list(C.TAG_COLOR_MODES), "tag_bands": list(C.TAG_BANDS),
+                "asset_kinds": list(C.ASSET_KINDS), "tag_colors": list(C.TAG_COLOR_MODES),
+                "tag_bands": list(C.TAG_BANDS), "favourite_tag": tags.FAVOURITE,
                 "tint_styles": list(C.TINT_STYLES), "tint_blends": list(C.TINT_BLENDS), "ring_defaults": C.DEFAULT_RING, "ring_ranges": C._RING_RANGES}
 
     # --- suggestions for press/set/toggle targets ------------------------------------------------
@@ -583,6 +606,146 @@ class Api(webapi.LibraryApi, webapi.TagApi):
         e = installs.entry(path)
         return {"ok": True, "message": f"Forgot {e['name'] if e else os.path.basename(os.path.normpath(str(path)))}."}
 
+    # --- import / export (menus, settings and tags in one file) -----------------------------------
+    def export_settings(self, cfg):
+        """Saves what the editor shows (cfg, unsaved edits included) and the tags as one settings file, to a
+        place the user picks. studio.json and usage.json are left out: they belong to this PC."""
+        import webview
+        if not isinstance(cfg, dict) or not isinstance(cfg.get("menus"), dict):
+            return {"ok": False, "message": "There are no menus to export."}
+        picked = self._window.create_file_dialog(
+            webview.FileDialog.SAVE, save_filename=f"ZOrbit settings {time.strftime('%Y-%m-%d')}.json",
+            file_types=("ZOrbit settings (*.json)", "All files (*.*)"))
+        if not picked:
+            return {"ok": False, "cancelled": True, "message": "Export cancelled."}
+        path = picked[0] if isinstance(picked, (list, tuple)) else picked
+        if not os.path.splitext(path)[1]:
+            path += ".json"
+        store = tags.TagStore(radiald.tags_path()).load()
+        bundle = {"zorbit_settings": SETTINGS_FORMAT, "version": VERSION,
+                  "exported": time.strftime("%Y-%m-%dT%H:%M:%S"), "config": cfg}
+        note = ""
+        if store.error:                  # a broken tags.json: the menus are still worth saving
+            note = f" The tags are not in it: {store.error}."
+        else:
+            bundle["tags"] = store.snapshot()
+        try:
+            fsutil.write_atomic(path, json.dumps(bundle, indent=2, ensure_ascii=False) + "\n")
+        except (OSError, TypeError, ValueError) as e:
+            return {"ok": False, "message": f"The settings could not be saved: {getattr(e, 'strerror', None) or e}"}
+        return {"ok": True, "path": path, "message": f"Saved the settings to {path}.{note}"}
+
+    def pick_import(self):
+        """Asks for a settings file (an export, or a plain radial.json or tags.json), reads and checks it and
+        returns what it holds. Writes nothing; apply_import() does the work with what is read here."""
+        import webview
+        self._pending_import = None
+
+        def refuse(msg):
+            return {"ok": False, "message": msg}
+
+        picked = self._window.create_file_dialog(
+            webview.FileDialog.OPEN, file_types=("ZOrbit settings (*.json)", "All files (*.*)"))
+        if not picked:
+            return {"ok": False, "cancelled": True}
+        path = picked[0] if isinstance(picked, (list, tuple)) else picked
+        name = os.path.basename(path)
+        try:
+            if os.path.getsize(path) > IMPORT_MAX_BYTES:
+                return refuse(f"{name} is too big to be a ZOrbit settings file (over "
+                              f"{IMPORT_MAX_BYTES // (1024 * 1024)} MB).")
+            with open(path, "rb") as f:
+                data = f.read(IMPORT_MAX_BYTES + 1)
+            if len(data) > IMPORT_MAX_BYTES:
+                return refuse(f"{name} is too big to be a ZOrbit settings file.")
+            raw = json.loads(data.decode("utf-8-sig"))
+        except json.JSONDecodeError as e:
+            return refuse(f"{name} is not valid JSON: {e.msg} at line {e.lineno}, column {e.colno}.")
+        except UnicodeDecodeError:
+            return refuse(f"{name} is not a text file.")
+        except (OSError, ValueError, RecursionError) as e:
+            return refuse(f"{name} could not be read: {getattr(e, 'strerror', None) or e}")
+        if not isinstance(raw, dict):
+            return refuse(f"{name} is not a ZOrbit settings file (the top level is not a JSON object).")
+
+        if "zorbit_settings" in raw:
+            kind, version = "bundle", raw.get("version")
+            fmt = raw["zorbit_settings"]
+            if isinstance(fmt, int) and fmt > SETTINGS_FORMAT:
+                return refuse(f"{name} was made by a newer ZOrbit{f' ({version})' if isinstance(version, str) else ''}. "
+                              "Update ZOrbit to import it.")
+            cfg, tags_raw = raw.get("config"), raw.get("tags")
+        elif isinstance(raw.get("menus"), dict):
+            kind, version, cfg, tags_raw = "config", None, raw, None
+        elif isinstance(raw.get("tags"), dict) or isinstance(raw.get("items"), dict):
+            kind, version, cfg, tags_raw = "tags", None, None, raw
+        else:
+            return refuse(f"{name} is not a ZOrbit settings file. It should be a settings export, a radial.json "
+                          "or a tags.json.")
+        version = version if isinstance(version, str) else ""
+        if cfg is not None and (not isinstance(cfg, dict) or not isinstance(cfg.get("menus"), dict)
+                                or not cfg["menus"]):
+            return refuse(f"The menus in {name} are missing or not valid.")
+        tags_raw = tags_raw if isinstance(tags_raw, dict) else None
+        info = tags.TagStore.from_raw(tags_raw) if tags_raw is not None else None
+        has_tags = bool(info and info.tags())
+        if not has_tags:
+            tags_raw = None
+        if cfg is None and not has_tags:
+            return refuse(f"{name} has no menus and no tags in it.")
+        problems = []
+        if cfg is not None:
+            loaded, problems = self._load_dict(cfg, info if has_tags else None)
+            if loaded is None:
+                return refuse(f"The menus in {name} could not be read: {problems[0] if problems else 'unknown error'}")
+        out = {"ok": True, "path": path, "kind": kind, "has_config": cfg is not None,
+               "menus": len(cfg["menus"]) if cfg is not None else 0, "has_tags": has_tags,
+               "tags": 0, "new_tags": 0, "items": 0, "problems": problems, "version": version}
+        if has_tags:
+            out.update(tags.TagStore(radiald.tags_path()).load().import_preview(tags_raw))
+        self._pending_import = {"path": path, "kind": kind, "config": cfg, "tags": tags_raw}
+        return out
+
+    def apply_import(self, tag_mode="merge"):
+        """Does what pick_import read. tag_mode: 'merge' or 'replace' the tags, or 'none' to leave them.
+        The tags are saved straight away; the menus and settings come back as config for the editor to load
+        (radial.json is not written: Save does that). Slots that point at a tag which joined a local tag of the
+        same name are pointed at the local one."""
+        pend = self._pending_import
+        if not pend:
+            return {"ok": False, "config": None, "problems": [], "tags_message": "",
+                    "message": "There is nothing to import. Pick the file again."}
+        if tag_mode not in ("merge", "replace", "none"):
+            return {"ok": False, "config": None, "problems": [], "tags_message": "",
+                    "message": "Import the tags as merge, replace or none."}
+        if pend["tags"] is None:
+            tag_mode = "none"
+        if pend["config"] is None and tag_mode == "none":
+            return {"ok": False, "config": None, "problems": [], "tags_message": "",
+                    "message": "There is nothing to import: the file has only tags, and they were left out."}
+        renamed, tags_message = {}, ""
+        if tag_mode != "none":
+            res = webapi._STORE.import_tags(pend["tags"], tag_mode)
+            if not res.get("ok"):
+                return {"ok": False, "config": None, "problems": [], "tags_message": "",
+                        "message": res.get("error") or "The tags could not be imported."}
+            renamed = res["renamed"]
+            if tag_mode == "replace":
+                tags_message = (f"Replaced the tags with the {_plural(res['added'], 'tag')} from the file. "
+                                "The old ones are kept in tags.json.bak.")
+            else:
+                tags_message = f"Merged the tags: {_plural(res['added'], 'new tag')} added"
+                if renamed:
+                    tags_message += f", {_plural(len(renamed), 'tag')} matched an existing tag by name"
+                tags_message += "."
+        cfg, problems = None, []
+        if pend["config"] is not None:
+            cfg = _retag(copy.deepcopy(pend["config"]), renamed)
+            _, problems = self._load_dict(cfg)          # against the tags as they are now
+        self._pending_import = None
+        return {"ok": True, "config": cfg, "problems": problems, "tags_message": tags_message,
+                "message": tags_message or "Loaded the menus and settings into the editor."}
+
     # --- Studio preferences (not part of the menus; saved straight away) --------------------------
     _PREFS_DEFAULTS = {"show_licence": True, "check_updates": True, "last_screen": "menus", "setup_done": False}
     # Keys an earlier Studio already wrote: a studio.json with any of them belongs to someone who has used the
@@ -656,27 +819,30 @@ class Api(webapi.LibraryApi, webapi.TagApi):
         os.startfile(folder)
         return True
 
-    def open_browser(self):
-        """Opens the brush browser: asks the running one to show itself (it may be a hidden pre-warmed one, or
-        one the user closed), else starts a new one that shows itself. Not --managed: the browser needs no app.
+    def open_browser(self, kind=None):
+        """Opens the browser (on the tab of this kind: brush, alpha, material or texture; None keeps its last tab):
+        asks the running one to show itself (it may be a hidden pre-warmed one, or one the user closed), else
+        starts a new one that shows itself. Not --managed: the browser needs no app.
         {"ok": bool, "started": bool, "error"}."""
+        kind = kind if kind in C.ASSET_KINDS else None
         try:
             import win32
             ctl = win32.find_message_window(radiald.POPOUT_CLASS)
             if ctl:
-                payload = json.dumps({"tag": None, "zbrush_hwnd": 0, "toggle": False}).encode("utf-8")
+                payload = json.dumps({"tag": None, "kind": kind, "zbrush_hwnd": 0, "toggle": False}).encode("utf-8")
                 r = win32.send_copydata(ctl, radiald.COPYDATA_SHOW, payload)
                 if r == 1:
                     return {"ok": True, "started": False}
                 _startup(f"open_browser: SHOW to {ctl} answered {r}; starting a new one")
-            subprocess.Popen(paths.launch_commands()["popout"] + ["--show"], env=paths.clean_env(),
+            subprocess.Popen(paths.launch_commands()["popout"] + ["--show"] + (["--kind", kind] if kind else []),
+                             env=paths.clean_env(),
                              creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP,
                              close_fds=True, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
                              stderr=subprocess.DEVNULL)
             return {"ok": True, "started": True}
         except Exception as e:
             _startup(f"open_browser failed: {e!r}")
-            return {"ok": False, "started": False, "error": "Could not open the brush browser: " + str(e)}
+            return {"ok": False, "started": False, "error": "Could not open the browser: " + str(e)}
 
     # --- window (custom title bar; plain Win32 so nothing touches .NET off the UI thread) ---------
     def get_app_info(self):

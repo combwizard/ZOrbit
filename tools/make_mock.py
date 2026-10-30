@@ -20,6 +20,11 @@ def main():
     used = sorted({it["brush"] for m in cfg["config"]["menus"].values() for it in m["items"] if "brush" in it})
     names = used + [b["name"] for b in lib["brushes"][:70]]
     first = next(iter(cfg["config"]["menus"]))
+    kinds = {}                          # the alpha, material and texture tabs: library + first 30 thumbnails
+    for kind in ("alpha", "material", "texture"):
+        klib = a.get_library(kind=kind)
+        kinds["get_library_" + kind] = klib
+        kinds["get_thumbs_" + kind] = a.get_thumbs([it["name"] for it in klib["items"][:30]], 128, kind)
     mock = {
         "get_config": cfg, "get_library": lib, "get_thumbs": a.get_thumbs(names, 128),
         "get_suggestions": a.get_suggestions(), "get_tags": a.get_tags(), "get_status": a.get_status(), "get_options": a.get_options(),
@@ -27,6 +32,7 @@ def main():
         "preview_ring_hover0": a.preview_ring(cfg["config"], first, hover=0),
         "preview_tags": a.preview_tags(cfg["config"]),
         "preview_animation": a.preview_animation(cfg["config"], first),
+        **kinds,
     }
     out = os.path.join(ROOT, "zorbit", "studio_ui", "dev", "mock_data.js")
     with open(out, "w", encoding="utf-8") as f:

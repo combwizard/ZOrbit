@@ -9,13 +9,16 @@ How it works:
     key bound natively in ZBrush (held modifiers released first). Then a zero-distance mouse move wakes
     the pen/cursor tracking.
   * The same pick also goes to request.txt for the ZScript bridge of ZBrush 2022-2025 (no Python API, so no
-    listener: those always get the bridge key, and brushes load from their own installation's .zbp files).
+    listener: those always get the bridge key, and brushes, alphas, materials and textures load from their own
+    installation's files).
   * Brush picks are counted in usage.json; a menu's auto slots are filled from those counts as it opens.
-  * tags.json (the user's brush tags) is watched with radial.json: tag slots open a fan of the brushes with
-    that tag, and a slot is drawn in the colour of its brush's first tag (expand.py does both).
-  * The brush browser is a separate popout process (popout.py): a normal window that stays open until the user
-    closes it. It is opened by browser.hotkey, a "browser" ring item or the tray menu. The app finds its
-    message-only window and sends it WM_COPYDATA; a brush picked there comes back the same way, to the control
+  * tags.json (the user's tags on brushes, alphas, materials and textures) is watched with radial.json: tag
+    slots open a fan of the items with that tag, and a slot is drawn in the colour of its item's first tag
+    (expand.py does both).
+  * The browser (brushes, alphas, materials, textures) is a separate popout process (popout.py): a normal window
+    that stays open until the user closes it. It is opened by browser.hotkey, a "browser" ring item or the tray
+    menu. The app finds its message-only window and sends it WM_COPYDATA; an asset picked there comes back the
+    same way, to the control
     window, and goes through the normal hand-off once ZBrush has the focus again. The hotkey never closes the
     window: pressed over the browser it hands the keyboard back to ZBrush. The browser outlives the app.
 
@@ -46,9 +49,9 @@ import win32 as W           # noqa: E402
 import zscript_bridge       # noqa: E402
 
 try:
-    import brushes          # noqa: E402
+    import assets           # noqa: E402
 except Exception:           # thumbnails are optional
-    brushes = None
+    assets = None
 
 DATA_DIR = paths.DATA_DIR
 LOG_FILE = os.path.join(DATA_DIR, "radiald.log")
@@ -134,7 +137,7 @@ class App:
         self._browser_vk = None         # the browser hotkey while it is down (its repeats and key-up are ours)
         self._popout_proc = None        # subprocess.Popen of the popout we last started
         self._popout_spawning = False   # a thread is starting it right now
-        self._popout_pending = None     # (tag, toggle) to SHOW once a popout started hidden has its window
+        self._popout_pending = None     # (tag, toggle, kind) to SHOW once a popout started hidden has its window
         self._popout_started = 0.0      # when we last spawned the popout process
         self._popout_show = False       # ... and whether that spawn asked it to show itself
         self._prewarmed = False         # a pre-warm spawn is scheduled or done for this popout
@@ -149,7 +152,7 @@ class App:
             if self.tags.error:
                 log(f"tags: {self.tags.error}; keeping the previous tags")
             else:
-                log(f"tags loaded: {len(self.tags.tags())} tags, {len(self.tags.tagged('brush'))} tagged brushes")
+                log(f"tags loaded: {len(self.tags.tags())} tags, {len(self.tags.tagged())} tagged items")
             force = True
         try:
             mtime = os.stat(self.cfg_path).st_mtime
@@ -176,43 +179,57 @@ class App:
         self._schedule_prewarm()
 
     def _prefetch(self):
-        if brushes is None:
+        if assets is None:
             return
-        names = set()
+        pairs = set()
         for m in self.cfg.menus.values():
             for it in m.items:
                 acts = it.data["steps"] if it.kind == "steps" else [it.data]
-                names.update(a["brush"] for a in acts if "brush" in a)
+                pairs.update(g for g in map(C.asset_of, acts) if g)
         self.usage.load()
         for m in self.cfg.menus.values():
             if usage.auto_count(m):
-                names.update(n for n in self.usage.slots(m) if n)
+                pairs.update(("brush", n) for n in self.usage.slots(m) if n)
             for it in m.items:
                 if it.kind == "tag":               # warm the fan before it opens
                     tm = self.expander.tag_menu(it.data["tag"])
                     if tm is not None:
-                        names.update(i.data["brush"] for i in tm.items if i.kind == "brush")
+                        pairs.update(g for g in (C.asset_of(i.data) for i in tm.items) if g)
         size = THUMB_PX
-        threading.Thread(target=brushes.prefetch, args=(sorted(names), size), daemon=True).start()
+        threading.Thread(target=assets.prefetch, args=(sorted(pairs), size), daemon=True).start()
+
+    @staticmethod
+    def _icon_kind(src):
+        """The asset kind an explicit icon path decodes as. A .png is an image to show as it is, and anything
+        that is not a file is a brush name."""
+        ext = os.path.splitext(src)[1].lower()
+        if ext == ".png" or not os.path.isfile(src):
+            return "brush"
+        if ext == ".zmt":
+            return "material"
+        if ext == ".exr":
+            return "texture"
+        return "alpha" if ext in assets.EXTS["alpha"] else "brush"
 
     def icon_for(self, item):
-        if brushes is None:
+        if assets is None:
             return None
         size = THUMB_PX
         src = item.icon
+        kind = self._icon_kind(src) if src else "brush"
         if not src:
             acts = item.data["steps"] if item.kind == "steps" else [item.data]
-            src = next((a["brush"] for a in acts if "brush" in a), "")
+            kind, src = next((g for g in map(C.asset_of, acts) if g), ("brush", ""))
         if not src:
             return None
-        key = (src, size)
+        key = (kind, src, size)
         if key not in self._icons:
             im = None
             if src.lower().endswith(".png") and os.path.isfile(src):
                 from PIL import Image
                 im = Image.open(src).convert("RGBA")
             else:
-                im = brushes.thumbnail(src, size)
+                im = assets.thumbnail(kind, src, size)
             self._icons[key] = im
         return self._icons[key]
 
@@ -412,7 +429,7 @@ class App:
     def _tray_command(self, name):
         try:
             if name == "browser":
-                log("tray: opening the brush browser")
+                log("tray: opening the browser")
                 self.open_browser(None, toggle=False)
             elif name == "studio":
                 subprocess.Popen(paths.launch_commands()["studio"], env=paths.clean_env(),
@@ -446,18 +463,22 @@ class App:
         self.open_menu(menu, W.cursor_pos(), held=self.held_vk is not None)
 
     def _record_pick(self, item):
-        """Counts a brush pick and lets the auto slots of every menu react to it."""
-        if item.kind != "brush":
+        """Notes a brush, alpha, material or texture pick in the recent list; a brush pick is also counted for the
+        auto slots, and every menu's auto slots react to it."""
+        if item.kind not in C.ASSET_KINDS:
             return
-        self.usage.load().record(item.data["brush"])
-        autos = [m for m in self.cfg.menus.values() if usage.auto_count(m)]
-        for m in autos:
-            before = self.usage.slots(m)
-            self.usage.update(m)
-            after = self.usage.menus[m.id]["slots"]
-            if after != before:
-                log(f"auto slots of '{m.id}': {before} -> {after}")
-        self.usage.menus = {m.id: self.usage.menus[m.id] for m in autos}
+        self.usage.load()
+        self.usage.record_pick(item.kind, item.data[item.kind])
+        if item.kind == "brush":                  # the auto slots follow brushes only
+            self.usage.record(item.data["brush"])
+            autos = [m for m in self.cfg.menus.values() if usage.auto_count(m)]
+            for m in autos:
+                before = self.usage.slots(m)
+                self.usage.update(m)
+                after = self.usage.menus[m.id]["slots"]
+                if after != before:
+                    log(f"auto slots of '{m.id}': {before} -> {after}")
+            self.usage.menus = {m.id: self.usage.menus[m.id] for m in autos}
         try:
             self.usage.save()
         except OSError as e:
@@ -495,7 +516,7 @@ class App:
             log(f"empty {item.kind} slot picked; nothing sent")
             return
         if item.kind == "browser":
-            self.open_browser(item.data["browser"] or None)
+            self.open_browser(item.data["browser"] or None, kind=item.data.get("kind"))
             return
         self.send(item)
         try:
@@ -503,12 +524,12 @@ class App:
         except Exception:
             log("usage error:\n" + traceback.format_exc())
 
-    # --- brush browser popout --------------------------------------------------------------------
+    # --- browser popout ------------------------------------------------------------------------
     @property
     def browser_key(self):
         return self.cfg.browser_key if self.cfg else None
 
-    def _spawn_popout(self, show, tag=None, zb_hwnd=0):
+    def _spawn_popout(self, show, tag=None, zb_hwnd=0, kind=None):
         """Starts the popout process on a worker thread: this runs on the keyboard hook's thread, and a process
         start that outlasts Windows' low-level hook timeout gets the hook dropped."""
         cmd = paths.launch_commands()["popout"] + ["--managed"]
@@ -516,6 +537,8 @@ class App:
             cmd.append("--show")
             if tag:
                 cmd += ["--tag", tag]
+            if kind:
+                cmd += ["--kind", kind]
             cmd += ["--zbrush-hwnd", str(zb_hwnd)]
         self._popout_started, self._popout_show, self._popout_spawning = time.time(), show, True
 
@@ -533,18 +556,22 @@ class App:
                 self._popout_spawning = False
         threading.Thread(target=start, daemon=True).start()
 
-    def open_browser(self, tag=None, toggle=False):
-        """Shows the brush browser, starting its process if none is running. toggle (the hotkey): if it is already
-        the front window, ZBrush gets the keyboard back instead; the window itself stays open."""
+    def open_browser(self, tag=None, toggle=False, kind=None):
+        """Shows the browser, starting its process if none is running. kind: the tab to open on (brush, alpha,
+        material, texture; None keeps the one it was last on). toggle (the hotkey): if it is already the front
+        window, ZBrush gets the keyboard back instead; the window itself stays open."""
+        kind = kind if kind in C.ASSET_KINDS else None
         fg = W.GetForegroundWindow()
         if fg and self.target_in_front():          # remembered for the pick: the popout takes the focus away
             self._popout_zb = (int(fg), self.target_install())
         zb = self._popout_zb[0] if self._popout_zb else 0
         hwnd = W.find_message_window(POPOUT_CLASS)
         if hwnd:
-            payload = json.dumps({"tag": tag or None, "zbrush_hwnd": zb, "toggle": bool(toggle)}).encode("utf-8")
+            payload = json.dumps({"tag": tag or None, "kind": kind, "zbrush_hwnd": zb,
+                                  "toggle": bool(toggle)}).encode("utf-8")
             r = W.send_copydata(hwnd, COPYDATA_SHOW, payload)
-            log(f"browser: SHOW sent to popout {hwnd} (tag={tag or None}, toggle={bool(toggle)}, zbrush={zb}): "
+            log(f"browser: SHOW sent to popout {hwnd} (tag={tag or None}, kind={kind}, toggle={bool(toggle)}, "
+                f"zbrush={zb}): "
                 + ("no answer within 0.5 s" if r is None else f"result {r}"))
             return
         self._prewarmed = False                    # the popout is gone: the next config load may warm it again
@@ -552,11 +579,11 @@ class App:
             if self._popout_show:
                 log("popout starting; ignoring")    # it shows itself when it is up
             else:                                  # a pre-warm is still coming up: show it as soon as it is there
-                self._popout_pending = (tag, bool(toggle))
+                self._popout_pending = (tag, bool(toggle), kind)
                 W.SetTimer(self.ctrl, TIMER_POPOUT_SHOW, 100, None)
                 log("popout warming up; showing it when it is ready")
             return
-        self._spawn_popout(True, tag, zb)
+        self._spawn_popout(True, tag, zb, kind)
 
     def _spawning(self) -> bool:
         """A popout we started is still coming up: its process lives and has had less than POPOUT_START_S."""
@@ -573,7 +600,8 @@ class App:
         if W.find_message_window(POPOUT_CLASS):
             W.KillTimer(self.ctrl, TIMER_POPOUT_SHOW)
             self._popout_pending = None
-            self.open_browser(pend[0], toggle=False)   # it was not up yet: a toggle must not hand the focus away
+            # it was not up yet: a toggle must not hand the focus away
+            self.open_browser(pend[0], toggle=False, kind=pend[2])
         elif not self._spawning():
             W.KillTimer(self.ctrl, TIMER_POPOUT_SHOW)
             self._popout_pending = None
@@ -599,8 +627,8 @@ class App:
         self._spawn_popout(False)
 
     def _on_copydata(self, wparam, lparam) -> int:
-        """WM_COPYDATA from the popout: 1 = accepted, 0 = refused. Only a brush name is taken from the payload;
-        the .zbp is looked up by send() as for any other pick."""
+        """WM_COPYDATA from the popout: 1 = accepted, 0 = refused. Only a kind and a name are taken from the
+        payload; the file is looked up by send() as for any other pick."""
         try:
             cds = W.COPYDATASTRUCT.from_address(lparam)
             if cds.dwData != COPYDATA_PICK or not cds.lpData or not 0 < cds.cbData <= 4096:
@@ -613,11 +641,12 @@ class App:
             return 0
         name = msg.get("name") if isinstance(msg, dict) else None
         if (not isinstance(msg, dict) or msg.get("v") != 1 or msg.get("op") != "pick"
-                or msg.get("kind") != "brush" or not isinstance(name, str) or not name or len(name) > 120
+                or msg.get("kind") not in C.ASSET_KINDS or not isinstance(name, str) or not name or len(name) > 120
                 or any(c in name for c in "\\/:") or ".." in name or any(ord(c) < 32 for c in name)):
             log(f"copydata refused: not a valid pick ({str(msg)[:80]!r})")
             return 0
-        self._browser_pick = C.Item(label=name, kind="brush", data={"brush": name})
+        kind = msg["kind"]
+        self._browser_pick = C.Item(label=name, kind=kind, data={kind: name})
         W.PostMessageW(self.ctrl, WM_APP_BROWSER_PICK, 0, 0)
         return 1
 
@@ -643,9 +672,9 @@ class App:
         W.KillTimer(self.ctrl, TIMER_BROWSER_PICK)
         self._browser_pick = None
         if legacy and not in_front:
-            log(f"pick from browser '{item.label}' dropped: ZBrush did not get the focus back in 2 s")
+            log(f"pick from browser {item.kind} '{item.label}' dropped: ZBrush did not get the focus back in 2 s")
             return
-        log(f"pick from browser '{item.label}'")
+        log(f"pick from browser {item.kind} '{item.label}'")
         self.send(item, install=ins, source="browser")
         try:
             self._record_pick(item)
@@ -654,13 +683,14 @@ class App:
 
     # --- hand-off to ZBrush ----------------------------------------------------------------------
     def _actions(self, item, legacy=None):
-        """legacy: the ZBrush 2022-2025 installation in front, whose own .zbp files must be used."""
+        """legacy: the ZBrush 2022-2025 installation in front, whose own files must be used."""
         acts = item.data["steps"] if item.kind == "steps" else [item.data]
         out = []
         for a in acts:
             a = dict(a)
-            if "brush" in a and brushes is not None:
-                p = brushes.find_brush(a["brush"], legacy["path"] if legacy else None)
+            got = C.asset_of(a)
+            if got and assets is not None:
+                p = assets.find(got[0], got[1], legacy["path"] if legacy else None)
                 a["file"] = str(p).replace("\\", "/") if p else None
             out.append(a)
         return out
@@ -791,7 +821,7 @@ class App:
             return 0
         W.make_dpi_aware()
         log(f"ZOrbit starting (pid {os.getpid()}, python {sys.version.split()[0]}, "
-            f"thumbnails={'on' if brushes else 'off'}; {started}; started by {W.launch_chain()})")
+            f"thumbnails={'on' if assets else 'off'}; {started}; started by {W.launch_chain()})")
         self.load_config(force=True)
         if self.cfg is None:
             return 1
@@ -829,14 +859,17 @@ def check(cfg_path) -> int:
         print(f"  [{m.id}] '{m.title}' hotkey={m.hotkey.text if m.hotkey else '-'} swallow={m.swallow}")
         for it in m.items:
             extra = ""
-            if it.kind == "brush" and brushes is not None:
-                p = brushes.find_brush(it.data["brush"])
-                extra = f"  ({p})" if p else "  (no .zbp found: must already be loaded in ZBrush)"
+            if it.kind in C.ASSET_KINDS and assets is not None:
+                p = assets.find(it.kind, it.data[it.kind])
+                ext = "/".join(assets.exts(it.kind))
+                extra = f"  ({p})" if p else f"  (no {ext} file found: must already be loaded in ZBrush)"
             elif it.kind == "tag":
                 key = it.data["tag"]
-                n = len(store.items_with(key, "brush"))
-                extra = (f"  ({n} brush{'' if n == 1 else 'es'} tagged)" if store.has(key)
+                n = len(store.items_with(key))
+                extra = (f"  ({n} item{'' if n == 1 else 's'} tagged)" if store.has(key)
                          else f"  (tag {key!r} does not exist)")
+            elif it.kind == "browser":
+                extra = f"  (opens on {it.data.get('kind', 'brush')})"
             print(f"      {it.kind:7s} {it.label}{extra}")
     problems = ([f"tags: {store.error}"] if store.error else []) + cfg.errors
     for e in problems:

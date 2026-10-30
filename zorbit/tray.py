@@ -100,7 +100,7 @@ TIMER_RETRY = 1
 CLASS_NAME = "ZOrbitTray"
 ICON_ID = 1
 CMD_STUDIO, CMD_RELOAD, CMD_LOGS, CMD_QUIT, CMD_BROWSER = 1, 2, 3, 4, 5
-MENU_ITEMS = [(CMD_BROWSER, "Brush browser", "browser"), (CMD_STUDIO, "Open Studio", "studio"),
+MENU_ITEMS = [(CMD_BROWSER, "Browser", "browser"), (CMD_STUDIO, "Open Studio", "studio"),
               (CMD_RELOAD, "Reload menus", "reload"), (CMD_LOGS, "Open logs folder", "logs"), None,
               (CMD_QUIT, "Quit ZOrbit", "quit")]
 _CMD_NAMES = {i[0]: i[2] for i in MENU_ITEMS if i}

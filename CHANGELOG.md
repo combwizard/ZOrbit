@@ -8,6 +8,35 @@ All notable changes to this project are listed here. The format follows
 
 ### Added
 
+- Alphas, materials and textures as ring items: `{"alpha": "Alpha 058"}`, `{"material": "SkinShade4"}` and
+  `{"texture": "Txtr01"}`, also as steps in a `steps` item. The name is the file's name; case and spaces are ignored,
+  and the first folder that has the file wins. An item ZBrush already has is selected. Otherwise it is loaded from its
+  file with Alpha > Import, Material > Load or Texture > Import, then selected. Material > Load replaces the material
+  in the selected material slot, as ZBrush does itself.
+- Both bridges handle the new items: the Python plugin for ZBrush 2026 and newer, and the ZScript plugin for ZBrush
+  2022 to 2025. The 2022 to 2025 plugin needs an update from **Settings > Older ZBrush** (**Update**) before these items
+  work there.
+- Thumbnails for the new kinds, cached in `%LOCALAPPDATA%\ZOrbit\thumbs`. Materials use the icon stored in their `.zmt`
+  file, and alphas and textures use their image. EXR textures have no thumbnail.
+- The browser window has four tabs, **Brushes**, **Alphas**, **Materials** and **Textures**. Ctrl+Tab and
+  Ctrl+Shift+Tab switch between them. Search, folders, tag chips and the size slider work per tab. The tab you were on
+  is remembered in `popout.json`. `--kind brush|alpha|material|texture` opens the browser on a tab, and a browser slot
+  can say `"kind"` too.
+- Studio's Library and the Library tab on the Menus screen have the same four tabs. Add to menu and drag and drop work
+  for every kind. The item inspector offers Alpha, Material and Texture, each with a picker and a "Not found" warning,
+  and a Browser item has a "Shows" select.
+- Tags apply to every kind, with one shared tag set. A `tag` slot's fan lists brushes first, most used first, then
+  alphas, materials and textures by name.
+- The browser has its own icon, and its Start menu shortcut is called **ZOrbit Browser**.
+- A **Browser** button in Studio's top bar opens the ZOrbit Browser from any screen.
+- Two buttons in the browser's header: one collapses the folders and tags column and shows it again, the other
+  moves it to the right side of the window and back. Both are remembered in `popout.json` (`column`, `side`).
+- `ZOrbit.exe --check` prints each item's resolved file, `opens on <kind>` for browser items and `N items tagged` for
+  tag slots.
+- **Settings > Import and export**. **Export...** saves the menus, settings and tags to one `.json` file, as they are
+  on screen. **Import...** accepts that file, or a plain `radial.json` or `tags.json`, and shows what it holds first.
+  Imported menus and settings load as an unsaved change, so Undo takes them back. For tags, choose **Merge tags** or
+  **Replace tags**; a replaced `tags.json` is kept as `tags.json.bak`.
 - A **Setup** screen in Studio, the sixth button in the rail (Alt+6). It is a checklist with live state: ZBrush found,
   plugin loaded in ZBrush, try the ring, your brushes, and what's where. A fresh install opens Studio on it; **Finish**
   or **Skip for now** marks it done (`setup_done` in `studio.json`), and closing Studio without either brings it back.
@@ -22,6 +51,28 @@ All notable changes to this project are listed here. The format follows
 - An amber dot on the Setup button when no ZBrush found has the plugin set up, or a running ZBrush does not.
 - `%LOCALAPPDATA%\ZOrbit\activity.json`, written by the app: the last ring opened and the last pick it sent, with its
   route and whether the plugin picked it up. Setup reads it. Safe to delete.
+- Favourites: a built-in tag, shown with a gold star instead of a dot. It always exists and always comes first. It
+  cannot be deleted, renamed or merged away, but its colour can be changed in the tag manager. Starring an item does
+  not change its colour cue; the first other tag does.
+- Star an item in the browser (on every tab) or in Studio's Library: hover a card and press the star in its top-right
+  corner. The selection strip has a star button for the whole selection, **Ctrl+D** toggles Favourites on the
+  selection or the highlighted card, and the right-click tag picker lists Favourites first.
+- A **Favourites** entry at the top of the folders list on every tab, with a count. It lists starred items, most used
+  first, then by name.
+- A `{"tag": "favourite"}` ring slot: a fan of your favourites, drawn with a star. `{"browser": "favourite"}` opens the
+  browser filtered to favourites. New installs get a Favourites slot in the starter **Tools** menu; existing menus are
+  not changed.
+- **Recent**, under Favourites: every brush, alpha, material or texture you pick in ZBrush, from a ring or from the
+  browser, newest first. Up to 24 per tab, and 200 across all kinds in the file. Right-click an item in the Recent view
+  for **Remove from Recent**. Stored under `"picks"` in `usage.json`.
+
+### Changed
+
+- Picks of alphas, materials and textures are now recorded in `usage.json` too, for Recent. Brush auto slots are
+  unchanged.
+- "Brush browser" is now "Browser" in Studio, the Start menu and the user guide.
+- The Studio web API: `get_library(refresh, kind)` returns the items under `items`. The `brushes` key is kept for the
+  brush kind for one release. `get_thumbs(names, size, kind)` takes a kind.
 
 ## [0.9.0] - 2026-10-30
 

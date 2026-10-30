@@ -7,12 +7,13 @@ This guide covers everything ZOrbit can do. For installing, see the [README](../
 - [Menus](#menus)
 - [Item types](#item-types)
 - [Tags](#tags)
-- [Brush browser](#brush-browser)
+- [Browser window](#browser-window)
 - [Hotkeys](#hotkeys)
 - [Pick modes](#pick-modes)
 - [Appearance and behaviour settings](#appearance-and-behaviour-settings)
 - [Open animations](#open-animations)
 - [How picks reach ZBrush (bridge modes)](#how-picks-reach-zbrush-bridge-modes)
+- [Import and export](#import-and-export)
 - [Files and logs](#files-and-logs)
 - [Troubleshooting](#troubleshooting)
 
@@ -38,8 +39,8 @@ Studio is where you edit everything. Open it from the Start menu (**ZOrbit Studi
 | Screen | Shortcut | What it does |
 |---|---|---|
 | Menus | Alt+1 | Create and edit menus and their items, with a live ring preview. |
-| Library | Alt+2 | Browse every brush ZBrush can load, with search, folders and thumbnails. Click a brush and press **Add to <menu>**, or drag it onto a menu, the ring or the item list. **Rescan** picks up brushes saved since Studio opened. Tag brushes and filter by tag (see [Tags](#tags)). |
-| Settings | Alt+3 | Ring size, animation, labels, tag colours, colours, tap time, auto-close, the brush browser hotkey, tags, bridge, and Studio's own preferences. |
+| Library | Alt+2 | Browse the brushes, alphas, materials and textures ZBrush can load, on four tabs, with search, folders and thumbnails. Click an item and press **Add to <menu>**, or drag it onto a menu, the ring or the item list. **Rescan** picks up items saved since Studio opened. Tag items and filter by tag (see [Tags](#tags)). Star favourites; Recent lists what you have picked in ZBrush (see [Favourites and Recent](#favourites-and-recent)). |
+| Settings | Alt+3 | Ring size, animation, labels, tag colours, colours, tap time, auto-close, the browser hotkey, tags, bridge, Studio's own preferences, and Import and export (see [Import and export](#import-and-export)). |
 | Status | Alt+4 | Is ZBrush running, is the app running, is the bridge connected; the app log with a Copy button. **Start app** on the app card starts the app when ZBrush is running. A dot on this button in the rail means the app is not running while ZBrush is. |
 | Setup | Alt+6 | A checklist of five steps: ZBrush found (with the plugin set up for it), plugin loaded in ZBrush, try the ring, your brushes, and what's where. It shows live state and offers one action per step. An amber dot on this button in the rail means a check is failing: no ZBrush that Studio found has the plugin set up, or a running ZBrush does not. Finding no ZBrush at all does not count. |
 | Licence | Alt+5 | A licence screen. Press its button once and you will see. **Settings > Studio** hides it or brings it back. |
@@ -75,8 +76,8 @@ How saving works:
 On the Menus screen you can:
 
 - add, duplicate and delete menus (a duplicate has no hotkey, so it starts out as a submenu);
-- add items with **Add item**, drag brushes from the Library onto the ring or the list, reorder items, and remove them (you can also drag a brush from the [brush browser](#brush-browser) window onto a menu in the list, the ring or the item list);
-- drag on the ring to place things exactly: a bright bar shows the gap between two slots a brush (from the Library or the brush browser) or an item will go into, and dragging a slot itself reorders it. Drag a slot onto another menu in the list to move it there (hold **Ctrl** to copy it instead), or onto the **Delete** target that appears in the corner of the preview to remove it (you can undo that);
+- add items with **Add item**, drag brushes, alphas, materials and textures from the Library onto the ring or the list, reorder items, and remove them (you can also drag an item from the [browser](#browser-window) window onto a menu in the list, the ring or the item list);
+- drag on the ring to place things exactly: a bright bar shows the gap between two slots a brush, alpha, material or texture (from the Library or the browser) or an item will go into, and dragging a slot itself reorders it. Drag a slot onto another menu in the list to move it there (hold **Ctrl** to copy it instead), or onto the **Delete** target that appears in the corner of the preview to remove it (you can undo that);
 - drag an item from the item list onto another menu in the list to move it there (hold **Ctrl** to copy it instead);
 - open a submenu by double-clicking its item or pressing **Open** in the inspector; a **Back** chip above the item list returns to the parent menu;
 - edit each item's action, label and icon in the inspector;
@@ -94,7 +95,7 @@ A menu is a named list of items shown as one ring. Menus live in one file, `%APP
 - A menu can have its own open animation (`"animation": "spiral"`, or pick one in the menu settings in Studio). Without one it uses `ring.animation`. See [Open animations](#open-animations).
 - A menu can **fan out** when it is opened as a submenu (`"fan": true`, or switch on **Fan out when opened from another menu** in the menu settings in Studio). See [Submenu](#submenu).
 
-Starter menus ship with ZOrbit: **Brushes** (Q), with submenus **More Brushes**, **Tools** (masking, symmetry, PolyFrame, LazyMouse and other switches, and a **Browser** slot that opens the [brush browser](#brush-browser)) and **SubDivide** (a row of stroke subdivide sizes). They use only brushes that come with ZBrush.
+Starter menus ship with ZOrbit: **Brushes** (Q), with submenus **More Brushes**, **Tools** (masking, symmetry, PolyFrame, LazyMouse and other switches, a **Browser** slot that opens the [browser](#browser-window), and a **Favourites** slot) and **SubDivide** (a row of stroke subdivide sizes). They use only brushes that come with ZBrush. New installs get the **Favourites** slot in **Tools**; existing menus are not changed.
 
 ## Item types
 
@@ -103,13 +104,16 @@ Every item does exactly one thing. Besides the action, an item can have a `label
 | Type | What it does |
 |---|---|
 | `brush` | Selects a brush. If it is not loaded yet, it is loaded from its `.zbp` file first. |
+| `alpha` | Selects an alpha. If it is not loaded yet, it is imported from its file first. |
+| `material` | Selects a material. If it is not loaded yet, it is loaded from its file first. |
+| `texture` | Selects a texture. If it is not loaded yet, it is imported from its file first. |
 | `press` | Presses any ZBrush button, by its interface path. |
 | `set` | Sets a slider or value. Needs a `value`. |
 | `toggle` | Flips a switch on or off. |
 | `steps` | Runs a list of the actions above, in order. |
 | `menu` | Opens another ring in place of this one. |
-| `tag` | Opens a fan of every installed brush that carries a tag, most used first. |
-| `browser` | Opens the [brush browser](#brush-browser), optionally on one tag. |
+| `tag` | Opens a fan of every installed item that carries a tag, or the Favourites tag: brushes first, most used first, then alphas, materials and textures. |
+| `browser` | Opens the [browser](#browser-window) on one of its tabs, optionally on one tag. |
 
 ### Brush
 
@@ -118,7 +122,42 @@ Every item does exactly one thing. Besides the action, an item can have a `label
 {"brush": "Inflat", "label": "Inflate"}
 ```
 
-The name is the brush's name in ZBrush (the file name without `.zbp`). Spaces and capitals do not matter when ZOrbit looks the file up. The slot's icon is the brush's own thumbnail. If ZBrush already has the brush loaded, it is simply selected. If not, ZOrbit looks for a `.zbp` in your ZBrush brush folders and loads it. If it finds none, the pick is logged as "not loaded in ZBrush and no .zbp file known".
+The name is the brush's name in ZBrush (the file name without `.zbp`). Spaces and capitals do not matter when ZOrbit looks the file up. The slot's icon is the brush's own thumbnail. If ZBrush already has the brush loaded, it is simply selected. If not, ZOrbit looks for a `.zbp` in your ZBrush brush folders and loads it. If it finds none, the pick is logged as "NOT loaded in ZBrush and no file known".
+
+### Alpha, material and texture
+
+```json
+{"alpha": "Alpha 058"}
+{"material": "SkinShade4", "label": "Skin"}
+{"texture": "Txtr01"}
+```
+
+The name is the file's name without its extension. Spaces and capitals do not matter when ZOrbit looks the file up. If
+two folders hold a file with the same name, the first folder searched wins. ZOrbit searches these folders, in order:
+
+- **ZBrush 2026 and newer:** `ZStartup\Alphas`, `ZStartup\Materials` and `ZStartup\Textures` in your user folder (shown
+  as **My Alphas**, **My Materials** and **My Textures**), then the installation's `ZData\Alphas`, `ZData\Materials` and
+  `ZData\Textures` (shown as **ZBrush**), then its `Lightbox\Alphas`, `Lightbox\Materials` and `Lightbox\Textures`
+  (shown as **Lightbox**).
+- **ZBrush 2022 to 2025:** `ZStartup\Alphas`, `ZStartup\Materials` and `ZStartup\Textures`, then the installation's
+  `ZData\...` folders, then its `ZAlphas`, `ZMaterials` and `ZTextures` folders.
+
+Alphas can be `.psd`, `.bmp`, `.jpg`, `.png` or `.tif` files. Materials are `.zmt` files. Textures can be `.psd`, `.jpg`,
+`.png`, `.bmp`, `.tif` or `.exr` files.
+
+If ZBrush already has the item loaded, it is simply selected. ZOrbit looks for a button with its name (`Alpha:<name>`,
+`Material:<name>` or `Texture:<name>`). If there is none, ZOrbit loads the file with **Alpha > Import**, **Material > Load**
+or **Texture > Import**, then selects the item.
+
+**Material > Load** replaces the material in the currently selected material slot, the same as ZBrush does when you load
+one yourself. Select the slot you do not mind overwriting before you pick a material that is not loaded yet.
+
+Thumbnails: a material uses the icon stored in its `.zmt` file. A few old MatCap files have none, and they show the
+placeholder. An alpha or texture uses its image file. EXR textures have no thumbnail, so they show the placeholder too.
+Thumbnails are cached in `%LOCALAPPDATA%\ZOrbit\thumbs`.
+
+ZBrush 2022 to 2025 get these through the ZScript plugin. Until you update it in **Studio > Settings > Older ZBrush >
+Update**, the old plugin skips them.
 
 ### Press
 
@@ -151,7 +190,7 @@ An interface path is the chain of palette and button names, joined with colons, 
  "label": "Fresh Start", "icon": "Standard"}
 ```
 
-Steps run in order. Each step is a `brush`, `press`, `set` or `toggle`. Steps cannot open menus, cannot contain more steps, and cannot hold `tag` or `browser` items. Without an `icon`, a `steps` item uses the thumbnail of the first brush among its steps, or a placeholder.
+Steps run in order. Each step is a `brush`, `alpha`, `material`, `texture`, `press`, `set` or `toggle`. Steps cannot open menus, cannot contain more steps, and cannot hold `tag` or `browser` items. Without an `icon`, a `steps` item uses the thumbnail of its first brush, alpha, material or texture step, or a placeholder if it has none.
 
 ### Submenu
 
@@ -170,55 +209,76 @@ A submenu can open another way. Give its menu `"fan": true` (or switch on **Fan 
 ```json
 {"tag": "blocking"}
 {"tag": "detailing", "label": "Detail"}
+{"tag": "favourite"}
 ```
 
 The name is the tag's key, not its label. The key is made once, from the label, when the tag is created (`Blocking` becomes `blocking`), and it stays the same when you rename the tag, so slots keep working. In Studio you pick the tag from a list and never need to type the key. See [Tags](#tags).
 
-The slot opens a fan of every brush with that tag that is installed, most used first (the same count that fills auto slots, so the order can shift after you pick). A fan holds up to 12 slots. If the tag has more brushes, the last slot is **More...**, which opens the [brush browser](#brush-browser) on that tag. Picking a brush from the fan works like any brush pick and counts towards auto slots. If there is no room for a fan, the tag's brushes open as a normal ring. The slot is a disc in the tag's colour with a tag symbol and a submenu badge. Without a `label`, it is named after the tag.
+The slot opens a fan of every installed item with that tag. The brushes come first, most used first (the same count that fills auto slots, so their order can shift after you pick). Then come the alphas, materials and textures with that tag, by name. A fan holds up to 12 slots. If the tag has more items, the last slot is **More...**, which opens the [browser](#browser-window) on the tab of the first item in the fan, on that tag. Picking a brush from the fan works like any brush pick and counts towards auto slots. Picking an alpha, material or texture works as it does from the browser. If there is no room for a fan, the tag's items open as a normal ring. The slot is a disc in the tag's colour with a tag symbol and a submenu badge. Without a `label`, it is named after the tag.
 
-A tag that has no installed brushes is a faint tag symbol, and picking it does nothing. So is a key that is not in `tags.json`, which is also listed as a problem ("tag 'x' does not exist; the slot stays empty").
+A tag that has no installed items is a faint tag symbol, and picking it does nothing. So is a key that is not in `tags.json`, which is also listed as a problem ("tag 'x' does not exist; the slot stays empty").
+
+The `favourite` key is the built-in Favourites tag (see [Tags](#tags)). A `{"tag": "favourite"}` slot opens a fan of
+your starred items, in the same order as any tag, with the same 12-slot cap and **More...** slot. It is drawn with a
+star instead of the tag symbol. New installs have one in the starter **Tools** menu.
 
 ### Browser
 
 ```json
 {"browser": ""}
 {"browser": "blocking", "label": "Blocking"}
+{"browser": "", "kind": "alpha", "label": "Alphas"}
 ```
 
-Opens the [brush browser](#brush-browser). Nothing is sent to ZBrush until you pick a brush in it. `""` shows every brush; a tag key opens it on that tag. A key that is not in `tags.json` is listed as a problem and the browser opens unfiltered. Without a `label`, the slot is called **Browser**, or the tag's name when it filters. In Studio, the **Tag filter** field offers **All brushes** and your tags.
+Opens the [browser window](#browser-window). `kind` chooses the tab it opens on: `brush` (the default), `alpha`, `material` or `texture`. Nothing is sent to ZBrush until you pick an item in it. `""` shows every item of that kind; a tag key opens it on that tag. A key that is not in `tags.json` is listed as a problem and the browser opens unfiltered. Without a `label`, the slot is called **Browser**, or the tag's name when it filters. In Studio, the **Shows** select in the inspector sets `kind`, and the **Tag filter** field lists your tags.
 
 ### Labels and icons
 
 - `label`: text shown under the slot. Long labels are shortened with an ellipsis.
-- `icon`: a brush name, the path to a `.zbp`, or the path to a `.png` file. Without one, brush items use the brush thumbnail. Other items show a round placeholder with a short text.
+- `icon`: a brush name, the path to a `.zbp`, or the path to a `.png` file. Without one, brush, alpha, material and texture items use the item's own thumbnail, and a `steps` item uses the thumbnail of its first asset step. Other items show a round placeholder with a short text.
 
 ## Tags
 
-A tag is a coloured label for brushes, like **Blocking** in orange or **Detailing** in blue. A brush can have several tags. Its first tag is the one that colours its slot on the ring and comes first in the Library. New installs start with those two tags; rename, recolour or delete them as you like.
+A tag is a coloured label for items, like **Blocking** in orange or **Detailing** in blue. Brushes, alphas, materials and textures
+can all carry tags, and one item can have several. There is one set of tags for all of them. An item's first tag is the one
+that colours its slot on the ring and comes first in the Library. New installs start with those two tags; rename, recolour
+or delete them as you like.
 
-Tags let you do three things: filter the Library, colour slots on the ring (see [Tag colours](#tag-colours)), and open all the brushes with a tag from one slot (see [Tag](#tag)). The [brush browser](#brush-browser) filters by tag too.
+Tags let you do three things: filter the Library, colour slots on the ring (see [Tag colours](#tag-colours)), and open all
+the items with a tag from one slot (see [Tag](#tag)). The [browser](#browser-window) filters by tag too.
 
-### Tagging brushes
+**Favourites** is a built-in tag. It always exists and always comes first. It shows a star instead of a dot, and it
+cannot be deleted, renamed or merged away, but you can change its colour in the tag manager. Starring an item never
+changes its colour cue: the first *other* tag does that. Favourites has its own entry in the folders list rather than
+a chip (see [Favourites and Recent](#favourites-and-recent)).
 
-1. In the **Library**, or in the brush list on the Menus screen, click a brush to select it. **Ctrl-click** adds or removes brushes. **Shift-click** selects a range from the last plain click, over the brushes on show.
-2. Press **Tag...** in the bar that shows the selection, or right-click a brush. A right-click on a brush that is in the selection tags the whole selection; on any other brush it tags just that brush.
-3. In the picker, click a tag to put it on, or take it off, every selected brush. A tag that only some of them carry shows as partly ticked. A tag you add goes at the end of the brush's list, so the first tag you gave a brush stays its colour.
-4. To make a new tag, type its name under **New tag...** and press Enter. It is created and put on the selected brushes. If a tag with that name exists, that one is used.
+Your other tags are named, coloured sets. They work the same way: each one is a ring slot of its own (see
+[Tag](#tag)). Favourites give you a one-click star; tags give you named sets.
+
+### Tagging items
+
+1. In the **Library**, or in the Library tab on the Menus screen, click an item to select it. **Ctrl-click** adds or removes items. **Shift-click** selects a range from the last plain click, over the items on show.
+2. Press **Tag...** in the bar that shows the selection, or right-click an item. A right-click on an item that is in the selection tags the whole selection; on any other item it tags just that item.
+3. In the picker, click a tag to put it on, or take it off, every selected item. A tag that only some of them carry shows as partly ticked. A tag you add goes at the end of the item's list, so the first tag you gave an item stays its colour. Favourites is first in the picker, with a star.
+4. To make a new tag, type its name under **New tag...** and press Enter. It is created and put on the selected items. If a tag with that name exists, that one is used.
 
 A card shows up to three small colour dots, first tag first. Tag names are 1 to 40 characters, and no two tags can have the same name, whatever the capitals.
 
 ### Filtering
 
-Under **Folders** the Library lists your tags as chips (in the small brush list on the Menus screen they are a row under the folder box). Click a chip to filter. With several chips on, a brush shows when it has any of them. The folder and the search box narrow the result further. **Untagged** shows brushes with no tag, and **Clear** switches the filter off.
+Under **Folders** the Library lists your tags as chips (in the small list on the Menus screen they are a row under the folder box). Click a chip to filter. With several chips on, an item shows when it has any of them. The folder and the search box narrow the result further. **Untagged** shows items with no ordinary tag, and **Clear** switches the filter off. A starred item with no other tag
+still counts as untagged.
 
 ### Managing tags
 
 **Manage tags...** (under the chips in the Library, or on **Settings > Tags**) opens the tag manager. Each row has:
 
 - a swatch: click it for the eight preset colours, or type any `#rrggbb` value;
-- the name: edit it and press Enter, or leave the field, to rename the tag. If another tag already has that name, you are asked to **Merge into** it or keep them apart. Merging puts the brushes of this tag on the other one (in the same place in each brush's list, so the colour cue stays) and removes this tag;
-- the number of brushes it is on;
-- a delete button. The confirmation says how many brushes it is on and how many ring items use it. **Brushes keep working**; they only lose the tag. Ring items that point at the deleted tag stay in `radial.json`: a `tag` slot becomes a faint empty slot, a `browser` slot opens unfiltered, and the problems pill lists both so you can point them elsewhere.
+- the name: edit it and press Enter, or leave the field, to rename the tag. If another tag already has that name, you are asked to **Merge into** it or keep them apart. Merging puts the items of this tag on the other one (in the same place in each item's list, so the colour cue stays) and removes this tag;
+- the number of items it is on;
+- a delete button. The confirmation says how many items it is on and how many ring items use it. **Items keep working**; they only lose the tag. Ring items that point at the deleted tag stay in `radial.json`: a `tag` slot becomes a faint empty slot, a `browser` slot opens unfiltered, and the problems pill lists both so you can point them elsewhere.
+
+The Favourites row lets you change only its swatch. Its name is fixed, and it cannot be deleted or merged away.
 
 Tags save as you make them. They are not part of **Save**, **Revert**, **Undo** or the unsaved-changes list. The app notices a change within a moment, and Studio refreshes its tags when you come back to its window, so a tag made in one place shows up in the other.
 
@@ -231,36 +291,59 @@ Tags are in `%APPDATA%\ZOrbit\tags.json`, apart from your menus. The file does n
  "tags":  {"blocking":  {"label": "Blocking",  "color": "#F86B33"},
            "detailing": {"label": "Detailing", "color": "#4DC8E9"}},
  "items": {"brush:claybuildup": ["blocking"],
-           "brush:dam_standard": ["detailing", "blocking"]}}
+           "brush:dam_standard": ["detailing", "blocking"],
+           "alpha:alpha058": ["blocking"]}}
 ```
 
-A brush is `brush:` plus its name in lower case without spaces. The first tag in a brush's list is its colour cue. Brushes that are not installed keep their tags. You can edit the file by hand and the ring follows. If the file cannot be read (a stray comma, say), the app and Studio keep the last good tags, Studio shows the error in the Library, and nothing is changed or written until you fix it.
+An item's key is its kind, `brush:`, `alpha:`, `material:` or `texture:`, plus its name in lower case without spaces (`alpha:alpha058`). The first tag in an item's list is its colour cue. Items that are not installed keep their tags. You can edit the file by hand and the ring follows. If the file cannot be read (a stray comma, say), the app and Studio keep the last good tags, Studio shows the error in the Library, and nothing is changed or written until you fix it.
 
-## Brush browser
+## Browser window
 
-The brush browser is a window with all your brushes in it: search, folders, tag chips and thumbnails. Pick a brush and ZBrush selects it, without going through the ring. It is a window like any other: it has a taskbar button, you can move, resize, minimise and maximise it, and snap or dock it to a screen edge (drag its header to an edge, or press Win+Arrow). It does not close by itself. It stays up until you close it with the **X** button or Alt+F4, so you can keep it beside ZBrush all day.
+The browser is a window with your brushes, alphas, materials and textures in it, on four tabs. Each tab has search, folders, tag chips and thumbnails. Pick an item and ZBrush selects it (loading it first if it is not loaded yet), without going through the ring. It is a window like any other: it has a taskbar button, you can move, resize, minimise and maximise it, and snap or dock it to a screen edge (drag its header to an edge, or press Win+Arrow). It does not close by itself. It stays up until you close it with the **X** button or Alt+F4, so you can keep it beside ZBrush all day.
 
-While Studio is open you can drag a brush from the browser onto a menu in Studio's menu list, onto the ring or onto the item list. It is added exactly as when you drag it from the Library, and you can undo it. A drag carries only the brush you pick up, even when several are selected.
+While Studio is open you can drag an item from the browser onto a menu in Studio's menu list, onto the ring or onto the item list. It is added exactly as when you drag it from the Library, and you can undo it. A drag carries only the item you pick up, even when several are selected.
 
 ### Opening it
 
 - Press the browser hotkey (`browser.hotkey`; **Alt+B** on new installs). It works while ZBrush **or the browser** is in front. If the browser is hidden it appears; if it is open behind other windows it comes to the front; if it is already in front, the keyboard goes back to ZBrush and the window stays where it is.
 - Pick a **Browser** slot on a ring (new installs have one in **Tools**).
 - Pick **More...** in a tag's fan: the browser opens on that tag.
-- Choose **Brush browser** in the tray menu (the ZOrbit icon in the notification area).
-- Press **Brush browser** in Studio's Library toolbar, or on **Settings > Brush browser**.
-- Start it from the Start menu (**ZOrbit Brush Browser**).
+- Choose **Browser** in the tray menu (the ZOrbit icon in the notification area).
+- Press **Browser** in Studio's top bar (on every screen), in the Library toolbar, or on **Settings > Browser**.
+- Start it from the Start menu (**ZOrbit Browser**).
+- Start it on a tab from the command line with `--kind brush`, `--kind alpha`, `--kind material` or `--kind texture`.
 
-The Studio button and the Start menu shortcut work without ZBrush running, so you can browse and tag brushes on their own. The first time it appears centred on a screen. After that it comes back where, and as large as, you left it, maximised or not.
+The Studio button and the Start menu shortcut work without ZBrush running, so you can browse and tag items on their own. The browser has its own icon in the taskbar, different from ZOrbit's. The first time it appears centred on a screen. After that it comes back where, and as large as, you left it, maximised or not.
 
 ### Using it
 
+- The header has four tabs: **Brushes**, **Alphas**, **Materials** and **Textures**. Click a tab, or press **Ctrl+Tab** and **Ctrl+Shift+Tab** to move through them. With a tab focused, **Left** and **Right** move between them too. Folders, the size slider and the selection belong to each tab. The search text and the tag filter stay when you switch tab. The tab you were on last is remembered.
 - Type to search by name: any letter you type goes to the search box.
 - Click chips to filter by tag, and folders to filter by folder, as in the Library.
-- **Arrow keys** move from brush to brush. After a search the first match is highlighted.
-- **Enter** or a **double-click** picks the highlighted brush. ZBrush gets the keyboard back, then the brush is selected the same way as a ring pick, and counts towards auto slots. The browser stays open.
+- **Arrow keys** move from item to item. After a search the first match is highlighted.
+- **Enter** or a **double-click** picks the highlighted item. ZBrush gets the keyboard back, then the item is selected the same way as a ring pick. An alpha, material or texture that ZBrush does not have yet is loaded first. Only a brush counts towards auto slots. The browser stays open.
 - **Esc** clears the search, then the selection, then gives the keyboard back to ZBrush. It never closes the window. The browser hotkey does the same when the browser is in front.
 - The pin button in the header is **Keep on top**. It is on by default: the browser stays above other windows, so it is there when you glance at it. Switch it off and it sits in the stack like any other window. The choice is remembered.
+- The panel button next to it collapses the folders and tags column, so the thumbnails get the whole window, and shows it again. The arrows button beside it moves the column to the right side of the window, and back. Both are remembered.
+
+### Favourites and Recent
+
+**Favourites** keeps the items you use most in one place. Star an item in the browser, on any tab, or in Studio's
+Library: hover its card and press the star in its top-right corner. A starred item shows a filled gold star, and the
+star stays visible while the item is starred. The selection strip has a star button for the whole selection.
+**Ctrl+D** toggles Favourites on the selection or the highlighted card. The right-click tag picker lists Favourites
+first, with a star.
+
+Favourites is the first entry in the folders list on every tab, with a count. It lists starred items, most used first,
+then by name. It is not among the tag chips, because it has its own entry.
+
+**Recent** sits right under Favourites. It holds every brush, alpha, material or texture you pick in ZBrush, from a
+ring or from the browser, newest first. Each tab keeps the latest 24, and the file keeps 200 across all kinds. To take
+an item out of Recent, right-click it in the Recent view and choose **Remove from Recent**. This does not change a
+brush's standing for auto slots.
+
+Recent is stored in `%LOCALAPPDATA%\ZOrbit\usage.json`, under `"picks"`, next to the brush usage that fills the auto
+slots (see [Files and logs](#files-and-logs)).
 
 ### Picks, focus and ZBrush 2022 to 2025
 
@@ -270,7 +353,7 @@ The browser is a separate program that sends your pick to the ZOrbit app, which 
 
 The browser takes a moment to start, so when your config has a browser hotkey or a **Browser** slot, the app starts it hidden a few seconds after it starts itself, and the first press is quick. It stays hidden until you call it and holds its web view in memory while it waits. Closing it with **X** hides it again, ready for the next press. Without a hotkey or a Browser slot it starts the first time you use **More...**, the tray menu, Studio or the Start menu.
 
-It does not depend on ZBrush. When ZBrush and the app quit, a browser you have open stays open; it just cannot select anything, and a pick says **ZOrbit is not running** until ZBrush is back. Closing it then ends it. A hidden one quits with the app. Its window position, whether it is maximised, Keep on top and the thumbnail size are in `popout.json`, and its log is `popout.log`.
+It does not depend on ZBrush. When ZBrush and the app quit, a browser you have open stays open; it just cannot select anything, and a pick says **ZOrbit is not running** until ZBrush is back. Closing it then ends it. A hidden one quits with the app. Its window position, whether it is maximised, Keep on top, the side of the folders column and whether it is shown, and the thumbnail size are in `popout.json`, and its log is `popout.log`.
 
 ## Hotkeys
 
@@ -283,10 +366,10 @@ Q          Alt+G          Ctrl+Shift+1          F9          `
 - Keys: letters, digits, F1 to F24, and `space tab enter backspace insert delete home end pageup pagedown` and the punctuation keys `` ` - = [ ] \ ; ' , . / ``.
 - Modifiers: `Ctrl`, `Alt`, `Shift`, in any combination, joined with `+`.
 - Each hotkey can belong to only one menu. Duplicates are reported as problems and ignored.
-- A hotkey only works while **ZBrush is the front window**. In every other program the key behaves normally. The browser hotkey is the one exception: it also works while the brush browser is in front, where it hands the keyboard back to ZBrush.
+- A hotkey only works while **ZBrush is the front window**. In every other program the key behaves normally. The browser hotkey is the one exception: it also works while the browser is in front, where it hands the keyboard back to ZBrush.
 - Keys sent by other programs (macro tools, for example) are ignored.
 - Press the hotkey again while its ring is open to close it. **Esc** also closes the ring.
-- The brush browser has a hotkey of its own, `browser.hotkey`, written the same way (see [Brush browser hotkey](#brush-browser-hotkey)). It cannot be a key a menu already uses: the menu wins and the browser hotkey is reported as a problem. It is swallowed like a menu hotkey. Press it again while the browser is in front to hand the keyboard back to ZBrush; the browser stays open.
+- The browser has a hotkey of its own, `browser.hotkey`, written the same way (see [Browser hotkey](#browser-hotkey)). It cannot be a key a menu already uses: the menu wins and the browser hotkey is reported as a problem. It is swallowed like a menu hotkey. Press it again while the browser is in front to hand the keyboard back to ZBrush; the browser stays open.
 
 By default a menu **swallows** its hotkey: ZBrush never sees it, so it does not also run its own shortcut for that key. Set `"swallow": false` (or switch it off in the menu settings in Studio) if you want the key to keep working in ZBrush too.
 
@@ -337,7 +420,7 @@ These are on the Settings screen in Studio, and under `"ring"` in `radial.json`.
 | `labels` | `name` | `name`, `none` | Show names under the slots, or icons only. |
 | `flick` | `true` | `true`, `false` | Moving out past a slot picks it without releasing or clicking. |
 | `hover_submenus` | `true` | `true`, `false` | Reaching a submenu slot opens the submenu, centred on that slot. |
-| `tag_colors` | `tint` | `none`, `tint`, `glow`, `both` | Whether a brush's first tag tints its icon, glows, or both. See [Tag colours](#tag-colours). |
+| `tag_colors` | `tint` | `none`, `tint`, `glow`, `both` | Whether an item's first tag tints its icon, glows, or both. See [Tag colours](#tag-colours). |
 | `tag_band` | `medium` | `none`, `hairline`, `narrow`, `medium`, `wide` | Thickness of the band through the slot centres. `none` turns it off. |
 | `tag_band_opacity` | 0.45 | 0 to 1 | How solid the band is. |
 | `tag_glow_opacity` | 0.4 | 0 to 1 | Strength of the halo. |
@@ -371,7 +454,7 @@ Anything you leave out keeps its default. Values outside the allowed range are r
 
 ### Tag colours
 
-The colour of a brush's first tag (see [Tags](#tags)) can show on its slot in three ways: an icon tint, a glow and a band. In Studio they are the three groups of the **Tag colours** card on the Settings screen, each with its own switch. Beside them is a preview. It shows the current menu if it has a tagged brush, and otherwise a sample ring of your brushes coloured with your tags, so every change is visible.
+The colour of an item's first tag (see [Tags](#tags)) can show on its slot in three ways: an icon tint, a glow and a band. In Studio they are the three groups of the **Tag colours** card on the Settings screen, each with its own switch. Beside them is a preview. It shows the current menu if it has a tagged brush, and otherwise a sample ring of your brushes coloured with your tags, so every change is visible.
 
 ![A ring of eight brushes with two tags: Blocking in orange, Detailing in blue, and two untagged slots. Each slot has a coloured rim and tint, and the band behind them follows the tags](images/tag-colours.png)
 
@@ -388,7 +471,7 @@ The tint and glow switches together set `ring.tag_colors`. The band switch sets 
 | `glow` | The glow. |
 | `both` | The tint and the glow together. |
 
-The band does not depend on `tag_colors`. Slot colours are dropped entirely, hover border, spoke, label and band included, only when `tag_colors` is `none` and `tag_band` is `none`. The fan of a `tag` slot is always drawn in that tag's colour, and so is the slot itself. Brushes without a tag look as before. The colours are drawn when the ring opens, so they cost no speed.
+The band does not depend on `tag_colors`. Slot colours are dropped entirely, hover border, spoke, label and band included, only when `tag_colors` is `none` and `tag_band` is `none`. The fan of a `tag` slot is always drawn in that tag's colour, and so is the slot itself. Items without a tag look as before. The colours are drawn when the ring opens, so they cost no speed.
 
 In Studio, opacities show as percentages (45%) but are 0 to 1 in the file. Controls under a switch that is off are dimmed.
 
@@ -401,13 +484,13 @@ In Studio, opacities show as percentages (45%) but are 0 to 1 in the file. Contr
 }
 ```
 
-### Brush browser hotkey
+### Browser hotkey
 
 ```json
 "browser": {"hotkey": "Alt+B"}
 ```
 
-The hotkey that opens the [brush browser](#brush-browser) and, pressed over it, hands the keyboard back to ZBrush. On Settings it is the **Brush browser** card, where you record it like a menu hotkey and Studio warns if a menu already uses it. New installs get **Alt+B**. An existing `radial.json` has no `browser` section until you add one, so the hotkey does nothing there. Leave it out for no hotkey; the browser then opens from **Browser** slots only.
+The hotkey that opens the [browser window](#browser-window) and, pressed over it, hands the keyboard back to ZBrush. On Settings it is the **Browser** card, where you record it like a menu hotkey and Studio warns if a menu already uses it. New installs get **Alt+B**. An existing `radial.json` has no `browser` section until you add one, so the hotkey does nothing there. Leave it out for no hotkey; the browser then opens from **Browser** slots only.
 
 ## Open animations
 
@@ -491,6 +574,20 @@ When this version of ZOrbit has a newer plugin than one you installed, **Setting
 | Start App | Starts the app if it is not running. Normally unnecessary. |
 | Status | Shows whether the listener is verified, whether the app is running, and the last pick. |
 
+## Import and export
+
+**Settings > Import and export** saves your setup to one file, or loads one back. Use it to move a setup to another PC or to keep a copy.
+
+**Export...** writes one `.json` file with your menus and settings (everything in `radial.json`) and your tags. It saves what is on screen, including edits you have not saved yet. It leaves out Studio's window placement and preferences, the ZBrush folders you added by hand and the usage counts, since those belong to one PC.
+
+**Import...** reads a file and shows what it holds before anything changes. It also accepts a plain `radial.json` or a plain `tags.json`, such as one you copied by hand.
+
+- The menus and settings load into the editor as an unsaved change. **Save** keeps them and **Undo** takes them back.
+- If the file has tags, you choose each time:
+  - **Merge tags** adds the tags you do not have. A tag that matches one of yours, by key or by label, keeps your name and colour. Each item's tag list is joined with yours, your tags first and no repeats.
+  - **Replace tags** swaps your tags for the file's. Your old `tags.json` is kept as `tags.json.bak` first.
+- Tags save straight away, as tag edits always do, so they are not part of **Undo**.
+
 ## Files and logs
 
 | Path | What |
@@ -510,14 +607,15 @@ When this version of ZOrbit has a newer plugin than one you installed, **Setting
 | `%LOCALAPPDATA%\ZOrbit\zscript_launch.log` | ZBrush 2022 to 2025: how the plugin last started the app or Studio. |
 | `%LOCALAPPDATA%\ZOrbit\zscript_hotkey.log` | ZBrush 2022 to 2025: the hotkey Apply had when the plugin loaded, and the one it has after (88 is F9). |
 | `%APPDATA%\ZOrbit\studio.json` | Studio's own preferences (Licence button, update check) and window placement. |
-| `%APPDATA%\ZOrbit\tags.json` | Your brush tags: each tag's label and colour, and which brushes carry which tags. Created the first time you change a tag. See [Tags](#where-tags-live). |
-| `%APPDATA%\ZOrbit\popout.json` | The brush browser's window position and size, whether it is maximised, Keep on top and thumbnail size. Safe to delete. |
-| `%LOCALAPPDATA%\ZOrbit\popout.log` | The brush browser: how it started, what it showed, the picks it sent to the app. |
+| `%APPDATA%\ZOrbit\tags.json` | Your tags: each tag's label and colour (Favourites included), and which items carry which tags. Created the first time you change a tag. See [Tags](#where-tags-live). |
+| `%APPDATA%\ZOrbit\popout.json` | The browser's window position and size, whether it is maximised, Keep on top, thumbnail size, the side of the folders column (`side`), whether it is shown (`column`) and the tab you were last on (`kind`). Safe to delete. |
+| `%LOCALAPPDATA%\ZOrbit\popout.log` | The browser: how it started, what it showed, the picks it sent to the app. |
 | `%LOCALAPPDATA%\ZOrbit\studio.log` | How Studio started: which program launched it and how long each step took. A failed update check is noted here. |
-| `%LOCALAPPDATA%\ZOrbit\thumbs\` | Cached brush thumbnails. Safe to delete. |
+| `%LOCALAPPDATA%\ZOrbit\usage.json` | Brush usage, which fills the auto slots, and your recent picks under `"picks"` (see [Favourites and Recent](#favourites-and-recent)). |
+| `%LOCALAPPDATA%\ZOrbit\thumbs\` | Cached thumbnails of brushes, alphas, materials and textures. Safe to delete. |
 | `<ZBrush>\ZStartup\ZPlugs64\ZOrbitBridge.zsc` | ZBrush 2022 to 2025: the plugin. Its `ZOrbitData` folder says where picks arrive and how to start the app. |
 
-When you report a bug, paste the last lines of `radiald.log` and `bridge.log` (and `popout.log` for a problem with the brush browser). They contain brush names and menu ids, but have a quick look before you post them.
+When you report a bug, paste the last lines of `radiald.log` and `bridge.log` (and `popout.log` for a problem with the browser). They contain brush names and menu ids, but have a quick look before you post them.
 
 ## Troubleshooting
 
@@ -531,7 +629,7 @@ When you report a bug, paste the last lines of `radiald.log` and `bridge.log` (a
 6. Another program may grab the same key before it reaches the app. Try a different hotkey.
 
 **The ring opens, but picks do nothing.**
-Check the listener on the Status screen. If it is not verified, use the fallback: bind the bridge key (see above) and leave the mode on `auto`. Then read `bridge.log`; it names each action and says whether it worked. Common causes: a `press`, `set` or `toggle` path that does not exist in your ZBrush (logged as "no such interface item"), or a `brush` with no `.zbp` file (logged as "NOT loaded in ZBrush and no .zbp file known").
+Check the listener on the Status screen. If it is not verified, use the fallback: bind the bridge key (see above) and leave the mode on `auto`. Then read `bridge.log`; it names each action and says whether it worked. Common causes: a `press`, `set` or `toggle` path that does not exist in your ZBrush (logged as "no such interface item"), or a `brush`, `alpha`, `material` or `texture` whose file ZOrbit cannot find (logged as "NOT loaded in ZBrush and no file known").
 
 **ZBrush 2022 to 2025: the ring opens, but picks do nothing.**
 Picks there only arrive through the bridge key. Hover **Zplugin > ZOrbit > Apply** in that ZBrush: its hotkey should match the bridge key. The plugin brings F9 itself, but only once it is up to date, so update it if **Settings > Older ZBrush** says **Update available**. For any other key, check that it is bound to **Apply** and that you clicked **Preferences > Hotkeys > Store**; a binding that was not stored is gone after a restart. If the palette is missing, install the plugin again in **Studio > Settings > Older ZBrush** and restart that ZBrush. `zscript_bridge.log` shows what the last pick did.
@@ -539,27 +637,27 @@ Picks there only arrive through the bridge key. Hover **Zplugin > ZOrbit > Apply
 **I upgraded from Radial Menu for ZBrush and F9 stopped working.**
 The palette was renamed, so a hotkey you bound by hand to the old **Apply** does not carry over in ZBrush 2026. Ctrl+Alt+click **Zplugin > ZOrbit > Apply**, press **F9**, then click **Preferences > Hotkeys > Store**. ZBrush 2022 to 2025: update the plugin in **Studio > Settings > Older ZBrush**; it binds F9 itself. Your menus were copied from `%APPDATA%\RadialMenu` to `%APPDATA%\ZOrbit` on the first start, and learned auto slots from `%LOCALAPPDATA%\RadialMenu`. The old folders are left in place; you can delete them.
 
-**The brush browser does not appear.**
+**The browser does not appear.**
 
-1. Is ZBrush (or the browser itself) the front window? The browser hotkey is ignored everywhere else. The tray menu, Studio's **Brush browser** button and the Start menu shortcut work from anywhere.
-2. Does your `radial.json` have a `browser` hotkey? Check **Settings > Brush browser**. If a menu uses the same key, the menu wins and the problems pill says so.
+1. Is ZBrush (or the browser itself) the front window? The browser hotkey is ignored everywhere else. The tray menu, Studio's **Browser** button and the Start menu shortcut work from anywhere.
+2. Does your `radial.json` have a `browser` hotkey? Check **Settings > Browser**. If a menu uses the same key, the menu wins and the problems pill says so.
 3. After the app starts, the browser needs a few seconds to be ready. The first press can take a moment when it was not started in advance. If it is open but you cannot see it, it may be behind other windows (Keep on top is off) or on a screen you have unplugged: press the hotkey, or open it from the tray menu.
 4. Read `radiald.log` (lines that start with `browser`) and `popout.log`. A missing WebView2 runtime stops it, as it stops Studio.
 
-**The brush browser opens but does not take the keyboard.**
+**The browser opens but does not take the keyboard.**
 Click the search box once. If you have to do that every time, send `popout.log` and the `browser` lines of `radiald.log`.
 
-**A pick in the brush browser does nothing.**
+**A pick in the browser does nothing.**
 Look in `radiald.log` for `pick from browser`. If the line is there, the pick reached the app and `bridge.log` says what ZBrush did with it. If instead it says the pick was dropped because ZBrush did not get the focus back in 2 s, you are in ZBrush 2022 to 2025, which can only take a pick through the bridge key while ZBrush is the front window: do not click another program right after you pick. If neither line is there, the browser could not reach the app, and `popout.log` says why. Check that the app is running on the Status screen.
 
 **A tag slot is faint and does nothing.**
-No installed brush carries that tag, or the tag no longer exists (the problems pill says which). Tag some brushes in the Library, or point the slot at another tag.
+No installed item carries that tag, or the tag no longer exists (the problems pill says which). Tag some items in the Library, or point the slot at another tag.
 
 **My slots are not coloured by tag.**
-Check **Settings > Tag colours**: the **Icon tint**, **Glow** and **Band** switches may all be off. Only a brush's first tag colours its slot, and a brush with no tag is not coloured. A change made by hand to `tags.json` shows within a moment.
+Check **Settings > Tag colours**: the **Icon tint**, **Glow** and **Band** switches may all be off. Only an item's first tag colours its slot, and an item with no tag is not coloured. A change made by hand to `tags.json` shows within a moment.
 
 **A slot shows letters instead of a picture.**
-There is no thumbnail for it. For brushes, that means no `.zbp` was found. For other items it is the normal placeholder; set an `icon` to change it.
+There is no thumbnail for it. For a brush, that means no `.zbp` was found. A material with no icon in its `.zmt` file (some old MatCap files) and an EXR texture show it too. For other items it is the normal placeholder; set an `icon` to change it.
 
 **Picks feel late during a stroke.**
 That is intended. A pick waits until you release the mouse button or lift the pen, so a tool change never lands in the middle of a stroke.

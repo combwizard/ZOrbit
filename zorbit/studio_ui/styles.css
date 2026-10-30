@@ -73,6 +73,7 @@ h1, h2, h3, p { margin: 0; }
   filter: drop-shadow(0 0 6px rgba(248, 107, 51, .35)); }
 .wordmark { font-size: 14px; font-weight: 800; letter-spacing: .01em; color: var(--text); white-space: nowrap; }
 .wordmark em { font-style: normal; color: var(--accent); }
+.wordmark .z { color: var(--accent); }                      /* the Z of ZOrbit is orange wherever the name is drawn */
 .version-chip { font-size: 10.5px; color: var(--sub); padding: 3px 2px; border-radius: 4px; background: none; border: 0; }
 .version-chip:hover { color: var(--text); text-decoration: underline; text-underline-offset: 2px; }
 .version-chip.has-update { display: inline-flex; align-items: center; gap: 5px; }
@@ -161,6 +162,7 @@ h1, h2, h3, p { margin: 0; }
 .ibtn:disabled { opacity: .35; cursor: default; }
 .ibtn:disabled:hover { color: var(--sub); background: transparent; }
 .histctl { display: flex; align-items: center; gap: 2px; }
+.browser-open-top { gap: 6px; }
 .histctl .ibtn { width: 30px; height: 30px; }
 .ibtn.accent { color: var(--accent); }
 .ibtn.accent:hover { background: var(--accent-wash); }
@@ -445,6 +447,14 @@ body.dragging .irow:hover { background: transparent; }
 .tab { background: none; border: 0; border-bottom: 2px solid transparent; padding: 0 12px; margin-bottom: -1px; color: var(--sub); font: 700 10.5px var(--font); letter-spacing: .12em; text-transform: uppercase; transition: color .12s, border-color .12s; }
 .tab:hover { color: var(--text); }
 .tab.on { color: var(--accent); border-bottom-color: var(--accent); }
+/* The kind tabs of the browser (Brushes, Alphas, Materials, Textures): the same look as .tab, a little quieter in the dock. */
+.ktabs { display: flex; flex: none; gap: 2px; padding: 0 16px; height: 40px; border-bottom: 1px solid var(--line); }
+.ktab { background: none; border: 0; border-bottom: 2px solid transparent; padding: 0 12px; margin-bottom: -1px; color: var(--sub); font: 700 10.5px var(--font); letter-spacing: .12em; text-transform: uppercase; white-space: nowrap; transition: color .12s, border-color .12s; }
+.ktab:hover { color: var(--text); }
+.ktab:focus-visible { outline-offset: -3px; }
+.ktab.on { color: var(--accent); border-bottom-color: var(--accent); }
+.ktabs.compact { height: 34px; padding: 0 8px; }
+.ktabs.compact .ktab { padding: 0 7px; letter-spacing: .06em; }
 .tab-body { flex: 1; min-height: 0; overflow: auto; padding: 16px; animation: screenin .16s var(--ease); }
 .tab-body.tab-brushes { padding: 0; overflow: hidden; }
 .insp-head { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
@@ -454,7 +464,7 @@ body.dragging .irow:hover { background: transparent; }
 .sect { display: flex; align-items: baseline; gap: 8px; margin: 22px 0 10px; padding-top: 14px; border-top: 1px solid var(--line); font: 700 11px var(--font); letter-spacing: .12em; text-transform: uppercase; color: var(--sub); }
 .sect em { font-style: normal; font-weight: 400; letter-spacing: .02em; text-transform: none; color: var(--muted); }
 .insp > .sect:first-child { margin-top: 0; padding-top: 0; border-top: 0; }
-.kinds { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }          /* nine kinds: a 3 x 3 grid */
+.kinds { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }          /* twelve kinds: a 3 x 4 grid (four rows of three) */
 .kind { display: flex; flex-direction: column; align-items: center; gap: 5px; padding: 10px 4px 8px; background: var(--bg1); border: 1px solid var(--line); border-radius: 8px; color: var(--sub); font-size: 11.5px; font-weight: 500; transition: all .12s; }
 .kind:hover { color: var(--text); border-color: var(--line2); transform: translateY(-1px); }
 .kind.on { color: var(--accent); border-color: rgba(248, 107, 51, .5); background: rgba(248, 107, 51, .09); }
@@ -475,7 +485,7 @@ body.dragging .irow:hover { background: transparent; }
 .step-add { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
 .step-add .micro { margin-right: 4px; }
 
-/* ------------------------------------------------------------ brush browser */
+/* ------------------------------------------------------------ browser */
 .browser.compact { display: flex; flex-direction: column; height: 100%; min-height: 0; }
 .browser.full { display: grid; grid-template-columns: 230px minmax(0, 1fr); height: 100%; min-height: 0; }
 .lib-main { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--bg1); }
@@ -572,6 +582,23 @@ body.dragging .irow:hover { background: transparent; }
 .compact .bcard .tagdots { left: 6px; bottom: 6px; padding: 3px 4px; }
 .bcard.tagged::after { content: ""; position: absolute; left: 10px; right: 10px; bottom: 0; height: 3px; border-radius: 3px 3px 0 0; background: var(--tag); pointer-events: none; }
 .as-tag { flex: none; }
+
+/* Favourites: the star on a card, the strip's star button, and the star that stands in for a tag's dot. --fav is the Favourites tag's colour (set from the app). */
+.bstar { position: absolute; right: 6px; top: 6px; z-index: 3; width: 22px; height: 22px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 50%;
+  background: rgba(14, 13, 15, .66); color: #e8e9ec; opacity: 0; transform: scale(.85); transition: opacity .12s, transform .15s var(--pop), color .12s, background .12s; }
+.bcard:hover .bstar, .bcard:focus-within .bstar, .bstar.on { opacity: 1; transform: none; }
+.bstar:hover { color: var(--fav, #FFD166); background: rgba(14, 13, 15, .86); }
+.bstar.on { color: var(--fav, #FFD166); }
+.bstar.on .ico svg, .as-fav.on .ico svg, .tdot.star .ico svg, .cat[data-id="@fav"] .cat-ico svg { fill: currentColor; }
+.bstar:focus-visible { outline-offset: 1px; }
+.compact .bstar { width: 20px; height: 20px; right: 4px; top: 4px; }
+.as-fav { flex: none; padding: 0 8px; }
+.as-fav.on, .as-fav.on:hover:not(:disabled) { color: var(--fav, #FFD166); border-color: color-mix(in srgb, var(--fav, #FFD166) 55%, transparent); background: color-mix(in srgb, var(--fav, #FFD166) 12%, var(--bg3)); }
+.tdot.star, .target-row .tdot.tt-dot.star { display: inline-flex; width: auto; height: auto; border-radius: 0; background: none; box-shadow: none; color: var(--fav, #FFD166); }
+.iname .tdot.star { vertical-align: -1px; margin-right: 6px; }
+.cat-chev.cat-ico { color: var(--sub); }
+.cat.on .cat-ico { color: var(--accent); }
+.cat[data-id="@fav"] .cat-ico { color: var(--fav, #FFD166); }
 .as-multi { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 8px; background: var(--accent-wash); border: 1px solid rgba(248, 107, 51, .45); color: var(--accent); font: 700 13px var(--mono); }
 .iname .tdot { margin-right: 7px; vertical-align: 1px; }
 .tag-path { word-break: break-all; font-style: normal; margin-top: 6px; }
@@ -586,6 +613,8 @@ body.dragging .irow:hover { background: transparent; }
 .tcheck { display: grid; place-items: center; flex: none; width: 16px; height: 16px; border-radius: 4px; border: 1.5px solid var(--line2); color: var(--on-accent); }
 .tp-row[aria-checked="true"] .tcheck, .tp-row[aria-checked="mixed"] .tcheck { background: var(--accent); border-color: var(--accent); }
 .tdash { display: block; width: 8px; height: 2px; border-radius: 1px; background: var(--on-accent); }
+.tp-extra { margin-top: 4px; padding-top: 8px; border-top: 1px solid var(--line); border-radius: 0 0 6px 6px; }
+.tp-extra .tcheck { border-color: transparent; color: var(--sub); }
 .tp-add { padding: 8px 2px 2px; margin-top: 6px; border-top: 1px solid var(--line); }
 .tp-new { height: 30px; font-size: 12.5px; }
 
@@ -597,6 +626,8 @@ body.dragging .irow:hover { background: transparent; }
 .tm-sw { flex: none; width: 28px; height: 28px; padding: 0; border-radius: 7px; border: 1px solid var(--line2); background: var(--tag, var(--sub)); box-shadow: inset 0 0 0 2px rgba(0, 0, 0, .35); }
 .tm-sw:hover { border-color: var(--text); }
 .tm-label { flex: 1; min-width: 0; height: 30px; }
+.tm-label[readonly] { cursor: default; }
+.tm-gap { flex: none; width: 26px; height: 26px; }
 .tm-n { flex: none; width: 76px; text-align: right; font-size: 11px; color: var(--sub); }
 .tm-pal { display: flex; align-items: center; gap: 10px; padding: 6px 0 4px 38px; }
 .tm-pcs { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -842,14 +873,16 @@ body.dragging .irow:hover { background: transparent; }
 .chg-group li { color: var(--text); font-size: 13px; line-height: 1.6; }
 .modal:has(.changes) { width: min(560px, calc(100vw - 32px)); }
 
-/* ------------------------------------------------------------ brush browser popout (popout.html) */
+/* ------------------------------------------------------------ browser popout (popout.html) */
 .pop { background: var(--bg1); }
 .pop > .loading { flex: 1; display: grid; place-items: center; color: var(--sub); font-size: 12.5px; }
 .pop-head { flex: none; height: 40px; display: flex; align-items: center; gap: 8px; padding: 0 0 0 14px; background: var(--bg2); border-bottom: 1px solid var(--line);
   app-region: drag; -webkit-app-region: drag; user-select: none; }
 .pop-head button, .pop-head input { app-region: no-drag; -webkit-app-region: no-drag; }
-.pop-logo { display: inline-flex; color: var(--accent); filter: drop-shadow(0 0 5px rgba(248, 107, 51, .35)); }
-.pop-title { font-size: 13.5px; font-weight: 800; letter-spacing: .01em; }
+.pop-logo { display: inline-flex; flex: none; color: var(--accent); filter: drop-shadow(0 0 5px rgba(248, 107, 51, .35)); }
+.pop-logo svg { display: block; }
+.pop-head .ktabs { height: 100%; padding: 0 4px; border-bottom: 0; app-region: no-drag; -webkit-app-region: no-drag; }
+.pop-head .ktab { height: 100%; }
 .pop-head .pin-btn { width: 30px; height: 30px; }
 .pop-head .pin-btn[aria-pressed="true"] { color: var(--accent); background: var(--accent-wash); }
 .pop-head .pin-btn[aria-pressed="true"] .ico svg { fill: currentColor; fill-opacity: .35; }
@@ -857,10 +890,19 @@ body.dragging .irow:hover { background: transparent; }
 .pop-body { flex: 1; min-height: 0; }
 .pop .browser.full { grid-template-columns: 190px minmax(0, 1fr); }
 .pop .lib-side { padding: 10px 6px; }
+/* Folders and tags on the right (popout.json "side"): the columns swap and the divider moves with them. */
+.pop.side-right .browser.full { grid-template-columns: minmax(0, 1fr) 190px; }
+.pop.side-right .lib-side { order: 2; border-right: 0; border-left: 1px solid var(--line); }
+.pop-head .side-btn, .pop-head .col-btn { width: 30px; height: 30px; }
+.pop-head .col-btn[aria-pressed="true"] { color: var(--accent); }
+/* Folders and tags collapsed (popout.json "column"): the grid takes the whole width. */
+.pop.col-hidden .browser.full { grid-template-columns: minmax(0, 1fr); }
+.pop.col-hidden .lib-side { display: none; }
 .pop .b-tools { flex-wrap: wrap; gap: 8px 12px; padding: 10px 14px 6px; }
 .pop .searchbox { flex: 1 1 176px; }
 .pop .searchbox input:focus { box-shadow: none; }         /* the search box draws its own focus ring */
 .pop .b-sub { padding: 0 14px 8px; }
+.pop .b-count { display: none; }                  /* the popout shows no "N items" line */
 .pop .b-scroll { padding: 12px 14px 16px; }
 .pop .bgrid { gap: 8px; }
 .pop .bcard { cursor: pointer; }

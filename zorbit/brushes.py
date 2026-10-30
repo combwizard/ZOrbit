@@ -60,7 +60,7 @@ def zbrush_dirs() -> dict:
     return res
 
 
-def _scan(folder: Path, recursive: bool, out: dict[str, Path]) -> None:
+def _scan(folder: Path, recursive: bool, out: dict[str, Path], exts: tuple = (".zbp",)) -> None:
     if not folder.is_dir():
         return
     stack = [folder]
@@ -76,7 +76,7 @@ def _scan(folder: Path, recursive: bool, out: dict[str, Path]) -> None:
                 if e.is_dir():
                     if recursive and not e.name.startswith("_"):
                         subdirs.append(Path(e.path))
-                elif e.name.lower().endswith(".zbp"):
+                elif e.name.lower().endswith(exts):
                     out.setdefault(Path(e.name).stem.lower(), Path(e.path))
             except OSError:
                 pass

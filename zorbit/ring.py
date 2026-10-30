@@ -42,6 +42,7 @@ import time
 
 from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageFont
 
+import tags
 import win32 as W
 
 SS = 3                      # supersampling for sprites (drawn large, reduced once)
@@ -196,6 +197,16 @@ def _glyph_tag(draw, cx, cy, size, fill):
     hx, hy = pt(-0.27, 0.0)
     hr = size * 0.07
     draw.ellipse((hx - hr, hy - hr, hx + hr, hy + hr), outline=fill, width=max(1, int(size * 0.07)))
+
+
+def _glyph_star(draw, cx, cy, size, fill):
+    """A five-point star, outline like the luggage tag, size across, one point straight up."""
+    pts = []
+    for i in range(10):
+        a = math.radians(-90 + i * 36)
+        r = size * (0.55 if i % 2 == 0 else 0.23)
+        pts.append((cx + math.cos(a) * r, cy + 0.05 * size + math.sin(a) * r))
+    draw.polygon(pts, outline=fill, width=max(1, int(size * 0.07)))
 
 
 def _glyph_grid(draw, cx, cy, size, fill):
@@ -789,9 +800,11 @@ class Ring:
                 gd.text((c - (r_ - l) / 2 - l, c - (b_ - t_) / 2 - t_), "+", font=self.f_glyph,
                         fill=_rgba(self.c_text, 0.35))
             elif it.kind == "tag":                 # a tag with no brushes (or no such tag): faint, no tint
-                _glyph_tag(ImageDraw.Draw(im), c, c, ins * 0.42, _rgba(it.color or self.c_text, 0.35))
+                glyph = _glyph_star if it.tag == tags.FAVOURITE else _glyph_tag
+                glyph(ImageDraw.Draw(im), c, c, ins * 0.42, _rgba(it.color or self.c_text, 0.35))
             elif solid:                            # tag slot: the disc is the tag colour
-                _glyph_tag(ImageDraw.Draw(im), c, c, ins * 0.46, _rgba(self.c_text, 0.9))
+                glyph = _glyph_star if it.tag == tags.FAVOURITE else _glyph_tag
+                glyph(ImageDraw.Draw(im), c, c, ins * 0.46, _rgba(self.c_text, 0.9))
             else:                                  # placeholder disc with a short glyph
                 pr = ins / 2
                 ph = Image.new("RGBA", (C, C), (0, 0, 0, 0))
@@ -803,7 +816,7 @@ class Ring:
                     pd.ellipse((c - rr, c - rr, c + rr, c + rr), fill=g + (255,))
                 im.alpha_composite(ph)
                 gd = ImageDraw.Draw(im)
-                if it.kind == "browser":           # the brush browser: a 2x2 grid
+                if it.kind == "browser":           # the browser: a 2x2 grid
                     _glyph_grid(gd, c, c, ins * 0.46, _rgba(it.color or self.c_text, 0.95))
                 else:
                     glyph = it.label if len(it.label) <= 4 else "".join(w[0] for w in it.label.split()[:2]).upper()

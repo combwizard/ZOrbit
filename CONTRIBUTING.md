@@ -46,7 +46,7 @@ Source layout:
 
 | Folder | Contents |
 |---|---|
-| `zorbit\` | The app: hotkeys, ring drawing, config loading, brush thumbnails, Studio backend |
+| `zorbit\` | The app: hotkeys, ring drawing, config loading, thumbnails for brushes, alphas, materials and textures (`brushes.py`, `assets.py`), Studio backend |
 | `zorbit\studio_ui\` | Studio's interface (HTML, CSS, JavaScript) |
 | `bridge\` | The plugin that runs inside ZBrush 2026+ (Python) |
 | `bridge\zscript\` | The plugin for ZBrush 2022-2025 (ZScript source and its compiled `.zsc`) |

@@ -45,7 +45,8 @@
         {"toggle": "Brush:Auto Masking:BackfaceMask", "label": "Backface"},
         {"menu": "subdiv", "label": "SubDivide"},
         {"steps": [{"press": "Tool:Masking:Clear"}, {"brush": "Standard"}], "label": "Fresh Start", "icon": "Standard"},
-        {"browser": "", "label": "Browser"}
+        {"browser": "", "label": "Browser"},
+        {"tag": "favourite"}
       ]
     },
     "subdiv": {

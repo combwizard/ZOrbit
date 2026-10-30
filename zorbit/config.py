@@ -26,7 +26,7 @@ Schema (all keys optional except menus):
            "hover_submenus": true,           # reaching a submenu slot opens that submenu, centred on it
            "colors": {"bg": "#222327", "accent": "#f86b33", "highlight": "#4dc8e9", "text": "#f0f0f0",
                       "lines": "#f86b33"}},
-  "browser": {"hotkey": "Alt+B"},         # opens the brush browser popout (tags, search, folders)
+  "browser": {"hotkey": "Alt+B"},         # opens the browser popout (tabs per kind, tags, search, folders)
   "menus": {
     "<id>": {
       "title": "Brushes",
@@ -42,6 +42,9 @@ Schema (all keys optional except menus):
 
 <item> is one action plus an optional "label" and "icon" (path to a .png/.zbp, or a brush name):
   {"brush": "ClayBuildup"}                       select a brush (loaded from its .zbp if needed)
+  {"alpha": "Alpha 58"}                          select an alpha (imported from its file if needed)
+  {"material": "SkinShade4"}                     select a material (Material:Load replaces the selected slot)
+  {"texture": "Txtr01"}                          select a texture (imported from its file if needed)
   {"press": "Tool:Masking:Clear"}                press any ZBrush button by item path
   {"set": "Draw:Draw Size", "value": 64}         set a slider or value
   {"toggle": "Transform:Activate Symmetry"}      flip a switch
@@ -49,7 +52,8 @@ Schema (all keys optional except menus):
   {"menu": "<id>"}                               open another ring in place
   {"auto": "brush"}                              a slot the app fills with a brush you pick often (usage.py)
   {"tag": "blocking"}                            a submenu of every brush carrying that tag (tags.py), most used first
-  {"browser": ""}                                open the brush browser; a tag key filters it ("" = all brushes)
+  {"browser": "", "kind": "alpha"}               open the browser (tabs: brush alpha material texture) on that
+                                                 tab (default brush); a tag key filters it ("" = everything)
 
 Menu ids starting with "tag:" are reserved for the submenus a tag slot opens.
 """
@@ -58,7 +62,9 @@ import os
 import re
 from dataclasses import dataclass, field
 
-ACTION_KEYS = ("brush", "press", "set", "toggle", "steps", "menu", "auto", "tag", "browser")
+ACTION_KEYS = ("brush", "alpha", "material", "texture", "press", "set", "toggle", "steps", "menu", "auto", "tag",
+               "browser")
+ASSET_KINDS = ("brush", "alpha", "material", "texture")     # the kinds of the browser and of tags
 AUTO_KINDS = ("brush",)
 ANIMATIONS = ("smooth", "bounce", "pop", "zoom", "fade", "drift", "fancy", "spiral", "ripple", "breath", "mist",
               "snappy")
@@ -156,6 +162,14 @@ def parse_hotkey(text: str) -> Hotkey | None:
     return Hotkey(vk, mods["ctrl"], mods["alt"], mods["shift"], text.strip())
 
 
+def asset_of(action):
+    """(kind, name) of a brush, alpha, material or texture action; None for any other action."""
+    for k in ASSET_KINDS:
+        if k in action and isinstance(action[k], str):
+            return k, action[k]
+    return None
+
+
 def _check_action(a, errors, where, allow_nested=True) -> bool:
     if not isinstance(a, dict):
         errors.append(f"{where}: not an object")
@@ -173,7 +187,8 @@ def _check_action(a, errors, where, allow_nested=True) -> bool:
         return False
     if k == "steps":
         if not allow_nested or not isinstance(a["steps"], list) or not a["steps"]:
-            errors.append(f"{where}: 'steps' must be a non-empty list of brush/press/set/toggle actions")
+            errors.append(f"{where}: 'steps' must be a non-empty list of brush/alpha/material/texture/press/set/"
+                          f"toggle actions")
             return False
         for i, s in enumerate(a["steps"]):
             if not _check_action(s, errors, f"{where} step {i + 1}", allow_nested=False):
@@ -187,7 +202,10 @@ def _check_action(a, errors, where, allow_nested=True) -> bool:
         return False
     elif k == "browser":
         if not isinstance(a[k], str):
-            errors.append(f"{where}: 'browser' must be a string (a tag key, or \"\" for all brushes)")
+            errors.append(f"{where}: 'browser' must be a string (a tag key, or \"\" for everything)")
+            return False
+        if "kind" in a and a["kind"] not in ASSET_KINDS:
+            errors.append(f"{where}: browser 'kind' must be one of {', '.join(ASSET_KINDS)}")
             return False
     elif not isinstance(a[k], str) or not a[k].strip():
         errors.append(f"{where}: '{k}' must be a non-empty string")
@@ -196,8 +214,9 @@ def _check_action(a, errors, where, allow_nested=True) -> bool:
 
 
 def _default_label(a: dict, menus_raw: dict, tags=None) -> str:
-    if "brush" in a:
-        return a["brush"]
+    got = asset_of(a)
+    if got:
+        return got[1]
     if "menu" in a:
         m = menus_raw.get(a["menu"], {})
         return (m.get("title") if isinstance(m, dict) else None) or a["menu"]

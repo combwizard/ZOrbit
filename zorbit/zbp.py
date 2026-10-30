@@ -5,7 +5,8 @@ mode is "RGB" (interleaved) or "L". Never raises.
 
 File structure (all little-endian):
   0x00  b"ZBrush File?Copyright 1977-..."  (one filler byte, sometimes '*')
-  0x84  float32 width, float32 height of the embedded icon (96 or 512)
+  0x84  float32 width, float32 height of the embedded icon (96 or 512); a few
+        files (old .zmt materials) store the pair as 16.16 fixed point instead
   ...   a short header chunk stream ending in the marker 00 00 02 00
   then  uint32 block count, `count` uint32 compressed sizes, optionally one
         more uint32, then RLE data; blocks follow each other, one `size` each.
@@ -111,9 +112,13 @@ def _decode(path):
     if not d.startswith(_MAGIC) or _COPYRIGHT not in d[:0x30] or len(d) < 0xF8:
         return None
     a, b = struct.unpack_from("<ff", d, _DIM_OFF)
-    if a != b or a != int(a) or not (16 <= a <= _MAX_DIM):
-        return None
-    dim = int(a)
+    if a == b and a == int(a) and 16 <= a <= _MAX_DIM:
+        dim = int(a)
+    else:
+        ia, ib = struct.unpack_from("<II", d, _DIM_OFF)      # 16.16 fixed point, e.g. 0x00600000 = 96
+        if ia != ib or ia & 0xFFFF or not (16 <= ia >> 16 <= _MAX_DIM):
+            return None
+        dim = ia >> 16
 
     r = _parse(d, dim, _COUNT_OFF, 4, False)
     if r is not None:

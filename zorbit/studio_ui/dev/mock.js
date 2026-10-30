@@ -11,10 +11,17 @@
    calls are rejected, then they work), ?already (the first "Add a ZBrush folder" says the folder is already listed), ?busy
    (install/remove report that another operation is running), ?update (check_update finds a newer release), ?unreach
    (check_update cannot reach GitHub), ?prefsfail (set_pref is rejected).
-   Tags (state in localStorage rm_tags, seeded with the two starters and a few tagged brushes): ?tags=empty (no tags, nothing tagged),
-   ?tagsmany (30 tags with long names), ?tagfail (every tag change is refused), ?tagexists (create and rename always clash with
-   the first tag). The first two keep their state in memory only, so a reload starts clean.
-   The popout page (popout.html?mock): ?nopick (a pick is refused as "ZOrbit is not running"), ?tag=blocking (opens filtered, as --tag does);
+   Tags (state in localStorage rm_tags, seeded with the built-in Favourites tag (always first, cannot be renamed, merged or deleted), the two
+   starters and a few tagged brushes, three of them starred): ?tags=empty (only Favourites, nothing tagged),
+   ?tagsmany (Favourites and 30 tags with long names), ?tagfail (every tag change is refused), ?tagexists (create and rename always clash with
+   the first ordinary tag). The first two keep their state in memory only, so a reload starts clean.
+   Usage (get_usage / forget_recent; state in localStorage rm_usage_<kind>): a made-up Recent list of six items of that kind and scores for 24
+   (the order of Favourites); a pick in the popout moves that item to the front of Recent. ?usage=empty (nothing picked yet, no scores).
+   Import and export (Settings): ?importfail (the picked file is refused with a message), ?importcancel (the file dialog is closed),
+   ?importtags (the file holds tags only); an import changes the ring accent to cyan so it can be seen.
+   get_library/get_thumbs answer for every kind (brush, alpha, material, texture); the ?nozbrush/?nolib/?liberr switches apply to all of them.
+   The popout page (popout.html?mock): ?nopick (a pick is refused as "ZOrbit is not running"), ?tag=blocking (opens filtered, as --tag does),
+   ?kind=alpha (opens on that tab, else the last one, kept in localStorage rm_pop_kind);
    Keep on top is kept in localStorage rm_pop_on_top (on until switched off), and the popout_* calls only log.
    ?kinds adds a Tag item ({"tag": "blocking"}) and a Browser item ({"browser": ""}) to the end of the Tools menu, so the two newer
    kinds can be seen (the recorded config has none). The default stays the faithful recording.
@@ -36,9 +43,10 @@
   var ticks = 0, thumbCalls = 0, alreadyDone = false, appStarted = false;
   var saved = clone(M.get_config.config);
   var TAG_DEFAULTS = { tag_colors: 'tint', tag_band: 'medium', tag_band_opacity: 0.45, tag_glow_opacity: 0.4, tag_tint_opacity: 0.3, tag_tint_style: 'gradient', tag_tint_blend: 'multiply' };
-  var KINDS = ['brush', 'press', 'set', 'toggle', 'steps', 'menu', 'auto', 'tag', 'browser'];
+  var KINDS = ['brush', 'alpha', 'material', 'texture', 'press', 'set', 'toggle', 'steps', 'menu', 'auto', 'tag', 'browser'];
   if (q.has('kinds') && saved.menus && saved.menus.tools) saved.menus.tools.items.push({ tag: 'blocking' }, { browser: '' });
   var mtime = 1700000000000000000, conflictDone = false;
+  var FAV = 'favourite';
   var TAG_PALETTE = ['#F86B33', '#4DC8E9', '#A8DF23', '#E8413C', '#C77DFF', '#FFD166', '#5EEAD4', '#F472B6'];
   var tagsMode = q.get('tags') === 'empty' ? 'empty' : q.has('tagsmany') ? 'many' : 'saved';
   var tagMtime = 1700000000000000000, tagStore = null;
@@ -74,7 +82,7 @@
         if (kinds.length !== 1) { out.push(where + ': needs exactly one of ' + KINDS.join(', ')); return; }
         var k = kinds[0];
         if (k === 'steps') {
-          if (!Array.isArray(it.steps) || !it.steps.length) { out.push(where + ": 'steps' must be a non-empty list of brush/press/set/toggle actions"); return; }
+          if (!Array.isArray(it.steps) || !it.steps.length) { out.push(where + ": 'steps' must be a non-empty list of brush/alpha/material/texture/press/set/toggle actions"); return; }
           for (var j = 0; j < it.steps.length; j++) {
             var sk = KINDS.filter(function (x) { return it.steps[j] && x in it.steps[j]; });
             if (sk.some(function (x) { return ['menu', 'steps', 'auto', 'tag', 'browser'].indexOf(x) >= 0; })) {
@@ -141,17 +149,19 @@
   function tagSeed() {
     var st = { tags: [], items: {} }, names = ((M.get_library && M.get_library.brushes) || []).map(function (b) { return b.name; });
     var key = function (n) { return 'brush:' + n.replace(/\s+/g, '').toLowerCase(); };
+    st.tags.push({ key: FAV, label: 'Favourites', color: '#FFD166', builtin: true });          // always first
     if (tagsMode === 'empty') return st;
     if (tagsMode === 'many') {
       for (var i = 0; i < 30; i++) st.tags.push({ key: 'tag-' + (i + 1), label: (i % 3 ? 'Sculpting pass number ' : 'A rather long tag name for ') + (i + 1), color: TAG_PALETTE[i % 8] });
-      names.slice(0, 40).forEach(function (n, i) { st.items[key(n)] = [st.tags[i % 30].key].concat(i % 4 === 0 ? [st.tags[(i + 7) % 30].key] : []); });
+      names.slice(0, 40).forEach(function (n, i) { st.items[key(n)] = [st.tags[1 + i % 30].key].concat(i % 4 === 0 ? [st.tags[1 + (i + 7) % 30].key] : []); });
       return st;
     }
-    st.tags = [{ key: 'blocking', label: 'Blocking', color: '#F86B33' }, { key: 'detailing', label: 'Detailing', color: '#4DC8E9' }];
+    st.tags.push({ key: 'blocking', label: 'Blocking', color: '#F86B33' }, { key: 'detailing', label: 'Detailing', color: '#4DC8E9' });
     names.slice(0, 12).forEach(function (n, i) {
       if (i % 6 === 5) return;
       st.items[key(n)] = i % 5 === 4 ? ['blocking', 'detailing'] : [i % 2 ? 'detailing' : 'blocking'];
     });
+    [0, 3, 5, 8].forEach(function (i) { if (names[i]) st.items[key(names[i])] = (st.items[key(names[i])] || []).concat([FAV]); });   // a few stars (one on an untagged brush)
     return st;
   }
   function tagState() {
@@ -159,6 +169,10 @@
     var st = null;
     if (tagsMode === 'saved') { try { st = JSON.parse(localStorage.getItem('rm_tags')); } catch (e) { st = null; } }
     if (!st || !Array.isArray(st.tags) || !st.items) st = tagSeed();
+    // An older stored state has no Favourites tag: put it first. Whatever is stored, it is built in and first.
+    var fav = st.tags.filter(function (t) { return t.key === FAV; })[0] || { key: FAV, label: 'Favourites', color: '#FFD166' };
+    fav.builtin = true; fav.label = 'Favourites';
+    st.tags = [fav].concat(st.tags.filter(function (t) { return t.key !== FAV; }));
     tagStore = st;
     return st;
   }
@@ -168,6 +182,7 @@
   }
   function findTag(st, key) { return st.tags.filter(function (t) { return t.key === key; })[0] || null; }
   function hasTag(st, key) { return !!findTag(st, key); }
+  var BUILTIN_ERR = { ok: false, error: 'Favourites is built in' };
   function tagUnknown(key) { return { ok: false, error: "Tag '" + key + "' does not exist." }; }
   function tagDrop(st, key) {
     st.tags = st.tags.filter(function (t) { return t.key !== key; });
@@ -185,7 +200,7 @@
     label = typeof label === 'string' ? label.trim() : '';
     if (label.length < 1 || label.length > 40) return { err: { ok: false, error: 'A tag name is 1 to 40 characters.' } };
     var low = label.toLowerCase();
-    var other = st.tags.filter(function (t) { return t.key !== ignore && (q.has('tagexists') || t.label.toLowerCase() === low); })[0];
+    var other = st.tags.filter(function (t) { return t.key !== ignore && ((q.has('tagexists') && t.key !== FAV) || t.label.toLowerCase() === low); })[0];
     if (other) return { err: { ok: false, exists: other.key, error: "A tag called '" + other.label + "' already exists." } };
     return { label: label };
   }
@@ -193,7 +208,7 @@
     var st = tagState(), count = {};
     st.tags.forEach(function (t) { count[t.key] = 0; });
     Object.keys(st.items).forEach(function (ik) { st.items[ik].forEach(function (k) { if (k in count) count[k]++; }); });
-    return { ok: true, tags: st.tags.map(function (t) { return { key: t.key, label: t.label, color: t.color, count: count[t.key] }; }),
+    return { ok: true, tags: st.tags.map(function (t) { var o = { key: t.key, label: t.label, color: t.color, count: count[t.key] }; if (t.key === FAV) o.builtin = true; return o; }),
       items: clone(st.items), palette: TAG_PALETTE.slice(), mtime_ns: tagMtime, path: 'C:\\Users\\mock\\AppData\\Roaming\\ZOrbit\\tags.json', error: null };
   }
   // Runs one change like TagStore._change: refused under ?tagfail; written (and the time bumped) only when it says ok
@@ -204,6 +219,84 @@
       if (res.ok) tagSave();
       return Object.assign(tagSnapshot(), res);
     });
+  }
+
+  /* --- usage: the same shapes as get_usage / forget_recent in webapi.py, one store per kind in localStorage (rm_usage_<kind>).
+     First read: six items of the library as the recent picks (newest first, a pick every 45 minutes) and a score for 24 of them. */
+  var usageMem = {}, usageMtime = 1700000000000000000;
+  function usageStore(kind) {
+    if (usageMem[kind]) return usageMem[kind];
+    var st = null;
+    try { st = JSON.parse(localStorage.getItem('rm_usage_' + kind)); } catch (e) { st = null; }
+    if (!st || !Array.isArray(st.recent) || !st.scores) {
+      var names = libFor(kind).items.map(function (b) { return b.name; }), now = Math.floor(Date.now() / 1000);
+      st = { recent: [], scores: {}, mtime: usageMtime };
+      if (q.get('usage') !== 'empty' && names.length) {
+        uniq([2, 5, 9, 14, 20, 27].map(function (i) { return names[i % names.length]; })).forEach(function (n, i) {
+          st.recent.push({ name: n, t: now - 90 - i * 2700, count: Math.max(1, 14 - i * 2) });
+        });
+        names.slice(0, 24).forEach(function (n, i) { st.scores[n.toLowerCase()] = +(((i * 7) % 19) + 1 + (i % 3) / 4).toFixed(2); });
+      }
+    }
+    return (usageMem[kind] = st);
+  }
+  function usageSave(kind) {
+    var st = usageMem[kind];
+    usageMtime = Math.max(usageMtime, st.mtime || 0) + 1000000;       // never behind what an earlier page life saved
+    st.mtime = usageMtime;
+    try { localStorage.setItem('rm_usage_' + kind, JSON.stringify(st)); } catch (e) {}
+  }
+  function usagePayload(kind) {
+    var st = usageStore(kind);
+    return { ok: true, kind: kind, recent: clone(st.recent.slice(0, 24)), scores: clone(st.scores), mtime_ns: st.mtime };
+  }
+  // No library, no usage: ?nozbrush, ?nolib and ?liberr leave the Recent folder empty and unsaved
+  function usageOff() { return q.has('nozbrush') || q.has('nolib') || q.has('liberr'); }
+  function usageEmpty(kind) { return { ok: true, kind: kind, recent: [], scores: {}, mtime_ns: usageMtime }; }
+  function usagePick(kind, name) {                    // a pick in the popout: to the front of Recent, and a better score
+    var st = usageStore(kind), key = name.replace(/\s+/g, '').toLowerCase(), old = st.recent.filter(function (r) { return r.name.replace(/\s+/g, '').toLowerCase() === key; })[0];
+    st.recent = [{ name: name, t: Math.floor(Date.now() / 1000), count: (old ? old.count : 0) + 1 }].concat(st.recent.filter(function (r) { return r !== old; })).slice(0, 24);
+    st.scores[name.toLowerCase()] = +((st.scores[name.toLowerCase()] || 0) + 1).toFixed(2);
+    usageSave(kind);
+  }
+
+  /* The libraries of the four kinds. Brushes are the recording; an alpha, material or texture library is M.get_library_<kind> when one was
+     recorded ({items|brushes, categories}), else made from the first 48 recorded brushes: the same pictures under new names. */
+  var ASSET_KIND = {
+    brush: { suffix: '', ext: '.ZBP', cats: null,
+      sources: [{ label: 'ZBrush 2026 brush presets', path: 'C:\\Users\\david\\OneDrive\\Documents\\ZBrush 2026 Assets\\ZStartup\\BrushPresets', exists: true },
+                { label: 'ZBrush 2022 brush presets', path: 'C:\\Program Files\\Maxon ZBrush 2022\\ZStartup\\BrushPresets', exists: false }] },
+    alpha: { suffix: ' Alpha', ext: '.psd', cats: ['My Alphas', 'ZBrush', 'Lightbox/HardSurfaceAlphas'],
+      sources: [{ label: 'ZBrush 2026 alphas', path: 'C:\\Users\\david\\OneDrive\\Documents\\ZBrush 2026 Assets\\ZStartup\\Alphas', exists: true },
+                { label: 'ZBrush 2022 alphas', path: 'C:\\Program Files\\Maxon ZBrush 2022\\ZStartup\\Alphas', exists: false }] },
+    material: { suffix: ' Mat', ext: '.zmt', cats: ['My Materials', 'ZBrush/MatCap', 'Lightbox/Standard'],
+      sources: [{ label: 'ZBrush 2026 materials', path: 'C:\\Users\\david\\OneDrive\\Documents\\ZBrush 2026 Assets\\ZStartup\\Materials', exists: true },
+                { label: 'ZBrush 2022 materials', path: 'C:\\Program Files\\Maxon ZBrush 2022\\ZStartup\\Materials', exists: false }] },
+    texture: { suffix: ' Tex', ext: '.psd', cats: ['My Textures', 'ZBrush', 'Lightbox/Panoramas'],
+      sources: [{ label: 'ZBrush 2026 textures', path: 'C:\\Users\\david\\OneDrive\\Documents\\ZBrush 2026 Assets\\ZStartup\\Textures', exists: true },
+                { label: 'ZBrush 2022 textures', path: 'C:\\Program Files\\Maxon ZBrush 2022\\ZStartup\\Textures', exists: false }] }
+  };
+  var libCache = {};
+  function libFor(kind) {
+    if (libCache[kind]) return clone(libCache[kind]);
+    var out, rec = M['get_library_' + kind], A = ASSET_KIND[kind];
+    if (kind === 'brush') {
+      var b = clone(M.get_library);
+      out = { items: b.brushes, categories: b.categories };
+    } else if (rec) {
+      var r = clone(rec);
+      out = { items: r.items || r.brushes || [], categories: r.categories || [] };
+    } else {
+      var items = ((M.get_library && M.get_library.brushes) || []).slice(0, 48).map(function (b, i) {
+        var cat = A.cats[i % A.cats.length], name = b.name + A.suffix;
+        return { name: name, source: cat.split('/')[0], category: cat, path: 'C:\\Users\\david\\ZBrush Assets\\' + cat.replace(/\//g, '\\') + '\\' + name + A.ext };
+      });
+      var counts = {};
+      items.forEach(function (it) { counts[it.category] = (counts[it.category] || 0) + 1; });
+      out = { items: items, categories: Object.keys(counts).map(function (id) { return { id: id, count: counts[id] }; }) };
+    }
+    libCache[kind] = out;
+    return clone(out);
   }
 
   /* ---- Setup screen: one small model of ZBrush, the plugin and the app, read by get_status, get_setup and get_zscript_bridge */
@@ -353,7 +446,41 @@
     // Both mark the file as repaired for this tab, so the reload after them boots normally even with ?broken.
     restore_backup: function () { try { sessionStorage.setItem('rm_repaired', '1'); } catch (e) {} return sleep(200).then(function () { return { ok: true, message: 'Restored the last good backup (mock).' }; }); },
     reset_config: function () { try { sessionStorage.setItem('rm_repaired', '1'); } catch (e) {} return sleep(200).then(function () { return { ok: true, message: 'Reset to the default menus (mock).' }; }); },
-    preview_tags: function () {                                      // the backend's sample ring; the recorded data has it once regenerated
+    // Export and import: the picked file is a made-up bundle. ?importfail refuses it, ?importcancel is a closed dialog, ?importtags a tags-only file.
+    export_settings: function (cfg) {
+      return sleep(150).then(function () {
+        if (q.has('importcancel')) return { ok: false, cancelled: true };
+        return { ok: true, path: 'C:\\Users\\mock\\Documents\\ZOrbit settings 2026-10-30.json', message: 'Exported ' + Object.keys((cfg && cfg.menus) || {}).length + ' menus and the tags to ZOrbit settings 2026-10-30.json (mock).' };
+      });
+    },
+    pick_import: function () {
+      return sleep(150).then(function () {
+        if (q.has('importcancel')) return { ok: false, cancelled: true };
+        if (q.has('importfail')) return { ok: false, message: "That file is not valid JSON: Expecting ',' delimiter: line 12 column 5 (mock)." };
+        var tagsOnly = q.has('importtags'), n = Object.keys(saved.menus || {}).length;
+        return { ok: true, path: 'C:\\Users\\mock\\Documents\\ZOrbit settings 2026-10-30.json', kind: tagsOnly ? 'tags' : 'bundle', has_config: !tagsOnly, menus: tagsOnly ? 0 : n,
+          has_tags: true, tags: 4, new_tags: 2, items: 17, problems: tagsOnly || !q.has('problems') ? [] : validate(saved), version: '0.9.0' };
+      });
+    },
+    apply_import: function (tag_mode) {
+      return sleep(200).then(function () {
+        var tagsOnly = q.has('importtags'), msg = '';
+        if (tag_mode === 'merge' || tag_mode === 'replace') {
+          var st = tagState();
+          if (tag_mode === 'replace') { st.tags = st.tags.filter(function (t) { return t.key === FAV; }); st.items = {}; }   // Favourites is built in: it stays
+          ['blocking', 'detailing', 'imported-a', 'imported-b'].forEach(function (k, i) {
+            if (!hasTag(st, k)) st.tags.push({ key: k, label: k.replace('-', ' '), color: tagNextColor(st) });
+          });
+          tagSave();
+          msg = tag_mode === 'merge' ? 'Merged the tags: 2 added.' : 'Replaced the tags with the 4 in the file.';
+        }
+        if (tagsOnly) return { ok: true, config: null, problems: [], tags_message: msg };
+        var cfg = clone(saved);                                   // a visible change: another accent colour
+        cfg.ring = Object.assign({}, cfg.ring); cfg.ring.colors = Object.assign({}, cfg.ring.colors, { accent: '#4dc8e9', lines: '#4dc8e9' });
+        return { ok: true, config: cfg, problems: q.has('problems') ? validate(cfg) : [], tags_message: msg };
+      });
+    },
+    preview_tags: function () {                                   // the backend's sample ring; the recorded data has it once regenerated
       return sleep(60 + lag).then(function () {
         var res = clone(M.preview_tags || M.preview_ring[Object.keys(M.preview_ring)[0]]);
         res.width = res.height = res.size; res.centre = [res.size / 2, res.size / 2];
@@ -400,31 +527,43 @@
     get_options: function () {
       return sleep(10).then(function () {
         var o = clone(M.get_options);
-        o.actions = KINDS.slice(); o.tag_colors = ['none', 'tint', 'glow', 'both'];
+        o.favourite_tag = FAV;
+        o.actions = KINDS.slice(); o.asset_kinds = ['brush', 'alpha', 'material', 'texture']; o.tag_colors = ['none', 'tint', 'glow', 'both'];
         o.tag_bands = ['none', 'hairline', 'narrow', 'medium', 'wide']; o.tint_styles = ['flat', 'gradient']; o.tint_blends = ['multiply', 'overlay'];
         o.ring_defaults = Object.assign({}, o.ring_defaults, TAG_DEFAULTS);
         o.ring_ranges = Object.assign({}, o.ring_ranges, { tag_band_opacity: [0, 1], tag_glow_opacity: [0, 1], tag_tint_opacity: [0, 1] });
         return o;
       });
     },
-    get_library: function (refresh) {
+    get_library: function (refresh, kind) {
+      kind = ASSET_KIND[kind] ? kind : 'brush';
       return sleep(refresh ? 700 : 250).then(function () {
-        var lib = clone(M.get_library), n = lib.brushes.length;
-        var sources = [
-          { label: 'ZBrush 2026 brush presets', path: 'C:\\Users\\david\\OneDrive\\Documents\\ZBrush 2026 Assets\\ZStartup\\BrushPresets', exists: true, count: n },
-          { label: 'ZBrush 2022 brush presets', path: 'C:\\Program Files\\Maxon ZBrush 2022\\ZStartup\\BrushPresets', exists: false, count: 0 }];
-        if (q.has('liberr')) return { brushes: [], categories: [], sources: [], zbrush_found: true, error: 'Could not read the brush folders: [WinError 5] Access is denied (mock)' };
-        if (q.has('nozbrush')) return { brushes: [], categories: [], sources: [], zbrush_found: false, error: null };
-        if (q.has('nolib')) { sources[0].count = 0; return { brushes: [], categories: [], sources: sources, zbrush_found: true, error: null }; }
-        return { brushes: lib.brushes, categories: lib.categories, sources: sources, zbrush_found: true, error: null };
+        var A = ASSET_KIND[kind], lib = libFor(kind), n = lib.items.length;
+        var sources = A.sources.map(function (src, i) { return { label: src.label, path: src.path, exists: src.exists, count: i === 0 ? n : 0 }; });
+        if (q.has('liberr')) return { kind: kind, items: [], brushes: [], categories: [], sources: [], zbrush_found: true, error: 'Could not read the ' + kind + ' folders: [WinError 5] Access is denied (mock)' };
+        if (q.has('nozbrush')) return { kind: kind, items: [], brushes: [], categories: [], sources: [], zbrush_found: false, error: null };
+        if (q.has('nolib')) { sources[0].count = 0; return { kind: kind, items: [], brushes: [], categories: [], sources: sources, zbrush_found: true, error: null }; }
+        var out = { kind: kind, items: lib.items, categories: lib.categories, sources: sources, zbrush_found: true, error: null };
+        if (kind === 'brush') out.brushes = lib.items;      // the alias the backend keeps for one release
+        return out;
       });
     },
-    get_thumbs: function (names, size) {
-      console.log('[mock] get_thumbs', (names || []).length, 'names, size', size);
+    get_thumbs: function (names, size, kind) {
+      kind = ASSET_KIND[kind] ? kind : 'brush';
+      console.log('[mock] get_thumbs', (names || []).length, kind, 'names, size', size);
       if (q.has('thumbfail') && ++thumbCalls <= 2) return sleep(70).then(function () { throw new Error('thumbnail service unavailable (mock)'); });
       return sleep(70).then(function () {
-        var out = {};
-        (names || []).forEach(function (n) { out[n] = (M.get_thumbs && M.get_thumbs[n]) || null; });
+        var out = {}, own = M['get_thumbs_' + kind], suffix = ASSET_KIND[kind].suffix;
+        (names || []).forEach(function (n) {
+          var v = null;
+          if (kind === 'brush') v = (M.get_thumbs && M.get_thumbs[n]) || null;
+          else if (own && own[n]) v = own[n];
+          else if (!own || !(n in own)) {                  // a synthesised name: the picture of the brush it was made from
+            var base = n.length > suffix.length && n.slice(-suffix.length) === suffix ? n.slice(0, -suffix.length) : null;
+            v = (base && M.get_thumbs && M.get_thumbs[base]) || null;
+          }
+          out[n] = v;
+        });
         return out;
       });
     },
@@ -447,6 +586,7 @@
     },
     rename_tag: function (key, label) {
       return tagChange(function (st) {
+        if (key === FAV) return BUILTIN_ERR;
         var t = findTag(st, key);
         if (!t) return tagUnknown(key);
         var lb = tagLabel(st, label, key);
@@ -466,6 +606,7 @@
     },
     delete_tag: function (key) {
       return tagChange(function (st) {
+        if (key === FAV) return BUILTIN_ERR;
         if (!findTag(st, key)) return tagUnknown(key);
         tagDrop(st, key);
         return { ok: true, key: key };
@@ -473,6 +614,7 @@
     },
     merge_tags: function (src, dst) {
       return tagChange(function (st) {
+        if (src === FAV) return BUILTIN_ERR;
         if (!findTag(st, src)) return tagUnknown(src);
         if (!findTag(st, dst)) return tagUnknown(dst);
         if (src === dst) return { ok: false, error: 'A tag cannot be merged into itself.' };
@@ -506,6 +648,19 @@
           if (lst.length) st.items[ik] = lst; else delete st.items[ik];
         });
         return { ok: true };
+      });
+    },
+    get_usage: function (kind) {
+      kind = ASSET_KIND[kind] ? kind : 'brush';
+      return sleep(50 + lag).then(function () { return usageOff() ? usageEmpty(kind) : usagePayload(kind); });
+    },
+    forget_recent: function (kind, name) {
+      kind = ASSET_KIND[kind] ? kind : 'brush';
+      return sleep(60 + lag).then(function () {
+        var st = usageStore(kind), key = String(name).replace(/\s+/g, '').toLowerCase();
+        st.recent = st.recent.filter(function (r) { return r.name.replace(/\s+/g, '').toLowerCase() !== key; });
+        usageSave(kind);
+        return usagePayload(kind);
       });
     },
     get_auto_slots: function (cfg, menuId) {
@@ -584,10 +739,14 @@
     check_update: function () { var p = JSON.parse(localStorage.getItem('rm_prefs') || '{}'); if (p.check_updates === false) return Promise.resolve({ newer: false, current: '0.9.0', latest: null, url: 'https://github.com/combwizard/zorbit/releases' }); return sleep(300).then(function () { if (q.has('unreach')) return { newer: false, current: '0.9.0', latest: null, url: 'https://github.com/combwizard/zorbit/releases' }; return q.has('update') ? { newer: true, current: '0.9.0', latest: '0.9.0', url: 'https://github.com/combwizard/zorbit/releases' } : { newer: false, current: '0.9.0', latest: '0.9.0', url: 'https://github.com/combwizard/zorbit/releases' }; }); },
     open_url: function (url) { console.log('[mock] open_url', url); return Promise.resolve(true); },
     open_browser: function () { console.log('[mock] open_browser'); return Promise.resolve({ ok: true, started: false }); },
-    // The brush browser popout (popout.html?mock). A pick only logs; ?nopick answers like a popout whose app is gone.
-    popout_pick: function (name) {
-      console.log('[mock] popout_pick', name);
-      return sleep(60).then(function () { return q.has('nopick') ? { ok: false, error: 'ZOrbit is not running' } : { ok: true }; });
+    // The browser popout (popout.html?mock). A pick only logs; ?nopick answers like a popout whose app is gone.
+    popout_pick: function (name, kind) {
+      console.log('[mock] popout_pick', name, kind);
+      return sleep(60).then(function () {
+        if (q.has('nopick')) return { ok: false, error: 'ZOrbit is not running' };
+        if (name && ASSET_KIND[kind] && !usageOff()) usagePick(kind, String(name));          // ZBrush selected it: it is now the newest Recent
+        return { ok: true };
+      });
     },
     popout_hide: function () { console.log('[mock] popout_hide'); return Promise.resolve(true); },
     popout_release_focus: function () { console.log('[mock] popout_release_focus'); return Promise.resolve(true); },
@@ -596,11 +755,26 @@
       try { localStorage.setItem('rm_pop_on_top', flag ? '1' : '0'); } catch (e) {}
       return Promise.resolve(true);
     },
+    popout_set_kind: function (kind) {
+      console.log('[mock] popout_set_kind', kind);
+      try { localStorage.setItem('rm_pop_kind', kind); } catch (e) {}
+      return Promise.resolve(true);
+    },
+    popout_set_column: function (shown) {
+      console.log('[mock] popout_set_column', shown);
+      try { localStorage.setItem('rm_pop_column', shown ? '1' : '0'); } catch (e) {}
+      return Promise.resolve(true);
+    },
+    popout_set_side: function (side) {
+      console.log('[mock] popout_set_side', side);
+      try { localStorage.setItem('rm_pop_side', side); } catch (e) {}
+      return Promise.resolve(true);
+    },
     popout_set_size: function (px) { console.log('[mock] popout_set_size', px); return Promise.resolve(true); },
     popout_get_state: function () {
-      var onTop = true;
-      try { onTop = localStorage.getItem('rm_pop_on_top') !== '0'; } catch (e) {}
-      return Promise.resolve({ on_top: onTop, size: 96, tag: q.get('tag') || null, tags_path: '' });
+      var onTop = true, kind = null, side = 'left', column = true;
+      try { onTop = localStorage.getItem('rm_pop_on_top') !== '0'; kind = localStorage.getItem('rm_pop_kind'); side = localStorage.getItem('rm_pop_side') || 'left'; column = localStorage.getItem('rm_pop_column') !== '0'; } catch (e) {}
+      return Promise.resolve({ on_top: onTop, size: 96, side: side, column: column, tag: q.get('tag') || null, kind: q.get('kind') || kind || 'brush', tags_path: '' });
     },
     popout_log: function (msg) { console.log('[mock] popout_log', msg); return Promise.resolve(true); },
   };

@@ -57,15 +57,18 @@
 - [ ] ZBrush 2026 can move the user asset folder (Preferences > Asset Directory, `ZBRUSH_USER_ASSETS_DIR`).
       `brushes.zbrush_dirs()` reads only `userassets_path.txt`; have the bridge write
       `zbc.resolve_path("ZPLUGINDATA_")` to a file the app reads
+- [ ] Check in ZBrush 2026 and 2022 that an imported alpha or texture gets a button named by its file stem (else
+      every pick re-imports); check that `Texture:Import` takes .exr
 
 ### Ring
 
 - [ ] Auto slots: unpinned slots refill from usage (decay with a ~2 week half-life; a newcomer must win twice
       in a row before it takes a slot, so the ring doesn't reshuffle). A simpler first step: a "Recent brushes" ring
 - [ ] Right-click the open ring: Keep (pin), Remove, Hide, without opening Studio
-- [ ] More item kinds with library tabs and thumbnails: alpha (`Alpha:Import`), material (`Material:Load`),
-      texture (`Texture:Import`), macro, load a tool/project/UI layout. Same pattern as brushes: press the
-      item if it is loaded, else `FileNameSetNext` + the Load button
+- [x] More item kinds with library tabs and thumbnails: alpha (`Alpha:Import`), material (`Material:Load`),
+      texture (`Texture:Import`). Same pattern as brushes: press the item if it is loaded, else
+      `FileNameSetNext` + the Load button
+- [ ] More item kinds: macro, load a tool/project/UI layout
   - [ ] Load project: an "always the newest" option that opens the latest file in a folder, so saving
         `Blockout_012` after `_011` needs no menu edit
 - [ ] Capture item: save the viewport (`Document:Export`) as a timestamped PNG in a folder chosen in Studio
@@ -74,9 +77,10 @@
 
 ### Tags and the browser
 
-- [ ] Alphas, materials and textures in the browser: `alpha:<path>` style item keys in `tags.json` (the store and
+- [x] Alphas, materials and textures in the browser: `alpha:<path>` style item keys in `tags.json` (the store and
       keys already take other kinds), tabs in the browser and the Library, and the matching bridge actions
       (`Alpha:Import`, `Material:Load`, `Texture:Import`)
+- [x] Favourites (a built-in star tag) and Recent in the browser
 - [ ] Any / All toggle for the tag chips (they match any chosen tag today)
 - [ ] A segmented slot border when a brush has several tags (only the first colours it now)
 - [ ] Group same-tag slots: an option to draw a ring with each tag's slots side by side, so the band forms
@@ -84,7 +88,9 @@
 - [ ] The tag band along a fan's arc (only the ring has it; a fan's slots take the tint and glow)
 - [ ] Idle exit for the browser process: quit after a while unused and start again on the next press
 - [ ] `ring.tag_limit`: change the 12-slot cap of a tag fan
-- [ ] Import and export tags (share a tag set or merge another `tags.json`)
+- [x] Import and export tags (share a tag set or merge another `tags.json`)
+- [ ] Favourites: manual drag-to-reorder and several named favourite tabs (XMD Toolbox style); a mini-mode strip of
+      favourites over ZBrush
 
 ### Studio
 
@@ -93,7 +99,8 @@
 - [ ] Reorder the Settings cards: Ring geometry, Colours, Labels, Tag colours (the look); Open animation, Behaviour
       (the feel); Brush browser, ZBrush bridge; then the cards that save straight away: Older ZBrush, Tags,
       Studio. Do it by sorting the built cards by name before the "On this page" list is made, not by moving
-      their code, and put the same order in the Settings row of the user guide's Studio table. Optionally a
+      their code, and put the same order in the Settings row of the user guide's Studio table. Import and export
+      comes last, after Studio. Optionally a
       **Manage tags...** button in the Tag colours card
 
 ### macOS notes
