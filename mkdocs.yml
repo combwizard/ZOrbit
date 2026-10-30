@@ -32,26 +32,17 @@ nav:
 
 theme:
   name: material
-  logo: assets/icon.png
+  # Header, footer and logo are reshaped to match the landing page (zorbit.lol).
+  custom_dir: docs-theme
   favicon: assets/icon.png
   font: false
   icon:
     repo: fontawesome/brands/github
+  # Dark only, like the landing page and Studio.
   palette:
-    - media: "(prefers-color-scheme: dark)"
-      scheme: slate
-      primary: custom
-      accent: custom
-      toggle:
-        icon: material/weather-sunny
-        name: Light mode
-    - media: "(prefers-color-scheme: light)"
-      scheme: default
-      primary: custom
-      accent: custom
-      toggle:
-        icon: material/weather-night
-        name: Dark mode
+    scheme: slate
+    primary: custom
+    accent: custom
   features:
     - navigation.sections
     - navigation.footer

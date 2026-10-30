@@ -1,0 +1,30 @@
+{#- Material's header, reshaped into the landing page's floating bar: orbit mark and wordmark
+    (back to zorbit.lol), a Docs link, search, and the GitHub and Download buttons. -#}
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="{{ lang.t('header') }}">
+    <label class="md-header__button md-icon zo-menu" for="__drawer">
+      {% set icon = config.theme.icon.menu or "material/menu" %}
+      {% include ".icons/" ~ icon ~ ".svg" %}
+    </label>
+    <a class="zo-brand" href="{{ config.extra.homepage }}" title="ZOrbit home">
+      {% include "partials/logo.html" %}
+      <span class="zo-wordmark"><span class="zo-z">Z</span>Orbit</span>
+    </a>
+    <a class="zo-docs" href="{{ nav.homepage.url | url }}">Docs</a>
+    <div class="zo-spacer"></div>
+    {% if "material/search" in config.plugins %}
+      {% set search = config.plugins["material/search"] | attr("config") %}
+      {% if search.enabled %}
+        <label class="md-header__button md-icon" for="__search">
+          {% set icon = config.theme.icon.search or "material/magnify" %}
+          {% include ".icons/" ~ icon ~ ".svg" %}
+        </label>
+        {% include "partials/search.html" %}
+      {% endif %}
+    {% endif %}
+    <a class="zo-btn zo-gh" href="{{ config.repo_url }}" aria-label="ZOrbit on GitHub">
+      {% include ".icons/fontawesome/brands/github.svg" %}<span class="zo-gh-label">GitHub</span>
+    </a>
+    <a class="zo-btn zo-primary" href="{{ config.repo_url }}/releases/latest">Download</a>
+  </nav>
+</header>
