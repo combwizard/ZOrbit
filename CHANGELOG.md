@@ -4,6 +4,18 @@ All notable changes to this project are listed here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [0.10.1] - 2026-10-30
+
+### Fixed
+
+- Studio no longer flashes black when it opens or when it leaves maximised. It now opens hidden, gets its title bar
+  removed, its saved size and position and its maximised state, and shows once the page has loaded (after 3 s at
+  most). Leaving maximised is one resize straight to the remembered size, instead of a resize one title bar too tall
+  followed by a correction. The browser window restores the same way.
+  Not yet tested on the PC that reported the flash: on a test machine the extra resizes are gone, but nobody has
+  checked the flash itself there yet.
+- The Studio and browser windows start in the page's own background colour.
+
 ## [0.10.0] - 2026-10-30
 
 ### Added
@@ -376,6 +388,7 @@ First public release.
   only brushes included with ZBrush.
 - Documentation: README, user guide, third-party notices and contributing guide.
 
+[0.10.1]: https://github.com/combwizard/zorbit/releases/tag/v0.10.1
 [0.10.0]: https://github.com/combwizard/zorbit/releases/tag/v0.10.0
 [0.9.0]: https://github.com/combwizard/zorbit/releases/tag/v0.9.0
 [0.8.1]: https://github.com/combwizard/zorbit/releases/tag/v0.8.1
