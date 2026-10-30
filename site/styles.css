@@ -107,8 +107,12 @@ kbd {
   background: linear-gradient(90deg, var(--accent), var(--amber));
   -webkit-background-clip: text; background-clip: text; color: transparent;
 }
-.shine {
-  background: linear-gradient(100deg, #fff 0%, #fff 38%, #ffb08a 46%, var(--accent) 50%, var(--cyan) 56%, #fff 64%, #fff 100%);
+/* The band rides on a copy of the text, so the letters keep their own colours under it. */
+.shine { position: relative; display: inline-block; color: #fff; }
+.shine::after {
+  content: attr(data-text); content: attr(data-text) / "";
+  position: absolute; inset: 0; white-space: nowrap; pointer-events: none;
+  background: linear-gradient(100deg, transparent 0%, transparent 38%, #ffb08a 46%, var(--accent) 50%, var(--cyan) 56%, transparent 64%, transparent 100%);
   background-size: 300% 100%; background-position: 100% 0;
   -webkit-background-clip: text; background-clip: text; color: transparent;
   animation: shine 7s var(--ease) infinite;
@@ -1016,12 +1020,12 @@ kbd {
 .reveal.in { opacity: 1; transform: none; filter: none; }
 @media (prefers-reduced-motion: reduce) {
   .reveal { opacity: 1; transform: none; filter: none; transition: none; }
-  .orb, .orbit, .shine, .badge-dot, .marquee-track, .glow-card, .glow-card::before, .cta-rings span, .win-run { animation: none; }
+  .orb, .orbit, .badge-dot, .marquee-track, .glow-card, .glow-card::before, .cta-rings span, .win-run { animation: none; }
   .marquee-track { flex-wrap: wrap; justify-content: center; width: auto; padding: 0 24px; }
   .marquee-track > :nth-child(n + 23) { display: none; }
   .rec-dot { animation: none; }
   .cta-rings span:first-child { opacity: .5; transform: scale(2); }
-  .shine { background-position: 100% 0; }
+  .shine::after { display: none; }
   .btn.primary::after { display: none; }
 }
 
