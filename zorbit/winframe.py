@@ -115,45 +115,64 @@ class _MINMAXINFO(ctypes.Structure):
                 ("ptMinTrackSize", w.POINT), ("ptMaxTrackSize", w.POINT)]
 
 
+class _WINDOWPOS(ctypes.Structure):
+    _fields_ = [("hwnd", w.HWND), ("hwndInsertAfter", w.HWND), ("x", ctypes.c_int), ("y", ctypes.c_int),
+                ("cx", ctypes.c_int), ("cy", ctypes.c_int), ("flags", w.UINT)]
+
+
 _LRESULT = ctypes.c_ssize_t
 _WNDPROC = ctypes.WINFUNCTYPE(_LRESULT, w.HWND, w.UINT, w.WPARAM, w.LPARAM)
 _subclass = {}                     # keeps the callback and the original proc alive for the window's life
 
 
+def _same_monitor(a, b) -> bool:
+    user32.MonitorFromRect.restype = w.HMONITOR
+    user32.MonitorFromRect.argtypes = [ctypes.POINTER(w.RECT), w.DWORD]
+    return user32.MonitorFromRect(ctypes.byref(w.RECT(*a)), 2) == user32.MonitorFromRect(ctypes.byref(w.RECT(*b)), 2)
+
+
 def limit_maximise_to_work_area(hwnd):
-    """Subclasses the window to answer WM_GETMINMAXINFO only. Without a caption Windows maximises over the
+    """Subclasses the window to answer WM_GETMINMAXINFO. Without a caption Windows maximises over the
     whole monitor (taskbar included); this makes double-click, Win+Up, snap-to-top and our button all
-    maximise to the work area, with the usual invisible-border overhang. Everything else passes through.
-    It also tracks the window's normal (restored) rectangle: see normal_rect."""
+    maximise to the work area, with the usual invisible-border overhang. It also tracks the window's normal
+    (restored) rectangle (see normal_rect) and makes a restore land on it. Everything else passes through."""
     user32.GetWindowLongPtrW.restype = ctypes.c_void_p
     user32.GetWindowLongPtrW.argtypes = [w.HWND, ctypes.c_int]
     user32.SetWindowLongPtrW.restype = ctypes.c_void_p
     user32.SetWindowLongPtrW.argtypes = [w.HWND, ctypes.c_int, ctypes.c_void_p]
     user32.CallWindowProcW.restype = _LRESULT
     user32.CallWindowProcW.argtypes = [ctypes.c_void_p, w.HWND, w.UINT, w.WPARAM, w.LPARAM]
-    GWLP_WNDPROC, WM_GETMINMAXINFO, WM_WINDOWPOSCHANGED = -4, 0x0024, 0x0047
-    WM_FIX_RESTORE = 0x8000 + 77
+    GWLP_WNDPROC, WM_GETMINMAXINFO, WM_WINDOWPOSCHANGING, WM_WINDOWPOSCHANGED = -4, 0x0024, 0x0046, 0x0047
+    WM_ENTERSIZEMOVE, WM_EXITSIZEMOVE = 0x0231, 0x0232
+    SWP_NOSIZE, SWP_NOMOVE = 0x0001, 0x0002
     if hwnd in _subclass:
         return
     original = user32.GetWindowLongPtrW(hwnd, GWLP_WNDPROC)
-    # WinForms still believes the window has a caption, and on restore re-applies a size that is one caption
-    # taller. So remember the last normal rectangle and put it back right after any restore.
-    st = {"zoomed": bool(user32.IsZoomed(hwnd)), "normal": None, "pending": None}
+    # WinForms still believes the window has a caption, and on restore asks for a size that is one caption
+    # taller. A second resize to fix that afterwards makes WebView2 flash black, so the restore itself is
+    # given the last normal rectangle instead. In a drag off the top (or after Win+Shift+Arrow moved the
+    # maximised window to another screen) Windows' position is kept and only the size is corrected.
+    st = {"zoomed": bool(user32.IsZoomed(hwnd)), "normal": None, "sizemove": False}
 
     def proc(h, msg, wp, lp):
-        if msg == WM_FIX_RESTORE:
-            rc = st.pop("pending", None)
-            st["pending"] = None
-            if rc and not user32.IsZoomed(h) and not user32.IsIconic(h):
-                user32.SetWindowPos(h, None, rc[0], rc[1], rc[2] - rc[0], rc[3] - rc[1], 0x0014)
-            return 0
+        if msg == WM_ENTERSIZEMOVE or msg == WM_EXITSIZEMOVE:
+            st["sizemove"] = msg == WM_ENTERSIZEMOVE
+        elif msg == WM_WINDOWPOSCHANGING and st["zoomed"] and st["normal"]:
+            try:
+                pos = _WINDOWPOS.from_address(lp)
+                if not pos.flags & SWP_NOSIZE and not user32.IsZoomed(h) and not user32.IsIconic(h):
+                    left, top, right, bottom = st["normal"]
+                    asked = (pos.x, pos.y, pos.x + pos.cx, pos.y + pos.cy)
+                    if not st["sizemove"] and _same_monitor(asked, st["normal"]):
+                        pos.x, pos.y = left, top
+                        pos.flags &= ~SWP_NOMOVE
+                    pos.cx, pos.cy = right - left, bottom - top
+            except Exception:
+                pass
         r = user32.CallWindowProcW(original, h, msg, wp, lp)
         if msg == WM_WINDOWPOSCHANGED:
             zoomed, iconic = bool(user32.IsZoomed(h)), bool(user32.IsIconic(h))
-            if st["zoomed"] and not zoomed and not iconic and st["normal"]:
-                st["pending"] = st["normal"]
-                user32.PostMessageW(h, WM_FIX_RESTORE, 0, 0)
-            elif not zoomed and not iconic and not st["pending"]:
+            if not zoomed and not iconic:
                 rc = w.RECT()
                 user32.GetWindowRect(h, ctypes.byref(rc))
                 st["normal"] = (rc.left, rc.top, rc.right, rc.bottom)
@@ -208,6 +227,9 @@ def custom_frame(title, placement=None, pid=None, topmost=False, toolwindow=Fals
     pid: only a window of that process counts. topmost: keep the window above others. toolwindow: no taskbar
     button. maximizable=False: no maximise box. on_hwnd(hwnd): called once the window is found, before the
     frame is changed. include_hidden: also find a window that was created hidden.
+    A hidden window is not maximised here (that would show it): show it with show_placed. Every size change
+    of a visible WebView2 window flashes black, so the Studio applies all this while hidden and shows once.
+    Returns the window handle, or None.
     Plain Win32 only: touching window.native (a .NET Form) from pywebview's worker thread deadlocks."""
     try:
         hwnd = None
@@ -245,10 +267,51 @@ def custom_frame(title, placement=None, pid=None, topmost=False, toolwindow=Fals
         if placement:
             x, y, wd, ht, maxed = placement
             user32.SetWindowPos(hwnd, None, x, y, wd, ht, 0x0004 | 0x0010)             # NOZORDER NOACTIVATE
-            if maxed:
+            if maxed and user32.IsWindowVisible(hwnd):
                 user32.ShowWindow(hwnd, 3)                                         # SW_MAXIMIZE
+        return hwnd
     except Exception:
-        pass
+        return None
+
+
+def show_placed(hwnd, maximized=False):
+    """Shows a window that custom_frame placed while hidden, in one step: SW_SHOWMAXIMIZED goes from hidden to
+    maximised without first showing the normal size. Then brings it to the front."""
+    user32.ShowWindow(hwnd, 3 if maximized else 5)                         # SW_SHOWMAXIMIZED / SW_SHOW
+    force_foreground(hwnd)
+    _focus_content(hwnd)
+
+
+def _focus_content(hwnd):
+    """Gives keyboard focus to the window's largest child (the WebView2 control). pywebview focuses it when
+    the form is first shown, which for a window created hidden is before the real show, and a maximised show
+    loses it. SetFocus only works within one input queue, so this thread is attached to the window's."""
+    best, best_area = None, 0
+    EnumProc = ctypes.WINFUNCTYPE(w.BOOL, w.HWND, w.LPARAM)
+    user32.EnumChildWindows.argtypes = [w.HWND, EnumProc, w.LPARAM]
+    user32.GetParent.restype = w.HWND
+    user32.SetFocus.argtypes = [w.HWND]
+
+    def visit(h, _):
+        nonlocal best, best_area
+        if user32.GetParent(h) == hwnd:
+            r = w.RECT()
+            user32.GetWindowRect(h, ctypes.byref(r))
+            area = (r.right - r.left) * (r.bottom - r.top)
+            if area > best_area:
+                best, best_area = h, area
+        return True
+    user32.EnumChildWindows(hwnd, EnumProc(visit), 0)
+    if not best:
+        return
+    target = user32.GetWindowThreadProcessId(hwnd, None)
+    me = kernel32.GetCurrentThreadId()
+    attached = bool(target != me and user32.AttachThreadInput(me, target, True))
+    try:
+        user32.SetFocus(best)
+    finally:
+        if attached:
+            user32.AttachThreadInput(me, target, False)
 
 
 def enable_drag_regions():

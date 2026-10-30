@@ -1013,19 +1013,31 @@ def main():
     else:
         geometry = {"width": 1320, "height": 860}
     api = Api()
-    window = webview.create_window(TITLE, url=UI_INDEX, js_api=api, **geometry,
-                                   min_size=min_size, background_color="#1b1c20", text_select=False)
+    window = webview.create_window(TITLE, url=UI_INDEX, js_api=api, **geometry, hidden=True,
+                                   min_size=min_size, background_color="#1a1b1e", text_select=False)
     api._window = window
     window.events.closing += lambda: _on_closing(api)
-    window.events.shown += lambda: _startup("window shown")
     window.events.loaded += lambda: _startup("page loaded")
     winframe.enable_drag_regions()
     icon = paths.ICON if os.path.isfile(paths.ICON) else None
-    webview.start(lambda: winframe.custom_frame(TITLE, placement, pid=os.getpid(),
-                                                on_hwnd=winframe.limit_maximise_to_work_area),
-                  debug="--debug" in sys.argv, icon=icon)                     # custom_frame: worker thread
+    webview.start(_frame_and_show, (window, placement),
+                  debug="--debug" in sys.argv, icon=icon)                     # worker thread
     CloseHandle(mutex)
     return 0
+
+
+def _frame_and_show(window, placement):
+    """On pywebview's worker thread. The window was created hidden: every size change of a visible WebView2
+    window flashes black, so the title bar, saved placement and maximise are all applied before it is first
+    shown, and it is shown once the page has drawn (or after 3 s, so a slow page never leaves it invisible)."""
+    hwnd = winframe.custom_frame(TITLE, placement, pid=os.getpid(), include_hidden=True,
+                                 on_hwnd=winframe.limit_maximise_to_work_area)
+    window.events.loaded.wait(3)
+    if hwnd:
+        winframe.show_placed(hwnd, bool(placement and placement[4]))
+    else:
+        window.show()
+    _startup("window shown")
 
 
 if __name__ == "__main__":

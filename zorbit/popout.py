@@ -720,7 +720,7 @@ def main(args) -> int:
     user32.SetProcessDPIAware()                          # as pywebview does: sizes below are logical pixels
     api = PopoutApi(pop)
     window = webview.create_window(TITLE, url=UI_PAGE, js_api=api, width=START_SIZE[0], height=START_SIZE[1],
-                                   min_size=MIN_SIZE, hidden=True, on_top=pop.on_top, background_color="#1b1c20",
+                                   min_size=MIN_SIZE, hidden=True, on_top=pop.on_top, background_color="#1a1b1e",
                                    text_select=False)
     pop.window = window
     window.events.closing += pop.on_closing

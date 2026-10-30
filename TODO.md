@@ -119,6 +119,14 @@
       their code, and put the same order in the Settings row of the user guide's Studio table. Import and export
       comes last, after Studio. Optionally a
       **Manage tags...** button in the Tag colours card
+- [ ] Custom title bar through `WM_NCCALCSIZE` instead of removing `WS_CAPTION` (`winframe.custom_frame`). With
+      the caption style kept, Windows and WinForms agree on the window size, so the restore correction, the
+      `WM_GETMINMAXINFO` work-area limit and the normal-rectangle tracker can all go, and `GetWindowPlacement`
+      becomes right again. The catch: the top resize edge is inside the area WebView2 covers (keep a thin top
+      border, or hit-test it). Test on Windows 10 and 11, Aero Snap, drag off the top, two monitors
+- [ ] Test the 0.10.1 flash fix on the PC that reported the black flash (open, and leaving maximised)
+- [ ] Untested after the flash fix: drag a maximised window off the top, Win+Shift+Arrow to another monitor and
+      restore, snap layouts
 
 ### macOS notes
 
