@@ -2,7 +2,7 @@
 Studio UI can be developed in a plain browser: open studio_ui/index.html?mock in Edge.
 
 The output contains your own paths, hotkeys and logs. It is git-ignored; never commit it.
-Run: python tools/make_mock.py
+Run: python tools/make_mock.py [OUT]   (OUT defaults to that file; tools/docs_shots.py records its own elsewhere)
 """
 import json
 import os
@@ -34,7 +34,7 @@ def main():
         "preview_animation": a.preview_animation(cfg["config"], first),
         **kinds,
     }
-    out = os.path.join(ROOT, "zorbit", "studio_ui", "dev", "mock_data.js")
+    out = sys.argv[1] if len(sys.argv) > 1 else os.path.join(ROOT, "zorbit", "studio_ui", "dev", "mock_data.js")
     with open(out, "w", encoding="utf-8") as f:
         f.write("// Recorded Studio API responses from a developer's machine. Generated; git-ignored.\n"
                 "window.__RADIAL_MOCK__ = " + json.dumps(mock) + ";\n")

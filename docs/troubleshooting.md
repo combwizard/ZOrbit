@@ -21,6 +21,9 @@ The palette was renamed, so a hotkey you bound by hand to the old **Apply** does
 ### Pressing the hotkey does nothing
 
 1. Open Studio's **Setup** screen (Alt+6). It checks ZBrush, the plugin and the app, and says which step is missing. An amber dot on its button in the rail means a check is failing.
+
+    ![The Setup screen with ZBrush found ticked, and the Plugin loaded in ZBrush step waiting: ZBrush 2026 shows Restart ZBrush because it was started before the plugin was set up](images/setup-restart.png)
+
 2. Is ZBrush the front window? The hotkey is ignored everywhere else.
 3. In ZBrush, open **Zplugin > ZOrbit > Status**. It should say the listener is verified and the app is running. If the palette is missing, ZBrush did not load the plugin. Restart ZBrush and check that your user environment variable `ZBRUSH_PLUGIN_PATH` (in Windows' environment variables, user section) contains the plugin folder. As a one-off you can also load `zorbit_bridge.py` with **ZScript > Python Scripting > Load**.
 4. If the status says the app is not running, press **Start App**, then read `app_stderr.log` and `radiald.log`.

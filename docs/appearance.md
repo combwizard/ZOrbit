@@ -4,6 +4,8 @@
 
 These are on the Settings screen in Studio, and under `"ring"` in `radial.json`. Studio shows live previews.
 
+![The Settings screen in Studio: a list of sections on the left, and Ring geometry with sliders for ring radius, slot size and dead zone beside a ring preview, above the Open animation choices](images/studio-settings.png)
+
 | Setting (`ring.`) | Default | Range | Meaning |
 |---|---|---|---|
 | `radius` | 145 | 60 to 400 | Distance from the centre to the slots, in pixels. |
@@ -36,6 +38,8 @@ Sizes are scaled for high-DPI screens automatically.
 | `highlight` | `#4dc8e9` | Submenu slots and badges |
 | `text` | `#f0f0f0` | Labels |
 | `lines` | `#f86b33` | Spokes and guide circles |
+
+![Settings > Colours: swatches and hex values for Background, Accent, Highlight, Text and Lines, a Reset all colours button, and a preview of the Brushes ring](images/settings-colours.png)
 
 ```json
 "ring": {

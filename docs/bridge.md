@@ -9,6 +9,8 @@ ZOrbit has two halves.
 
 When you pick a slot, the app writes the request to a small file and posts a Windows message to a hidden listener window the bridge keeps inside ZBrush. The bridge reads the file and does the work on ZBrush's main thread. If the listener is not available, the app can press a fallback key (F9) that you bind to **Zplugin > ZOrbit > Apply**.
 
+![A diagram: the ZOrbit app writes the pick to a request file, then reaches ZBrush either by a Windows message to the plugin's listener window or by the bridge key, which runs Zplugin > ZOrbit > Apply](images/bridge-flow.svg)
+
 ZBrush 2022 to 2025 have no Python API, so for them the bridge is a ZScript plugin (`bridge\zscript\`) with the same palette. ZScript cannot host a listener window, so the app always presses the bridge key there. The app also writes each pick in a plain line-by-line form that ZScript can read, and loads brushes from that ZBrush version's own files.
 
 The app exits when ZBrush does.
@@ -27,6 +29,8 @@ When you pick a slot, the app has to tell ZBrush. It writes the request to a fil
 | `message` | Posts a window message to a hidden listener inside ZBrush. No keystroke is sent, so nothing can collide with your own shortcuts. If the listener is not available, the pick is dropped and logged. |
 | `key` | Presses the bridge key every time. |
 
+![Settings > ZBrush bridge: the Auto, Message and Key modes with Auto selected, and the bridge key field set to F9 with Record and Clear buttons](images/settings-bridge.png)
+
 The **message** route needs nothing from you. It works once the plugin has loaded and its listener is verified (see **Zplugin > ZOrbit > Status**).
 
 The **bridge key** is the fallback. To set it up:
@@ -42,6 +46,8 @@ Picks that arrive while you are in the middle of a stroke (mouse button down) wa
 ### ZBrush 2022 to 2025
 
 These versions have no Python API, so they get a ZScript plugin with the same palette. Studio installs it (the steps are in [Install and uninstall](install.md#zbrush-2022-to-2025)): **Settings > Older ZBrush** lists the 2022 to 2025 versions it found, with **Install**, **Update** and **Remove** for each, and **Add a ZBrush folder** for one it missed (a folder you added can be forgotten again with the x next to it). The plugin goes into that ZBrush's `ZStartup\ZPlugs64` (the only place these versions load plugins from), together with a `ZOrbitData` folder. A ZBrush under Program Files asks for administrator rights: the row says "approve the prompt" while Windows waits for you, for up to five minutes. The elevated step checks that the destination is a ZBrush plugin folder and builds the plugin files from the installation's own copies, so nothing from a user-writable folder is copied with administrator rights.
+
+![Settings > Older ZBrush: a row for ZBrush 2022 marked Not installed with an Install button, a row for ZBrush 2024 marked Update available with Update and Remove buttons, and Add a ZBrush folder](images/settings-older-zbrush.png)
 
 Differences from ZBrush 2026 and newer:
 

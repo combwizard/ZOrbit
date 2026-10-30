@@ -88,7 +88,7 @@ To continue, click **More info**, then **Run anyway**. If you would rather not r
 4. Click **Save** (Ctrl+S). The next time you open the ring in ZBrush it uses your changes. There is no need to restart anything.
 
 <p align="center">
-  <img src="docs/images/studio.png" alt="ZOrbit Studio: the menu list, the ring preview and the brush library">
+  <img src="docs/images/studio.png" alt="ZOrbit Studio on the Menus screen: the menu list, the ring preview of the Brushes menu, its item list and the Menu settings panel">
 </p>
 
 The [documentation](https://zorbit.lol/docs/) covers every setting and item type.

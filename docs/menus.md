@@ -108,6 +108,8 @@ An interface path is the chain of palette and button names, joined with colons, 
 
 Steps run in order. Each step is a `brush`, `alpha`, `material`, `texture`, `press`, `set` or `toggle`. Steps cannot open menus, cannot contain more steps, and cannot hold `tag` or `browser` items. Without an `icon`, a `steps` item uses the thumbnail of its first brush, alpha, material or texture step, or a placeholder if it has none.
 
+![The Menus screen with the Fresh Start item of the Tools menu open in the item editor: the grid of action types with Steps chosen, and two steps, Press Tool:Masking:Clear and Brush Standard](images/studio-item.png)
+
 ### Submenu
 
 ```json

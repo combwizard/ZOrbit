@@ -4,6 +4,8 @@
 
 **Settings > Import and export** saves your setup to one file, or loads one back. Use it to move a setup to another PC or to keep a copy.
 
+![Settings > Import and export: the Settings file section with Export and Import buttons, and a note on what the file holds](images/settings-import-export.png)
+
 **Export...** writes one `.json` file with your menus and settings (everything in `radial.json`) and your tags. It saves what is on screen, including edits you have not saved yet. It leaves out Studio's window placement and preferences, the ZBrush folders you added by hand and the usage counts, since those belong to one PC.
 
 **Import...** reads a file and shows what it holds before anything changes. It also accepts a plain `radial.json` or a plain `tags.json`, such as one you copied by hand.

@@ -23,7 +23,7 @@ Slots are laid out clockwise starting at the top. A slot with a small arrow badg
 4. Click **Save** (Ctrl+S). The next time you open the ring in ZBrush it uses your changes. There is no need to restart anything.
 
 <p align="center">
-  <img src="images/studio.png" alt="ZOrbit Studio: the menu list, the ring preview and the brush library">
+  <img src="images/studio.png" alt="ZOrbit Studio on the Menus screen: the menu list, the ring preview of the Brushes menu, its item list and the Menu settings panel">
 </p>
 
 Next: [ZOrbit Studio](studio.md) covers the editor, [Menus and items](menus.md) every item type, and [Appearance](appearance.md) every setting.

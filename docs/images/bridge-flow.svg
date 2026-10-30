@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 352" width="760" height="352" font-family="Segoe UI Variable, Segoe UI, system-ui, sans-serif" role="img" aria-labelledby="t d">
+  <title id="t">How a pick reaches ZBrush</title>
+  <desc id="d">The ZOrbit app, outside ZBrush, writes each pick to a request file. It then posts a Windows message to the listener window of the ZOrbit plugin in ZBrush 2026 and newer, or presses the bridge key, F9, which runs Zplugin, ZOrbit, Apply. ZBrush 2022 to 2025 always get the bridge key. The plugin reads the request file and runs the pick with ZBrush's own commands.</desc>
+  <defs>
+    <marker id="a-or" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 10 5 0 10z" fill="#f86b33"/></marker>
+    <marker id="a-cy" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 10 5 0 10z" fill="#4dc8e9"/></marker>
+    <marker id="a-gr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 10 5 0 10z" fill="#92949a"/></marker>
+  </defs>
+  <rect width="760" height="352" rx="10" fill="#141416"/>
+
+  <!-- the app -->
+  <rect x="20" y="70" width="190" height="190" rx="10" fill="#222327" stroke="rgba(255,255,255,.14)"/>
+  <text x="40" y="104" fill="#f0f0f0" font-size="17" font-weight="700"><tspan fill="#f86b33">Z</tspan>Orbit app</text>
+  <text x="40" y="126" fill="#92949a" font-size="13">outside ZBrush</text>
+  <text x="40" y="164" fill="#d8d9dd" font-size="13.5">Watches your hotkeys</text>
+  <text x="40" y="186" fill="#d8d9dd" font-size="13.5">while ZBrush is in front</text>
+  <text x="40" y="216" fill="#d8d9dd" font-size="13.5">Draws the ring and</text>
+  <text x="40" y="238" fill="#d8d9dd" font-size="13.5">takes your pick</text>
+
+  <!-- the request file -->
+  <path d="M305 22h118l18 18v52H305z" fill="#1a1b1e" stroke="rgba(255,255,255,.14)"/>
+  <path d="M423 22v18h18" fill="none" stroke="rgba(255,255,255,.14)"/>
+  <text x="373" y="56" fill="#f0f0f0" font-size="14" font-weight="600" text-anchor="middle">Request file</text>
+  <text x="373" y="76" fill="#92949a" font-size="12" text-anchor="middle">what to do in ZBrush</text>
+  <path d="M210 100 C 250 80, 270 60, 300 57" fill="none" stroke="#92949a" stroke-width="1.6" marker-end="url(#a-gr)"/>
+  <text x="196" y="52" fill="#92949a" font-size="12.5">1. writes the pick</text>
+
+  <!-- ZBrush -->
+  <rect x="510" y="14" width="232" height="302" rx="12" fill="#1a1b1e" stroke="rgba(255,255,255,.14)" stroke-dasharray="5 4"/>
+  <text x="530" y="40" fill="#f0f0f0" font-size="16" font-weight="700">ZBrush</text>
+
+  <rect x="526" y="56" width="200" height="112" rx="9" fill="#222327" stroke="rgba(255,255,255,.14)"/>
+  <text x="542" y="80" fill="#f0f0f0" font-size="14" font-weight="600">ZOrbit plugin</text>
+  <text x="542" y="98" fill="#92949a" font-size="12">Python, ZBrush 2026 and newer</text>
+  <rect x="542" y="112" width="168" height="40" rx="7" fill="rgba(248,107,51,.09)" stroke="rgba(248,107,51,.5)"/>
+  <text x="626" y="137" fill="#f0f0f0" font-size="13" text-anchor="middle">Listener window</text>
+
+  <rect x="526" y="186" width="200" height="112" rx="9" fill="#222327" stroke="rgba(255,255,255,.14)"/>
+  <text x="542" y="210" fill="#f0f0f0" font-size="14" font-weight="600">Zplugin &gt; ZOrbit &gt; Apply</text>
+  <text x="542" y="228" fill="#92949a" font-size="12">Python plugin, or the ZScript</text>
+  <text x="542" y="244" fill="#92949a" font-size="12">plugin in ZBrush 2022 to 2025</text>
+  <text x="542" y="276" fill="#d8d9dd" font-size="12.5">Bound to the bridge key</text>
+
+  <!-- the two routes -->
+  <path d="M210 150 H 538" fill="none" stroke="#f86b33" stroke-width="2" marker-end="url(#a-or)"/>
+  <text x="232" y="140" fill="#f86b33" font-size="13" font-weight="600">2a. Windows message</text>
+  <text x="232" y="170" fill="#92949a" font-size="12">no keystroke; needs the listener</text>
+
+  <path d="M210 230 H 522" fill="none" stroke="#4dc8e9" stroke-width="2" stroke-dasharray="7 5" marker-end="url(#a-cy)"/>
+  <text x="232" y="220" fill="#4dc8e9" font-size="13" font-weight="600">2b. or the bridge key (F9)</text>
+  <text x="232" y="250" fill="#92949a" font-size="12">auto falls back to it; 2022 to 2025 always</text>
+
+  <!-- the plugin reads the file -->
+  <path d="M441 64 C 470 64, 488 70, 506 78" fill="none" stroke="#92949a" stroke-width="1.4" stroke-dasharray="3 4" marker-end="url(#a-gr)"/>
+  <text x="380" y="338" fill="#92949a" font-size="12.5" text-anchor="middle">3. The plugin reads the request file and runs it with ZBrush's own commands.</text>
+</svg>

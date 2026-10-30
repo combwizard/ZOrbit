@@ -31,6 +31,8 @@ A card shows up to three small colour dots, first tag first. Tag names are 1 to 
 Under **Folders** the Library lists your tags as chips (in the small list on the Menus screen they are a row under the folder box). Click a chip to filter. With several chips on, an item shows when it has any of them. The folder and the search box narrow the result further. **Untagged** shows items with no ordinary tag, and **Clear** switches the filter off. A starred item with no other tag
 still counts as untagged.
 
+![The Library filtered to the Blocking tag: seven brushes, each with an orange dot, and a Clear link beside the Tags heading](images/library-tag.png)
+
 ## Managing tags
 
 **Manage tags...** (under the chips in the Library, or on **Settings > Tags**) opens the tag manager. Each row has:

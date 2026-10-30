@@ -13,8 +13,11 @@ The user docs are the Markdown pages in `docs/`. Every push to `main` that touch
   feature is documented where a user would look for it; a removed one is taken out of every page that mentions it.
 - **Add a line to `CHANGELOG.md`** under `## [Unreleased]` (create the section if the top one is a released version).
 - **Check `README.md`** when the change touches install, requirements, first steps or the feature list.
-- **Pictures:** when a change makes a screenshot or GIF in `docs/images/` out of date, say so in the reply. Don't
-  leave it silently wrong.
+- **Pictures:** the Studio and browser screenshots are made by `python tools/docs_shots.py` (headless Edge on the
+  mock UI, recorded from a fresh install; `--record` re-records after a UI or API change, and the `SHOTS` table says
+  what each picture shows). When a change alters a screen that has a picture, retake it and look it over before
+  committing. The ring pictures and GIFs (`ring.png`, `fan.png`, `tag-colours.png`, `animations.png`, the GIFs) are
+  made by hand: when a change makes one of them out of date, say so in the reply rather than leaving it wrong.
 - **Build the docs** after editing them: `mkdocs build --strict` (`pip install -r requirements-docs.txt` first). It
   fails on a broken link or anchor. Link between pages with relative `.md` links so they work on GitHub too.
 - **The pre-commit hook** (`tools/hooks/pre-commit`) stops a commit that changes `zorbit/` or `bridge/` without
