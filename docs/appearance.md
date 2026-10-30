@@ -49,7 +49,7 @@ Sizes are scaled for high-DPI screens automatically.
 }
 ```
 
-Anything you leave out keeps its default. Values outside the allowed range are reported as problems and the default is used.
+Anything you leave out keeps its default. Values outside the allowed range are reported as problems and the default is used. In Studio, a slider or switch put back to its default is taken out of the file again, so it counts as no change.
 
 ### Tag colours
 

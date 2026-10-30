@@ -108,6 +108,10 @@ function iconBtn(name, title, onclick, cls = '') {
   return h('button', { class: 'ibtn ' + cls, type: 'button', title, 'aria-label': title, onclick }, icon(name, 15));
 }
 function setText(el, t) { if (el.textContent !== t) el.textContent = t; }
+/* Roving tabindex: a list is one Tab stop (the row `cur`, else its first row); the arrow keys move inside it. */
+function setRoving(rows, cur) { const stop = rows.includes(cur) ? cur : rows[0]; rows.forEach(x => { x.tabIndex = x === stop ? 0 : -1; }); }
+/* Row buttons are reached with the mouse or a shortcut (Delete, F2, Alt+Up/Down), not the Tab key. */
+function noTab(btn) { btn.tabIndex = -1; return btn; }
 
 /* ================================================================== state */
 const ACTIONS = ['brush', 'alpha', 'material', 'texture', 'press', 'set', 'toggle', 'steps', 'menu', 'auto', 'tag', 'browser'];
@@ -127,10 +131,10 @@ const KIND = {
 };
 /* The kinds of asset the library holds (brushes, alphas, materials, textures) and their wording; every "brush/brushes" string reads from here. */
 const KINDS = {
-  brush:    { one: 'brush',    many: 'brushes',   tab: 'Brushes',   ext: '.zbp', eg: 'ClayBuildup' },
-  alpha:    { one: 'alpha',    many: 'alphas',    tab: 'Alphas',    ext: '.psd', eg: 'Alpha 058' },
-  material: { one: 'material', many: 'materials', tab: 'Materials', ext: '.zmt', eg: 'SkinShade4' },
-  texture:  { one: 'texture',  many: 'textures',  tab: 'Textures',  ext: '.psd', eg: 'Txtr01' },
+  brush:    { one: 'brush',    many: 'brushes',   tab: 'Brushes',   ext: '.zbp', files: 'a .zbp file', eg: 'ClayBuildup' },
+  alpha:    { one: 'alpha',    many: 'alphas',    tab: 'Alphas',    ext: '.psd', files: 'a .psd, .bmp, .jpg, .png or .tif file', eg: 'Alpha 058' },
+  material: { one: 'material', many: 'materials', tab: 'Materials', ext: '.zmt', files: 'a .zmt file', eg: 'SkinShade4' },
+  texture:  { one: 'texture',  many: 'textures',  tab: 'Textures',  ext: '.psd', files: 'a .psd, .jpg, .png, .bmp, .tif or .exr file', eg: 'Txtr01' },
 };
 const LIB_KINDS = Object.keys(KINDS);
 const isLib = k => typeof k === 'string' && Object.prototype.hasOwnProperty.call(KINDS, k);
@@ -153,14 +157,14 @@ const ANIM_INFO = {
 };
 const COLOR_INFO = {
   bg: ['Background', 'Slot fill'],
-  accent: ['Accent', 'Centre dot, hover and labels'],
+  accent: ['Accent', 'Centre dot, hover and title'],
   highlight: ['Highlight', 'Submenus'],
   text: ['Text', 'Labels'],
   lines: ['Lines', 'Spokes and guides'],
 };
 const BRIDGE_INFO = {
   auto: ['Auto', 'Recommended. Uses the listener inside ZBrush when it is alive and falls back to the bridge key otherwise (or if a message is not picked up within half a second).'],
-  message: ['Message', 'Posts a message to a small listener window inside ZBrush. No keystroke is sent, so nothing can collide with your own shortcuts. Needs the ZOrbit plugin loaded in ZBrush.'],
+  message: ['Message', 'Posts a message to a small listener window inside ZBrush. No keystroke is sent, so nothing can collide with your own shortcuts. Needs the ZOrbit plugin loaded in ZBrush. If no listener is live, the pick is dropped and logged.'],
   key: ['Key', 'Presses the bridge key. Bind that key in ZBrush to Zplugin > ZOrbit > Apply (Ctrl+Alt+click the button, press the key, then Preferences > Hotkeys > Store).'],
 };
 const FALLBACK_DEFAULTS = { radius: 145, slot: 72, dead_zone: 38, tap_ms: 250, timeout_s: 20, animation: 'smooth', labels: 'name', tag_colors: 'tint', flick: true, hover_submenus: true,
@@ -706,8 +710,13 @@ const DnD = {
     const ghost = h('div', { class: 'drag-ghost' }, ghostEl);
     document.body.append(ghost);
     document.body.classList.add('dragging');
-    this.active = { payload, ghost, zone: null, onKey: e => { if (e.key === 'Escape') this.end(null, false); } };
+    // last: the latest pointer position, so pressing or releasing Ctrl (copy instead of move) updates the cue without a mouse move
+    this.active = { payload, ghost, zone: null, last: null, onKey: e => {
+      if (e.key === 'Escape') this.end(null, false);
+      else if (e.key === 'Control' && !e.repeat && this.active && this.active.last) this.move({ clientX: this.active.last.x, clientY: this.active.last.y, ctrlKey: e.type === 'keydown' });
+    } };
     document.addEventListener('keydown', this.active.onKey, true);
+    document.addEventListener('keyup', this.active.onKey, true);
     window.dispatchEvent(new Event('zorbit-dnd'));           // lets a view dim what is being dragged
   },
   findZone(x, y, payload) {
@@ -722,6 +731,7 @@ const DnD = {
   },
   move(ev) {
     const a = this.active; if (!a) return;
+    a.last = { x: ev.clientX, y: ev.clientY };
     a.ghost.style.transform = `translate(${ev.clientX + 14}px, ${ev.clientY + 14}px)`;
     const z = this.findZone(ev.clientX, ev.clientY, a.payload);
     if (z !== a.zone) { if (a.zone) a.zone._dz.leave && a.zone._dz.leave(); a.zone = z; }
@@ -732,6 +742,7 @@ const DnD = {
     const a = this.active; if (!a) return;
     this.active = null;
     document.removeEventListener('keydown', a.onKey, true);
+    document.removeEventListener('keyup', a.onKey, true);
     if (a.zone) a.zone._dz.leave && a.zone._dz.leave();
     if (drop && ev && a.zone) a.zone._dz.drop(a.payload, ev.clientX, ev.clientY, ev);
     a.ghost.remove();
@@ -906,6 +917,8 @@ const pathOpts = () => S.suggestions.map(s => ({ value: s.path, sub: s.source })
 const menuOpts = () => Object.entries(S.cfg.menus).map(([id, m]) => ({ value: id, label: id, sub: m.title }));
 
 /* ================================================================== hotkey recorder */
+const NAMED_KEYS = { Space: 'Space', Tab: 'Tab', Enter: 'Enter', NumpadEnter: 'Enter', Backspace: 'Backspace', Insert: 'Insert', Delete: 'Delete',
+  Home: 'Home', End: 'End', PageUp: 'PageUp', PageDown: 'PageDown' };          // the names config.py reads (_NAMED_VK, case-insensitive)
 const CODE_KEYS = { Backquote: '`', Minus: '-', Equal: '=', BracketLeft: '[', BracketRight: ']', Backslash: '\\',
   Semicolon: ';', Quote: "'", Comma: ',', Period: '.', Slash: '/' };
 function keyFromEvent(e) {
@@ -916,11 +929,11 @@ function keyFromEvent(e) {
   if (/^Key[A-Z]$/.test(c)) return c[3];                      // other layouts (Cyrillic, Greek...): fall back to the physical key
   if (/^Digit[0-9]$/.test(c)) return c[5];
   if (/^F([1-9]|1\d|2[0-4])$/.test(c)) return c;
-  return CODE_KEYS[c] || null;
+  return NAMED_KEYS[c] || CODE_KEYS[c] || null;
 }
 function hotkeyField({ value, mods = { ctrl: true, alt: true, shift: true }, onChange, placeholder = 'Not set', noMessage, what = 'Hotkey' }) {
   let rec = false;
-  const field = h('div', { class: 'hk-field', role: 'button', tabindex: '0', title: 'Press Enter to record a new one' });
+  const field = h('div', { class: 'hk-field', role: 'button', tabindex: '0', title: 'Press Enter to record a new one', dataset: { fk: 'hk:' + what } });
   const msg = h('div', { class: 'hk-msg', 'aria-live': 'polite' });
   const recBtn = h('button', { class: 'btn small', type: 'button' }, 'Record');
   const clearBtn = h('button', { class: 'btn small danger-o', type: 'button' }, 'Clear');
@@ -946,7 +959,7 @@ function hotkeyField({ value, mods = { ctrl: true, alt: true, shift: true }, onC
     }
     if (e.metaKey) { say('The Windows key cannot be used.'); return; }
     const key = keyFromEvent(e);
-    if (!key) { say('That key is not supported. Use a letter, digit, F1-F24 or one of ` - = [ ] \\ ; \' , . /'); return; }
+    if (!key) { say('That key is not supported. Use a letter, digit, F1-F24, space, tab, enter, backspace, insert, delete, home, end, pageup, pagedown or one of ` - = [ ] \\ ; \' , . /'); return; }
     for (const m of ['ctrl', 'alt', 'shift']) {
       if (e[m + 'Key'] && !mods[m]) {
         say(m === 'alt' ? 'Alt is not allowed here.' : (m === 'ctrl' ? 'Ctrl' : 'Shift') + ' cannot be used here: ZBrush reads it as ' + (m === 'ctrl' ? 'mask' : 'smooth') + '. Use a bare F-key or Alt.');
@@ -964,7 +977,7 @@ function hotkeyField({ value, mods = { ctrl: true, alt: true, shift: true }, onC
   };
   recBtn.onclick = start;
   field.onclick = start;
-  field.onkeydown = e => { if (!rec && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); start(); } };
+  field.onkeydown = e => { if (!rec && !e.repeat && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); start(); } };
   clearBtn.onclick = () => { value = ''; say(''); paint(); onChange(''); };
   paint();
   const wrap = h('div', { class: 'hk-wrap' }, h('div', { class: 'hk-row' }, field, recBtn, clearBtn), noMessage ? null : msg);
@@ -1028,7 +1041,10 @@ function undoToast(msg, o = {}) {
     undo();
   } } }));
 }
+/* What the Settings screen draws from the config: when this is the same before and after an undo, Settings is left alone (and keeps focus). */
+const settingsSig = () => JSON.stringify([S.cfg.ring, S.cfg.bridge, S.cfg.browser, S.menuId, Object.entries(S.cfg.menus).map(([id, m]) => [id, m.title, m.animation])]);
 function applySnap(e) {
+  const sigBefore = R.settings ? settingsSig() : '';
   S.cfg = JSON.parse(e.cfg);
   const ids = Object.keys(S.cfg.menus);
   S.menuId = S.cfg.menus[e.menuId] ? e.menuId : (S.cfg.menus[S.menuId] ? S.menuId : (ids[0] || null));
@@ -1037,7 +1053,7 @@ function applySnap(e) {
   if (S.itemIdx === null && S.tab === 'item') S.tab = 'menu';
   else if (S.itemIdx !== null && S.tab === 'menu') S.tab = 'item';
   S.version++; updateDirty(); validateSoon(); previewSoon(); updateHistButtons();
-  renderAllMenus(); if (R.settings) R.settings();
+  renderAllMenus(); if (R.settings && settingsSig() !== sigBefore) R.settings();
   const row = $('.irow.sel'); if (row) row.scrollIntoView({ block: 'nearest' });
 }
 function undo() { snapSoon.cancel(); pushSnap(); if (S.histI > 0) { S.histI--; applySnap(S.hist[S.histI]); toast('Undone', { ms: 1400 }); } }
@@ -1068,10 +1084,10 @@ function goBack() {
   const m = curMenu();
   if (c.itemIdx !== null && m && m.items[c.itemIdx]) selectItem(c.itemIdx);
 }
-function selectItem(i, { focusTarget = false } = {}) {
+function selectItem(i, { focusTarget = false, keepTab = false } = {}) {
   S.itemIdx = i;
   if (i !== null) S.tab = 'item';
-  else if (S.tab === 'item') S.tab = 'menu';
+  else if (S.tab === 'item' && !keepTab) S.tab = 'menu';
   rememberSel();
   if (R.itemList) R.itemList();
   if (R.overlay) R.overlay();
@@ -1225,12 +1241,16 @@ function transferItem(fromId, index, toId, copy) {
   if (copy) dst.items.push(clone(it));
   else {
     src.items.splice(index, 1); dst.items.push(it);
-    if (S.menuId === fromId) { S.menuId = toId; S.itemIdx = dst.items.length - 1; S.tab = 'item'; S.cameFrom = null; }   // follow the item to its new menu
-    else if (S.menuId === toId) S.itemIdx = dst.items.length - 1;
+    if (S.menuId === fromId) {                                  // stay on this menu: the selection moves on like after a delete
+      if (S.itemIdx === index) S.itemIdx = src.items.length ? Math.min(index, src.items.length - 1) : null;
+      else if (S.itemIdx !== null && S.itemIdx > index) S.itemIdx--;
+    } else if (S.menuId === toId) S.itemIdx = dst.items.length - 1;
   }
   commit({ inspector: true }); if (R.head) R.head();
   if (!copy && R.preview) R.preview();
-  if (!copy) { const row = $('.irow.sel'); if (row) row.scrollIntoView({ block: 'nearest' }); }
+  flashRow(toId, dst.items.length - 1);                         // the new row, if its list is on screen
+  const mrow = $(`.mrow[data-id="${CSS.escape(toId)}"]`);      // and the menu it went to
+  if (mrow) { mrow.classList.remove('flash'); void mrow.offsetWidth; mrow.classList.add('flash'); setTimeout(() => mrow.classList.remove('flash'), 1400); }
   undoToast(`${copy ? 'Copied' : 'Moved'} "${label}" to "${dstName}"`);
 }
 function dropOnMenu(menuId, payload, at) {
@@ -1260,6 +1280,8 @@ function textInput(value, onInput, o = {}) {
 function parseValue(s) { const t = s.trim(); return /^-?\d+(\.\d+)?$/.test(t) ? Number(t) : s; }
 const validValue = v => typeof v === 'number' && Number.isFinite(v);
 const VALUE_HINT = 'Use a number, e.g. 32';
+/* A text link that is a button; it does not take focus from a field on mouse down, so the field does not blur first. */
+const linkBtn = (text, fn) => h('button', { class: 'link', type: 'button', onmousedown: e => e.preventDefault(), onclick: fn }, text);
 function sectionTitle(t, sub) { return h('div', { class: 'sect' }, h('span', null, t), sub ? h('em', null, sub) : null); }
 
 /* ================================================================== MENUS screen */
@@ -1272,9 +1294,10 @@ function buildMenusScreen(root) {
     h('button', { class: 'dashed', type: 'button', onclick: () => addMenu() }, icon('plus', 14), 'Add menu'));
   const head = h('div', { class: 'center-head' });
   const stageBox = buildStage();
-  const itemsEl = h('div', { class: 'ilist', role: 'listbox', 'aria-label': 'Items in this menu', title: 'Alt+Up/Down moves the selected item' });
+  const itemsEl = h('div', { class: 'ilist', role: 'listbox', 'aria-label': 'Items in this menu', title: 'Up and Down move through the items. Alt+Up/Down moves the selected item.' });
   const itemsHead = h('div', { class: 'col-head slim' });
-  const itemsPanel = h('div', { class: 'items-panel' }, itemsHead, itemsEl);
+  const itemsNote = h('div', { class: 'items-note', hidden: true });
+  const itemsPanel = h('div', { class: 'items-panel' }, itemsHead, itemsNote, itemsEl);
   const center = h('section', { class: 'col center-col' }, head, stageBox.el, itemsPanel);
   const rightEl = h('aside', { class: 'col right-col' });
   root.append(left, center, rightEl);
@@ -1293,7 +1316,11 @@ function buildMenusScreen(root) {
   // Rebuilt only when what it shows changed; a plain selection change just moves the `sel` class, so the clicked row keeps focus.
   const menuRows = () => $$('.mrow', listEl);
   const menuRowOf = id => menuRows().find(r => r.dataset.id === id);
-  const refreshMenuSel = () => menuRows().forEach(r => { const on = r.dataset.id === S.menuId; r.classList.toggle('sel', on); r.setAttribute('aria-selected', on ? 'true' : 'false'); });
+  const refreshMenuSel = () => {
+    const rows = menuRows();
+    rows.forEach(x => { const on = x.dataset.id === S.menuId; x.classList.toggle('sel', on); x.setAttribute('aria-selected', on ? 'true' : 'false'); });
+    setRoving(rows, menuRowOf(S.menuId));
+  };
   R.menuList = () => {
     const ids = Object.keys(S.cfg.menus);
     setText($('.count', left), String(ids.length));
@@ -1306,25 +1333,31 @@ function buildMenusScreen(root) {
     if (!ids.length) { listEl.append(emptyState('menus', 'No menus yet', 'Create a menu to get started. Give it a hotkey to open it from ZBrush.', { text: 'Add menu', fn: addMenu })); return; }
     ids.forEach(id => {
       const m = S.cfg.menus[id];
-      const row = h('div', { class: 'mrow' + (id === S.menuId ? ' sel' : '') + (m.hotkey ? '' : ' subonly'), role: 'option', 'aria-selected': id === S.menuId ? 'true' : 'false', tabindex: '0', dataset: { id } });
+      const n = (m.items || []).length;
+      // the full title, hotkey and item count, for when the row is too narrow to show them
+      const row = h('div', { class: 'mrow' + (id === S.menuId ? ' sel' : '') + (m.hotkey ? '' : ' subonly'), role: 'option', 'aria-selected': id === S.menuId ? 'true' : 'false', tabindex: '-1', dataset: { id },
+        title: [m.title || id, m.hotkey ? 'Hotkey: ' + m.hotkey : 'Submenu: no hotkey', plural(n, 'item')].join('\n') });
       const title = h('div', { class: 'mrow-title' }, m.title || id);
       row.append(
         h('div', { class: 'mrow-main' }, title, h('div', { class: 'mrow-meta' }, h('span', { class: 'mono' }, id))),
         h('div', { class: 'mrow-side' },
           menuWarn(id),
-          m.hotkey ? hkChips(m.hotkey, 'sm') : h('span', { class: 'tag cyan', title: 'No hotkey: this menu can only be opened from another menu' }, 'submenu'),
-          h('span', { class: 'pill-n', title: (m.items || []).length + ' items' }, String((m.items || []).length))),
+          m.hotkey ? hkChips(m.hotkey, 'sm') : h('span', { class: 'sub-ico', role: 'img', 'aria-label': 'Submenu', title: 'Submenu: no hotkey, so it can only be opened from another menu' }, icon('k_menu', 14)),
+          h('span', { class: 'pill-n', title: plural(n, 'item') }, String(n))),
         h('div', { class: 'mrow-actions' },
-          iconBtn('edit', 'Rename (F2)', e => { e.stopPropagation(); R.renameMenu(id); }),
-          iconBtn('copy', 'Duplicate', e => { e.stopPropagation(); dupMenu(id); }),
-          iconBtn('trash', 'Delete (Delete)', e => { e.stopPropagation(); deleteMenu(id); }, 'danger')));
+          noTab(iconBtn('edit', 'Rename (F2)', e => { e.stopPropagation(); R.renameMenu(id); })),
+          noTab(iconBtn('copy', 'Duplicate', e => { e.stopPropagation(); dupMenu(id); })),
+          noTab(iconBtn('trash', 'Delete (Del key)', e => { e.stopPropagation(); deleteMenu(id); }, 'danger'))));
       row.addEventListener('click', () => { if (id !== S.menuId) selectMenu(id); });
       title.addEventListener('dblclick', () => R.renameMenu(id));
       row.addEventListener('keydown', e => {
         if (e.target !== row) return;
         const i = ids.indexOf(id);
-        if (e.key === 'ArrowDown' && ids[i + 1]) { e.preventDefault(); selectMenu(ids[i + 1]); $(`.mrow[data-id="${CSS.escape(ids[i + 1])}"]`, listEl).focus(); }
-        else if (e.key === 'ArrowUp' && ids[i - 1]) { e.preventDefault(); selectMenu(ids[i - 1]); $(`.mrow[data-id="${CSS.escape(ids[i - 1])}"]`, listEl).focus(); }
+        const go = j => { selectMenu(ids[j]); const t = menuRowOf(ids[j]); if (t) t.focus(); };
+        if (e.key === 'ArrowDown' && ids[i + 1]) { e.preventDefault(); go(i + 1); }
+        else if (e.key === 'ArrowUp' && ids[i - 1]) { e.preventDefault(); go(i - 1); }
+        else if (e.key === 'Home' && i > 0) { e.preventDefault(); go(0); }
+        else if (e.key === 'End' && i < ids.length - 1) { e.preventDefault(); go(ids.length - 1); }
         else if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectMenu(id); }
         else if (e.key === 'F2') { e.preventDefault(); R.renameMenu(id); }
         else if (e.key === 'Delete') { e.preventDefault(); deleteMenu(id); }
@@ -1349,6 +1382,7 @@ function buildMenusScreen(root) {
       listEl.append(row);
     });
     listEl._sel = S.menuId;
+    setRoving(menuRows(), menuRowOf(S.menuId));
     if (had) {
       const rows = menuRows();
       const t = fid !== null && fid === prevSel && menuRowOf(S.menuId) ? menuRowOf(S.menuId)
@@ -1387,6 +1421,9 @@ function buildMenusScreen(root) {
     if (!back && S.cameFrom) S.cameFrom = null;
     itemsHead.replaceChildren(...[back ? h('button', { class: 'chip back', type: 'button', title: 'Back to ' + (back.title || S.cameFrom.menuId), onclick: goBack }, icon('chevL', 12), h('span', { class: 'back-txt' }, 'Back to ' + (back.title || S.cameFrom.menuId))) : null,
       h('span', { class: 'micro' }, 'Items'), h('span', { class: 'count' }, m ? String(m.items.length) : '0'), h('span', { class: 'spacer' }), m ? addBtn : null].filter(Boolean));
+    const crowded = !!m && m.items.length > 12;
+    itemsNote.hidden = !crowded;
+    if (crowded) itemsNote.replaceChildren(icon('alert', 13), 'Rings work best with 4 to 12 items. With more, slots start to overlap unless you raise the ring radius.');
     renderItemList(itemsEl, S.menuId, false);
   };
 
@@ -1423,10 +1460,18 @@ function buildMenusScreen(root) {
 function renderItemList(box, menuId, compact) {
   const m = S.cfg.menus[menuId];
   box.classList.toggle('compact', compact);
-  const refreshSel = () => $$('.irow', box).forEach(r => {
-    const on = !compact && +r.dataset.i === S.itemIdx;
-    r.classList.toggle('sel', on); r.setAttribute('aria-selected', on ? 'true' : 'false');
-  });
+  const refreshSel = () => {
+    const rows = $$('.irow', box);
+    rows.forEach(x => {
+      const on = !compact && +x.dataset.i === S.itemIdx;
+      x.classList.toggle('sel', on); x.setAttribute('aria-selected', on ? 'true' : 'false');
+    });
+    setRoving(rows, compact ? rows[box._rov] : rows[S.itemIdx]);       // one Tab stop per list: the selected row (a compact list has no selection: the last one focused)
+  };
+  if (!box._rovBound) {
+    box._rovBound = true;
+    box.addEventListener('focusin', e => { const x = e.target.closest && e.target.closest('.irow'); if (x && x.parentElement === box) { box._rov = +x.dataset.i; setRoving($$('.irow', box), x); } });
+  }
   // Rebuilt only when a row would look different; a plain selection change just moves the `sel` class, so focus stays put.
   const sig = m ? JSON.stringify([menuId, compact, (m.items || []).map(it => [itemLabel(it), itemUsable(it), it, isLib(kindOf(it)) ? (firstTag(kindOf(it), it[kindOf(it)]) || {}).color || '' : keyTag(it) ? [keyTag(it).label, keyTag(it).color] : ''])]) : 'none';
   if (sig === box._sig) { refreshSel(); box._sel = compact ? null : S.itemIdx; return; }
@@ -1442,34 +1487,40 @@ function renderItemList(box, menuId, compact) {
   }
   m.items.forEach((it, i) => {
     const k = kindOf(it), ok = itemUsable(it);
-    const row = h('div', { class: 'irow k-' + k + (!compact && i === S.itemIdx ? ' sel' : '') + (ok ? '' : ' bad'), role: 'option', tabindex: '0', dataset: { i, menu: menuId },
+    const sub = k === 'auto' ? 'filled from your picks' : k === 'tag' ? (it.tag ? 'all items tagged ' + tagName(it.tag) : '(not set)') : k === 'browser' ? 'opens the ' + K(it.kind).one + ' browser' + (it.browser ? ' for ' + tagName(it.browser) : '') : k === 'steps' ? plural((it.steps || []).length, 'step') : (k === 'set' ? `${targetOf(it)} = ${it.value}` : targetOf(it) || '(not set)');
+    const row = h('div', { class: 'irow k-' + k + (!compact && i === S.itemIdx ? ' sel' : '') + (ok ? '' : ' bad'), role: 'option', tabindex: '-1', dataset: { i, menu: menuId },
+      title: itemLabel(it) + '\n' + KIND[k].label + ': ' + sub,                    // the full name and target, for a row too narrow to show them
       'aria-selected': !compact && i === S.itemIdx ? 'true' : 'false' },
       compact ? null : h('span', { class: 'grip', 'aria-hidden': 'true' }, icon('grip', 14)),
       h('span', { class: 'inum mono' }, String(i + 1)),
       itemThumb(it, compact ? 26 : 32),
       h('span', { class: 'imain' }, h('span', { class: 'iname' }, isLib(k) ? tagDot(k, it[k]) : keyTag(it) ? keyDot(keyTag(it)) : null, itemLabel(it)),
-        compact ? null : h('span', { class: 'isub mono' }, k === 'auto' ? 'filled from your picks' : k === 'tag' ? (it.tag ? 'all items tagged ' + tagName(it.tag) : '(not set)') : k === 'browser' ? 'opens the ' + K(it.kind).one + ' browser' + (it.browser ? ' for ' + tagName(it.browser) : '') : k === 'steps' ? `${(it.steps || []).length} step${(it.steps || []).length === 1 ? '' : 's'}` : (k === 'set' ? `${targetOf(it)} = ${it.value}` : targetOf(it) || '(not set)'))),
+        compact ? null : h('span', { class: 'isub mono' }, sub)),
       h('span', { class: 'ikind', title: KIND[k].hint }, icon(KIND[k].icon, 13), compact ? null : KIND[k].label),
       itemWarn(menuId, i, ok),
       h('span', { class: 'iacts' },
-        compact ? null : iconBtn('copy', 'Duplicate item', e => { e.stopPropagation(); S.itemIdx = i; dupItem(i); }),
-        iconBtn('trash', compact ? 'Delete item' : 'Delete (Delete)', e => { e.stopPropagation(); if (e.detail > 1) return; delItem(i, menuId); }, 'danger')));
+        compact ? null : noTab(iconBtn('copy', 'Duplicate item', e => { e.stopPropagation(); S.itemIdx = i; dupItem(i); })),
+        noTab(iconBtn('trash', compact ? 'Delete item' : 'Delete (Del key)', e => { e.stopPropagation(); if (e.detail > 1) return; delItem(i, menuId); }, 'danger'))));
+    // Up, Down, Home and End move through the list (in the editor the selection goes with them); Delete removes the row
+    row.addEventListener('keydown', e => {
+      if (e.target !== row) return;
+      const rows = $$('.irow', box);
+      const go = j => { if (!compact) selectItem(j); const t = $$('.irow', box)[j]; if (t) t.focus(); };
+      if (!compact && e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+        e.preventDefault();
+        const to = e.key === 'ArrowUp' ? i - 1 : i + 2;
+        if (to >= 0 && to <= m.items.length) { moveItem(menuId, i, to); const r = $$('.irow', box)[e.key === 'ArrowUp' ? i - 1 : i + 1]; if (r) r.focus(); }
+      }
+      else if (e.key === 'ArrowDown' && rows[i + 1]) { e.preventDefault(); go(i + 1); }
+      else if (e.key === 'ArrowUp' && rows[i - 1]) { e.preventDefault(); go(i - 1); }
+      else if (e.key === 'Home' && i > 0) { e.preventDefault(); go(0); }
+      else if (e.key === 'End' && i < rows.length - 1) { e.preventDefault(); go(rows.length - 1); }
+      else if (e.key === 'Enter' && !compact) { e.preventDefault(); selectItem(i, { focusTarget: true }); }
+      else if (e.key === 'Delete') { e.preventDefault(); delItem(i, menuId); }
+    });
     if (!compact) {
       row.addEventListener('click', () => selectItem(i));
       row.addEventListener('dblclick', () => { if (k === 'menu' && S.cfg.menus[it.menu]) openSubmenu(it.menu, i); });
-      row.addEventListener('keydown', e => {
-        if (e.target !== row) return;
-        const rows = $$('.irow', box);
-        if (e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
-          e.preventDefault();
-          const to = e.key === 'ArrowUp' ? i - 1 : i + 2;
-          if (to >= 0 && to <= m.items.length) { moveItem(menuId, i, to); const r = $$('.irow', box)[e.key === 'ArrowUp' ? i - 1 : i + 1]; if (r) r.focus(); }
-        }
-        else if (e.key === 'ArrowDown' && rows[i + 1]) { e.preventDefault(); selectItem(i + 1); $$('.irow', box)[i + 1].focus(); }
-        else if (e.key === 'ArrowUp' && rows[i - 1]) { e.preventDefault(); selectItem(i - 1); $$('.irow', box)[i - 1].focus(); }
-        else if (e.key === 'Enter') { e.preventDefault(); selectItem(i, { focusTarget: true }); }
-        else if (e.key === 'Delete') { e.preventDefault(); delItem(i, menuId); }
-      });
     }
     DnD.source(row, () => ({ type: 'item', menuId, index: i }), () => h('span', { class: 'ghost-chip' }, itemThumb(it, 22), itemLabel(it)));
     box.append(row);
@@ -1699,7 +1750,7 @@ function buildStage() {
   wrap.addEventListener('click', e => {
     if (player.state === 'playing') { player.stop(); return; }
     const j = hitTest(e.clientX, e.clientY);
-    selectItem(j === null ? null : idxs[j]);
+    selectItem(j === null ? null : idxs[j], { keepTab: true });     // empty space clears the selection, and the inspector stays on its tab
     el.focus({ preventScroll: true });
   });
   /* A ring slot is a drag source too: it moves like a row of the item list. A plain click still selects. */
@@ -1778,7 +1829,7 @@ function buildItemInspector() {
   }
   const i = S.itemIdx, k = kindOf(it);
   box.append(h('div', { class: 'insp-head' }, itemThumb(it, 36), h('div', { class: 'insp-title' }, h('b', null, itemLabel(it)), h('span', null, `Item ${i + 1} of ${m.items.length}`)),
-    h('div', { class: 'spacer' }), iconBtn('copy', 'Duplicate item', () => dupItem(i)), iconBtn('trash', 'Delete item', e => { if (e.detail > 1) return; delItem(i); selectItem(null); }, 'danger')));
+    h('div', { class: 'spacer' }), iconBtn('copy', 'Duplicate item', () => dupItem(i)), iconBtn('trash', 'Delete item', e => { if (e.detail > 1) return; delItem(i); const t = $('.irow.sel') || $('.items-panel .col-head .btn'); if (t) t.focus(); }, 'danger')));    // delItem already selected the neighbour, as the row's own button does
 
   /* action type */
   const seg = h('div', { class: 'kinds', role: 'radiogroup', 'aria-label': 'Action type' }, Object.keys(KIND).map(kk =>
@@ -1788,7 +1839,8 @@ function buildItemInspector() {
         sealSnap();
         const r = convertItem(it, kk);
         m.items[i] = r.item; commit({ inspector: true });
-        const t = $('[data-focus="target"]'); if (t && !t.value) t.focus();
+        const t = $('[data-focus="target"]');
+        if (t && !t.value) t.focus(); else { const kb = $('.kinds .kind.on'); if (kb) kb.focus(); }      // the inspector was rebuilt: keep the keyboard on the type picker
         if (r.lost.length) undoToast(`Switched to ${KIND[kk].label}. Dropped ${joinList(r.lost)}.`, { ms: 6500 });
       } },
       icon(KIND[kk].icon, 18), h('span', null, KIND[kk].label))));
@@ -1837,12 +1889,14 @@ function buildItemInspector() {
         const tt = $('.tthumb', wrap); if (tt) tt.replaceChildren(thumb(v || null, { size: 30, kind: k }));
         const L = lib(k), W = K(k);
         if (L.state === 'loading' || L.state === 'idle') hintEl.append('Reading your ' + W.one + ' library...');
-        else if (v && L.state === 'ready' && L.items.length && !L.byName.has(nameKey(v))) { hintEl.classList.add('warn'); hintEl.append(`Not found in your ${W.one} library. ZBrush needs ${aOrAn(W.ext)} file with this name.`); }
+        else if (L.state === 'error') { hintEl.classList.add('warn'); hintEl.append(`Your ${W.one} library could not be read: `, linkBtn('see Library', () => { S.lib.kind = k; showScreen('library'); }), '.'); }
+        else if (!L.zbrushFound) { hintEl.classList.add('warn'); hintEl.append('ZBrush was not found: ', linkBtn('see Setup', () => showScreen('setup')), '.'); }
+        else if (v && L.items.length && !L.byName.has(nameKey(v))) { hintEl.classList.add('warn'); hintEl.append(`Not found in your ${W.one} library. ZBrush needs ${W.files} with this name.`); }
         else if (!v) hintEl.append('Type to search your library.');
       } else if (k === 'menu') {
         const t = S.cfg.menus[v];
         if (openBtn) openBtn.disabled = !t || v === S.menuId;
-        if (t) hintEl.append('Opens ', h('b', null, t.title || v), ` (${t.items.length} items). `, h('button', { class: 'link', type: 'button', onmousedown: e => e.preventDefault(), onclick: () => openSubmenu(v) }, 'Open it'));
+        if (t) hintEl.append('Opens ', h('b', null, t.title || v), ` (${plural(t.items.length, 'item')}). `, linkBtn('Open it', () => openSubmenu(v)));
         else {
           if (v) { hintEl.classList.add('bad'); hintEl.append('No menu with this id. '); }
           hintEl.append(h('button', { class: 'link', type: 'button', onmousedown: e => e.preventDefault(), onclick: () => {
@@ -1906,7 +1960,7 @@ function autoNow(m, i) {
 const STEP_KINDS = ['brush', 'alpha', 'material', 'texture', 'press', 'set', 'toggle'];
 function buildSteps(it) {
   const host = h('div', { class: 'steps' });
-  const render = () => {
+  const render = f => {                                          // f: { j, k } the control to focus afterwards (step j; k = type, up, down or rm)
     host.replaceChildren();
     if (!Array.isArray(it.steps)) it.steps = [];
     it.steps.forEach((st, j) => {
@@ -1916,7 +1970,7 @@ function buildSteps(it) {
         if (hasText(was) && !hasText(keep)) lost.push(`the ${TARGET_NOUN[sk]} "${was.trim()}"`);
         if (sk === 'set' && nk !== 'set' && hasText(st.value)) lost.push(`the value ${st.value}`);
         sealSnap();
-        it.steps[j] = makeItem(nk, keep); commit({ inspector: false }); render();
+        it.steps[j] = makeItem(nk, keep); commit({ inspector: false }); render({ j, k: 'type' });
         if (lost.length) undoToast(`Step ${j + 1} is now ${KIND[nk].label}. Dropped ${joinList(lost)}.`, { ms: 6500 });
       } },
         STEP_KINDS.map(x => h('option', { value: x, selected: x === sk }, KIND[x].label)));
@@ -1939,15 +1993,21 @@ function buildSteps(it) {
         })() : null,
         sk === 'set' ? vhint : null,
         h('span', { class: 'sacts' },
-          iconBtn('up', 'Move step up', () => { if (j > 0) { [it.steps[j - 1], it.steps[j]] = [it.steps[j], it.steps[j - 1]]; commit(); render(); } }),
-          iconBtn('down', 'Move step down', () => { if (j < it.steps.length - 1) { [it.steps[j + 1], it.steps[j]] = [it.steps[j], it.steps[j + 1]]; commit(); render(); } }),
-          iconBtn('trash', 'Remove step', e => { if (e.detail > 1) return; it.steps.splice(j, 1); commit(); render(); }, 'danger')));
+          actBtn('up', iconBtn('up', 'Move step up', () => { if (j > 0) { [it.steps[j - 1], it.steps[j]] = [it.steps[j], it.steps[j - 1]]; commit(); render({ j: j - 1, k: 'up' }); } })),
+          actBtn('down', iconBtn('down', 'Move step down', () => { if (j < it.steps.length - 1) { [it.steps[j + 1], it.steps[j]] = [it.steps[j], it.steps[j + 1]]; commit(); render({ j: j + 1, k: 'down' }); } })),
+          actBtn('rm', iconBtn('trash', 'Remove step', e => { if (e.detail > 1) return; it.steps.splice(j, 1); commit(); render({ j: Math.min(j, it.steps.length - 1), k: 'rm' }); }, 'danger'))));
       host.append(row);
     });
     if (!it.steps.length) host.append(h('div', { class: 'fhint bad' }, 'Add at least one step.'));
     host.append(h('div', { class: 'step-add' }, h('span', { class: 'micro' }, 'Add'), STEP_KINDS.map(x =>
       h('button', { class: 'btn small', type: 'button', onclick: () => { it.steps.push(makeItem(x, '')); commit(); render(); const ins = $$('.step .inp.mono, .step input', host); const last = $$('.step', host).pop(); if (last) $$('input', last)[0].focus(); } }, icon(KIND[x].icon, 12), KIND[x].label))));
+    if (f) {                                                      // the control that had focus was rebuilt: focus its successor
+      const row = $$('.step', host)[f.j], c = row && (f.k === 'type' ? $('select', row) : $(`[data-act="${f.k}"]`, row));
+      const t = c || $('.step-add .btn', host);
+      if (t) t.focus();
+    }
   };
+  const actBtn = (act, b) => { b.dataset.act = act; return b; };
   render();
   return host;
 }
@@ -1976,19 +2036,31 @@ function buildMenuProps() {
   if (m.items.some(x => kindOf(x) === 'auto')) idNotes.push(h('div', { class: 'fhint' }, 'Renaming resets the learned auto slots for this menu.'));
   box.append(field('Id', idInp, h('div', { class: 'id-notes' }, idErr, ...idNotes)));
 
+  // The file order decides: of two menus with one hotkey, the first opens (and any menu beats the browser).
+  const clash = owner => {
+    if (owner === BROWSER) return 'Also used by the browser, which will not open with it.';
+    const ids = Object.keys(S.cfg.menus);
+    return ids.indexOf(owner) < ids.indexOf(id) ? `Also used by ${ownerName(owner)}, which comes first and wins; this menu will not open with it.` : `Also used by ${ownerName(owner)}, which will not open with it.`;
+  };
   const owner0 = m.hotkey ? hotkeyOwner(m.hotkey, id) : null;
+  let syncSwallow = () => {};
   const hk = hotkeyField({ what: 'Hotkey for this menu', value: m.hotkey || '', placeholder: 'No hotkey (submenu only)', onChange: str => {
     if (str) m.hotkey = str; else delete m.hotkey;
     const owner = str ? hotkeyOwner(str, id) : null;
-    if (owner) hk.say(`Also used by ${ownerName(owner)}. Only one of them will open.`, 'warn');
+    if (owner) hk.say(clash(owner), 'warn');
+    syncSwallow();
     commit(); if (R.head) R.head();
   } });
   box.append(field('Hotkey', hk, m.hotkey ? 'Hold or tap this key in ZBrush to open the ring. Click the field and press a combination to change it.' : 'Without a hotkey this menu can only be opened as a submenu from another menu.'));
-  if (owner0) hk.say(`Also used by ${ownerName(owner0)}. Only one of them will open.`, 'warn');
+  if (owner0) hk.say(clash(owner0), 'warn');
 
+  const swallowSw = toggleSwitch(m.swallow !== false, v => { if (v) delete m.swallow; else m.swallow = false; commit(); }, 'Swallow hotkey');
+  const swallowNeed = h('div', { class: 'fhint warn' }, 'Set a hotkey first.');
+  syncSwallow = () => { const none = !m.hotkey; $('input', swallowSw).disabled = none; swallowSw.title = none ? 'Set a hotkey first' : ''; swallowNeed.hidden = !none; };   // a submenu has no key to hide
+  syncSwallow();
   box.append(h('div', { class: 'field row' }, h('div', { class: 'grow' }, h('span', { class: 'flabel' }, 'Swallow hotkey'),
-    h('div', { class: 'fhint' }, 'Hides the key from ZBrush while the ring is in use, so it does not also trigger ZBrush\'s own shortcut for that key. Turn off if you want the key to keep working in ZBrush too.')),
-    toggleSwitch(m.swallow !== false, v => { if (v) delete m.swallow; else m.swallow = false; commit(); }, 'Swallow hotkey')));
+    h('div', { class: 'fhint' }, 'Hides the key from ZBrush while the ring is in use, so it does not also trigger ZBrush\'s own shortcut for that key. Turn off if you want the key to keep working in ZBrush too.'), swallowNeed),
+    swallowSw));
 
   const refs = referrers(id);
   box.append(sectionTitle('Used by'), refs.length
@@ -3065,6 +3137,8 @@ function buildLibraryScreen(root) {
 }
 
 /* ================================================================== SETTINGS screen */
+/* The Browser buttons of the top bar and of Settings: the browser can take a moment to start, so say so first. */
+function openBrowserFromButton() { toast('Opening the browser...', { ms: 2500 }); return openBrowserWindow(); }
 function ensureRing() { if (!S.cfg.ring || typeof S.cfg.ring !== 'object') S.cfg.ring = {}; return S.cfg.ring; }
 function setRing(k, v) { ensureRing()[k] = v; commit(); }
 function setColor(k, v) { const r = ensureRing(); if (!r.colors || typeof r.colors !== 'object') r.colors = {}; r.colors[k] = v; commit(); }
@@ -3076,24 +3150,38 @@ function normHex(v) {
   if (/^[0-9a-f]{3}$/i.test(t)) t = t.replace(/./g, c => c + c);
   return /^[0-9a-f]{6}$/i.test(t) ? '#' + t.toLowerCase() : null;
 }
+/* After the last ring key is dropped, an empty ring object goes too when the saved file had none, so a slider put back leaves nothing to save. */
+function tidyRing() {
+  const r = S.cfg.ring;
+  if (!r || typeof r !== 'object' || Object.keys(r).length) return;
+  let had = true;
+  try { had = 'ring' in JSON.parse(S.savedStr); } catch (e) { /* keep it */ }
+  if (!had) delete S.cfg.ring;
+}
+/* Sets a ring value, or drops its key when it equals the default (the file then says nothing about it). */
+function putRing(k, v) {
+  if (v !== S.defaults[k]) { setRing(k, v); return; }
+  delete ensureRing()[k]; tidyRing(); commit();
+}
 function sliderRow({ label, hint, key, step = 1, unit = '', scale = 1, onLive }) {   // scale: shown = stored * scale (0-1 opacity as 0-100 %)
   const [lo, hi] = ranges()[key] || [0, 100];
   const min = lo * scale, max = hi * scale;
   const disp = v => Number((v * scale).toFixed(6)), store = d => Number((d / scale).toFixed(6));
-  const range = h('input', { type: 'range', min, max, step, value: disp(ringNum(key)), 'aria-label': label });
-  const num = h('input', { class: 'inp mono num', type: 'number', min, max, step, value: disp(ringNum(key)), 'aria-label': label + ' value' });
-  const reset = iconBtn('undo', 'Reset to default (' + disp(S.defaults[key]) + (scale !== 1 ? unit : '') + ')', () => { delete ensureRing()[key]; commit(); sync(ringNum(key)); onLive && onLive(); }, 'reset');
+  const range = h('input', { type: 'range', min, max, step, value: disp(ringNum(key)), 'aria-label': label, dataset: { fk: key + '/range' } });
+  const num = h('input', { class: 'inp mono num', type: 'number', min, max, step, value: disp(ringNum(key)), 'aria-label': label + ' value', dataset: { fk: key + '/num' } });
+  const reset = iconBtn('undo', 'Reset to default (' + disp(S.defaults[key]) + (scale !== 1 ? unit : '') + ')', () => { delete ensureRing()[key]; tidyRing(); commit(); sync(ringNum(key)); onLive && onLive(); }, 'reset');
+  reset.dataset.fk = key + '/reset';
   const note = h('span', { class: 'num-hint', role: 'status' });
   let noteT = 0;
   const say = t => { clearTimeout(noteT); note.textContent = t; if (t) noteT = setTimeout(() => { note.textContent = ''; }, 2000); };
   const sync = v => { range.value = num.value = disp(v); range.style.setProperty('--pct', ((v - lo) / (hi - lo)) * 100 + '%'); reset.style.visibility = key in ring() && ring()[key] !== S.defaults[key] ? 'visible' : 'hidden'; };
-  range.addEventListener('input', () => { const v = store(Number(range.value)); setRing(key, v); sync(v); onLive && onLive(); });
+  range.addEventListener('input', () => { const v = store(Number(range.value)); putRing(key, v); sync(v); onLive && onLive(); });
   num.addEventListener('change', () => {
     const raw = num.value.trim(), n = Number(raw);
     if (raw === '' || !Number.isFinite(n)) { sync(ringNum(key)); say(''); return; }     // nothing usable typed: keep what was there
     const snapped = Number((min + Math.round((n - min) / step) * step).toFixed(6)), v = store(clamp(snapped, min, max));
     say(n < min || n > max ? 'Kept within ' + min + ' to ' + max : '');
-    if (v !== ringNum(key)) { setRing(key, v); onLive && onLive(); }
+    if (v !== ringNum(key)) { putRing(key, v); onLive && onLive(); }
     sync(v);
   });
   sync(ringNum(key));
@@ -3102,7 +3190,7 @@ function sliderRow({ label, hint, key, step = 1, unit = '', scale = 1, onLive })
 function switchRow({ label, hint, key }) {
   const v = ring()[key];
   return h('div', { class: 'srow' }, h('div', { class: 'slabel' }, h('span', null, label), h('small', null, hint)),
-    h('div', { class: 'sctl switch' }, toggleSwitch(typeof v === 'boolean' ? v : S.defaults[key], on => { if (on === S.defaults[key]) { delete ensureRing()[key]; commit(); } else setRing(key, on); }, label)));
+    h('div', { class: 'sctl switch' }, toggleSwitch(typeof v === 'boolean' ? v : S.defaults[key], on => putRing(key, on), label)));
 }
 /* A radio group: only the chosen card is a Tab stop; the arrow keys move and choose, Home and End jump to the ends. */
 function choiceCards(items, current, onPick, cls = '', label = '') {
@@ -3153,13 +3241,16 @@ function card(title, sub, ...kids) { return h('section', { class: 'card' }, h('h
    refresh() so the caller can look again (Settings fetches, Setup forces its own poll). extra(z) may add a node to a row. */
 function legacyRows(box, { refresh, extra } = {}) {
   // Runs one install or remove. The whole row is locked while it runs (the elevation prompt can sit open for minutes).
-  const act = (name, path, btn, rowBtns, busyText) => async () => {
+  // later: after that many ms of waiting the button says laterText (a plain copy is quick; an administrator prompt is not)
+  const act = (name, path, btn, rowBtns, busyText, later, laterText) => async () => {
     const was = rowBtns.map(b => b.disabled), label = [...btn.childNodes];
     rowBtns.forEach(b => { b.disabled = true; });
     btn.classList.add('running'); btn.replaceChildren(h('span', { class: 'spin' }), busyText);
+    const slow = later ? setTimeout(() => { if (btn.classList.contains('running')) btn.replaceChildren(h('span', { class: 'spin' }), laterText); }, later) : 0;
     let res = null;
     try { res = await call(name, path); }
     catch (e) { toast('That did not work: ' + e.message, { tone: 'warn' }); }
+    clearTimeout(slow);
     if (res && res.busy) {                               // another operation is running: say so, leave the row as it was
       toast(res.message || 'Another install or removal is still running.', { tone: 'warn', ms: 5000 });
       btn.classList.remove('running'); btn.replaceChildren(...label); rowBtns.forEach((b, i) => { b.disabled = was[i]; });
@@ -3180,7 +3271,7 @@ function legacyRows(box, { refresh, extra } = {}) {
         refresh();
       }) : null;
       const rowBtns = [main, rm, forget].filter(Boolean);
-      main.onclick = act('install_zscript_bridge', z.path, main, rowBtns, 'Installing... approve the prompt');
+      main.onclick = act('install_zscript_bridge', z.path, main, rowBtns, 'Installing...', 4000, 'Installing... approve the prompt if Windows asks');
       if (rm) rm.onclick = async () => {
         const ok = await modal({ title: `Remove the plugin from ${z.name}?`,
           body: [h('p', null, 'This deletes the ZOrbit plugin files from this ZBrush install:'), h('p', { class: 'modal-path mono' }, z.path)],
@@ -3471,7 +3562,7 @@ function buildSettingsScreen(root) {
     } });
     page.append(card('Browser', 'A window of its own',
       h('div', { class: 'browser-key' }, field('Hotkey', bhk, 'Shows the browser; pressed over it, it gives ZBrush the keyboard back. The browser also opens from a Browser slot and the tray menu.')),
-      h('div', { class: 'browser-open' }, h('button', { class: 'btn small', type: 'button', title: 'Open the browser in its own window', onclick: openBrowserWindow }, icon('k_browser', 13), 'Open the browser'))));
+      h('div', { class: 'browser-open' }, h('button', { class: 'btn small', type: 'button', title: 'Open the browser in its own window', onclick: openBrowserFromButton }, icon('k_browser', 13), 'Open the browser'))));
     { const o0 = bOwner(S.cfg.browser && S.cfg.browser.hotkey); if (o0) bhk.say(bsay(o0), 'warn'); }
 
     /* --- studio (preferences of this window, saved immediately, not part of the menus file) */
@@ -3515,7 +3606,16 @@ function buildSettingsScreen(root) {
         h('div', { class: 'btn-row' }, ...ioBtns))));
     R.preview();
   };
-  R.settings = () => { build(); buildToc(); };
+  // Rebuilt after an undo, a revert or a reload: the control that had focus gets it back (found by its data-fk key, else its label), and the scroll stays.
+  const fkOf = el => el.dataset.fk || [el.tagName, el.type || '', el.getAttribute('aria-label') || '', (el.closest('[role="radiogroup"]') || el).getAttribute('aria-label') || '', el.dataset.v || ''].join('|');
+  const focusables = () => $$('input, button, select, textarea, [tabindex]', page);
+  R.settings = () => {
+    const act = document.activeElement, key = act && page.contains(act) ? fkOf(act) : null, top = scroll.scrollTop;
+    build(); buildToc();
+    scroll.scrollTop = top;
+    const again = key && focusables().find(el => fkOf(el) === key && !el.disabled);
+    if (again) again.focus({ preventScroll: true });
+  };
   build();
   buildToc();
 }
@@ -3665,6 +3765,9 @@ function buildStatusScreen(root) {
     curLines = backend.concat(extra).slice(-LOG_LINES);
     const forced = new Set(extra);
     const today = localDate(new Date());
+    const logSig = today + '\u0001' + curLines.join('\n') + '\u0001' + extra.join('\n');
+    if (logSig === logBox._sig) { tickStamp(); return; }           // same lines: leave the box alone, so a selection in it survives
+    logBox._sig = logSig;
     logBox.replaceChildren(...(curLines.length ? curLines.map(line => {
       const m = /^(\d{4}-\d\d-\d\d) (\d\d:\d\d:\d\d)(\.\d+)?\s+(.*)$/.exec(line);
       const cls = /\bpick #/.test(line) ? 'pick' : (forced.has(line) || /\b(error|errors|fail\w*|exception|traceback|warn\w*)\b/i.test(line) ? 'err' : '');
@@ -3791,10 +3894,12 @@ function deriveSteps(d, tryFrom, ctx) {
   let hint = null;
   if (pk && !sent) hint = { text: pk.reason || 'The app could not send that pick to ZBrush.' };
   else if (sent && !did && now - pk.at > 4) {
-    hint = { key: { text: 'ZBrush did not react to the bridge key. Bind it to Zplugin > ZOrbit > Apply (Settings > ZBrush bridge).', settings: true },
-      listener: { text: 'The plugin did not act on the pick. See bridge.log on the Status screen.' },
+    // ZBrush did answer, with a failure: the bridge log line says what (the same seq, so it is this pick)
+    const failed = !!(lp && lp.ok === false && pk.seq != null && lp.seq === pk.seq && lp.at >= pk.at - 2);
+    hint = failed ? { text: lp.text } : ({ key: { text: 'ZBrush did not react to the bridge key. Bind it to Zplugin > ZOrbit > Apply (Settings > ZBrush bridge).', settings: true },
+      listener: { text: 'The plugin did not act on the pick. Open the logs folder from Status and read bridge.log.', status: true },
       zscript: { text: 'ZBrush did not react to F9. Check Zplugin > ZOrbit > Apply has the hotkey.' } }[pk.route]
-      || { text: pk.reason || 'ZBrush did not confirm the pick.' };
+      || { text: pk.reason || 'ZBrush did not confirm the pick.' });
   }
   const locked3 = s2.state !== 'ok';
   const key = (ctx.menu && ctx.menu.hotkey) || 'Q';
@@ -3826,7 +3931,7 @@ const SETUP_WHERE = [
   ['Library', 'Every brush ZBrush can load, with tags', 'library'],
   ['Settings', 'Size, animation, colours, the bridge', 'settings'],
   ['Status', 'Is everything running, and the logs', 'status'],
-  ['User guide', 'The whole manual, on GitHub', null]];
+  ['User guide', 'The whole manual, at zorbit.lol/docs', null]];
 
 function buildSetupScreen(root) {
   root.replaceChildren();
@@ -3895,6 +4000,7 @@ function buildSetupScreen(root) {
       if (s.hint) {
         out.push(note(s.hint.text, true));
         if (s.hint.settings) out.push(h('div', { class: 'btn-row' }, h('button', { class: 'btn small', type: 'button', onclick: () => showScreen('settings') }, 'Open Settings')));
+        if (s.hint.status) out.push(h('div', { class: 'btn-row' }, h('button', { class: 'btn small', type: 'button', onclick: () => showScreen('status') }, 'Open Status')));
       }
       out.push(h('div', { class: 'btn-row' }, h('button', { class: 'btn small', type: 'button', title: 'Forget what happened so far and watch for a new try',
         onclick: () => { st.tryFrom = Date.now() / 1000; paint(true); } }, icon('refresh', 12), 'Start over')));
@@ -4068,18 +4174,19 @@ function describeProblem(raw) {
 /* Amber markers on menu and item rows. Built with the row, and patched in place when the problems change. */
 function menuWarn(id) {
   const tips = S.problemTips.get(id);
-  return tips ? h('span', { class: 'mwarn', title: tips.join('\n') }, icon('alert', 13)) : null;
+  return tips ? h('span', { class: 'mwarn', role: 'img', title: tips.join('\n'), 'aria-label': 'Problem: ' + tips.join('. ') }, icon('alert', 13)) : null;
 }
 function itemWarn(menuId, i, ok) {
   const tips = S.problemTips.get(menuId + '#' + i);
   if (ok && !tips) return null;
-  return h('span', { class: 'iwarn', title: tips ? tips.join('\n') : 'This item is incomplete and will be skipped' }, icon('alert', 14));
+  const text = tips ? tips.join('\n') : 'This item is incomplete and will be skipped';
+  return h('span', { class: 'iwarn', role: 'img', title: text, 'aria-label': 'Problem: ' + text.replace(/\n/g, '. ') }, icon('alert', 14));
 }
 function paintMarkers() {
   $$('.mrow').forEach(row => {
     const want = S.problemTips.get(row.dataset.id), cur = $('.mwarn', row);
     if (!want) { if (cur) cur.remove(); return; }
-    if (cur) { cur.title = want.join('\n'); return; }
+    if (cur) { cur.title = want.join('\n'); cur.setAttribute('aria-label', 'Problem: ' + want.join('. ')); return; }
     const side = $('.mrow-side', row); if (side) side.prepend(menuWarn(row.dataset.id));
   });
   $$('.irow').forEach(row => {
@@ -4087,7 +4194,7 @@ function paintMarkers() {
     const m = S.cfg.menus[menuId], bad = !m || !m.items[i] || !itemUsable(m.items[i]);
     if (!want && !bad) { if (cur) cur.remove(); return; }
     const title = want ? want.join('\n') : 'This item is incomplete and will be skipped';
-    if (cur) { cur.title = title; return; }
+    if (cur) { cur.title = title; cur.setAttribute('aria-label', 'Problem: ' + title.replace(/\n/g, '. ')); return; }
     const acts = $('.iacts', row), el = itemWarn(menuId, i, !bad);
     if (el) row.insertBefore(el, acts);
   });
@@ -4168,6 +4275,8 @@ function closeProblems(refocus) {
   S.problemsOpen = false; renderProblems();
   if (refocus) $('#problemsBtn').focus();
 }
+/* True when `after` holds a problem that `before` did not. */
+const newProblems = (before, after) => { const had = new Set(before.map(String)); return after.some(p => !had.has(String(p))); };
 /* Takes a freshly loaded get_config result (boot, or "reload from disk") and makes it the current and saved config. */
 function adoptConfig(res) {
   S.cfg = res.config;
@@ -4235,10 +4344,11 @@ async function importSettings() {
   if (!res || !res.ok) { toast((res && (res.message || res.error)) || 'The import did not work.', { tone: 'warn', ms: 5000 }); return; }
   if (res.config) {
     snapSoon.cancel(); validateSoon.cancel(); pushSnap();       // files an edit still waiting, so Undo goes back to it; mtimeNs and savedStr stay as they were
+    const priorProblems = S.problems.slice();
     S.cfg = res.config;
     if (!S.cfg.menus || typeof S.cfg.menus !== 'object' || Array.isArray(S.cfg.menus)) S.cfg.menus = {};
     S.problems = res.problems || [];
-    if (S.problems.length) S.problemsOpen = true;
+    if (newProblems(priorProblems, S.problems)) S.problemsOpen = true;
     if (!S.cfg.menus[S.menuId]) S.menuId = Object.keys(S.cfg.menus)[0] || null;
     const m = curMenu();
     if (!m || S.itemIdx === null || S.itemIdx >= (m.items || []).length) S.itemIdx = null;
@@ -4271,7 +4381,7 @@ function save() {
    'failed'. force skips the changed-on-disk check; allowUnusable skips the "no ring can open" check. They stay
    separate so confirming one warning never skips the other. */
 async function doSave({ force = false, allowUnusable = false } = {}) {
-  const snap = JSON.stringify(S.cfg);
+  const snap = JSON.stringify(S.cfg), prior = (S.problems || []).slice();
   try {
     const r = await call('save_config', S.cfg, S.mtimeNs, !!force, !!allowUnusable);
     if (r && r.saved) {
@@ -4281,13 +4391,14 @@ async function doSave({ force = false, allowUnusable = false } = {}) {
       const tail = S.appDown === false ? '. The app picks it up straight away.' : (S.appDown === true ? '. The app is not running: start it from Status.' : '');
       toast(S.problems.length ? `Saved at ${t} with ${S.problems.length} problem${S.problems.length === 1 ? '' : 's'}` : `Saved at ${t}${tail}`, { tone: S.problems.length ? 'warn' : 'ok', ms: tail && S.appDown === true ? 4800 : 3800 });
       if (R.status) R.status(); else refreshAppDown();      // one quiet look, so the rail dot is right
-      if (S.problems.length) { S.problemsOpen = true; }
+      if (newProblems(prior, S.problems)) S.problemsOpen = true;     // the toast and the pill already count them; the panel opens for a new one only
       return 'saved';
     }
     if (r && r.conflict) {
       const v = await modal({ title: 'The file changed on disk',
-        body: h('p', null, r.message || 'The menus file was changed by something else after Studio loaded it. Saving now would overwrite those changes.'),
-        actions: [{ text: 'Cancel', value: 'cancel' }, { text: 'Overwrite', value: 'overwrite', kind: 'danger-ghost' }, { text: 'Reload from disk', value: 'reload', kind: 'primary', focus: true }] });
+        body: h('div', null, h('p', null, r.message || 'The menus file was changed by something else after Studio loaded it. Saving now would overwrite those changes.'),
+          h('p', null, 'Reload discards your unsaved changes.')),
+        actions: [{ text: 'Cancel', value: 'cancel', focus: true }, { text: 'Overwrite', value: 'overwrite', kind: 'danger-ghost' }, { text: 'Reload from disk', value: 'reload' }] });
       if (v === 'reload') return (await reloadFromDisk()) ? 'reloaded' : 'failed';
       if (v === 'overwrite') {
         // adopt the file's current stamp so this is a plain save of what the user saw; the no-usable-ring check still applies
@@ -4542,7 +4653,8 @@ function recovery(res) {
   const path = isErr ? '' : String((res && res.path) || '');
   const backup = !isErr && !!(res && res.backup_exists);
   const loading = $('#screens > .loading'); if (loading) loading.remove();
-  $$('.rail-btn').forEach(b => { b.classList.remove('on'); b.setAttribute('aria-current', 'false'); });
+  // The screens need the menus: the rail and Alt+1 to Alt+6 do nothing until the file is fixed, so the rail looks that way.
+  $$('.rail-btn').forEach(b => { b.classList.remove('on'); b.setAttribute('aria-current', 'false'); b.setAttribute('aria-disabled', 'true'); b.title = 'Fix or reset the menus file first'; });
   $('#saveBtn').disabled = true; $('#revertBtn').disabled = true;
   if (path) setPathHint(path);
   const run = async (btn, method) => {
@@ -4555,6 +4667,7 @@ function recovery(res) {
     btn.disabled = false;
   };
   const folderBtn = h('button', { class: 'btn', type: 'button', onclick: async () => { try { await call('open_folder', 'config'); } catch (e) { toast('Could not open the folder.', { tone: 'warn' }); } } }, icon('folder', 13), 'Open folder');
+  const logsBtn = h('button', { class: 'btn', type: 'button', title: 'Where the logs are kept', onclick: async () => { try { await call('open_folder', 'data'); } catch (e) { toast('Could not open the folder.', { tone: 'warn' }); } } }, icon('folder', 13), 'Open logs folder');
   const restoreBtn = backup ? h('button', { class: 'btn', type: 'button', onclick: () => run(restoreBtn, 'restore_backup') }, icon('undo', 13), 'Restore backup') : null;
   const resetBtn = h('button', { class: 'btn danger-ghost', type: 'button', onclick: async () => {
     const ok = await modal({ title: 'Start from defaults?',
@@ -4567,7 +4680,7 @@ function recovery(res) {
     path ? h('p', { class: 'fatal-path mono' }, path) : null,
     h('pre', { class: 'fatal-err mono' }, msg),
     h('p', { class: 'fatal-lead' }, backup ? 'Nothing has been changed. You can fix the file yourself, restore the last good backup, or start again from the defaults.' : 'Nothing has been changed. You can fix the file yourself or start again from the defaults.'),
-    h('div', { class: 'btn-row' }, folderBtn, restoreBtn, resetBtn, h('button', { class: 'btn primary', type: 'button', onclick: () => location.reload() }, 'Try again'))));
+    h('div', { class: 'btn-row' }, folderBtn, logsBtn, restoreBtn, resetBtn, h('button', { class: 'btn primary', type: 'button', onclick: () => location.reload() }, 'Try again'))));
 }
 
 async function boot() {
@@ -4636,7 +4749,7 @@ function init() {
   $('#revertBtn').addEventListener('click', revert);
   $('#undoBtn').append(icon('undo', 16)); $('#redoBtn').append(icon('redo', 16));
   $('#browserBtn').prepend(icon('k_browser', 13));
-  $('#browserBtn').addEventListener('click', openBrowserWindow);   // works before the config loads: the browser needs none
+  $('#browserBtn').addEventListener('click', openBrowserFromButton);   // works before the config loads: the browser needs none
   $('#undoBtn').addEventListener('click', () => { if (S.ready && !S.fatal) undo(); });
   $('#redoBtn').addEventListener('click', () => { if (S.ready && !S.fatal) redo(); });
   $('#problemsBtn').addEventListener('click', () => { S.problemsOpen = !S.problemsOpen; renderProblems(); });
@@ -4649,7 +4762,9 @@ function init() {
   window.addEventListener('keydown', e => {
     const ours = ((e.ctrlKey || e.metaKey) && !e.altKey && /^[szy]$/i.test(e.key)) || (e.altKey && !e.ctrlKey && !e.shiftKey && /^[1-6]$/.test(e.key));
     if ($('#overlay-root').firstElementChild) { if (ours) e.preventDefault(); return; }   // a dialog is open: our shortcuts stay quiet, and the web view must not get Ctrl+S either
-    const ed = e.target && e.target.closest && e.target.closest('input, textarea, select, [contenteditable]');
+    // a text box keeps its own undo; a slider, switch, select or colour swatch does not, so Ctrl+Z there undoes the config
+    const edEl = e.target && e.target.closest && e.target.closest('input, textarea, [contenteditable]');
+    const ed = !!edEl && (edEl.matches('textarea, [contenteditable]:not([contenteditable="false"])') || !edEl.type || /^(text|search|number|url|email|password|tel)$/i.test(edEl.type));
     if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === 's') { e.preventDefault(); if (S.ready && !S.fatal) save(); }
     else if (!S.ready || S.fatal) return;
     else if ((e.ctrlKey || e.metaKey) && !e.altKey && !ed && e.key.toLowerCase() === 'z') { e.preventDefault(); e.shiftKey ? redo() : undo(); }

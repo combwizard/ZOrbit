@@ -6,7 +6,7 @@ A menu is a named list of items shown as one ring. Menus live in one file, `%APP
 
 - A menu **with a hotkey** can be opened from ZBrush.
 - A menu **without a hotkey** is a submenu: it opens when you pick an item of type `menu` in another ring.
-- Rings work best with 4 to 12 items. They are spread evenly around the circle.
+- Rings work best with 4 to 12 items. They are spread evenly around the circle. Past 12, the slots start to overlap at the default **Ring radius** and **Slot size**: raise the radius or shrink the slots to make room. Studio shows a note above the item list when a menu has more than 12.
 - At least one menu needs a hotkey, otherwise nothing can open the ring.
 - A menu can have its own open animation (`"animation": "spiral"`, or pick one in the menu settings in Studio). Without one it uses `ring.animation`. See [Open animations](appearance.md#open-animations).
 - A menu can **fan out** when it is opened as a submenu (`"fan": true`, or switch on **Fan out when opened from another menu** in the menu settings in Studio). See [Submenu](#submenu).
@@ -28,6 +28,7 @@ Every item does exactly one thing. Besides the action, an item can have a `label
 | `toggle` | Flips a switch on or off. |
 | `steps` | Runs a list of the actions above, in order. |
 | `menu` | Opens another ring in place of this one. |
+| `auto` | A slot that holds a brush you pick often. ZOrbit fills it. |
 | `tag` | Opens a fan of every installed item that carries a tag, or the Favourites tag: brushes first, most used first, then alphas, materials and textures. |
 | `browser` | Opens the [browser](browser.md) on one of its tabs, optionally on one tag. |
 
@@ -121,6 +122,22 @@ Steps run in order. Each step is a `brush`, `alpha`, `material`, `texture`, `pre
 A submenu can open another way. Give its menu `"fan": true` (or switch on **Fan out when opened from another menu** in the menu settings in Studio) and its items spread out in an arc beyond its slot, joined to it by dashed lines, instead of a new ring opening on the slot. The ring you came from stays visible. An item of a fan can itself be a submenu of a fan, and it fans out further (up to three deep). The option only matters when the menu is opened as a submenu. A menu with a hotkey still opens as a normal ring when you press it. See [Pick modes](hotkeys.md#pick-modes) for how to pick from a fan.
 
 ![More Brushes fanned out from the Brushes ring, with ClayTubes hovered](images/fan.png)
+
+### Auto
+
+```json
+{"auto": "brush"}
+```
+
+`"brush"` is the only value. An auto slot holds a brush that ZOrbit picked for you, not one you pinned. Every brush you pick from a ring or from the [browser](browser.md) scores a point, and points fade with a half-life of two weeks, so last week's brushes count for more than last month's. A menu's auto slots hold its best-scoring brushes, leaving out any brush that menu already has as an ordinary item.
+
+The ring does not reshuffle under your hand:
+
+- A brush keeps its slot until another brush takes it.
+- A newcomer has to be among the best brushes after two picks in a row before it takes a slot. It takes the slot of the lowest-scoring brush that has dropped out of the best.
+- An empty slot fills straight away.
+
+An auto slot that nothing has filled yet is drawn as a faint **+**, and picking it does nothing. The slot shows the brush it holds, with that brush's thumbnail and name, so it takes no `label` or `icon` of its own. Each menu learns on its own, keyed by the menu's id: renaming the id in Studio resets what its auto slots learned. In Studio, the **Right now** field in the inspector shows which brush an auto slot holds at the moment. The scores are kept in `usage.json` (see [Files and logs](files.md#files-and-logs)).
 
 ### Tag
 

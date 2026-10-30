@@ -22,11 +22,11 @@ The steps:
 
 1. **ZBrush found.** Every ZBrush version Studio found. For ZBrush 2026 and newer, each row shows whether `ZBRUSH_PLUGIN_PATH` points at the plugin; **Fix** adds it the way the installer does. Restart ZBrush afterwards. Rows for [ZBrush 2022 to 2025](install.md#zbrush-2022-to-2025) have the same **Install**, **Update** and **Remove** buttons as **Settings > Older ZBrush**, and **Add a ZBrush folder** adds one Studio did not find.
 2. **Plugin loaded in ZBrush.** Live: whether ZBrush is running, which version, whether it loaded the plugin, and whether it needs a restart because it was started before the plugin was set up. It also shows whether the app is running, with **Start app**.
-3. **Try the ring.** Hover ZBrush's canvas, press Q and flick to a brush. Three checks tick off as it happens: ring opened, pick sent, ZBrush did it. If ZBrush does not confirm the pick within a few seconds, a hint says what to look at for the route the pick took. **Start over** forgets the try so far. This step reads `activity.json` (see [Files and logs](files.md#files-and-logs)).
+3. **Try the ring.** Hover ZBrush's canvas, press Q and flick to a brush. Three checks tick off as it happens: ring opened, pick sent, ZBrush did it. If ZBrush does not confirm the pick within a few seconds, a hint says what to look at for the route the pick took. If ZBrush answered with a failure, the hint is that line from the log instead. **Start over** forgets the try so far. This step reads `activity.json` (see [Files and logs](files.md#files-and-logs)).
 4. **Your brushes.** A preview of the Q ring, and **Change these brushes**, which opens it on the Menus screen.
 5. **What's where.** A line on each of Menus, Library, Settings, Status and the user guide, which links to these pages.
 
-Other shortcuts: **Ctrl+S** saves, **Ctrl+Z** undoes, **Ctrl+Y** (or Ctrl+Shift+Z) redoes. Closing Studio with unsaved changes shows what would be lost, grouped by menu and setting, with **Save and close**, **Close without saving** and **Keep editing**; Escape keeps editing. The Undo and Redo buttons next to Revert do the same, and undoing puts the selection back on what you were editing. In the lists, **Delete** removes the selected menu or item, **F2** renames a menu and **Alt+Up/Down** moves an item.
+Other shortcuts: **Ctrl+S** saves, **Ctrl+Z** undoes, **Ctrl+Y** (or Ctrl+Shift+Z) redoes. Undo and redo work wherever the focus is, even on a slider or a switch; inside a text box, Ctrl+Z undoes your typing there instead. Closing Studio with unsaved changes shows what would be lost, grouped by menu and setting, with **Save and close**, **Close without saving** and **Keep editing**; Escape keeps editing. The Undo and Redo buttons next to Revert do the same, and undoing puts the selection back on what you were editing. Each list (the menus, the items) is one stop for the Tab key. Inside it, **Up** and **Down** move through the rows, **Home** and **End** jump to the first and last, **Delete** removes the selected menu or item, **F2** renames a menu and **Alt+Up/Down** moves an item.
 
 The version at the top links to its release notes. When Studio opens, it asks GitHub whether there is a newer release. If there is, the top shows your version, an orange dot and the new version in orange. Clicking it opens the new release's page, where you can download it. The check only asks GitHub for the latest release and sends nothing about you or your menus. Turn it off in **Settings > Studio > Check for updates**. It is never made while that is off.
 
@@ -36,19 +36,29 @@ How saving works:
   file was readable and actually differs, so saving twice cannot swap a good backup for a bad one. When nothing has
   changed, Save says so and writes nothing.
 - If the file changed on disk after Studio loaded it (you edited it by hand, say), Save asks whether to overwrite
-  it or reload from disk.
+  it or reload from disk. Reloading throws away your unsaved changes, and the dialog says so. **Cancel** is the
+  button that has focus.
 - A config that no ring can open from (no menus, or no menu with a hotkey) is not saved until you confirm.
 - **Revert** goes back to what is saved on disk.
 - The app re-reads the file as soon as it changes, so saved changes apply immediately, new hotkeys included. You do not need to restart ZBrush or the app.
-- If something in the file is wrong, a **problems** pill appears at the top. Click it for the list: each entry says what is wrong in plain words and jumps to the menu, item or setting to fix, and the menu and item rows concerned carry an amber marker. Studio saves anyway, and the app skips the bad items and logs what it skipped.
+- If something in the file is wrong, a **problems** pill appears at the top. Click it for the list: each entry says what is wrong in plain words and jumps to the menu, item or setting to fix, and the menu and item rows concerned carry an amber marker. Studio saves anyway, and the app skips the bad items and logs what it skipped. The list opens by itself after a save or an import only when there is a problem that was not there before; the toast and the pill give the count either way.
 
 On the Menus screen you can:
 
 - add, duplicate and delete menus (a duplicate has no hotkey, so it starts out as a submenu);
 - add items with **Add item**, drag brushes, alphas, materials and textures from the Library onto the ring or the list, reorder items, and remove them (you can also drag an item from the [browser](browser.md) window onto a menu in the list, the ring or the item list);
 - drag on the ring to place things exactly: a bright bar shows the gap between two slots a brush, alpha, material or texture (from the Library or the browser) or an item will go into, and dragging a slot itself reorders it. Drag a slot onto another menu in the list to move it there (hold **Ctrl** to copy it instead), or onto the **Delete** target that appears in the corner of the preview to remove it (you can undo that);
-- drag an item from the item list onto another menu in the list to move it there (hold **Ctrl** to copy it instead);
-- open a submenu by double-clicking its item or pressing **Open** in the inspector; a **Back** chip above the item list returns to the parent menu;
-- edit each item's action, label and icon in the inspector;
-- record a hotkey by clicking the hotkey field and pressing the keys;
+- drag an item from the item list onto another menu in the list to move it there (hold **Ctrl** to copy it instead, and press or release Ctrl while you drag to switch). Studio stays on the menu you were editing, the row of the menu it went to flashes, and the toast has **Undo**;
+- open a submenu by double-clicking its item, by pressing the arrow button beside the submenu field in the inspector, or with the **Open it** link under that field; a **Back** chip above the item list returns to the parent menu;
+- click empty space inside the ring to clear the selection (the inspector stays on the **Item** tab);
+- edit each item's action, label and icon in the inspector. When you switch an item to another type, anything that cannot come along is dropped, and a toast lists it (**Switched to Press. Dropped the brush "ClayBuildup".**) with **Undo**. Brush, alpha, material and texture items say if the name is not in your library and which kind of file ZBrush needs; if the library could not be read, or ZBrush was not found, they say that and link to **Library** or **Setup**;
+- record a hotkey by clicking the hotkey field (or focusing it and pressing **Enter**) and pressing the keys. Letters, digits, F1 to F24, the punctuation keys and `space`, `tab`, `enter`, `backspace`, `insert`, `delete`, `home`, `end`, `pageup` and `pagedown` can be recorded; **Esc** cancels. If another menu already uses the key, the field says which one comes first and wins;
 - press the play button to preview the open animation.
+
+The right-hand side has three tabs:
+
+- **Item** edits the selected item: its type, target, label and icon.
+- **Menu** edits the selected menu: its title, id, hotkey, **Swallow hotkey** switch (off and greyed out until the menu has a hotkey), open animation and **Fan out when opened from another menu**. Changing the **Id** updates every item that opens the menu. If the menu has auto slots, they forget what they learned, because they are kept under the id. **Used by** lists the items in other menus that open this one; click one to go to it.
+- **Library** is the [browser](browser.md) in a narrow form, to drag items into the ring or the list.
+
+Menu rows show the menu's title, id, hotkey (or a small submenu icon when it has none) and item count. When the window is narrow, hover a row for its full title and hotkey. A menu with more than 12 items gets a note above its list, because the slots start to overlap.
