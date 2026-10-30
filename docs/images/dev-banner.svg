@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="222" viewBox="0 0 900 222" role="img" aria-labelledby="t d">
+  <title id="t">ZOrbit is under heavy development</title>
+  <desc id="d">I use ZOrbit every day in ZBrush myself. New versions come out often, some days more than one, so screens and settings can move between them. What I want most now is your take on how it is to use. Does it offer too much? Is a screen unclear, or cluttered enough that you gave up on it? Open an issue and say so. One line is plenty, and "I didn't get what this button does" helps me as much as a crash report.</desc>
+  <rect width="900" height="222" rx="14" fill="#f86b33"/>
+  <g transform="translate(60 56)">
+    <circle r="30" fill="#141416"/>
+    <rect x="-4" y="-18" width="8" height="23" rx="4" fill="#f86b33"/>
+    <circle cy="14" r="4.5" fill="#f86b33"/>
+  </g>
+  <g font-family="'Segoe UI', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif" fill="#141416">
+    <text x="114" y="58" font-size="30" font-weight="700">ZOrbit is under heavy development</text>
+    <g font-size="16.5" font-weight="500">
+      <text x="114" y="94">I use it every day in ZBrush myself. New versions come out often, some days more than one,</text>
+      <text x="114" y="117">so screens and settings can move between them.</text>
+      <text x="114" y="151">What I want most now is your take on how it is to use. Does it offer too much? Is a screen</text>
+      <text x="114" y="174">unclear, or cluttered enough that you gave up on it? <tspan font-weight="700">Open an issue and say so.</tspan></text>
+      <text x="114" y="197">One line is plenty, and "I didn't get what this button does" helps me as much as a crash report.</text>
+    </g>
+  </g>
+</svg>

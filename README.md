@@ -3,6 +3,9 @@
   ZOrbit
 </h1>
 
+<a href="https://github.com/combwizard/zorbit/issues"><img src="docs/images/dev-banner.svg" width="100%"
+  alt="ZOrbit is under heavy development. I use it every day in ZBrush myself. New versions come out often, some days more than one, so screens and settings can move between them. What I want most now is your take on how it is to use. Does it offer too much? Is a screen unclear, or cluttered enough that you gave up on it? Open an issue and say so. One line is plenty, and &quot;I didn't get what this button does&quot; helps me as much as a crash report."></a>
+
 ZOrbit is a radial brush menu for ZBrush. Press **Q** over ZBrush and a ring of your favourite brushes and buttons appears around the cursor. Flick toward one and let go, and ZBrush switches to it. You choose what goes on the ring in a small editor called ZOrbit Studio. It is free, open source (GPL-3.0), and runs on Windows.
 
 If you know pie menus from Blender or marking menus from Maya, ZOrbit brings that to ZBrush.
