@@ -1,7 +1,23 @@
 #!/bin/sh
-# Recompiles the ZScript bridge when its source is committed, so ZOrbitBridge.txt and ZOrbitBridge.zsc never
-# go in out of step. Needs ZBrush closed (tools/compile-zscript.ps1 starts ZBrush 2022 for the compile).
-# Install: tools/hooks/install.sh. Skip once: ZORBIT_SKIP_ZSC=1 git commit ...
+# 1. Stops a commit that changes the app or the bridge without touching the docs, so docs/ (published at
+#    zorbit.lol/docs) keeps up with main. Nothing to document: ZORBIT_NO_DOCS=1 git commit ...
+# 2. Recompiles the ZScript bridge when its source is committed, so ZOrbitBridge.txt and ZOrbitBridge.zsc never
+#    go in out of step. Needs ZBrush closed (tools/compile-zscript.ps1 starts ZBrush 2022 for the compile).
+#    Skip once: ZORBIT_SKIP_ZSC=1 git commit ...
+# Install: tools/hooks/install.sh.
+
+code=$(git diff --cached --name-only -- zorbit bridge | grep -v '^zorbit/studio_ui/dev/')
+# A release commit only bumps VERSION in paths.py.
+if [ "$code" = zorbit/paths.py ] &&
+	! git diff --cached -U0 -- zorbit/paths.py | grep '^[-+][^-+]' | grep -qv '^[-+]VERSION = '; then
+	code=
+fi
+if [ -n "$code" ] && [ "$ZORBIT_NO_DOCS" != 1 ] && [ -z "$(git diff --cached --name-only -- docs README.md)" ]; then
+	echo "pre-commit: this commit changes zorbit/ or bridge/ but no page in docs/ (or README.md)." >&2
+	echo "  If it changes anything a user sees or does, update the page that describes it (CLAUDE.md maps code" >&2
+	echo "  to pages) and add a CHANGELOG.md line. If there is nothing to document, commit with ZORBIT_NO_DOCS=1." >&2
+	exit 1
+fi
 
 src=bridge/zscript/ZOrbitBridge.txt
 zsc=bridge/zscript/ZOrbitBridge.zsc

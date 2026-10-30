@@ -13,6 +13,13 @@ on:
       - "mkdocs.yml"
       - "requirements-docs.txt"
       - ".github/workflows/pages.yml"
+  # Pull requests only build the docs (strict: broken links and anchors fail), they don't deploy.
+  pull_request:
+    paths:
+      - "docs/**"
+      - "docs-theme/**"
+      - "mkdocs.yml"
+      - "requirements-docs.txt"
   workflow_dispatch:
 
 permissions:
@@ -25,7 +32,27 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  check:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-docs.txt
+
+      - name: Build docs
+        env:
+          NO_MKDOCS_2_WARNING: "1"
+        run: |
+          pip install -r requirements-docs.txt
+          mkdocs build --strict
+
   deploy:
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     environment:
       name: github-pages
