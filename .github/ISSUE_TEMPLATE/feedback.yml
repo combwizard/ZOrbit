@@ -1,0 +1,15 @@
+name: Idea or feedback
+description: An idea, a wish, or a screen that was unclear or too busy.
+labels: [feedback]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        One line is plenty. "I didn't get what this button does" helps as much as a crash report.
+  - type: textarea
+    id: feedback
+    attributes:
+      label: What would you like to say?
+      description: Where in ZOrbit it is, and what you expected or would like instead.
+    validations:
+      required: true

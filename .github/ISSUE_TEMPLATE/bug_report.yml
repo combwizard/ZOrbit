@@ -1,0 +1,45 @@
+name: Bug report
+description: Something does not work the way the docs say it should.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. [Troubleshooting](https://zorbit.lol/docs/troubleshooting/) covers the common problems,
+        if you have not looked there yet.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: input
+    id: zorbit
+    attributes:
+      label: ZOrbit version
+      description: Shown at the top of Studio.
+      placeholder: "0.11.0"
+    validations:
+      required: true
+  - type: input
+    id: zbrush
+    attributes:
+      label: ZBrush version
+      placeholder: "2026.1"
+    validations:
+      required: true
+  - type: input
+    id: windows
+    attributes:
+      label: Windows version
+      placeholder: "Windows 11 24H2"
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: |
+        The last lines of `radiald.log` and `bridge.log` (and `popout.log` for a problem with the browser), from
+        `%LOCALAPPDATA%\ZOrbit`. Studio's **Status** screen has a button that opens the folder. The logs contain brush
+        names and menu ids; look them over and remove anything you would rather not share.
+      render: text

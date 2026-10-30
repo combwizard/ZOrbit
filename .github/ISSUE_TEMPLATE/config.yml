@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Documentation
+    url: https://zorbit.lol/docs/
+    about: Every setting and item type, hotkeys, files and logs, and troubleshooting.
+  - name: Report a security problem
+    url: https://github.com/combwizard/zorbit/security/advisories/new
+    about: Please report security problems privately, not as an issue.

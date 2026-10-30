@@ -12,6 +12,9 @@ Bug reports and ideas are welcome on the
 - the last lines of `%LOCALAPPDATA%\ZOrbit\radiald.log` and `bridge.log`. Look them over first and remove
   anything you would rather not share.
 
+Report security problems privately, as [SECURITY.md](SECURITY.md) describes. Everyone taking part is expected to
+follow the [code of conduct](CODE_OF_CONDUCT.md).
+
 ## Pull requests
 
 1. Fork the repository and make a branch.
