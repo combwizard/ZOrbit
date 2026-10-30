@@ -4623,7 +4623,14 @@ function init() {
     });
   }
   const skip = $('#skipLink');
-  if (skip) skip.addEventListener('click', e => { e.preventDefault(); const main = $('#screens'); if (main) main.focus(); });
+  if (skip) {
+    skip.addEventListener('click', e => { e.preventDefault(); const main = $('#screens'); if (main) main.focus(); });
+    // WebView2 puts focus on the first focusable element when the window hands it keyboard focus (on open, and
+    // on some activations), which would show this link with nobody pressing Tab. Only a Tab press may land here.
+    let tabAt = 0;
+    document.addEventListener('keydown', e => { if (e.key === 'Tab') tabAt = Date.now(); }, true);
+    skip.addEventListener('focus', () => { if (Date.now() - tabAt > 1000) { const main = $('#screens'); if (main) main.focus({ preventScroll: true }); else skip.blur(); } });
+  }
   $$('.rail-btn').forEach(b => b.addEventListener('click', () => { if (S.ready && !S.fatal) showScreen(b.dataset.screen); }));
   $('#saveBtn').addEventListener('click', () => save());
   $('#revertBtn').addEventListener('click', revert);
