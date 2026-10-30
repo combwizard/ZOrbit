@@ -449,8 +449,8 @@
     win_close: function () { return Promise.resolve(); },
     win_toggle_maximize: function () { return Promise.resolve(false); },
     win_is_maximized: function () { return Promise.resolve(false); },
-    get_app_info: function () { return Promise.resolve({ version: '0.8.1' }); },
-    check_update: function () { var p = JSON.parse(localStorage.getItem('rm_prefs') || '{}'); if (p.check_updates === false) return Promise.resolve({ newer: false, current: '0.8.1', latest: null, url: 'https://github.com/combwizard/zorbit/releases' }); return sleep(300).then(function () { if (q.has('unreach')) return { newer: false, current: '0.8.1', latest: null, url: 'https://github.com/combwizard/zorbit/releases' }; return q.has('update') ? { newer: true, current: '0.8.1', latest: '0.8.1', url: 'https://github.com/combwizard/zorbit/releases' } : { newer: false, current: '0.8.1', latest: '0.8.1', url: 'https://github.com/combwizard/zorbit/releases' }; }); },
+    get_app_info: function () { return Promise.resolve({ version: '0.9.0' }); },
+    check_update: function () { var p = JSON.parse(localStorage.getItem('rm_prefs') || '{}'); if (p.check_updates === false) return Promise.resolve({ newer: false, current: '0.9.0', latest: null, url: 'https://github.com/combwizard/zorbit/releases' }); return sleep(300).then(function () { if (q.has('unreach')) return { newer: false, current: '0.9.0', latest: null, url: 'https://github.com/combwizard/zorbit/releases' }; return q.has('update') ? { newer: true, current: '0.9.0', latest: '0.9.0', url: 'https://github.com/combwizard/zorbit/releases' } : { newer: false, current: '0.9.0', latest: '0.9.0', url: 'https://github.com/combwizard/zorbit/releases' }; }); },
     open_url: function (url) { console.log('[mock] open_url', url); return Promise.resolve(true); },
     open_browser: function () { console.log('[mock] open_browser'); return Promise.resolve({ ok: true, started: false }); },
     // The brush browser popout (popout.html?mock). A pick only logs; ?nopick answers like a popout whose app is gone.
