@@ -88,8 +88,8 @@
 
 ### Studio
 
-- [ ] First-run wizard: find ZBrush, pick eight brushes, try the ring once
-- [ ] A short guided tour, offered on first run and under Help
+- [x] First-run wizard: find ZBrush, pick eight brushes, try the ring once (Setup screen; brushes are a preview plus a hand-off to Menus)
+- [ ] A short guided tour, offered on first run and under Help (Setup ends with a "What's where" step; the tour itself is not done)
 - [ ] Reorder the Settings cards: Ring geometry, Colours, Labels, Tag colours (the look); Open animation, Behaviour
       (the feel); Brush browser, ZBrush bridge; then the cards that save straight away: Older ZBrush, Tags,
       Studio. Do it by sorting the built cards by name before the "On this page" list is made, not by moving

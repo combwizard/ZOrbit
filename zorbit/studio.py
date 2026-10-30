@@ -27,6 +27,7 @@ import brushes              # noqa: E402
 import expand               # noqa: E402
 import fsutil               # noqa: E402
 import installs             # noqa: E402
+import onboarding           # noqa: E402
 import paths                # noqa: E402
 import radiald              # noqa: E402
 import tags                 # noqa: E402
@@ -392,29 +393,63 @@ class Api(webapi.LibraryApi, webapi.TagApi):
         self._extras = (time.monotonic(), mode, legacy)
         return mode, legacy
 
-    def get_status(self):
-        listener = None
+    def _listener_info(self):
+        """listener.json as {verified (when, epoch seconds, or None), alive (its window exists), pid (the ZBrush
+        that wrote it), hwnd}, or None when there is no readable file. The file outlives a ZBrush that crashed,
+        so 'alive' only says the window handle is still valid."""
         try:
             with open(os.path.join(DATA_DIR, "listener.json"), encoding="utf-8") as f:
                 info = json.load(f)
-            listener = {"verified": bool(info.get("verified")), "alive": bool(IsWindow(int(info["hwnd"])))}
+            hwnd = int(info["hwnd"])
+            verified, pid = info.get("verified"), info.get("pid")
+            return {"verified": float(verified) if isinstance(verified, (int, float)) and verified else None,
+                    "alive": bool(IsWindow(hwnd)), "pid": pid if isinstance(pid, int) else None, "hwnd": hwnd}
         except (OSError, ValueError, KeyError, TypeError):
-            pass
-        picks = [l for l in _tail(os.path.join(DATA_DIR, "bridge.log"), 200) if " #" in l]
-        zs_log = os.path.join(DATA_DIR, "zscript_bridge.log")       # ZBrush 2022-2025: only the last pick
+            return None
+
+    def _last_pick_info(self):
+        """The last pick ZBrush carried out, from bridge.log (2026+) or zscript_bridge.log (2022-2025, only the
+        last pick): {text (the log line, as the Status screen shows it), at (epoch seconds), seq, ok, source
+        ('bridge' or 'zscript')}, or None. ok is False when ZBrush reported a problem with it."""
+        bridge_log = os.path.join(DATA_DIR, "bridge.log")
+        picks = [l for l in _tail(bridge_log, 200) if " #" in l]
+        source, mtime = "bridge", None
+        zs_log = os.path.join(DATA_DIR, "zscript_bridge.log")
         try:
-            if not picks or os.path.getmtime(zs_log) > os.path.getmtime(os.path.join(DATA_DIR, "bridge.log")):
+            if not picks or os.path.getmtime(zs_log) > os.path.getmtime(bridge_log):
                 zs = _tail(zs_log, 1)
                 if zs:
-                    when = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(os.path.getmtime(zs_log)))
+                    mtime = os.path.getmtime(zs_log)
+                    when = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(mtime))
                     picks.append(f"{when} {zs[0]} (ZScript bridge)")
+                    source = "zscript"
         except OSError:
             pass
+        if not picks:
+            return None
+        text = picks[-1]
+        try:
+            at = time.mktime(time.strptime(text[:19], "%Y-%m-%d %H:%M:%S"))      # log lines start with the time
+        except (ValueError, OverflowError):
+            at = mtime
+            if at is None:
+                try:
+                    at = os.path.getmtime(bridge_log)
+                except OSError:
+                    at = time.time()
+        m = re.search(r"#(\d+)", text)
+        ok = not any(bad in text for bad in ("FAILED", "NOT loaded", "no such interface item"))
+        return {"text": text, "at": at, "seq": int(m.group(1)) if m else None, "ok": ok, "source": source}
+
+    def get_status(self):
+        info = self._listener_info()
+        listener = {"verified": bool(info["verified"]), "alive": info["alive"]} if info else None
+        pick = self._last_pick_info()
         app_log = _tail(os.path.join(DATA_DIR, "radiald.log"), 40)
         zbrush_running, check_ok = _zbrush_running()
         bridge_mode, legacy_only = self._status_extras()
         return {"app_running": _mutex_exists(APP_MUTEX), "zbrush_running": zbrush_running,
-                "listener": listener, "last_pick": picks[-1] if picks else None, "app_log": app_log,
+                "listener": listener, "last_pick": pick["text"] if pick else None, "app_log": app_log,
                 "data_dir": DATA_DIR, "bridge_mode": bridge_mode, "legacy_only": legacy_only,
                 "checked_at": time.time(), "zbrush_check_ok": check_ok}
 
@@ -443,8 +478,8 @@ class Api(webapi.LibraryApi, webapi.TagApi):
                 "log": _tail(os.path.join(DATA_DIR, "radiald.log"), 8)}
 
     # --- ZScript bridge for ZBrush 2022-2025 -----------------------------------------------------
-    def _legacy_installs(self):
-        """ZBrush installations without the Python API: found ones plus folders the user added."""
+    def _all_installs(self):
+        """Every ZBrush installation: found ones plus folders the user added."""
         found = installs.find_installs()
         seen = {os.path.normcase(e["path"]) for e in found}
         found = [dict(e, added=False) for e in found]
@@ -453,11 +488,42 @@ class Api(webapi.LibraryApi, webapi.TagApi):
             if e and os.path.normcase(e["path"]) not in seen:
                 seen.add(os.path.normcase(e["path"]))
                 found.append(dict(e, added=True))        # added by hand: the page offers to forget these
-        return [e for e in found if not e["python"]]
+        return found
+
+    def _legacy_installs(self):
+        """ZBrush installations without the Python API (2022-2025)."""
+        return [e for e in self._all_installs() if not e["python"]]
 
     def get_zscript_bridge(self):
         rows = [dict(e, **zscript_bridge.status(e["path"])) for e in self._legacy_installs()]
         return {"installs": rows, "bundled": bool(zscript_bridge.bundled())}
+
+    # --- Setup screen ----------------------------------------------------------------------------
+    def get_setup(self):
+        """Everything the Setup screen shows, read fresh each call (the installs scan and the process list are
+        cheap). One failing probe costs only its part of the answer: the rest comes back with an 'error'."""
+        try:
+            mode, _ = self._status_extras()
+            return onboarding.snapshot(self._all_installs(), self._listener_info(), self._last_pick_info(), mode,
+                                       bool(zscript_bridge.bundled()), app_running=_mutex_exists(APP_MUTEX))
+        except Exception as e:
+            if getattr(self, "_setup_err", None) != repr(e):          # polled every second: log a repeat once
+                self._setup_err = repr(e)
+                _startup(f"get_setup failed: {e!r}")
+            return {"now": time.time(), "checked_at": time.time(), "bridge": None, "env": None, "installs": [],
+                    "unmatched_procs": [], "zbrush": {"running": False, "check_ok": False}, "listener": None,
+                    "app": {"running": False}, "bridge_mode": "auto", "bundled": False, "activity": None,
+                    "last_pick": None, "hard_fail": False, "hard_reasons": [],
+                    "error": f"{type(e).__name__}: {e}"}
+
+    def register_plugin_path(self):
+        """Adds this build's bridge folder to the user's ZBRUSH_PLUGIN_PATH. Takes no argument on purpose: the
+        folder is always the one this installation ships, never something the page sends."""
+        d = paths.bridge_dir()
+        if not d or not os.path.isfile(os.path.join(d, "zorbit_bridge.py")):
+            return {"ok": False, "changed": False, "message": "The plugin folder is missing. Reinstall ZOrbit.",
+                    "restart": True}
+        return dict(onboarding.register_plugin_path(d), restart=True)
 
     def _known_legacy(self, path):
         for e in self._legacy_installs():
@@ -518,11 +584,24 @@ class Api(webapi.LibraryApi, webapi.TagApi):
         return {"ok": True, "message": f"Forgot {e['name'] if e else os.path.basename(os.path.normpath(str(path)))}."}
 
     # --- Studio preferences (not part of the menus; saved straight away) --------------------------
-    _PREFS_DEFAULTS = {"show_licence": True, "check_updates": True, "last_screen": "menus"}
+    _PREFS_DEFAULTS = {"show_licence": True, "check_updates": True, "last_screen": "menus", "setup_done": False}
+    # Keys an earlier Studio already wrote: a studio.json with any of them belongs to someone who has used the
+    # Studio, so the Setup screen is not forced on them after an update.
+    _USED_KEYS = ("window", "last_screen", "show_licence", "check_updates", "zbrush_folders")
 
     def get_prefs(self):
+        with _studio_lock:
+            data = _read_studio_file()
+            # once: existing users skip Setup, a fresh install gets it. (An unreadable file reads as {}: it is
+            # left alone rather than overwritten with just this key.)
+            if "setup_done" not in data and (data or not os.path.exists(STUDIO_FILE)):
+                data["setup_done"] = any(k in data for k in self._USED_KEYS)
+                try:
+                    _write_studio_file(data)
+                except OSError:
+                    pass                             # the answer below is the same; it is decided again next time
         prefs = dict(self._PREFS_DEFAULTS)
-        prefs.update({k: v for k, v in _read_studio_file().items()
+        prefs.update({k: v for k, v in data.items()
                       if k in self._PREFS_DEFAULTS and type(v) is type(self._PREFS_DEFAULTS[k])})   # a hand edit of the wrong type is ignored
         return prefs
 

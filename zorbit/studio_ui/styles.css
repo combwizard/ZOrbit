@@ -712,6 +712,39 @@ body.dragging .irow:hover { background: transparent; }
 .livedot { width: 7px; height: 7px; border-radius: 50%; background: var(--lime); animation: pulse 3s ease-in-out infinite; }
 .stamp { color: var(--muted); }
 
+/* ------------------------------------------------------------ SETUP: a checklist, one card per step (colours follow .scard) */
+.setup-steps { list-style: none; margin: 0 0 16px; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+.sstep { display: flex; gap: 14px; align-items: flex-start; padding: 16px; background: var(--bg3); border: 1px solid var(--line); border-top: 2px solid var(--line2); border-radius: 8px; --c: var(--sub); transition: border-color .2s, opacity .2s; }
+.sstep.ok { --c: var(--lime); border-top-color: var(--lime); }
+.sstep.off { --c: var(--danger); border-top-color: var(--danger); }
+.sstep.warn { --c: var(--amber); border-top-color: var(--amber); }
+.sstep.pending { --c: var(--sub); }
+.sstep.locked { opacity: .55; }
+.sstep.locked .btn { pointer-events: none; }
+.snum { flex: none; width: 26px; height: 26px; display: grid; place-items: center; border-radius: 50%; border: 1.5px solid var(--c); color: var(--c); font: 700 12px var(--font); }
+.sstep.ok .snum { background: var(--c); color: var(--on-accent); }
+.sstep.ok .snum svg { stroke-width: 2.6; }
+.smain { flex: 1; min-width: 0; }
+.stitle { display: block; font-size: 15px; font-weight: 600; }
+.sdetail { margin-top: 3px; color: var(--sub); font-size: 12.5px; line-height: 1.5; }
+.sdetail .hk { margin: 0 2px; vertical-align: 1px; }
+.sbody { margin-top: 12px; display: flex; flex-direction: column; gap: 10px; }
+.sbody .zrows { margin: 0; }
+.sbody .btn-row { margin-top: 2px; }
+.sub-checks { display: flex; flex-direction: column; gap: 8px; }
+.sub-check { display: flex; align-items: center; gap: 10px; min-height: 28px; padding: 6px 12px; border-radius: 8px; background: var(--bg1); border: 1px solid var(--line); --c: var(--sub); }
+.sub-check.ok { --c: var(--lime); }
+.sub-check.warn { --c: var(--amber); }
+.sub-check.off { --c: var(--danger); }
+.sub-check.pending .sdot { box-shadow: none; opacity: .6; }
+.sub-check small { display: block; color: var(--sub); font-size: 12px; }
+.setup-where { display: flex; flex-direction: column; gap: 8px; }
+.setup-where .zrow b { font-weight: 600; }
+.setup-where .zrow small { display: block; color: var(--sub); font-size: 12px; }
+.setup-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+.setup-foot .foot-note { display: inline-flex; align-items: center; gap: 12px; color: var(--sub); font-size: 12.5px; }
+.setup-ring { max-width: 280px; }
+
 @media (max-height: 800px) {
   /* short windows: the ring stage gives some height back to the item list */
   .stage { flex: 0 1 max(240px, 42vh); min-height: 240px; max-height: max(240px, 42vh); }

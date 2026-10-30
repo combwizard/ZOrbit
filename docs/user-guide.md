@@ -41,7 +41,20 @@ Studio is where you edit everything. Open it from the Start menu (**ZOrbit Studi
 | Library | Alt+2 | Browse every brush ZBrush can load, with search, folders and thumbnails. Click a brush and press **Add to <menu>**, or drag it onto a menu, the ring or the item list. **Rescan** picks up brushes saved since Studio opened. Tag brushes and filter by tag (see [Tags](#tags)). |
 | Settings | Alt+3 | Ring size, animation, labels, tag colours, colours, tap time, auto-close, the brush browser hotkey, tags, bridge, and Studio's own preferences. |
 | Status | Alt+4 | Is ZBrush running, is the app running, is the bridge connected; the app log with a Copy button. **Start app** on the app card starts the app when ZBrush is running. A dot on this button in the rail means the app is not running while ZBrush is. |
+| Setup | Alt+6 | A checklist of five steps: ZBrush found (with the plugin set up for it), plugin loaded in ZBrush, try the ring, your brushes, and what's where. It shows live state and offers one action per step. An amber dot on this button in the rail means a check is failing: no ZBrush that Studio found has the plugin set up, or a running ZBrush does not. Finding no ZBrush at all does not count. |
 | Licence | Alt+5 | A licence screen. Press its button once and you will see. **Settings > Studio** hides it or brings it back. |
+
+Setup sits between Status and Licence in the rail, but it is Alt+6. Licence stays on Alt+5.
+
+The first time Studio runs (a fresh install, with no Studio preferences yet), it opens on **Setup**. Work down the steps, then press **Finish**, or **Skip for now**; either one marks Setup as done and takes you to Menus. If you close Studio without pressing either, Setup comes back the next time. People who upgrade from an earlier version are not sent to it. Once Setup is done, the bottom of the screen has a **Show Setup on next start** switch that brings it back.
+
+The steps:
+
+1. **ZBrush found.** Every ZBrush version Studio found. For ZBrush 2026 and newer, each row shows whether `ZBRUSH_PLUGIN_PATH` points at the plugin; **Fix** adds it the way the installer does. Restart ZBrush afterwards. Rows for ZBrush 2022 to 2025 have the same **Install**, **Update** and **Remove** buttons as **Settings > Older ZBrush**, and **Add a ZBrush folder** adds one Studio did not find.
+2. **Plugin loaded in ZBrush.** Live: whether ZBrush is running, which version, whether it loaded the plugin, and whether it needs a restart because it was started before the plugin was set up. It also shows whether the app is running, with **Start app**.
+3. **Try the ring.** Hover ZBrush's canvas, press Q and flick to a brush. Three checks tick off as it happens: ring opened, pick sent, ZBrush did it. If ZBrush does not confirm the pick within a few seconds, a hint says what to look at for the route the pick took. **Start over** forgets the try so far. This step reads `activity.json` (see [Files and logs](#files-and-logs)).
+4. **Your brushes.** A preview of the Q ring, and **Change these brushes**, which opens it on the Menus screen.
+5. **What's where.** A line on each of Menus, Library, Settings, Status and this guide.
 
 Other shortcuts: **Ctrl+S** saves, **Ctrl+Z** undoes, **Ctrl+Y** (or Ctrl+Shift+Z) redoes. Closing Studio with unsaved changes shows what would be lost, grouped by menu and setting, with **Save and close**, **Close without saving** and **Keep editing**; Escape keeps editing. The Undo and Redo buttons next to Revert do the same, and undoing puts the selection back on what you were editing. In the lists, **Delete** removes the selected menu or item, **F2** renames a menu and **Alt+Up/Down** moves an item.
 
@@ -490,6 +503,7 @@ When this version of ZOrbit has a newer plugin than one you installed, **Setting
 | `%LOCALAPPDATA%\ZOrbit\bridge.log` | The plugin inside ZBrush: what each pick actually did. |
 | `%LOCALAPPDATA%\ZOrbit\app_stderr.log` | Output when the app crashes on startup. |
 | `%LOCALAPPDATA%\ZOrbit\listener.json` | The verified listener window (written by the plugin). |
+| `%LOCALAPPDATA%\ZOrbit\activity.json` | The last ring the app opened and the last pick it sent: the route, whether it went out, and whether the plugin picked it up. Written by the app; Setup's **Try the ring** step reads it. Safe to delete. |
 | `%LOCALAPPDATA%\ZOrbit\request.json` | The pick in transit. Normally gone in a moment. |
 | `%LOCALAPPDATA%\ZOrbit\request.txt` | The same pick for the ZBrush 2022 to 2025 plugin. |
 | `%LOCALAPPDATA%\ZOrbit\zscript_bridge.log` | ZBrush 2022 to 2025: what the last pick did. |
@@ -509,11 +523,12 @@ When you report a bug, paste the last lines of `radiald.log` and `bridge.log` (a
 
 **Pressing the hotkey does nothing.**
 
-1. Is ZBrush the front window? The hotkey is ignored everywhere else.
-2. In ZBrush, open **Zplugin > ZOrbit > Status**. If the palette is missing, ZBrush did not load the plugin. Restart ZBrush and check that your user environment variable `ZBRUSH_PLUGIN_PATH` contains the plugin folder. As a one-off you can also load `zorbit_bridge.py` with **ZScript > Python Scripting > Load**.
-3. If the status says the app is not running, press **Start App**, then read `app_stderr.log` and `radiald.log`.
-4. In Studio, check for the **problems** pill. A menu with no usable items, a duplicate hotkey or a hotkey the app cannot read all stop a ring from opening.
-5. Another program may grab the same key before it reaches the app. Try a different hotkey.
+1. Open Studio's **Setup** screen (Alt+6). It checks ZBrush, the plugin and the app, and says which step is missing. An amber dot on its button in the rail means a check is failing.
+2. Is ZBrush the front window? The hotkey is ignored everywhere else.
+3. In ZBrush, open **Zplugin > ZOrbit > Status**. If the palette is missing, ZBrush did not load the plugin. Restart ZBrush and check that your user environment variable `ZBRUSH_PLUGIN_PATH` contains the plugin folder. As a one-off you can also load `zorbit_bridge.py` with **ZScript > Python Scripting > Load**.
+4. If the status says the app is not running, press **Start App**, then read `app_stderr.log` and `radiald.log`.
+5. In Studio, check for the **problems** pill. A menu with no usable items, a duplicate hotkey or a hotkey the app cannot read all stop a ring from opening.
+6. Another program may grab the same key before it reaches the app. Try a different hotkey.
 
 **The ring opens, but picks do nothing.**
 Check the listener on the Status screen. If it is not verified, use the fallback: bind the bridge key (see above) and leave the mode on `auto`. Then read `bridge.log`; it names each action and says whether it worked. Common causes: a `press`, `set` or `toggle` path that does not exist in your ZBrush (logged as "no such interface item"), or a `brush` with no `.zbp` file (logged as "NOT loaded in ZBrush and no .zbp file known").

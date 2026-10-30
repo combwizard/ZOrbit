@@ -66,6 +66,8 @@ A submenu can open as a fan instead of a new ring. Turn on **Fan out when opened
 3. **Restart ZBrush once.** ZBrush reads `ZBRUSH_PLUGIN_PATH` only when it starts.
 4. Open a canvas, hover over it and press **Q**.
 
+The first time you open **ZOrbit Studio** it starts on its **Setup** screen. Setup walks through the rest: it finds your ZBrush, tells you whether to restart it, installs the plugin for ZBrush 2022 to 2025, and has you try the ring once. You can reopen it any time with Alt+6.
+
 The first run puts a starter set of menus in `%APPDATA%\ZOrbit\radial.json`. They use only brushes that come with ZBrush.
 
 ### Upgrading from Radial Menu for ZBrush
@@ -78,7 +80,7 @@ In ZBrush 2026 the palette is now **Zplugin > ZOrbit**. If you bound F9 to the o
 
 These versions load plugins only from their own `ZStartup\ZPlugs64` folder, so Studio puts the plugin there:
 
-1. Open **ZOrbit Studio** and go to **Settings > Older ZBrush**. It lists the 2022 to 2025 versions it found. If yours is missing, use **Add a ZBrush folder**.
+1. Open **ZOrbit Studio** and go to **Settings > Older ZBrush**. It lists the 2022 to 2025 versions it found. If yours is missing, use **Add a ZBrush folder**. The **Setup** screen (Alt+6) lists the same versions with the same **Install** button.
 2. Click **Install**. A ZBrush under Program Files asks for administrator rights once.
 3. Restart that ZBrush.
 
@@ -140,7 +142,7 @@ The app exits when ZBrush does.
 ## Troubleshooting
 
 **Nothing happens when I press Q.**
-Make sure ZBrush is the front window. Then in ZBrush open **Zplugin > ZOrbit > Status**. It should say the listener is verified and the app is running. If the palette is missing, ZBrush did not load the plugin: restart it, and check that `ZBRUSH_PLUGIN_PATH` (in Windows' environment variables, user section) contains the bridge folder.
+Open Studio's **Setup** screen (Alt+6). It says which step is missing. Make sure ZBrush is the front window. Then in ZBrush open **Zplugin > ZOrbit > Status**. It should say the listener is verified and the app is running. If the palette is missing, ZBrush did not load the plugin: restart it, and check that `ZBRUSH_PLUGIN_PATH` (in Windows' environment variables, user section) contains the bridge folder.
 
 **The ring opens but picks do nothing.**
 Open **Zplugin > ZOrbit > Status** and check that the listener says "verified". Look at `bridge.log`, which shows exactly what ZBrush did with each pick. Failed items are listed there, for example a button path that does not exist.

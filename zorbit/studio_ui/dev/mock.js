@@ -1,7 +1,7 @@
 /* Browser-only stand-in for pywebview's js_api. Loaded by index.html only when the URL has ?mock.
    Backed by window.__RADIAL_MOCK__ (recorded real responses from dev/mock_data.js).
    Extra URL switches for visual testing: ?problems (sample problems), ?status=down (ZBrush and the app off; Start app is refused
-   with reason "zbrush"), ?status=up (the app already runs; by default ZBrush runs and the app does not until Start app succeeds),
+   with reason "zbrush"), ?status=up (the app already runs; by default ZBrush and the app both run; with ?appoff, ?startfail or any other ?status the app stays off until Start app succeeds),
    ?startfail (start_app answers reason "failed" with three log lines after 1.5 s), ?legacy (legacy_only: key-bridge listener card),
    ?nocheck (zbrush_check_ok false: the ZBrush card says "Could not check"),
    ?lag=300 (artificial latency in ms for preview calls and for the ZScript install/remove, so the busy row is visible), ?broken (get_config fails to parse: recovery screen),
@@ -17,7 +17,16 @@
    The popout page (popout.html?mock): ?nopick (a pick is refused as "ZOrbit is not running"), ?tag=blocking (opens filtered, as --tag does);
    Keep on top is kept in localStorage rm_pop_on_top (on until switched off), and the popout_* calls only log.
    ?kinds adds a Tag item ({"tag": "blocking"}) and a Browser item ({"browser": ""}) to the end of the Tools menu, so the two newer
-   kinds can be seen (the recorded config has none). The default stays the faithful recording. */
+   kinds can be seen (the recorded config has none). The default stays the faithful recording.
+   Setup screen (get_setup; state in localStorage rm_env for the registered folder and rm_zscript for the ZScript plugin, which Settings > Older
+   ZBrush shares): ?firstrun (setup_done is false until Finish or Skip, so Studio opens on Setup; a reload does it again),
+   ?zb=2026|2022|both|none|multi (which ZBrush installs exist; default both = 2026 plus the two older ones, multi adds 2027 and runs two),
+   ?noenv (ZBRUSH_PLUGIN_PATH not set until Fix), ?fixfail (Fix is refused), ?nobridge (the plugin folder is missing: no Fix),
+   ?zbrun=off (no ZBrush process), ?zbstale (it started before the plugin: restart), ?zbstart (it is still starting), ?noloaded (it never loaded the plugin),
+   ?elevated (the ZBrush is running as administrator and cannot be matched to an install), ?appoff (the app is not running), ?otherbridge (another ZOrbit
+   folder is registered too, one of them missing), ?bridgemode=key (picks go through the bridge key), ?ringtried=open|sent|done (step 3 starts part
+   way, measured from when Setup is first shown), ?ringauto (once step 3 opens, the ring opens after 2 s, a pick follows after 4 s and ZBrush answers
+   after 6 s; with ?bridgemode=key ZBrush never answers, so the hint shows). In the console, __mock.ring('open'), ('pick') and ('ack') do the same by hand. */
 (function () {
   var M = window.__RADIAL_MOCK__ || {};
   var q = new URLSearchParams(location.search);
@@ -196,6 +205,123 @@
       return Object.assign(tagSnapshot(), res);
     });
   }
+
+  /* ---- Setup screen: one small model of ZBrush, the plugin and the app, read by get_status, get_setup and get_zscript_bridge */
+  var zbMode = q.get('zb') || 'both';                       // 2026 | 2022 | both | none | multi
+  var zbRunning = function () { return q.get('zbrun') !== 'off' && q.get('status') !== 'down' && !q.has('nocheck') && zbMode !== 'none'; };
+  // By default the app runs along with ZBrush. ?appoff, ?startfail and a ?status other than up leave it off until Start app succeeds.
+  var appRunning = function () { return zbRunning() && (appStarted || q.get('status') === 'up' || !(q.has('appoff') || q.has('startfail') || q.has('status'))); };
+  var firstDone = false, firstRun = function () { return q.has('firstrun') && !firstDone; };   // ?firstrun holds until Finish or Skip in this page; a reload starts it again
+  var lsGet = function (k) { try { return localStorage.getItem(k); } catch (e) { return null; } };
+  var envRegistered = function () { return !q.has('noenv') || lsGet('rm_env') === '1'; };
+  var bridgeOk = function () { return !q.has('nobridge'); };
+  var BRIDGE_DIR = 'C:\\Program Files\\ZOrbit\\bridge';
+  var zbStartedAt = Date.now() / 1000 - 600;                 // the mock's ZBrush started ten minutes before the page opened
+  var zInstalledNow = false, fixedAt = 0;                   // the plugin was installed / the folder registered during this page's life: a running ZBrush predates it
+  var bridgeMode = function () { return q.get('bridgemode') || (saved.bridge && saved.bridge.mode) || 'auto'; };
+  var MODERN = [{ name: 'ZBrush 2026', year: 2026, path: 'C:\\Program Files\\Maxon ZBrush 2026', python: true, added: false },
+    { name: 'ZBrush 2027', year: 2027, path: 'C:\\Program Files\\Maxon ZBrush 2027', python: true, added: false }];
+  var modernInstalls = function () { return zbMode === 'none' || zbMode === '2022' ? [] : (zbMode === 'multi' ? MODERN : MODERN.slice(0, 1)); };
+  // The ZScript installs (ZBrush 2022 to 2025): what Settings > Older ZBrush lists, and what Setup shows for those versions
+  function zsInstalls() {
+    var z = JSON.parse(lsGet('rm_zscript') || '{}');
+    var forgotten = JSON.parse(lsGet('rm_zforgot') || '{}');
+    var installs = [
+      { name: 'ZBrush 2022', year: 2022, path: 'C:\\Programs\\ZBrush 2022', python: false, installed: !!z.a, current: !!z.a, added: true, zplugs: 'C:\\Programs\\ZBrush 2022\\ZStartup\\ZPlugs64' },
+      { name: 'ZBrush 2024', year: 2024, path: 'C:\\Program Files\\Maxon ZBrush 2024', python: false, installed: true, current: false, added: false, zplugs: 'C:\\Program Files\\Maxon ZBrush 2024\\ZStartup\\ZPlugs64' }];
+    if (q.has('nozs') || zbMode === 'none' || zbMode === '2026') installs = [];
+    else if (zbMode === '2022') installs = installs.slice(0, 1);
+    return installs.filter(function (i) { return !(i.added && forgotten[i.path]); });
+  }
+  var act = { ring: null, pick: null }, lastPick = null, pickSeq = 0, seeded = false, autoStarted = false;
+  var pickRoute = function () { var i = runningInstalls()[0]; return bridgeMode() === 'key' ? 'key' : (i && i.kind === 'legacy' ? 'zscript' : 'listener'); };
+  // The activity the daemon would write: stage 'open' (ring shown), 'pick' (a brush sent), 'ack' (ZBrush did it)
+  function ringStage(stage, at) {
+    var t = at || Date.now() / 1000;
+    if (stage === 'open') { act.ring = { at: t, menu: 'brushes' }; act.pick = null; lastPick = null; return; }
+    if (stage === 'pick') {
+      if (!act.ring) act.ring = { at: t - 0.4, menu: 'brushes' };
+      act.pick = { at: t, seq: ++pickSeq, menu: 'brushes', kind: 'brush', label: 'ClayBuildup', route: pickRoute(), sent: true, reason: null, source: 'ring', ack: null };
+      return;
+    }
+    if (stage === 'ack') {
+      if (!act.pick) ringStage('pick', t - 0.3);
+      act.pick.ack = 'picked_up';
+      lastPick = { text: "brush ClayBuildup: selected", at: t, seq: act.pick.seq, ok: true, source: 'ring' };
+    }
+  }
+  var STAGES = ['open', 'pick', 'ack'];
+  window.__mock = { ring: function (stage) { if (STAGES.indexOf(stage) < 0) { console.warn('[mock] ring(stage): open | pick | ack'); return; } ringStage(stage); } };
+  // Which installs have a ZBrush running: the first (two with ?zb=multi)
+  function runningInstalls() {
+    if (!zbRunning()) return [];
+    var all = modernInstalls().map(function (i) { return Object.assign({ kind: 'modern' }, i); }).concat(zsInstalls().map(function (i) { return Object.assign({ kind: 'legacy' }, i); }));
+    return all.slice(0, zbMode === 'multi' ? 2 : 1);
+  }
+  function setupSnapshot() {
+    var now = Date.now() / 1000, reg = envRegistered(), ok = bridgeOk(), started = zbStartedAt, keyMtime = fixedAt || zbStartedAt - 86400;
+    var running = runningInstalls(), ids = running.map(function (i) { return i.path; });
+    var installs = modernInstalls().map(function (i) {
+      return Object.assign({ kind: 'modern', plugin: { state: !ok ? 'no_bridge' : reg ? 'ok' : 'unregistered' }, ready: reg && ok, procs: [] }, i);
+    }).concat(zsInstalls().map(function (z) {
+      return { name: z.name, year: z.year, path: z.path, python: false, added: z.added, kind: 'legacy', ready: z.installed, procs: [],
+        plugin: { state: !z.installed ? 'missing' : (z.current ? 'ok' : 'outdated'), installed: z.installed, current: z.current, zplugs: z.zplugs } };
+    }));
+    var unmatched = [], loadedPid = null;
+    installs.forEach(function (inst) {
+      if (ids.indexOf(inst.path) < 0) return;
+      var pid = 4000 + installs.indexOf(inst) * 100, state, why = '', evidence = '';
+      if (q.has('elevated') && !unmatched.length) { unmatched.push({ pid: pid, started: started, elevated: true }); return; }
+      if (q.has('zbstart')) { state = 'starting'; why = 'Started a few seconds ago.'; }
+      else if (q.has('zbstale')) { state = 'restart'; why = 'Started before the plugin was set up.'; }
+      else if (q.has('noloaded')) { state = 'not_loaded'; why = inst.name + ' is running, but the plugin did not load. See bridge.log.'; }
+      else if (inst.kind === 'modern') {
+        if (!ok) { state = 'not_loaded'; why = 'The plugin folder is missing.'; }
+        else if (!reg) { state = 'not_loaded'; why = inst.name + ' does not know where the plugin is.'; }
+        else if (keyMtime > started) { state = 'restart'; why = 'Registered after this ZBrush started.'; }
+        else { state = 'loaded'; loadedPid = pid; evidence = 'listener.json'; }
+      } else if (!inst.ready) { state = 'not_loaded'; why = 'The ZOrbit plugin is not installed for this ZBrush.'; }
+      else if (zInstalledNow && inst.path === 'C:\\Programs\\ZBrush 2022') { state = 'restart'; why = 'Installed after this ZBrush started.'; }
+      else { state = 'loaded'; evidence = 'zscript_hotkey.log'; }
+      inst.procs.push({ pid: pid, started: started, age: now - started, state: state, evidence: evidence, why: why });
+    });
+    var hard = [];
+    if (installs.length && !installs.some(function (i) { return i.ready; })) hard.push('No ZBrush install is set up for ZOrbit.');
+    installs.forEach(function (i) { if (i.procs.length && !i.ready) hard.push('A running ' + i.name + ' is not set up for ZOrbit.'); });
+    var other = q.has('otherbridge') ? [{ path: 'D:\\Projects\\zOrbit\\bridge', exists: true }, { path: 'C:\\Old\\ZOrbit\\bridge', exists: false }] : [];
+    var entries = (reg ? [BRIDGE_DIR] : []).concat(other.map(function (o) { return o.path; }));
+    return {
+      now: now, checked_at: now,
+      bridge: { dir: ok ? BRIDGE_DIR : null, dir_ok: ok, kind: ok ? 'installed' : 'missing' },
+      env: { registered: reg, entries: entries, other_zorbit: other, key_mtime: keyMtime, can_fix: !reg && ok },
+      installs: installs, unmatched_procs: unmatched,
+      zbrush: { running: zbRunning(), check_ok: !q.has('nocheck') },
+      listener: loadedPid ? { verified: now - 100, alive: true, pid: loadedPid, stale: false } : null,
+      app: { running: appRunning() },
+      bridge_mode: bridgeMode(), bundled: true,
+      activity: act.ring || act.pick ? clone({ v: 1, pid: 4242, started: now - 900, opens: act.ring ? 1 : 0, picks: act.pick ? 1 : 0, ring: act.ring, pick: act.pick }) : null,
+      last_pick: lastPick ? clone(lastPick) : null,
+      hard_fail: hard.length > 0, hard_reasons: hard };
+  }
+  // ?ringtried and ?ringauto start from the moment the Setup screen is first built, so the events fall after its "try from" time
+  function setupTimers() {
+    var S = window.__studio && window.__studio.S, from = S && S.setup && S.setup.tryFrom;
+    if (!from) return;
+    var tried = q.get('ringtried');
+    if (tried && !seeded) {
+      seeded = true;
+      ringStage('open', from + 0.05);
+      if (tried === 'sent' || tried === 'done') ringStage('pick', from + 0.1);
+      if (tried === 'done') ringStage('ack', from + 0.15);
+    }
+    if (q.has('ringauto') && !autoStarted && runningInstalls().length && pluginLoaded()) {
+      autoStarted = true;
+      setTimeout(function () { ringStage('open'); }, 2000);
+      setTimeout(function () { ringStage('pick'); }, 4000);
+      if (bridgeMode() !== 'key') setTimeout(function () { ringStage('ack'); }, 6000);    // key mode: the key is "not bound", so ZBrush never answers and the hint shows
+    }
+  }
+  var pluginLoaded = function () { return setupSnapshot().installs.some(function (i) { return i.procs.some(function (p) { return p.state === 'loaded'; }); }); };
 
   var api = {
     get_config: function () {
@@ -390,11 +516,11 @@
       ticks++;
       return sleep(40).then(function () {
         var s = clone(M.get_status), down = q.get('status') === 'down';
-        s.zbrush_running = !down && !q.has('nocheck');
-        s.app_running = s.zbrush_running && (appStarted || q.get('status') === 'up');
+        s.zbrush_running = zbRunning();
+        s.app_running = appRunning();
         s.listener = down ? null : { verified: true, alive: true };
         if (down) s.last_pick = null;
-        s.bridge_mode = (saved.bridge && saved.bridge.mode) || 'auto';
+        s.bridge_mode = bridgeMode();
         s.legacy_only = q.has('legacy');
         s.checked_at = Date.now() / 1000;
         s.zbrush_check_ok = !q.has('nocheck');
@@ -414,19 +540,23 @@
     },
     open_folder: function (which) { console.log('[mock] open_folder', which); return Promise.resolve(true); },
     get_zscript_bridge: function () {
-      var z = JSON.parse(localStorage.getItem('rm_zscript') || '{}');
-      var forgotten = JSON.parse(localStorage.getItem('rm_zforgot') || '{}');
-      return sleep(120).then(function () {
-        var installs = [
-          { name: 'ZBrush 2022', year: 2022, path: 'C:\\Programs\\ZBrush 2022', python: false, installed: !!z.a, current: !!z.a, added: true, zplugs: 'C:\\Programs\\ZBrush 2022\\ZStartup\\ZPlugs64' },
-          { name: 'ZBrush 2024', year: 2024, path: 'C:\\Program Files\\Maxon ZBrush 2024', python: false, installed: true, current: false, added: false, zplugs: 'C:\\Program Files\\Maxon ZBrush 2024\\ZStartup\\ZPlugs64' }]
-        if (q.has('nozs')) installs = [];
-        return { bundled: true, installs: installs.filter(function (i) { return !(i.added && forgotten[i.path]); }) };
-      });
+      return sleep(120).then(function () { return { bundled: true, installs: zsInstalls() }; });
     },
     install_zscript_bridge: function () {
       if (q.has('busy')) return sleep(150).then(function () { return { ok: false, busy: true, message: 'Another install or removal is still running. Wait for it to finish.' }; });
-      return sleep(300 + lag).then(function () { try { localStorage.setItem('rm_zscript', '{"a":1}'); } catch (e) {} return { ok: true, message: 'Installed (mock). Restart ZBrush so it loads the plugin.' }; });
+      return sleep(300 + lag).then(function () { zInstalledNow = true; try { localStorage.setItem('rm_zscript', '{"a":1}'); } catch (e) {} return { ok: true, message: 'Installed (mock). Restart ZBrush so it loads the plugin.' }; });
+    },
+    // The Setup screen's one look at everything (see setupSnapshot). ?ringtried / ?ringauto start their clocks from here.
+    get_setup: function () {
+      return sleep(60).then(function () { setupTimers(); return setupSnapshot(); });
+    },
+    register_plugin_path: function () {
+      if (q.has('fixfail')) return sleep(300).then(function () { return { ok: false, changed: false, restart: false, message: 'Could not write ZBRUSH_PLUGIN_PATH (mock): access denied.' }; });
+      return sleep(300 + lag).then(function () {
+        try { localStorage.setItem('rm_env', '1'); } catch (e) {}
+        fixedAt = Date.now() / 1000;
+        return { ok: true, changed: true, restart: true, message: 'Registered (mock). Restart ZBrush so it loads the plugin.' };
+      });
     },
     remove_zscript_bridge: function () {
       if (q.has('busy')) return sleep(150).then(function () { return { ok: false, busy: true, message: 'Another install or removal is still running. Wait for it to finish.' }; });
@@ -441,8 +571,9 @@
       try { localStorage.setItem('rm_zforgot', JSON.stringify(f)); } catch (e) {}
       return sleep(100).then(function () { return { ok: true, message: 'Forgot ' + path + '. The folder itself was not touched.' }; });
     },
-    get_prefs: function () { return Promise.resolve(Object.assign({ show_licence: true, check_updates: true, last_screen: 'menus' }, JSON.parse(localStorage.getItem('rm_prefs') || '{}'))); },
-    set_pref: function (k, v) { if (q.has('prefsfail') && k !== 'last_screen') return sleep(80).then(function () { throw new Error('disk full (mock)'); }); var p = Object.assign({ show_licence: true, check_updates: true, last_screen: 'menus' }, JSON.parse(localStorage.getItem('rm_prefs') || '{}')); p[k] = v; try { localStorage.setItem('rm_prefs', JSON.stringify(p)); } catch (e) {} return Promise.resolve(p); },
+    // ?firstrun answers setup_done false until Finish or Skip, so a reload goes back to Setup
+    get_prefs: function () { var p = Object.assign({ show_licence: true, check_updates: true, last_screen: 'menus', setup_done: true }, JSON.parse(localStorage.getItem('rm_prefs') || '{}')); if (firstRun()) p.setup_done = false; return Promise.resolve(p); },
+    set_pref: function (k, v) { if (q.has('prefsfail') && k !== 'last_screen') return sleep(80).then(function () { throw new Error('disk full (mock)'); }); var p = Object.assign({ show_licence: true, check_updates: true, last_screen: 'menus', setup_done: true }, JSON.parse(localStorage.getItem('rm_prefs') || '{}')); p[k] = v; try { localStorage.setItem('rm_prefs', JSON.stringify(p)); } catch (e) {} if (k === 'setup_done' && v === true) firstDone = true; if (firstRun()) p.setup_done = false; return Promise.resolve(p); },
     set_dirty: function () { return Promise.resolve(true); },
     close_now: function () { console.log('[mock] close_now'); return Promise.resolve(true); },
     win_minimize: function () { return Promise.resolve(); },

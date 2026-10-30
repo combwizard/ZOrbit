@@ -167,6 +167,8 @@ WM_KEYDOWN, WM_KEYUP, WM_SYSKEYDOWN, WM_SYSKEYUP = 0x100, 0x101, 0x104, 0x105
 WM_LBUTTONDOWN, WM_LBUTTONUP, WM_RBUTTONDOWN, WM_MOUSEACTIVATE = 0x201, 0x202, 0x204, 0x21
 WM_APP = 0x8000
 WM_COPYDATA = 0x004A
+WM_SETTINGCHANGE = 0x001A
+HWND_BROADCAST = w.HWND(0xFFFF)
 SMTO_BLOCK, SMTO_ABORTIFHUNG = 0x1, 0x2
 MA_NOACTIVATE = 3
 WH_KEYBOARD_LL = 13
@@ -277,6 +279,36 @@ def running_exe_names() -> set[str]:
     finally:
         CloseHandle(snap)
     return names
+
+
+def pids_named(name: str) -> list[int]:
+    """Process ids of every running process whose exe name is name (case does not matter)."""
+    want, pids = name.lower(), []
+    snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0)
+    if not snap or snap == INVALID_HANDLE_VALUE:
+        return pids
+    try:
+        pe = PROCESSENTRY32W()
+        pe.dwSize = ctypes.sizeof(PROCESSENTRY32W)
+        ok = Process32FirstW(snap, ctypes.byref(pe))
+        while ok:
+            if pe.szExeFile.lower() == want:
+                pids.append(int(pe.th32ProcessID))
+            ok = Process32NextW(snap, ctypes.byref(pe))
+    finally:
+        CloseHandle(snap)
+    return pids
+
+
+def broadcast_setting_change(topic: str = "Environment") -> bool:
+    """Tells every top-level window that a setting changed (WM_SETTINGCHANGE), so Explorer and the programs it
+    starts afterwards pick up a new user environment variable. A hung window is skipped after 2 seconds, so this
+    never blocks for long. True when the broadcast went through."""
+    buf = ctypes.create_unicode_buffer(topic)            # alive until the call returns
+    result = ULONG_PTR()
+    ok = SendMessageTimeoutW(HWND_BROADCAST, WM_SETTINGCHANGE, 0, ctypes.addressof(buf), SMTO_ABORTIFHUNG,
+                             2000, ctypes.byref(result))
+    return bool(ok)
 
 
 def process_created(pid: int) -> float | None:

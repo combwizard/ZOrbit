@@ -55,6 +55,7 @@ const ICONS = {
   library: '<rect x="4" y="4" width="7" height="7" rx="1.6"/><rect x="13" y="4" width="7" height="7" rx="1.6"/><rect x="4" y="13" width="7" height="7" rx="1.6"/><rect x="13" y="13" width="7" height="7" rx="1.6"/>',
   settings: '<path d="M4 7h8M18 7h2M4 12h5M13 12h7M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="11" cy="12" r="2"/><circle cx="9" cy="17" r="2"/>',
   status: '<path d="M3 12h4l2.5-6 4 12 2.5-6H21"/>',
+  setup: '<path d="M5 7l1.5 1.5L9 6M5 12l1.5 1.5L9 11M5 17l1.5 1.5L9 16"/><path d="M12 7h8M12 12h8M12 17h8"/>',
   plus: '<path d="M12 5v14M5 12h14"/>',
   x: '<path d="M6 6l12 12M18 6L6 18"/>',
   copy: '<rect x="8.5" y="8.5" width="11" height="11" rx="2"/><path d="M15.5 8.5V6.5a2 2 0 0 0-2-2h-7a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h2"/>',
@@ -161,7 +162,7 @@ const S = {
   dock: { cat: 'All', q: '' },
   pop: { cat: 'All', q: '', size: 96 }, popOnTop: true,   // the popout's browser state, and whether its window stays above others
   status: null,
-  prefs: { show_licence: true },
+  prefs: { show_licence: true, setup_done: true },   // setup_done: boot tests === false, so a failed get_prefs never sends anyone to Setup
   ready: false, fatal: false,                 // ready after the first screen is up; fatal when the recovery screen is showing
   saving: false, savePromise: null, mtimeNs: null,
   dirtySent: undefined, dirtySeq: 0, dirtyFlight: null,
@@ -1327,11 +1328,11 @@ function buildMenusScreen(root) {
       listEl._sig = null;                                       // the row holds the input: force a rebuild
       R.menuList();
     };
-    // Only Enter and Escape are ours; everything else (Ctrl+S, Alt+1..5) still reaches the window, after the new title is taken in
+    // Only Enter and Escape are ours; everything else (Ctrl+S, Alt+1..6) still reaches the window, after the new title is taken in
     inp.addEventListener('keydown', e => {
       if (e.key === 'Enter') { e.stopPropagation(); finish(true); }
       else if (e.key === 'Escape') { e.stopPropagation(); finish(false); }
-      else if (((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === 's') || (e.altKey && !e.ctrlKey && /^[1-5]$/.test(e.key))) finish(true);
+      else if (((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === 's') || (e.altKey && !e.ctrlKey && /^[1-6]$/.test(e.key))) finish(true);
     });
     inp.addEventListener('blur', () => finish(true));
     inp.addEventListener('click', e => e.stopPropagation());
@@ -2902,6 +2903,64 @@ async function refreshZsBadge() {
 
 function card(title, sub, ...kids) { return h('section', { class: 'card' }, h('h2', { class: 'card-title' }, title, sub ? h('em', null, sub) : null), ...kids); }
 
+/* The rows for the ZScript plugin on ZBrush 2022 to 2025 (install, update, remove, forget, add a folder), shared by
+   Settings > Older ZBrush and the Setup screen. paint({installs, bundled}) draws into box; every action ends by calling
+   refresh() so the caller can look again (Settings fetches, Setup forces its own poll). extra(z) may add a node to a row. */
+function legacyRows(box, { refresh, extra } = {}) {
+  // Runs one install or remove. The whole row is locked while it runs (the elevation prompt can sit open for minutes).
+  const act = (name, path, btn, rowBtns, busyText) => async () => {
+    const was = rowBtns.map(b => b.disabled), label = [...btn.childNodes];
+    rowBtns.forEach(b => { b.disabled = true; });
+    btn.classList.add('running'); btn.replaceChildren(h('span', { class: 'spin' }), busyText);
+    let res = null;
+    try { res = await call(name, path); }
+    catch (e) { toast('That did not work: ' + e.message, { tone: 'warn' }); }
+    if (res && res.busy) {                               // another operation is running: say so, leave the row as it was
+      toast(res.message || 'Another install or removal is still running.', { tone: 'warn', ms: 5000 });
+      btn.classList.remove('running'); btn.replaceChildren(...label); rowBtns.forEach((b, i) => { b.disabled = was[i]; });
+      return;
+    }
+    if (res) toast(res.message || (res.ok ? 'Done.' : 'That did not work.'), { tone: res.ok ? 'ok' : 'warn', ms: 5000 });
+    refresh();
+  };
+  const paint = r => {
+    const rows = r.installs.map(z => {
+      const [stext, scls] = !z.installed ? ['Not installed', 'tag dim'] : (z.current ? ['Installed', 'tag cyan'] : ['Update available', 'tag amber']);
+      const main = h('button', { class: 'btn small' + (z.installed && z.current ? '' : ' primary'), type: 'button', disabled: !r.bundled }, z.installed ? (z.current ? 'Reinstall' : 'Update') : 'Install');
+      const rm = z.installed ? h('button', { class: 'btn small danger-ghost', type: 'button' }, icon('trash', 12), 'Remove') : null;
+      const forget = z.added ? iconBtn('x', 'Forget this folder', async () => {
+        forget.disabled = true;
+        try { const res = await call('forget_zbrush_folder', z.path); toast(res.message || (res.ok ? 'Forgot that folder.' : 'That did not work.'), { tone: res.ok ? 'ok' : 'warn', ms: 4000 }); }
+        catch (e) { toast('Could not forget the folder: ' + e.message, { tone: 'warn' }); }
+        refresh();
+      }) : null;
+      const rowBtns = [main, rm, forget].filter(Boolean);
+      main.onclick = act('install_zscript_bridge', z.path, main, rowBtns, 'Installing... approve the prompt');
+      if (rm) rm.onclick = async () => {
+        const ok = await modal({ title: `Remove the plugin from ${z.name}?`,
+          body: [h('p', null, 'This deletes the ZOrbit plugin files from this ZBrush install:'), h('p', { class: 'modal-path mono' }, z.path)],
+          actions: [{ text: 'Cancel', value: false, focus: true }, { text: 'Remove', value: true, kind: 'danger' }] });
+        if (ok) act('remove_zscript_bridge', z.path, rm, rowBtns, 'Removing...')();
+      };
+      const ex = extra ? extra(z) : null;
+      return h('div', { class: 'zrow' }, h('div', { class: 'grow' }, h('div', { class: 'zname' }, z.name, h('span', { class: scls }, stext), ex), h('div', { class: 'zpath mono', title: z.zplugs }, z.path)),
+        h('div', { class: 'btn-row' }, main, rm, forget));
+    });
+    if (!rows.length) rows.push(h('div', { class: 'fhint' }, 'No ZBrush 2022 to 2025 was found. Add a ZBrush folder if you have one.'));
+    else if (!r.bundled) rows.push(h('div', { class: 'fhint warn' }, 'This build has no compiled ZScript plugin (ZOrbitBridge.zsc), so there is nothing to install yet.'));
+    box.replaceChildren(...rows);
+  };
+  const addFolder = async () => {
+    try {
+      const r = await call('add_zbrush_folder');
+      if (r.already) toast(r.message || 'That folder is already listed.', { ms: 4000 });
+      else if (!r.cancelled) toast(r.message, { tone: r.ok ? 'ok' : 'warn', ms: 5000 });
+    } catch (e) { toast('Could not add the folder: ' + e.message, { tone: 'warn' }); }
+    refresh();
+  };
+  return { paint, addFolder };
+}
+
 function buildSettingsScreen(root) {
   root.replaceChildren();
   const page = h('div', { class: 'settings' });
@@ -3135,58 +3194,12 @@ function buildSettingsScreen(root) {
       let r;
       try { r = await call('get_zscript_bridge'); if (gen !== zgen) return; } catch (e) { if (gen !== zgen) return; zbox.replaceChildren(h('div', { class: 'fhint bad' }, 'Could not look for ZBrush: ' + e.message)); return; }
       setZsBadge(zsOutdated(r));
-      // Runs one install or remove. The whole row is locked while it runs (the elevation prompt can sit open for minutes).
-      const act = (name, path, btn, rowBtns, busyText) => async () => {
-        const was = rowBtns.map(b => b.disabled), label = [...btn.childNodes];
-        rowBtns.forEach(b => { b.disabled = true; });
-        btn.classList.add('running'); btn.replaceChildren(h('span', { class: 'spin' }), busyText);
-        let res = null;
-        try { res = await call(name, path); }
-        catch (e) { toast('That did not work: ' + e.message, { tone: 'warn' }); }
-        if (res && res.busy) {                               // another operation is running: say so, leave the row as it was
-          toast(res.message || 'Another install or removal is still running.', { tone: 'warn', ms: 5000 });
-          btn.classList.remove('running'); btn.replaceChildren(...label); rowBtns.forEach((b, i) => { b.disabled = was[i]; });
-          return;
-        }
-        if (res) toast(res.message || (res.ok ? 'Done.' : 'That did not work.'), { tone: res.ok ? 'ok' : 'warn', ms: 5000 });
-        zpaint();
-      };
-      const rows = r.installs.map(z => {
-        const [stext, scls] = !z.installed ? ['Not installed', 'tag dim'] : (z.current ? ['Installed', 'tag cyan'] : ['Update available', 'tag amber']);
-        const main = h('button', { class: 'btn small' + (z.installed && z.current ? '' : ' primary'), type: 'button', disabled: !r.bundled }, z.installed ? (z.current ? 'Reinstall' : 'Update') : 'Install');
-        const rm = z.installed ? h('button', { class: 'btn small danger-ghost', type: 'button' }, icon('trash', 12), 'Remove') : null;
-        const forget = z.added ? iconBtn('x', 'Forget this folder', async () => {
-          forget.disabled = true;
-          try { const res = await call('forget_zbrush_folder', z.path); toast(res.message || (res.ok ? 'Forgot that folder.' : 'That did not work.'), { tone: res.ok ? 'ok' : 'warn', ms: 4000 }); }
-          catch (e) { toast('Could not forget the folder: ' + e.message, { tone: 'warn' }); }
-          zpaint();
-        }) : null;
-        const rowBtns = [main, rm, forget].filter(Boolean);
-        main.onclick = act('install_zscript_bridge', z.path, main, rowBtns, 'Installing... approve the prompt');
-        if (rm) rm.onclick = async () => {
-          const ok = await modal({ title: `Remove the plugin from ${z.name}?`,
-            body: [h('p', null, 'This deletes the ZOrbit plugin files from this ZBrush install:'), h('p', { class: 'modal-path mono' }, z.path)],
-            actions: [{ text: 'Cancel', value: false, focus: true }, { text: 'Remove', value: true, kind: 'danger' }] });
-          if (ok) act('remove_zscript_bridge', z.path, rm, rowBtns, 'Removing...')();
-        };
-        return h('div', { class: 'zrow' }, h('div', { class: 'grow' }, h('div', { class: 'zname' }, z.name, h('span', { class: scls }, stext)), h('div', { class: 'zpath mono', title: z.zplugs }, z.path)),
-          h('div', { class: 'btn-row' }, main, rm, forget));
-      });
-      zCount = rows.length;
-      if (!rows.length) rows.push(h('div', { class: 'fhint' }, 'No ZBrush 2022 to 2025 was found. Add a ZBrush folder if you have one.'));
-      else if (!r.bundled) rows.push(h('div', { class: 'fhint warn' }, 'This build has no compiled ZScript plugin (ZOrbitBridge.zsc), so there is nothing to install yet.'));
-      zbox.replaceChildren(...rows);
+      lz.paint(r);
+      zCount = r.installs.length;
       paintZNote();
     };
-    const addBtn = h('button', { class: 'btn small', type: 'button' }, icon('folder', 12), 'Add a ZBrush folder...');
-    addBtn.onclick = async () => {
-      try {
-        const r = await call('add_zbrush_folder');
-        if (r.already) toast(r.message || 'That folder is already listed.', { ms: 4000 });
-        else if (!r.cancelled) toast(r.message, { tone: r.ok ? 'ok' : 'warn', ms: 5000 });
-      } catch (e) { toast('Could not add the folder: ' + e.message, { tone: 'warn' }); }
-      zpaint();
-    };
+    const lz = legacyRows(zbox, { refresh: zpaint });
+    const addBtn = h('button', { class: 'btn small', type: 'button', onclick: () => lz.addFolder() }, icon('folder', 12), 'Add a ZBrush folder...');
     page.append(card('Older ZBrush', 'ZBrush 2022 to 2025. Acts straight away.', znote, zbox, h('div', { class: 'btn-row' }, addBtn)));
     paintZNote();
     R.zpaint = zpaint;
@@ -3296,6 +3309,25 @@ async function refreshAppDown() {
   try { noteStatus(await call('get_status')); } catch (e) { /* no dot */ }
 }
 
+/* Starts the app and says how it went. Shared by the Status and Setup screens. paint() is called when the starting state
+   flips (appStarting is the flag to read). Resolves to { log } (the lines a failed start brought back), or null when a
+   start is already under way. The caller looks again at the status afterwards. */
+async function startAppFlow({ paint }) {
+  if (appStarting) return null;
+  appStarting = true; paint();
+  let r = null;
+  try { r = await call('start_app'); }
+  catch (e) { toast('Could not start the app: ' + (e.message || e), { tone: 'warn', ms: 5000 }); }
+  appStarting = false; paint();
+  let log = [];
+  if (r && r.ok && r.running) toast('Started.', { tone: 'ok', ms: 3000 });
+  else if (r && r.reason === 'failed') {
+    toast(r.message || 'The app did not start.', { tone: 'warn', ms: 6000 });
+    log = Array.isArray(r.log) ? r.log.map(String) : [];
+  } else if (r) toast(r.message || (r.reason === 'zbrush' ? 'ZBrush must be running first.' : 'Could not start the app.'), { tone: 'warn', ms: 4500 });
+  return { log };
+}
+
 function buildStatusScreen(root) {
   root.replaceChildren();
   const page = h('div', { class: 'settings status' });
@@ -3321,16 +3353,10 @@ function buildStatusScreen(root) {
   };
   async function startApp() {
     if (appStarting) return;
-    appStarting = true; startLog = []; paintStart(S.status);
-    let r = null;
-    try { r = await call('start_app'); }
-    catch (e) { toast('Could not start the app: ' + (e.message || e), { tone: 'warn', ms: 5000 }); }
-    appStarting = false; paintStart(S.status);
-    if (r && r.ok && r.running) toast('Started.', { tone: 'ok', ms: 3000 });
-    else if (r && r.reason === 'failed') {
-      toast(r.message || 'The app did not start.', { tone: 'warn', ms: 6000 });
-      startLog = Array.isArray(r.log) ? r.log.map(String) : [];
-    } else if (r) toast(r.message || (r.reason === 'zbrush' ? 'ZBrush must be running first.' : 'Could not start the app.'), { tone: 'warn', ms: 4500 });
+    startLog = [];
+    const out = await startAppFlow({ paint: () => paintStart(S.status) });
+    if (!out) return;
+    startLog = out.log;
     while (statusBusy) await sleep(60);       // a poll already in flight may predate the launch
     await refresh();
     if (startLog.length) logBox.scrollTop = logBox.scrollHeight;
@@ -3400,7 +3426,7 @@ function buildStatusScreen(root) {
     statusBusy = false;
   }
   R.status = refresh;
-  if (S.status) paint(S.status);           // from the last answer, so the stamp shows its real age
+  if (S.status && !S.status._partial) paint(S.status);           // from the last answer (not one the Setup screen filled in, which has no log or last pick), so the stamp shows its real age
   refresh();
   clearInterval(statusTimer);
   // one beat per second: the stamp counts up, and a poll goes out once the last answer is 3 s old
@@ -3408,6 +3434,298 @@ function buildStatusScreen(root) {
     if (S.screen !== 'status' || document.hidden) return;
     tickStamp();
     if (Date.now() - lastAsk >= 2900) refresh();
+  }, 1000);
+}
+
+/* ================================================================== SETUP screen */
+/* Amber dot on the Setup rail button while a hard check fails (no ZBrush is ready, or a running one is not set up). */
+function setSetupBadge(d) {
+  const rb = document.querySelector('.rail-btn[data-screen="setup"]');
+  if (!rb) return;
+  const bad = !!(d && d.hard_fail);
+  rb.classList.toggle('has-badge', bad);
+  rb.title = 'Setup (Alt+6)' + (bad ? ' – Something needs attention' : '');
+}
+/* One quiet look for the rail dot, from outside the Setup screen. */
+async function refreshSetupBadge() {
+  try { setSetupBadge(await call('get_setup')); } catch (e) { /* no dot */ }
+}
+/* The Setup answer also says whether ZBrush and the app run, so the Status rail dot is kept right from it. Fields the
+   Setup answer does not carry (log lines, last pick) stay as the last full get_status left them. */
+function noteSetupStatus(d) {
+  const app = d.app || {}, zb = d.zbrush || {};
+  const had = S.status;
+  noteStatus(Object.assign({}, had || {}, { app_running: !!app.running, zbrush_running: !!zb.running, zbrush_check_ok: zb.check_ok, checked_at: d.checked_at != null ? d.checked_at : d.now },
+    had ? {} : { _partial: true }));
+}
+
+const PROC_PRIORITY = ['loaded', 'restart', 'starting', 'unknown', 'not_loaded'];
+const PROC_TAG = { loaded: ['Plugin loaded', 'tag cyan'], restart: ['Restart ZBrush', 'tag amber'], starting: ['Starting', 'tag dim'], unknown: ['Not sure yet', 'tag dim'], not_loaded: ['No plugin loaded', 'tag dim'] };
+const procTag = state => (PROC_TAG[state] ? h('span', { class: PROC_TAG[state][1] }, PROC_TAG[state][0]) : null);
+const PICK_VIA = { listener: 'the listener', key: 'the bridge key', zscript: 'ZScript' };
+
+/* The menu the Setup screen talks about: the one on Q, else the first with a hotkey, else the first. */
+function setupMenu() {
+  const menus = (S.cfg && S.cfg.menus) || {}, ids = Object.keys(menus), hk = id => menus[id] && menus[id].hotkey;
+  const id = ids.find(i => hkNorm(hk(i)) === 'q') || ids.find(i => hk(i)) || ids[0];
+  return id ? { id, title: menus[id].title || id, hotkey: hk(id) || '' } : null;
+}
+
+/* The five steps from one get_setup answer. Pure: the same data gives the same steps, and every field in a step is
+   something that is drawn (nothing that ticks, like ages), so JSON of a step tells whether it needs painting again.
+   ctx: { menu: setupMenu(), done: setup_done }. */
+function deriveSteps(d, tryFrom, ctx) {
+  const installs = d.installs || [], unmatched = d.unmatched_procs || [], env = d.env || {}, zb = d.zbrush || {};
+  const now = typeof d.now === 'number' ? d.now : Date.now() / 1000;
+  const topProc = i => { const have = (i.procs || []).map(p => p.state); return PROC_PRIORITY.find(s => have.includes(s)) || null; };
+  const plugin = i => i.plugin || {};
+  const list = names => (names.length < 3 ? names.join(' and ') : names.slice(0, -1).join(', ') + ' and ' + names[names.length - 1]);
+
+  /* 1. ZBrush found */
+  const ready = installs.filter(i => i.ready), unready = installs.filter(i => !i.ready);
+  const s1 = { id: 'found', title: 'ZBrush found',
+    state: ready.length ? 'ok' : (installs.length ? 'warn' : 'off'),
+    modern: installs.filter(i => i.kind === 'modern').map(i => {
+      const st = plugin(i).state;
+      return { name: i.name, path: i.path, proc: topProc(i),
+        tag: st === 'ok' ? 'Registered' : (st === 'no_bridge' ? 'Plugin folder missing' : 'Not registered'),
+        tone: st === 'ok' ? 'cyan' : (st === 'no_bridge' ? 'dim' : 'amber'),
+        fix: !!env.can_fix && st !== 'ok' && st !== 'no_bridge' };
+    }),
+    legacy: { bundled: !!d.bundled, installs: installs.filter(i => i.kind === 'legacy').map(i => ({ name: i.name, path: i.path, added: !!i.added,
+      installed: !!plugin(i).installed, current: !!plugin(i).current, zplugs: plugin(i).zplugs, proc: topProc(i) })) },
+    others: (env.other_zorbit || []).map(o => ({ path: o.path, exists: o.exists !== false })),
+    bridgeMissing: !!(d.bridge && d.bridge.kind === 'missing') };
+  s1.detail = ready.length
+    ? list(ready.map(i => i.name)) + (ready.length === 1 ? ' is ready.' : ' are ready.') + (unready.length ? ' ' + list(unready.map(i => i.name)) + (unready.length === 1 ? ' still needs' : ' still need') + ' the plugin.' : '')
+    : (installs.length ? 'ZBrush was found, but the ZOrbit plugin is not set up for it yet.' : 'No ZBrush was found. Add its folder if you have one.');
+
+  /* 2. Plugin loaded in ZBrush */
+  const procs = [];
+  for (const i of installs) for (const p of (i.procs || [])) procs.push({ name: i.name, ready: !!i.ready, state: p.state, why: p.why || '' });
+  const elevated = unmatched.some(u => u.elevated !== false);
+  const worst = PROC_PRIORITY.slice(1).map(s => procs.find(p => p.state === s)).find(Boolean);
+  const loaded = procs.filter(p => p.state === 'loaded');
+  const s2 = { id: 'loaded', title: 'Plugin loaded in ZBrush', locked: false,
+    rows: procs.map(p => ({ name: p.name, state: p.state, why: p.why })),
+    elevated,
+    app: { running: !!(d.app && d.app.running), zbrush: !!zb.running, checkOk: zb.check_ok !== false } };
+  if (loaded.length) {
+    const names = [...new Set(loaded.map(p => p.name))];
+    s2.state = 'ok'; s2.detail = list(names) + (names.length === 1 ? ' has the plugin.' : ' have the plugin.');
+  } else if (!procs.length && !unmatched.length) {
+    s2.state = 'pending'; s2.detail = zb.check_ok === false ? 'Studio could not tell whether ZBrush is running.' : 'Start ZBrush. The plugin loads with it and starts the app.';
+  } else if (worst && worst.state === 'restart') {
+    s2.state = 'warn'; s2.detail = worst.name + ' was started before the plugin was set up. Restart it.';
+  } else if (worst && worst.state === 'starting') {
+    s2.state = 'warn'; s2.detail = worst.name + ' is starting...';
+  } else if (worst && worst.state === 'unknown') {
+    s2.state = 'warn'; s2.detail = worst.why || ('Studio cannot tell yet whether ' + worst.name + ' has the plugin.');
+  } else if (procs.length) {
+    const p = procs.find(x => x.state === 'not_loaded');
+    s2.state = 'off'; s2.detail = (p && p.why) || (p ? p.name + ' is running without the plugin.' : 'The plugin did not load.');
+  } else {
+    s2.state = 'warn'; s2.detail = 'A ZBrush is running as administrator, so Studio cannot see which version it is.';
+  }
+
+  /* 3. Try the ring */
+  const a = d.activity || null, lp = d.last_pick || null;
+  const opened = !!(a && a.ring && a.ring.at > tryFrom);
+  const pk = a && a.pick && a.pick.at > tryFrom && a.pick.source === 'ring' ? a.pick : null;
+  const sent = !!(pk && pk.sent);
+  const did = !!(sent && lp && lp.ok && lp.at >= pk.at - 2 && (lp.seq == null || pk.seq == null || lp.seq === pk.seq));
+  let hint = null;
+  if (pk && !sent) hint = { text: pk.reason || 'The app could not send that pick to ZBrush.' };
+  else if (sent && !did && now - pk.at > 4) {
+    hint = { key: { text: 'ZBrush did not react to the bridge key. Bind it to Zplugin > ZOrbit > Apply (Settings > ZBrush bridge).', settings: true },
+      listener: { text: 'The plugin did not act on the pick. See bridge.log on the Status screen.' },
+      zscript: { text: 'ZBrush did not react to F9. Check Zplugin > ZOrbit > Apply has the hotkey.' } }[pk.route]
+      || { text: pk.reason || 'ZBrush did not confirm the pick.' };
+  }
+  const locked3 = s2.state !== 'ok';
+  const key = (ctx.menu && ctx.menu.hotkey) || 'Q';
+  const s3 = { id: 'try', title: 'Try the ring', locked: locked3, key,
+    checks: [
+      { label: 'Ring opened', ok: opened, sub: '' },
+      { label: 'Pick sent', ok: sent, sub: sent ? '‘' + (pk.label || pk.item || 'item') + '’ via ' + (PICK_VIA[pk.route] || pk.route) : '' },
+      { label: 'ZBrush did it', ok: did, sub: '' }],
+    hint: locked3 ? null : hint };
+  const all3 = opened && sent && did;
+  s3.state = locked3 ? 'pending' : (all3 ? 'ok' : (hint ? 'warn' : 'pending'));
+  s3.detail = locked3 ? 'Available once the plugin is loaded in ZBrush.'
+    : (all3 ? 'The ring works. Press {key} over the canvas whenever you want a brush.' : 'Hover over ZBrush’s canvas, press {key}, and flick toward a brush.');
+
+  /* 4. Your brushes */
+  const m = ctx.menu;
+  const s4 = { id: 'brushes', title: 'Your brushes', menu: m,
+    state: m ? 'ok' : 'pending',
+    detail: m ? (m.hotkey ? m.hotkey + ' opens the “' + m.title + '” ring. Swap in your own brushes if you like.' : 'The “' + m.title + '” ring has no hotkey yet. Swap in your own brushes if you like.') : 'There are no menus yet.' };
+
+  /* 5. What's where */
+  const s5 = { id: 'where', title: 'What’s where', state: ctx.done ? 'ok' : 'pending', detail: 'A quick map of Studio.' };
+  return [s1, s2, s3, s4, s5];
+}
+
+const USER_GUIDE_URL = 'https://github.com/combwizard/zorbit/blob/main/docs/user-guide.md';
+const SETUP_WHERE = [
+  ['Menus', 'Edit the rings and what each slot does', 'menus'],
+  ['Library', 'Every brush ZBrush can load, with tags', 'library'],
+  ['Settings', 'Size, animation, colours, the bridge', 'settings'],
+  ['Status', 'Is everything running, and the logs', 'status'],
+  ['User guide', 'The whole manual, on GitHub', null]];
+
+function buildSetupScreen(root) {
+  root.replaceChildren();
+  const st = S.setup = S.setup || { data: null, tryFrom: Date.now() / 1000, busy: false, lastAsk: 0 };   // tryFrom outlives a screen switch; Start over resets it
+  const first = S.prefs.setup_done === false;       // decided once: the footer must not swap itself when the switch below is used
+  const list = h('ol', { class: 'setup-steps', 'aria-label': 'Setup steps' });
+  const errBox = h('div', { hidden: true, role: 'alert' });
+  const foot = h('div', { class: 'setup-foot' });
+  root.append(h('div', { class: 'settings-scroll' }, h('div', { class: 'settings setup' },
+    h('div', { class: 'page-head' }, h('h1', null, 'Setup'), h('p', null, 'Everything ZOrbit needs, and what still needs doing.')), errBox, list, foot)));
+
+  const els = new Map();
+  let steps = null;                                 // the last steps drawn: tells the timer whether step 3 is being waited on
+
+  // The Start app button lives on step 2. One element, moved into each freshly built step.
+  const startBtn = h('button', { class: 'btn small primary start-btn', type: 'button', onclick: () => startApp() });
+  const paintStart = () => {
+    const d = st.data, running = !!(d && d.app && d.app.running);
+    const noZ = !!d && !(d.zbrush && d.zbrush.running) && !(d.zbrush && d.zbrush.check_ok === false);
+    startBtn.disabled = appStarting || running || noZ || !d;
+    startBtn.replaceChildren(...(appStarting ? [h('span', { class: 'spin' }), 'Starting...'] : [icon('play', 12), running ? 'Running' : 'Start app']));
+    startBtn.classList.toggle('running', appStarting);
+    startBtn.title = appStarting ? 'Starting the app...' : running ? 'The app is already running' : noZ ? 'ZBrush must be running first' : 'Start the ZOrbit app';
+    if (appStarting) startBtn.setAttribute('aria-busy', 'true'); else startBtn.removeAttribute('aria-busy');
+  };
+  async function startApp() {
+    if (!await startAppFlow({ paint: paintStart })) return;
+    await ask(true);
+  }
+
+  const subCheck = (tone, text, sub, extra) => h('div', { class: 'sub-check ' + tone }, h('i', { class: 'sdot' }),
+    h('div', { class: 'grow' }, h('div', null, text), sub ? h('small', null, sub) : null), extra || null);
+  const note = (text, warn) => h('div', { class: 'fhint' + (warn ? ' warn' : '') }, text);
+
+  const bodies = {
+    found(s) {
+      const out = [];
+      if (s.modern.length) out.push(h('div', { class: 'zrows' }, ...s.modern.map(r => {
+        const fix = r.fix ? h('button', { class: 'btn small primary', type: 'button' }, 'Fix') : null;
+        if (fix) fix.onclick = async () => {
+          fix.disabled = true; fix.replaceChildren(h('span', { class: 'spin' }), 'Fixing...');
+          try { const res = await call('register_plugin_path'); toast(res.message || (res.ok ? 'Done.' : 'That did not work.'), { tone: res.ok ? 'ok' : 'warn', ms: 5000 }); }
+          catch (e) { toast('That did not work: ' + (e.message || e), { tone: 'warn' }); }
+          ask(true);
+        };
+        return h('div', { class: 'zrow' }, h('div', { class: 'grow' }, h('div', { class: 'zname' }, r.name, h('span', { class: 'tag ' + r.tone }, r.tag), procTag(r.proc)), h('div', { class: 'zpath mono', title: r.path }, r.path)), fix);
+      })));
+      const box = h('div', { class: 'zrows' });
+      const lz = legacyRows(box, { refresh: () => ask(true), extra: z => procTag(z.proc) });
+      if (s.legacy.installs.length) { lz.paint(s.legacy); out.push(box); }
+      if (s.bridgeMissing) out.push(note('The plugin folder is missing from this install. Reinstall ZOrbit.', true));
+      for (const o of s.others) out.push(note('Also registered: ' + o.path + (o.exists ? '' : ' (missing)')));
+      out.push(h('div', { class: 'btn-row' }, h('button', { class: 'btn small' + (s.state === 'off' ? ' primary' : ''), type: 'button', onclick: () => lz.addFolder() }, icon('folder', 12), 'Add a ZBrush folder...')));
+      return out;
+    },
+    loaded(s) {
+      const tone = { loaded: 'ok', restart: 'warn', starting: 'warn', unknown: 'warn', not_loaded: 'off' };
+      const rows = s.rows.map(p => subCheck(tone[p.state] || 'warn', [p.name, ' ', procTag(p.state)], p.why && p.state !== 'loaded' ? p.why : ''));
+      if (s.elevated) rows.push(subCheck('warn', 'A ZBrush is running as administrator', 'Studio cannot see which version it is, or whether it has the plugin.'));
+      rows.push(subCheck(s.app.running ? 'ok' : (s.app.zbrush ? 'warn' : 'pending'), ['App ', h('span', { class: 'tag ' + (s.app.running ? 'cyan' : 'dim') }, s.app.running ? 'Running' : 'Not running')],
+        s.app.running ? 'Listening for your hotkeys.' : (s.app.zbrush || !s.app.checkOk ? 'Press Start app to launch it.' : 'It starts together with ZBrush.'), startBtn));
+      return [h('div', { class: 'sub-checks' }, ...rows)];
+    },
+    try(s) {
+      const out = [h('div', { class: 'sub-checks' }, ...s.checks.map(c => subCheck(c.ok ? 'ok' : 'pending', c.label, c.sub)))];
+      if (s.hint) {
+        out.push(note(s.hint.text, true));
+        if (s.hint.settings) out.push(h('div', { class: 'btn-row' }, h('button', { class: 'btn small', type: 'button', onclick: () => showScreen('settings') }, 'Open Settings')));
+      }
+      out.push(h('div', { class: 'btn-row' }, h('button', { class: 'btn small', type: 'button', title: 'Forget what happened so far and watch for a new try',
+        onclick: () => { st.tryFrom = Date.now() / 1000; paint(true); } }, icon('refresh', 12), 'Start over')));
+      return out;
+    },
+    brushes(s) {
+      if (!s.menu) return [];
+      const img = h('img', { class: 'ring-img pending', alt: 'Ring preview', draggable: false, onload: () => img.classList.remove('pending') });
+      RingLoader.get(s.menu.id, null).then(res => { if (res && res.image && img.isConnected) img.src = res.image; });
+      const stage = h('div', { class: 'mini-stage' }, h('div', { class: 'stage-rings', 'aria-hidden': 'true' }), h('div', { class: 'mini-wrap' }, img),
+        h('div', { class: 'mini-cap micro' }, 'The ' + s.menu.title + ' ring' + (s.menu.hotkey ? ', on ' + s.menu.hotkey : '')));
+      return [h('div', { class: 'setup-ring' }, stage),
+        h('div', { class: 'btn-row' }, h('button', { class: 'btn small', type: 'button', onclick: () => { S.menuId = s.menu.id; S.itemIdx = null; S.tab = 'menu'; showScreen('menus'); } }, 'Change these brushes'))];
+    },
+    where() {
+      return [h('div', { class: 'setup-where' }, ...SETUP_WHERE.map(([name, text, screen]) => h('div', { class: 'zrow' },
+        h('div', { class: 'grow' }, h('b', null, name), h('small', null, text)),
+        screen ? h('button', { class: 'btn small', type: 'button', onclick: () => showScreen(screen) }, 'Open')
+          : h('button', { class: 'btn small', type: 'button', onclick: async () => { try { await call('open_url', USER_GUIDE_URL); } catch (e) { toast('Could not open the link.', { tone: 'warn' }); } } }, icon('external', 12), 'Open'))))];
+    } };
+
+  const renderStep = (el, s, n) => {
+    const parts = String(s.detail || '').split('{key}');
+    const detail = h('div', { class: 'sdetail' }, ...parts.flatMap((t, i) => (i ? [hkChips(s.key || 'Q', 'sm'), t] : [t])));
+    const body = (bodies[s.id](s) || []).filter(Boolean);
+    el.replaceChildren(h('div', { class: 'snum', 'aria-hidden': 'true' }, s.state === 'ok' ? icon('check', 14) : String(n)),
+      h('div', { class: 'smain' }, h('b', { class: 'stitle' }, s.title), detail, body.length ? h('div', { class: 'sbody' }, ...body) : null));
+  };
+
+  // Draws what changed. force: redraw every step (after an action of ours), else a step that is mid-action keeps its buttons.
+  function paint(force) {
+    const d = st.data;
+    if (!d) return;
+    steps = deriveSteps(d, st.tryFrom, { menu: setupMenu(), done: S.prefs.setup_done !== false });
+    steps.forEach((s, i) => {
+      let el = els.get(s.id);
+      if (!el) { el = h('li', { class: 'sstep', dataset: { step: s.id } }); els.set(s.id, el); list.append(el); }
+      el.className = 'sstep ' + s.state + (s.locked ? ' locked' : '');
+      const sig = JSON.stringify(s);
+      if (!force && (el._sig === sig || el.querySelector('.btn.running'))) return;
+      el._sig = sig;
+      renderStep(el, s, i + 1);
+    });
+    paintStart();
+  }
+  const paintErr = () => {
+    errBox.hidden = !st.err;
+    errBox.replaceChildren(...(st.err ? [h('div', { class: 'scard off' }, h('div', { class: 'micro' }, 'Setup'), h('div', { class: 'sval' }, h('i', { class: 'sdot' }), 'Setup check unavailable'), h('div', { class: 'ssub' }, st.err))] : []));
+  };
+  // One get_setup. A caller that forces one waits for a poll already in flight, so what it changed is in the answer.
+  async function ask(force) {
+    while (st.busy) { if (!force) return; await sleep(60); }
+    st.busy = true; st.lastAsk = Date.now();
+    try {
+      const d = await call('get_setup');
+      st.data = d; st.err = '';
+      noteSetupStatus(d); setSetupBadge(d);
+      if (S.screen === 'setup') paint(force);
+    } catch (e) { st.err = String(e.message || e); }
+    finally { st.busy = false; }
+    paintErr();
+  }
+  R.setup = () => ask(true);
+
+  // The footer is built once: Finish / Skip on a first run, else a Done tag and a switch to bring Setup back.
+  const menuNow = setupMenu();
+  const finish = async withToast => {
+    if (!await setPref('setup_done', true)) return;
+    if (withToast) toast('Setup done. Press ' + ((menuNow && menuNow.hotkey) || 'Q') + ' over ZBrush whenever you like.', { tone: 'ok', ms: 4500 });
+    showScreen('menus');
+  };
+  if (first) foot.append(h('button', { class: 'btn primary', type: 'button', onclick: () => finish(true) }, 'Finish'),
+    h('button', { class: 'btn', type: 'button', onclick: () => finish(false) }, 'Skip for now'));
+  else foot.append(h('span', { class: 'tag cyan' }, 'Done'),
+    h('span', { class: 'foot-note' }, 'Show Setup on next start', toggleSwitch(!S.prefs.setup_done, v => setPref('setup_done', !v), 'Show Setup on next start')));
+
+  if (st.data) paint(true);
+  ask(true);
+  clearInterval(statusTimer);
+  // one beat per second; a look goes out once the last answer is old enough (sooner while step 3 is being waited on)
+  statusTimer = setInterval(() => {
+    if (S.screen !== 'setup' || document.hidden || st.busy) return;
+    const s3 = steps && steps.find(s => s.id === 'try');
+    const fast = !!s3 && !s3.locked && s3.state !== 'ok';
+    if (Date.now() - st.lastAsk >= (fast ? 1400 : 1900)) ask(false);
   }, 1000);
 }
 
@@ -3848,9 +4166,9 @@ async function setPref(key, value) {
   }
 }
 
-const SCREENS = { menus: buildMenusScreen, library: buildLibraryScreen, settings: buildSettingsScreen, status: buildStatusScreen, licence: buildLicenceScreen };
+const SCREENS = { menus: buildMenusScreen, library: buildLibraryScreen, settings: buildSettingsScreen, status: buildStatusScreen, setup: buildSetupScreen, licence: buildLicenceScreen };
 // the element that scrolls on each screen (its position is remembered when you leave and put back when you return)
-const SCREEN_SCROLLER = { menus: '.ilist', library: '.b-scroll', settings: '.settings-scroll', status: '.settings-scroll', licence: '.settings-scroll' };
+const SCREEN_SCROLLER = { menus: '.ilist', library: '.b-scroll', settings: '.settings-scroll', status: '.settings-scroll', setup: '.settings-scroll', licence: '.settings-scroll' };
 const scrollerOf = name => { const root = $('#screen-' + name); return root ? $(SCREEN_SCROLLER[name] || '.settings-scroll', root) : null; };
 let lastScreenChain = Promise.resolve();   // writes run one after another, so two quick switches cannot land out of order
 const saveLastScreen = name => { lastScreenChain = lastScreenChain.then(() => call('set_pref', 'last_screen', name)).catch(() => {}); };
@@ -3955,11 +4273,12 @@ async function boot() {
   updateDirty(); renderProblems();
   applyPrefs();
   loadLibrary(); loadSuggestions(); loadTags();
-  showScreen(params.get('screen') || S.prefs.last_screen || 'menus');
+  showScreen(params.get('screen') || (S.prefs.setup_done === false ? 'setup' : (S.prefs.last_screen || 'menus')));
   S.ready = true;
   rememberSel(); updateHistButtons();
   $('#saveBtn').disabled = false;
   refreshZsBadge();
+  if (S.screen !== 'setup') refreshSetupBadge();
   if (S.screen !== 'status') refreshAppDown();
   if (params.has('hover')) { /* debug aid */ }
   document.documentElement.classList.add('ready');
@@ -3999,16 +4318,17 @@ function init() {
   });
   window.addEventListener('resize', () => { if (S.problemsOpen) placeProblemsPanel(); });
   window.addEventListener('keydown', e => {
-    const ours = ((e.ctrlKey || e.metaKey) && !e.altKey && /^[szy]$/i.test(e.key)) || (e.altKey && !e.ctrlKey && !e.shiftKey && /^[1-5]$/.test(e.key));
+    const ours = ((e.ctrlKey || e.metaKey) && !e.altKey && /^[szy]$/i.test(e.key)) || (e.altKey && !e.ctrlKey && !e.shiftKey && /^[1-6]$/.test(e.key));
     if ($('#overlay-root').firstElementChild) { if (ours) e.preventDefault(); return; }   // a dialog is open: our shortcuts stay quiet, and the web view must not get Ctrl+S either
     const ed = e.target && e.target.closest && e.target.closest('input, textarea, select, [contenteditable]');
     if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === 's') { e.preventDefault(); if (S.ready && !S.fatal) save(); }
     else if (!S.ready || S.fatal) return;
     else if ((e.ctrlKey || e.metaKey) && !e.altKey && !ed && e.key.toLowerCase() === 'z') { e.preventDefault(); e.shiftKey ? redo() : undo(); }
     else if ((e.ctrlKey || e.metaKey) && !e.altKey && !ed && e.key.toLowerCase() === 'y') { e.preventDefault(); redo(); }
-    else if (e.altKey && !e.ctrlKey && !e.shiftKey && /^[1-5]$/.test(e.key)) { e.preventDefault(); const scr = ['menus', 'library', 'settings', 'status', 'licence'][+e.key - 1]; if (scr !== 'licence' || licenceVisible()) showScreen(scr); }
+    else if (e.altKey && !e.ctrlKey && !e.shiftKey && /^[1-6]$/.test(e.key)) { e.preventDefault(); const scr = ['menus', 'library', 'settings', 'status', 'licence', 'setup'][+e.key - 1]; if (scr !== 'licence' || licenceVisible()) showScreen(scr); }
   });
   window.addEventListener('focus', debounce(() => { if (S.ready && !S.fatal) loadTags(); }, 300));      // tags.json may have changed (the popout, a hand edit)
+  window.addEventListener('focus', debounce(() => { if (S.ready && !S.fatal && S.screen !== 'setup') refreshSetupBadge(); }, 600));   // the Setup screen polls for itself
   window.addEventListener('beforeunload', e => { if (dirtyNow()) { e.preventDefault(); e.returnValue = ''; } });
   const showErr = msg => {
     console.error(msg);

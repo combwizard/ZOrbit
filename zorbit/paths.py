@@ -5,7 +5,9 @@
   %APPDATA%\\ZOrbit\\popout.json      window placement of the brush browser popout
   %APPDATA%\\ZOrbit\\launch.json      how to start the app, the Studio and the brush browser popout
                                     (read by the ZBrush bridge)
-  %LOCALAPPDATA%\\ZOrbit\\            logs, thumbnail cache, request/listener exchange with ZBrush
+  %LOCALAPPDATA%\\ZOrbit\\            logs, thumbnail cache, request/listener exchange with ZBrush,
+                                    activity.json (what the app last did with a ring, for the Setup screen)
+  bridge_dir()                      the folder of zorbit_bridge.py that ZBRUSH_PLUGIN_PATH points at
 
 ZOrbit used to be called Radial Menu and kept these in RadialMenu folders; ensure_config() copies them over.
 """
@@ -61,6 +63,20 @@ def ensure_config() -> str:
         os.makedirs(CONFIG_DIR, exist_ok=True)
         shutil.copyfile(DEFAULT_MENUS, CONFIG_FILE)
     return CONFIG_FILE
+
+
+def bridge_dir() -> str | None:
+    """The folder ZBRUSH_PLUGIN_PATH has to list so ZBrush 2026+ loads the Python bridge, or None when this
+    build has none. Installed: <app>\\bridge. Portable zip: bridge\\ sits beside the ZOrbit\\ folder. Checkout:
+    <repo>\\bridge (what tools/dev-install.ps1 registers)."""
+    if not FROZEN:
+        d = os.path.join(os.path.dirname(PKG_DIR), "bridge")
+        return d if os.path.isfile(os.path.join(d, "zorbit_bridge.py")) else None
+    here = os.path.dirname(sys.executable)
+    for d in (os.path.join(here, "bridge"), os.path.join(os.path.dirname(here), "bridge")):
+        if os.path.isfile(os.path.join(d, "zorbit_bridge.py")):
+            return d
+    return None
 
 
 def launch_commands() -> dict:

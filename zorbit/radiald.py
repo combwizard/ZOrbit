@@ -35,6 +35,7 @@ import traceback
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 
+import activity             # noqa: E402
 import config as C          # noqa: E402
 import expand               # noqa: E402
 import installs             # noqa: E402
@@ -125,6 +126,8 @@ class App:
         self._ack = None                # (seq, deadline) of a message-mode pick awaiting pickup
         self._target_misses = 0
         self.usage = usage.Usage()
+        self.activity = activity.Activity(os.path.join(DATA_DIR, "activity.json"), log)   # for the Studio's Setup screen
+        self._activity_menu = None      # id of the root ring last opened, so a pick can say which ring it came from
         self.tags = tags.TagStore(tags_path())
         self.expander = None            # expand.Expander of the current config, tags and usage
         self._refs = []                 # ctypes callbacks that must outlive their registration
@@ -473,6 +476,9 @@ class App:
             self.ring = None
             return
         self._ring_centre = pos
+        self.activity.note_open(menu.id, nested)
+        if not nested:
+            self._activity_menu = menu.id
 
     def _on_ring_done(self, item, reason, at=None):
         self.ring = None
@@ -640,7 +646,7 @@ class App:
             log(f"pick from browser '{item.label}' dropped: ZBrush did not get the focus back in 2 s")
             return
         log(f"pick from browser '{item.label}'")
-        self.send(item, install=ins)
+        self.send(item, install=ins, source="browser")
         try:
             self._record_pick(item)
         except Exception:
@@ -686,9 +692,9 @@ class App:
             pass
         return None
 
-    def send(self, item, install=None):
+    def send(self, item, install=None, source="ring"):
         """install: the ZBrush installation to hand off to, when it is not the one in front right now (a pick
-        from the browser arrives after the focus has moved)."""
+        from the browser arrives after the focus has moved). source: "ring" or "browser", for activity.json."""
         ins = install if install is not None else self.target_install()
         legacy = ins if ins is not None and not ins["python"] else None
         seq = self._write_request(item, legacy)
@@ -696,7 +702,8 @@ class App:
         if legacy is not None:
             # A listener can only be a ZBrush 2026+ (perhaps running as well), never the one in front.
             log(f"pick #{seq} '{item.label}': {legacy['name']} in front, so the ZScript bridge (bridge key)")
-            self.press_bridge_key(seq)
+            sent, reason = self.press_bridge_key(seq)
+            self.activity.note_pick(seq, item, "zscript", sent, source, self._activity_menu, reason)
             W.nudge_mouse()
             return
         listener = self._listener() if mode in ("auto", "message") else None
@@ -704,14 +711,18 @@ class App:
             ok = W.PostMessageW(listener, WM_APP_PICK, seq, 0)
             log(f"pick #{seq} '{item.label}' -> listener {int(listener.value)} (posted={bool(ok)})")
             if ok:
+                self.activity.note_pick(seq, item, "listener", True, source, self._activity_menu)
                 self._ack = (seq, time.time() + 0.5)
                 W.SetTimer(self.ctrl, TIMER_ACK, 100, None)
                 W.nudge_mouse()
                 return
         if mode == "message":
             log(f"pick #{seq}: no live listener in ZBrush and bridge mode is 'message'; nothing sent")
+            self.activity.note_pick(seq, item, "none", False, source, self._activity_menu,
+                                    "no live listener in ZBrush and bridge mode is 'message'")
             return
-        self.press_bridge_key(seq)
+        sent, reason = self.press_bridge_key(seq)
+        self.activity.note_pick(seq, item, "key", sent, source, self._activity_menu, reason)
         W.nudge_mouse()
 
     def _check_ack(self):
@@ -723,14 +734,17 @@ class App:
         if not pending:
             self._ack = None
             W.KillTimer(self.ctrl, TIMER_ACK)
+            self.activity.note_ack(seq, "picked_up")
             return
         if time.time() < deadline:
             return
         self._ack = None
         W.KillTimer(self.ctrl, TIMER_ACK)
+        self.activity.note_ack(seq, "timeout")
         if self.cfg.bridge_mode == "auto" and self.cfg.bridge_key:
             log(f"pick #{seq}: listener did not pick it up in 0.5 s; falling back to the bridge key")
-            self.press_bridge_key(seq)
+            sent, reason = self.press_bridge_key(seq)
+            self.activity.note_route(seq, "key", sent, reason)
         else:
             log(f"pick #{seq}: listener did not pick it up in 0.5 s")
 
@@ -738,10 +752,10 @@ class App:
         key = self.cfg.bridge_key
         if key is None:
             log(f"pick #{seq}: no bridge key configured; nothing sent")
-            return
+            return False, "no bridge key configured"
         if not self.target_in_front():
             log(f"pick #{seq}: ZBrush is not in front; bridge key not sent (it would land in another app)")
-            return
+            return False, "ZBrush is not in front"
         held = [vk for vk in (0xA0, 0xA1, 0xA2, 0xA3, 0xA4, 0xA5) if W.key_down(vk)]
         events = [(vk, True) for vk in held]                     # release what the user still holds
         mods = [vk for vk, on in ((W.VK_MENU, key.alt),) if on]  # bridge keys allow Alt only
@@ -752,6 +766,7 @@ class App:
         if still:
             W.send_keys([(vk, False) for vk in still])
         log(f"pick #{seq} -> bridge key {key.text} (sent {n} events; released/restored {held}/{still})")
+        return True, None
 
     # --- lifetime --------------------------------------------------------------------------------
     def _watch_target(self):

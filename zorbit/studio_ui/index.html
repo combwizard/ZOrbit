@@ -65,6 +65,7 @@
       <button class="rail-btn" type="button" data-screen="library" title="Library (Alt+2)"><span class="ri" data-i="library"></span><span>Library</span></button>
       <button class="rail-btn" type="button" data-screen="settings" title="Settings (Alt+3)"><span class="ri" data-i="settings"></span><span>Settings</span></button>
       <button class="rail-btn" type="button" data-screen="status" title="Status (Alt+4)"><span class="ri" data-i="status"></span><span>Status</span></button>
+      <button class="rail-btn" type="button" data-screen="setup" title="Setup (Alt+6)"><span class="ri" data-i="setup"></span><span>Setup</span></button>
       <button class="rail-btn rail-bottom" type="button" data-screen="licence" title="Licence (Alt+5)"><span class="ri" data-i="licence"></span><span>Licence</span></button>
     </nav>
     <main class="screens" id="screens" tabindex="-1">
@@ -73,6 +74,7 @@
       <section class="screen library-screen" id="screen-library" hidden></section>
       <section class="screen settings-screen" id="screen-settings" hidden></section>
       <section class="screen status-screen" id="screen-status" hidden></section>
+      <section class="screen settings-screen setup-screen" id="screen-setup" hidden></section>
       <section class="screen licence-screen" id="screen-licence" hidden></section>
     </main>
   </div>
@@ -99,6 +101,7 @@
     library: '<rect x="4" y="4" width="7" height="7" rx="1.6"/><rect x="13" y="4" width="7" height="7" rx="1.6"/><rect x="4" y="13" width="7" height="7" rx="1.6"/><rect x="13" y="13" width="7" height="7" rx="1.6"/>',
     settings: '<path d="M4 7h8M18 7h2M4 12h5M13 12h7M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="11" cy="12" r="2"/><circle cx="9" cy="17" r="2"/>',
     status: '<path d="M3 12h4l2.5-6 4 12 2.5-6H21"/>',
+    setup: '<path d="M5 7l1.5 1.5L9 6M5 12l1.5 1.5L9 11M5 17l1.5 1.5L9 16"/><path d="M12 7h8M12 12h8M12 17h8"/>',
     licence: '<circle cx="8" cy="15" r="4"/><path d="M11 12l9-9M16 7l3 3M14 9l2 2"/>'
   };
   document.querySelectorAll('.ri').forEach(function (n) {

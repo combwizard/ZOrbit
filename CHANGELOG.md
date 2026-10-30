@@ -4,6 +4,25 @@ All notable changes to this project are listed here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- A **Setup** screen in Studio, the sixth button in the rail (Alt+6). It is a checklist with live state: ZBrush found,
+  plugin loaded in ZBrush, try the ring, your brushes, and what's where. A fresh install opens Studio on it; **Finish**
+  or **Skip for now** marks it done (`setup_done` in `studio.json`), and closing Studio without either brings it back.
+  Existing users are not sent to it, and **Show Setup on next start** at the bottom brings it back.
+- Setup shows every ZBrush version found. For ZBrush 2026 and newer it says whether `ZBRUSH_PLUGIN_PATH` points at the
+  plugin, and **Fix** adds it the way the installer does. Rows for ZBrush 2022 to 2025 have the same **Install**,
+  **Update** and **Remove** as **Settings > Older ZBrush**, plus **Add a ZBrush folder**.
+- Setup checks whether ZBrush is running, which version, whether it loaded the plugin, and whether it needs a restart
+  because it was started before the plugin was set up. **Start app** starts the app from there.
+- **Try the ring** on Setup ticks off three checks as you use the ring in ZBrush (ring opened, pick sent, ZBrush did
+  it), and gives a hint for the pick's route when ZBrush does not confirm it within a few seconds.
+- An amber dot on the Setup button when no ZBrush found has the plugin set up, or a running ZBrush does not.
+- `%LOCALAPPDATA%\ZOrbit\activity.json`, written by the app: the last ring opened and the last pick it sent, with its
+  route and whether the plugin picked it up. Setup reads it. Safe to delete.
+
 ## [0.9.0] - 2026-10-30
 
 ### Added
@@ -306,6 +325,7 @@ First public release.
   only brushes included with ZBrush.
 - Documentation: README, user guide, third-party notices and contributing guide.
 
+[Unreleased]: https://github.com/combwizard/zorbit/compare/v0.9.0...HEAD
 [0.9.0]: https://github.com/combwizard/zorbit/releases/tag/v0.9.0
 [0.8.1]: https://github.com/combwizard/zorbit/releases/tag/v0.8.1
 [0.8.0]: https://github.com/combwizard/zorbit/releases/tag/v0.8.0
