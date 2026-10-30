@@ -7,10 +7,12 @@ so the page needs one call per change and never has to ask again. The recent pic
 read through LibraryApi.get_usage().
 """
 import base64
+import json
 import os
 
 import assets
 import brushes
+import paths
 import radiald
 import tags
 import usage
@@ -57,9 +59,10 @@ class LibraryApi:
                                 continue
                             count += 1
                             name = os.path.splitext(fn)[0]
-                            if name.lower() in seen:
+                            nk = tags._norm(name)           # as the page's nameKey: names that differ only by spaces are one item
+                            if nk in seen:
                                 continue
-                            seen.add(name.lower())
+                            seen.add(nk)
                             cat = src if rel == "." else f"{src}/{rel.replace(os.sep, '/')}"
                             items.append({"name": name, "source": src, "category": cat,
                                           "path": os.path.join(root, fn)})
@@ -133,6 +136,25 @@ class TagApi:
         if same and not _STORE.error:
             return {"unchanged": True, "mtime_ns": _STORE.mtime}
         return self._tag_snapshot()
+
+    def get_tag_uses(self):
+        """How many ring items point at each tag, read from radial.json: {"ok": True, "uses": {tag key: n}}. A Tag
+        slot ({"tag": key}) and a Browser slot ({"browser": key}) each count once. The browser window holds no
+        menus, so its tag manager asks for this to say what deleting a tag touches. A file that cannot be read
+        gives {"ok": False, "uses": {}}."""
+        uses = {}
+        try:
+            with open(paths.CONFIG_FILE, encoding="utf-8-sig") as f:
+                menus = (json.load(f) or {}).get("menus") or {}
+            for m in menus.values():
+                for it in (m.get("items") or []) if isinstance(m, dict) else ():
+                    for k in ("tag", "browser"):
+                        if isinstance(it, dict) and isinstance(it.get(k), str) and it[k]:
+                            uses[it[k]] = uses.get(it[k], 0) + 1
+                            break
+        except (OSError, ValueError, AttributeError, RecursionError):
+            return {"ok": False, "uses": {}}
+        return {"ok": True, "uses": uses}
 
     def _tag_result(self, res: dict) -> dict:
         out = self._tag_snapshot()

@@ -2101,6 +2101,8 @@ const TAG_PALETTE_FALLBACK = ['#F86B33', '#4DC8E9', '#A8DF23', '#E8413C', '#C77D
 const browsers = new Map();            // browser state object (S.lib, S.dock) -> its live browser, so a tag change can repaint it
 let tagMgr = null, tagPick = null;     // repaint hooks of the open tag manager and tag picker
 const plural = (n, w) => n + ' ' + w + (n === 1 ? '' : /(s|sh|ch|x)$/.test(w) ? 'es' : 's');
+/* What a tag's count in the picker and the manager counts (the chips count one tab: see renderTags). */
+const allKindsText = n => plural(n, 'item') + ' across brushes, alphas, materials and textures';
 
 const tagsOf = (kind, name) => { const l = S.itemTags[tagKey(kind, name)]; return l ? l.filter(k => S.tagMap.has(k)) : []; };
 const isFav = (kind, name) => tagsOf(kind, name).includes(FAV);
@@ -2198,8 +2200,17 @@ function tagCounts(kind) {
   }
   return (L._tc = { byKey, untagged, items: S.itemTags, map: S.tagMap, src: L.items });
 }
-/* How many ring items point at a tag ({"tag": key}). */
+/* How many ring items point at a tag ({"tag": key}). The browser window holds no menus, so it asks the backend (get_tag_uses, which reads
+   radial.json) when the delete confirmation is about to show: see loadTagUses. */
+let tagUses = {};
+async function loadTagUses() {
+  if (!POPOUT) return;
+  let r = null;
+  try { r = await call('get_tag_uses'); } catch (e) { r = null; }
+  tagUses = r && r.ok && r.uses && typeof r.uses === 'object' ? r.uses : {};
+}
 function tagRingUses(key) {
+  if (POPOUT) return tagUses[key] || 0;
   let n = 0;
   for (const m of Object.values(S.cfg.menus)) for (const it of (m.items || [])) if (it && (it.tag === key || it.browser === key)) n++;
   return n;
@@ -2207,12 +2218,15 @@ function tagRingUses(key) {
 
 /* Takes a get_tags answer or a changing call's answer. A changing call reports its own failure in `error`, which is not a
    problem with the file, so only get_tags answers (mutated = false) set S.tagsErr. Returns true when anything on screen changed. */
-function applyTagSnapshot(res, mutated = false) {
+let tagSeq = 0, tagSeqApplied = 0;       // tag calls are numbered when they start: an answer to an older call never replaces a newer one
+function applyTagSnapshot(res, mutated = false, seq = ++tagSeq) {
   if (!res || typeof res !== 'object') return false;
+  // Answers can land out of order (two picker clicks, a focus reload over a write). The order of the calls decides, not the file's
+  // time: a tags.json that was deleted or put back from a copy has an older time and is still the newest state.
+  if (seq < tagSeqApplied) return false;
+  tagSeqApplied = seq;
   if (res.unchanged) { S.tagMtime = res.mtime_ns; return false; }
   if (!Array.isArray(res.tags)) return false;
-  // Answers can land out of order (two picker clicks, a focus reload over a write): an older file state never replaces a newer one.
-  if (S.tagsLoaded && typeof res.mtime_ns === 'number' && typeof S.tagMtime === 'number' && res.mtime_ns < S.tagMtime - 1000) return false;
   const err = mutated ? (res.ok ? '' : S.tagsErr) : (res.error ? String(res.error) : '');
   const sig = JSON.stringify([res.tags, res.items || {}]);
   const changed = !S.tagsLoaded || sig !== S._tagSig || err !== S.tagsErr;
@@ -2231,16 +2245,18 @@ function applyTagSnapshot(res, mutated = false) {
 }
 async function loadTags(force = false) {
   let res = null;
+  const seq = ++tagSeq;
   try { res = await call('get_tags', force ? null : S.tagMtime); } catch (e) { res = null; }
-  applyTagSnapshot(res);
+  applyTagSnapshot(res, false, seq);
 }
 /* Every tag change goes through here: the answer carries the fresh snapshot, a refusal is toasted. A name that clashes
    (res.exists) is left to the caller, which can offer to use or merge into the other tag. */
 async function tagCall(name, ...args) {
   let res;
+  const seq = ++tagSeq;
   try { res = await call(name, ...args); } catch (e) { res = { ok: false, error: 'Could not save the tags: ' + ((e && e.message) || e) }; }
   if (!res || typeof res !== 'object') res = { ok: false, error: 'Could not save the tags.' };
-  applyTagSnapshot(res, true);
+  applyTagSnapshot(res, true, seq);
   if (!res.ok && !res.exists) toast(res.error || 'That tag change did not work.', { tone: 'warn', ms: 4500 });
   return res;
 }
@@ -2276,7 +2292,7 @@ function tagPicker(anchor, kind, names, at = null, extras = null) {
   };
   const row = t => {
     const st = stateOf(t);
-    return h('button', { class: 'tp-row' + (st === 'all' ? ' on' : ''), type: 'button', role: 'menuitemcheckbox', 'aria-checked': st === 'all' ? 'true' : st === 'some' ? 'mixed' : 'false', dataset: { k: t.key },
+    return h('button', { class: 'tp-row' + (st === 'all' ? ' on' : ''), type: 'button', role: 'menuitemcheckbox', title: allKindsText(t.count), 'aria-checked': st === 'all' ? 'true' : st === 'some' ? 'mixed' : 'false', dataset: { k: t.key },
       onclick: () => tagCall('tag_items', keys, st === 'all' ? [] : [t.key], st === 'all' ? [t.key] : []) },
       h('span', { class: 'tcheck' }, st === 'all' ? icon('check', 11) : st === 'some' ? h('i', { class: 'tdash' }) : null),
       t.key === FAV ? starGlyph(13) : h('i', { class: 'tdot', style: { '--tag': t.color } }), h('span', { class: 'tc-name' }, t.label), h('span', { class: 'tc-n mono' }, String(t.count)));
@@ -2391,16 +2407,23 @@ function openTagManager() {
       if (other) {
         msg.replaceChildren('A tag called "' + other.label + '" already exists. ',
           h('button', { class: 'link', type: 'button', onclick: async () => {
-            const m = await tagCall('merge_tags', tag.key, other.key);
-            if (m.ok) toast('Merged "' + tag.label + '" into "' + other.label + '"', { tone: 'ok', ms: 2600 });
+            const from = tag.label, ok = await modal({ title: 'Merge "' + from + '" into "' + other.label + '"?',
+              body: h('p', null, 'Items tagged "' + from + '" get "' + other.label + '" instead, and "' + from + '" is removed.'),
+              actions: [{ text: 'Cancel', value: false, focus: true }, { text: 'Merge', value: true, kind: 'danger' }] });
+            if (ok) {
+              const m = await tagCall('merge_tags', tag.key, other.key);
+              if (m.ok) toast('Merged "' + from + '" into "' + other.label + '"', { tone: 'ok', ms: 2600 });
+            }
+            openTagManager();                                 // the confirm replaced this dialog: bring it back
           } }, 'Merge into ' + other.label),
           ' or ', h('button', { class: 'link', type: 'button', onclick: () => { msg.hidden = true; inp.focus(); } }, 'keep them separate'), '.');
         msg.hidden = false;
       }
     });
     const remove = async () => {
+      await loadTagUses();                                // the browser window reads the ring items from radial.json just now
       const uses = tagRingUses(tag.key);
-      const text = (tag.count ? 'It is on ' + plural(tag.count, 'item') + (uses ? ', used by ' + plural(uses, 'ring item') : '') : 'It is not on any item' + (uses ? ', but ' + plural(uses, 'ring item') + (uses === 1 ? ' uses' : ' use') + ' it' : '')) + '. The items keep working.' + (POPOUT ? ' Ring slots that use it stay empty until you pick another tag.' : '');
+      const text = (tag.count ? 'It is on ' + plural(tag.count, 'item') + (uses ? ', used by ' + plural(uses, 'ring item') : '') : 'It is not on any item' + (uses ? ', but ' + plural(uses, 'ring item') + (uses === 1 ? ' uses' : ' use') + ' it' : '')) + '. The items keep working.' + (POPOUT && uses ? ' Tag slots that use it go empty; Browser slots open unfiltered.' : '');
       const ok = await modal({ title: 'Delete tag "' + tag.label + '"?', body: h('p', null, text),
         actions: [{ text: 'Cancel', value: false, focus: true }, { text: 'Delete tag', value: true, kind: 'danger' }] });
       if (ok) await tagCall('delete_tag', tag.key);
@@ -2419,7 +2442,7 @@ function openTagManager() {
       sw.setAttribute('aria-label', 'Colour of ' + t.label + ', ' + t.color);
       if (document.activeElement !== inp) inp.value = t.label;
       inp.setAttribute('aria-label', 'Name of the tag ' + t.label);
-      setText(n, plural(t.count, 'item'));
+      setText(n, plural(t.count, 'item')); n.title = allKindsText(t.count);
       del.title = 'Delete ' + t.label; del.setAttribute('aria-label', 'Delete the tag ' + t.label);
       $('.tm-pcs', pal).replaceChildren(...swatches());
       if (document.activeElement !== hex) hex.value = t.color.toUpperCase();
@@ -2474,10 +2497,12 @@ function kindTabs(get, set, cls = '') {
 const usageCat = cat => cat === '@fav' || cat === '@recent';
 const usageFlight = {};                                      // kind -> the get_usage call in flight, so a burst of triggers makes one call
 /* Takes a get_usage or forget_recent answer. Returns true when anything the browsers show changed. */
-function applyUsage(kind, res) {
+const usageSeq = {}, usageSeqApplied = {};                    // kind -> usage calls started / the newest one applied (as tagSeq)
+function applyUsage(kind, res, seq = usageSeq[kind] = (usageSeq[kind] || 0) + 1) {
   if (!res || res.ok === false || !Array.isArray(res.recent)) return false;
   const u = usageOf(kind);
-  if (u.loaded && typeof res.mtime_ns === 'number' && typeof u.mtime === 'number' && res.mtime_ns < u.mtime) return false;   // an older answer never replaces a newer one
+  if (seq < (usageSeqApplied[kind] || 0)) return false;       // an answer to an older call never replaces a newer one (a replaced usage.json has an older time and still wins)
+  usageSeqApplied[kind] = seq;
   const scores = res.scores && typeof res.scores === 'object' ? res.scores : {};
   const sig = JSON.stringify([res.recent, scores]), changed = !u.loaded || sig !== u.sig;
   u.recent = res.recent; u.scores = scores; u.sig = sig; u.loaded = true;
@@ -2492,8 +2517,9 @@ function loadUsage(kind) {
   if (usageFlight[kind]) return usageFlight[kind];
   return (usageFlight[kind] = (async () => {
     let res = null;
+    const seq = usageSeq[kind] = (usageSeq[kind] || 0) + 1;
     try { res = await call('get_usage', kind); } catch (e) { res = null; }
-    applyUsage(kind, res);
+    applyUsage(kind, res, seq);
   })().finally(() => { delete usageFlight[kind]; }));
 }
 /* Every kind a browser is showing: on window focus (the other window may have picked something) and when the popout is shown. */
@@ -2501,8 +2527,9 @@ function reloadUsage() { for (const k of new Set(Array.from(browsers.values()).m
 /* "Remove from Recent" for one or several items of a kind. */
 async function forgetRecent(kind, names) {
   let res = null;
+  const seq = usageSeq[kind] = (usageSeq[kind] || 0) + 1;
   try { for (const n of names) res = await call('forget_recent', kind, n); } catch (e) { res = null; }
-  if (res && res.ok !== false && Array.isArray(res.recent)) applyUsage(kind, res);
+  if (res && res.ok !== false && Array.isArray(res.recent)) applyUsage(kind, res, seq);
   else { toast((res && res.error) || 'Could not remove it from Recent.', { tone: 'warn', ms: 3800 }); loadUsage(kind); }
 }
 
@@ -2613,20 +2640,40 @@ function rescanBtn(kind, label = 'Rescan') {
   paintRescanBtn(b);
   return b;
 }
+/* Reads the folders again. A rescan that fails keeps showing the items it had (and says why); one that works says how many it found and,
+   when there was a list to compare with, what changed. */
 async function rescanLibrary(kind) {
   const L = lib(kind), w = K(kind);
   if (L.busy) return;
+  const old = L.loaded && L.state === 'ready' && { items: L.items, sorted: L.sorted, byName: L.byName, sources: L.sources, zbrushFound: L.zbrushFound };
   await loadLibrary(kind, true);
-  if (L.state === 'error') { toast(L.error || 'Could not read the ' + w.one + ' folders.', { tone: 'warn', ms: 4500 }); return; }
+  if (L.error) {
+    const msg = L.error;
+    if (old && old.items.length && L.state === 'error') {            // loadLibrary emptied the list: put back what was on show
+      Object.assign(L, { items: old.items, sorted: old.sorted, byName: old.byName, sources: old.sources, zbrushFound: old.zbrushFound, error: null, state: 'ready', _tree: null, _tc: null });
+      if (R.libRefresh) R.libRefresh(kind);
+    }
+    toast(msg || 'Could not read the ' + w.one + ' folders.', { tone: 'warn', ms: 4500 });
+    return;
+  }
   const n = L.items.length;
-  toast('Found ' + plural(n, w.one), n ? {} : { tone: 'warn' });
+  let text = 'Found ' + plural(n, w.one);
+  if (old && old.items.length && n) {
+    const added = L.items.filter(b => !old.byName.has(nameKey(b.name))).length, gone = old.items.filter(b => !L.byName.has(nameKey(b.name))).length;
+    text += added || gone ? [added ? ', ' + added + ' new' : '', gone ? ', ' + gone + ' gone' : ''].join('') : ', no changes';
+  }
+  toast(text, n ? {} : { tone: 'warn' });
 }
 /* What the grid says when there is no library to show: a read error, no ZBrush, or no files in the folders searched. */
 function libEmptyState(kind) {
   const L = lib(kind), w = K(kind);
   let el;
   if (L.state === 'error') el = emptyState('alert', 'Could not read the ' + w.one + ' library', L.error || 'The backend could not list your ZBrush ' + w.one + ' folders.');
-  else if (!L.zbrushFound) el = emptyState('library', 'No ' + w.many + ' to show', 'ZBrush was not found. Studio reads the ' + w.one + ' folders of a ZBrush that has run at least once.');
+  else if (!L.zbrushFound) {
+    // The Setup screen lists the ZBrush installs ZOrbit knows. The browser window has no way to open Studio, so it only says where to look.
+    el = emptyState('library', 'No ' + w.many + ' to show', 'ZBrush was not found. ZOrbit Studio reads the ' + w.one + ' folders of a ZBrush that has run at least once.',
+      POPOUT ? null : { text: 'Find ZBrush in Studio', fn: () => showScreen('setup') });
+  }
   else {
     el = emptyState('library', 'No ' + w.many + ' found', 'No ' + w.ext + ' files in these folders:');
     if (L.sources.length) el.append(h('ul', { class: 'src-list mono' }, L.sources.map(s => h('li', { class: s.exists ? '' : 'miss' },
@@ -2647,6 +2694,7 @@ function makeBrowser({ compact, st, host = STUDIO_HOST, kindUi = compact ? 'comp
   const search = h('input', { class: 'inp', type: 'text', value: st.q, spellcheck: 'false', autocomplete: 'off' });   // placeholder and label: paintStrings
   const clearBtn = h('button', { class: 'ibtn', type: 'button', title: 'Clear search', 'aria-label': 'Clear search', hidden: !st.q, onclick: () => { clearQuery(); renderGrid(); search.focus(); } }, icon('x', 13));
   const count = h('span', { class: 'b-count mono' });
+  const fchips = h('span', { class: 'filter-chips', hidden: true });     // the popout's toolbar: the filters that are on (styles.css shows them only while its column is collapsed)
   const grid = h('div', { class: 'bgrid' });
   const scroll = h('div', { class: 'b-scroll' }, grid);
   const side = h('div', { class: 'lib-side' });
@@ -2664,7 +2712,7 @@ function makeBrowser({ compact, st, host = STUDIO_HOST, kindUi = compact ? 'comp
   if (st.cat.includes('/')) st.open.add(st.cat.split('/')[0]);   // a folder chosen from outside (a link) starts unfolded
 
   const searchBox = h('label', { class: 'searchbox' }, icon('search', 14), search, clearBtn);
-  const onSearch = debounce(() => { st.q = search.value; clearBtn.hidden = !st.q; renderGrid(); if (host.firstMatch) highlightFirst(); }, 120);
+  const onSearch = debounce(() => { st.q = search.value; clearBtn.hidden = !st.q; renderGrid(); if (host.firstMatch) highlightFirst(); }, 120);   // flushed by move and pickSelected: a key right after typing acts on the new list
   search.addEventListener('input', onSearch);
   search.addEventListener('keydown', e => { if (e.key === 'Escape' && search.value) { e.stopPropagation(); clearBtn.click(); } });
   let autoHl = false;                    // the selection is only the highlight put on the first match (the popout), so Esc leaves it alone
@@ -2752,7 +2800,7 @@ function makeBrowser({ compact, st, host = STUDIO_HOST, kindUi = compact ? 'comp
     });
     paint(); grid.style.setProperty('--card', st.size + 'px');
     rescan = rescanBtn(st.kind);
-    tools = h('div', { class: 'b-tools' }, searchBox, h('div', { class: 'size-ctl' }, icon('library', 13), size), rescan, host.tools ? host.tools() : null);
+    tools = h('div', { class: 'b-tools' }, searchBox, h('div', { class: 'size-ctl' }, icon('library', 13), size), rescan, fchips, host.tools ? host.tools() : null);
     root.append(side, h('div', { class: 'lib-main' }, tabs ? tabs.el : null, tools, h('div', { class: 'b-sub' }, hint, count), scroll, strip));
   }
 
@@ -2783,15 +2831,30 @@ function makeBrowser({ compact, st, host = STUDIO_HOST, kindUi = compact ? 'comp
     renderTags(); renderGrid();
   }
   function clearTagFilter() { st.tags.clear(); st.untagged = false; renderTags(); renderGrid(); }
+  /* The filters that are on, as chips in the toolbar with an x that clears each: a tag filter ("Filtered: Blocking") and a folder ("Folder: My Brushes").
+     The folders and tags column shows the same, so the chips only appear when the popout has collapsed it (styles.css). */
+  const folderName = cat => cat === '@fav' ? 'Favourites' : cat === '@recent' ? 'Recent' : cat === '@used' ? 'In my menus' : cat.split('/').join(' / ');
+  function paintFilterChips() {
+    if (compact) return;
+    const chip = (text, clearText, fn) => h('button', { class: 'fchip', type: 'button', title: clearText, 'aria-label': clearText, onclick: fn },
+      h('span', { class: 'fc-text' }, text), icon('x', 11));
+    const chips = [];
+    if (st.cat !== 'All') chips.push(chip('Folder: ' + folderName(st.cat), 'Clear the folder filter', () => { setCat('All'); renderAll(); }));
+    if (st.untagged) chips.push(chip('Filtered: Untagged', 'Clear the tag filter', clearTagFilter));
+    else if (st.tags.size) chips.push(chip('Filtered: ' + Array.from(st.tags).map(k => (S.tagMap.get(k) || { label: k }).label).join(', '), 'Clear the tag filter', clearTagFilter));
+    fchips.hidden = !chips.length;
+    fchips.replaceChildren(...chips);
+  }
   /* The chips: a list under Folders in the full browser, a wrapped row under the category in the dock. */
   function renderTags() {
     const host = compact ? tagRow : tagSec;
     const act = document.activeElement, fr = act && host.contains(act) ? act.closest('[data-tk]') : null, fk = fr ? fr.dataset.tk : null;
     pruneTagSel();
+    paintFilterChips();
     const counts = tagCounts(st.kind);
     const chip = (key, label, n, color) => {
       const on = key === '@untagged' ? st.untagged : st.tags.has(key);
-      return h('button', { class: 'tagchip' + (on ? ' on' : ''), type: 'button', 'aria-pressed': on ? 'true' : 'false', title: label + ' (' + plural(n, W().one) + ')', style: color ? { '--tag': color } : null,
+      return h('button', { class: 'tagchip' + (on ? ' on' : ''), type: 'button', 'aria-pressed': on ? 'true' : 'false', title: label + ': ' + plural(n, W().one) + ' on this tab', style: color ? { '--tag': color } : null,
         dataset: { tk: key }, onclick: () => toggleTag(key) },
         h('i', { class: 'tdot' + (color ? '' : ' none') }), h('span', { class: 'tc-name' }, label), h('span', { class: 'tc-n mono' }, String(n)));
     };
@@ -2919,7 +2982,9 @@ function makeBrowser({ compact, st, host = STUDIO_HOST, kindUi = compact ? 'comp
     if (f) t += ' · ' + (st.untagged ? 'untagged' : plural(st.tags.size, 'tag'));
     setText(count, t);
   }
-  function renderGrid() {
+  /* keep: put the scroll position back once enough cards are drawn (a rescan or a refresh must not throw you to the top). */
+  function renderGrid(keep = false) {
+    let keepTop = keep ? scroll.scrollTop : null;
     $$('.thumb', grid).forEach(t => { if (t._io) t._io.unobserve(t); });   // the old cards are about to go: do not keep them in the observer
     const my = ++token;
     grid.replaceChildren();
@@ -2966,6 +3031,7 @@ function makeBrowser({ compact, st, host = STUDIO_HOST, kindUi = compact ? 'comp
       const frag = document.createDocumentFragment();
       for (const end = Math.min(i + 160, list.length); i < end; i++) frag.append(makeCard(list[i]));
       grid.append(frag);
+      if (keepTop !== null && (i >= list.length || scroll.scrollHeight - scroll.clientHeight >= keepTop)) { scroll.scrollTop = keepTop; keepTop = null; }
       if (i < list.length) requestAnimationFrame(chunk);
     };
     chunk();
@@ -3011,7 +3077,7 @@ function makeBrowser({ compact, st, host = STUDIO_HOST, kindUi = compact ? 'comp
       if (t) t.focus();
     }
   }
-  function renderAll() { if (L().state === 'ready') renderCats(); renderTags(); renderGrid(); }
+  function renderAll(keep = false) { if (L().state === 'ready') renderCats(); renderTags(); renderGrid(keep); }
 
   /* --- keyboard help for the popout: a highlight that follows the arrow keys and Enter picks */
   function highlightFirst() {
@@ -3022,6 +3088,7 @@ function makeBrowser({ compact, st, host = STUDIO_HOST, kindUi = compact ? 'comp
   }
   /* Moves the highlight one card (dx) or one row (dy). The row length is however many cards sit at the first card's height. */
   function move(dx, dy) {
+    onSearch.flush();
     const cards = $$('.bcard[data-name]', grid);
     if (!cards.length) return false;
     const top0 = cards[0].offsetTop;
@@ -3035,6 +3102,7 @@ function makeBrowser({ compact, st, host = STUDIO_HOST, kindUi = compact ? 'comp
     return true;
   }
   function pickSelected() {
+    onSearch.flush();
     const names = Array.from(sel);
     if (!names.length) return false;
     if (names.length === 1) host.primary(names[0], st.kind); else host.primaryMany(names, st.kind);
@@ -3079,7 +3147,8 @@ function makeBrowser({ compact, st, host = STUDIO_HOST, kindUi = compact ? 'comp
   const api = {
     el: root, scroller: () => scroll,
     kind: () => st.kind, setKind,
-    refresh() { renderAll(); paintTarget(); },
+    refresh() { renderAll(true); paintTarget(); },                  // after a library load: the scroll position stays
+    hasSel: () => sel.size > 0,
     focusSearch(select = true) { search.focus(); if (select) search.select(); },
     typeChar(ch) { search.value += ch; search.dispatchEvent(new Event('input', { bubbles: true })); },
     inSearch: el => !!el && el.closest && !!el.closest('.searchbox'),
@@ -4797,6 +4866,13 @@ function init() {
    selects it in ZBrush through the app and hands the keyboard back to ZBrush. The Python side calls __popoutShow({tag, kind}) each time the
    window is shown afresh (kind null keeps the current tab) and __popoutFocus() once it has the foreground. */
 let popBrowser = null, popTabs = null, popWant, popPicking = false;
+/* The popout is one long-lived process, so a brush saved in ZBrush after it started is not in its list. Whenever the window is shown, or a tab is
+   opened, the library of that kind is read again if the last read is more than a minute old. popScanned: kind -> when (R.libRefresh stamps it). */
+const popScanned = {}, POP_RESCAN_MS = 60000;
+function popRescanIfOld(kind) {
+  const L = lib(kind);
+  if (L.loaded && !L.busy && Date.now() - (popScanned[kind] || 0) > POP_RESCAN_MS) loadLibrary(kind, true);
+}
 const popHide = () => { call('popout_hide').catch(() => {}); };
 const POP_HOST = {
   dnd: false,
@@ -4811,8 +4887,9 @@ const POP_HOST = {
     let r;
     try { r = await call('popout_pick', name, kind); } catch (e) { r = { ok: false, error: 'Could not reach ZOrbit: ' + ((e && e.message) || e) }; }
     popPicking = false;
-    if (r && r.ok) toast('Selected ' + name, { tone: 'ok', ms: 1400 });
-    else toast((r && r.error) || 'ZOrbit is not running', { tone: 'warn', ms: 3800 });
+    // ok means the app took the pick and passed it on; whether ZBrush then selected it is in its log, so the toast says "sent"
+    if (r && r.ok) toast('Sent ' + name + ' to ZBrush', { tone: 'ok', ms: 1400 });
+    else toast((r && r.error) || 'ZOrbit is not running. It starts and stops with ZBrush.', { tone: 'warn', ms: 3800 });
   },
   primaryMany(names, kind) { const w = K(kind).one; toast(`ZBrush takes one ${w} at a time. Select a single ${w}.`, { tone: 'warn', ms: 2600 }); },
   cardTitle: () => 'Select in ZBrush',
@@ -4820,7 +4897,7 @@ const POP_HOST = {
   enterHint: 'Press Enter to select it in ZBrush.',
   hint: () => [],                                          // the popout shows no hint line
   badge: null,                                       // no "In my menus" folder, no badges: the popout knows nothing of menus
-  onKind: kind => { if (popTabs) popTabs.paint(); call('popout_set_kind', kind).catch(() => {}); },   // the header tabs follow every switch
+  onKind: kind => { if (popTabs) popTabs.paint(); call('popout_set_kind', kind).catch(() => {}); popRescanIfOld(kind); },   // the header tabs follow every switch
   onSize: debounce(px => { call('popout_set_size', px).catch(() => {}); }, 400),
 };
 
@@ -4874,7 +4951,13 @@ function buildPopout(root) {
     h('div', { class: 'winctl' }, h('button', { class: 'winbtn close', type: 'button', title: 'Close', 'aria-label': 'Close', onclick: popHide }, icon('x', 14))));
   popBrowser = makeBrowser({ compact: false, st: S.pop, host: POP_HOST, kindUi: 'none' });   // the tabs live in the header
   root.replaceChildren(head, h('div', { class: 'pop-body' }, popBrowser.el));
-  R.libRefresh = kind => { if (kind === S.pop.kind) { popBrowser.refresh(); popBrowser.highlightFirst(); } };
+  R.libRefresh = kind => {
+    popScanned[kind] = Date.now();
+    if (kind !== S.pop.kind) return;
+    const had = popBrowser.hasSel();                  // a rescan keeps the highlight and the scroll position; the first list highlights its first item
+    popBrowser.refresh();
+    if (!had) popBrowser.highlightFirst();
+  };
 }
 
 /* Called by popout.py each time the window is shown. Starts from a clean slate: no search, no folder, the given tag only, the first match
@@ -4885,6 +4968,7 @@ window.__popoutShow = o => {
   if (kind) popBrowser.setKind(kind);
   if (reset || tag) popBrowser.setFilter(tag);          // a tab switch alone keeps the search and tag filter
   popBrowser.focusSearch();
+  popRescanIfOld(popBrowser.kind());                    // a brush saved in ZBrush since the last read
   reloadUsage();                                        // picks made since the window was last shown
   const stale = !!tag && !S.tagMap.has(tag);
   loadTags(stale).then(() => { if (stale && S.tagMap.has(tag)) popBrowser.setFilter(tag); });
@@ -4893,7 +4977,7 @@ window.__popoutShow = o => {
 window.__popoutFocus = () => { if (popBrowser) popBrowser.focusSearch(false); return document.hasFocus(); };
 
 async function bootPopout() {
-  S.cfg = { menus: {} };                             // the tag manager reads the ring items; the popout has none
+  S.cfg = { menus: {} };                             // the popout has no menus; the tag manager asks get_tag_uses for the ring items that use a tag
   let state = null;
   try { state = await call('popout_get_state'); } catch (e) { state = null; }
   if (state) {
@@ -4933,9 +5017,11 @@ function initPopout() {
       return;
     }
     if (e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey) return;
-    const t = e.target, typing = !!(t && t.closest && t.closest('input, textarea, select, [contenteditable]')), inSearch = popBrowser.inSearch(t);
+    // A field the keys belong to. The size slider is not one for Enter and letters (they go to the search box); its own arrows still move it.
+    const t = e.target, field = t && t.closest && t.closest('input, textarea, select, [contenteditable]'), inSearch = popBrowser.inSearch(t);
+    const typing = !!field && !(field.matches && field.matches('input[type="range"]'));
     if (e.key.startsWith('Arrow')) {
-      if (typing && !inSearch) return;
+      if (field && !inSearch) return;
       const dx = e.key === 'ArrowLeft' ? -1 : e.key === 'ArrowRight' ? 1 : 0, dy = e.key === 'ArrowUp' ? -1 : e.key === 'ArrowDown' ? 1 : 0;
       if (inSearch && dx && popBrowser.searchValue()) return;               // the caret moves inside a query
       e.preventDefault(); popBrowser.move(dx, dy);
@@ -4948,10 +5034,24 @@ function initPopout() {
       popBrowser.focusSearch(false); popBrowser.typeChar(e.key);             // a focus change can swallow the first keypress
     }
   });
+  /* After a mouse click on a control (a tag chip, a folder, a tab, Rescan, the pin), the keyboard goes back to the search box, so Enter picks
+     the highlighted card and letters search instead of the control toggling again. Only for a pointer click (detail > 0): a keyboard user who
+     tabbed to a control and pressed Enter or Space (detail 0) keeps their focus. Capture phase, before the control's own handler, so the
+     chips' and folders' habit of putting the focus back on themselves after a repaint finds it already on the search box. */
+  document.addEventListener('click', e => {
+    const t = e.target;
+    if (!popBrowser || !(e.detail > 0) || !t || !t.closest) return;
+    if (!t.closest('button, a, [role="option"], [role="tab"]')) return;       // a click on the card itself keeps its focus: Ctrl+D, Space and Enter work on it
+    if (t.closest('input, textarea, select, [contenteditable], #overlay-root, .popover, #toasts')) return;
+    popBrowser.focusSearch(false);
+  }, true);
   window.addEventListener('contextmenu', e => {                              // the web view's own menu is a window of another
     if (!(e.target && e.target.closest && e.target.closest('.bcard'))) e.preventDefault();   // process and would read as leaving
   });
   window.addEventListener('focus', debounce(() => { if (S.ready) { loadTags(); reloadUsage(); } }, 300));      // tags.json may have changed (the Studio), and picks add to Recent
+  // The window stays on top beside the Studio, so it may never get focus while a tag changes there. get_tags answers "unchanged" from a
+  // file time check, so asking every 5 s costs next to nothing; a hidden window does not ask.
+  setInterval(() => { if (S.ready && !document.hidden) loadTags(); }, 5000);
   const log = msg => { console.error(msg); try { call('popout_log', String(msg).slice(0, 500)).catch(() => {}); } catch (e) { /* no backend */ } };
   window.addEventListener('error', e => log('Uncaught: ' + e.message + ' (' + (e.filename || '').split('/').pop() + ':' + e.lineno + ')'));
   window.addEventListener('unhandledrejection', e => log('Unhandled rejection: ' + (e.reason && e.reason.message || e.reason)));

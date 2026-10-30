@@ -649,7 +649,11 @@ class Popout:
         _log(f"pick {kind} {name!r}: app window {app}, result {r}")
         if r == 1:
             return {"ok": True}
-        return {"ok": False, "error": "ZOrbit is not running" if r is None else f"ZOrbit did not take that {kind}. Is it up to date?"}
+        if not app:                         # the app owns the pick window and runs only while ZBrush does
+            return {"ok": False, "error": "ZOrbit is not running. It starts and stops with ZBrush."}
+        if r is None:                       # the window is there but did not answer within the timeout
+            return {"ok": False, "error": "ZOrbit did not answer. Try again in a moment."}
+        return {"ok": False, "error": f"ZOrbit did not take that {kind}. Is it up to date?"}
 
     def quit(self, why=""):
         with self._lock:

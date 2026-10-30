@@ -38,13 +38,13 @@ still counts as untagged.
 **Manage tags...** (under the chips in the Library, or on **Settings > Tags**) opens the tag manager. Each row has:
 
 - a swatch: click it for the eight preset colours, or type any `#rrggbb` value;
-- the name: edit it and press Enter, or leave the field, to rename the tag. If another tag already has that name, you are asked to **Merge into** it or keep them apart. Merging puts the items of this tag on the other one (in the same place in each item's list, so the colour cue stays) and removes this tag;
-- the number of items it is on;
-- a delete button. The confirmation says how many items it is on and how many ring items use it. **Items keep working**; they only lose the tag. Ring items that point at the deleted tag stay in `radial.json`: a `tag` slot becomes a faint empty slot, a `browser` slot opens unfiltered, and the problems pill lists both so you can point them elsewhere.
+- the name: edit it and press Enter, or leave the field, to rename the tag. If another tag already has that name, you are asked to **Merge into** it or keep them apart. Merging asks you to confirm first (**Cancel** is the default), then puts the items of this tag on the other one (in the same place in each item's list, so the colour cue stays) and removes this tag;
+- the number of items it is on. Hover it to see what is counted: every item the tag is on, across brushes, alphas, materials and textures. The tag chips in the Library and the browser count only the tab you are on, so their numbers can be smaller;
+- a delete button. The confirmation says how many items it is on and how many ring items use it. The browser's tag manager reads the ring items from the saved `radial.json` for this, so it gives the same count as long as you have saved your menus. **Items keep working**; they only lose the tag. Ring items that point at the deleted tag stay in `radial.json`: a `tag` slot becomes a faint empty slot, a `browser` slot opens unfiltered, and the problems pill lists both so you can point them elsewhere.
 
 The Favourites row lets you change only its swatch. Its name is fixed, and it cannot be deleted or merged away.
 
-Tags save as you make them. They are not part of **Save**, **Revert**, **Undo** or the unsaved-changes list. The app notices a change within a moment, and Studio refreshes its tags when you come back to its window, so a tag made in one place shows up in the other.
+Tags save as you make them. They are not part of **Save**, **Revert**, **Undo** or the unsaved-changes list. The app notices a change within a moment. Studio refreshes its tags when you come back to its window, and the browser checks every few seconds while it is open, so a tag made in one place shows up in the other.
 
 ## Where tags live
 
