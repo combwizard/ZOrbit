@@ -3,7 +3,8 @@
   'use strict';
 
   var RELEASES_API = 'https://api.github.com/repos/combwizard/zorbit/releases/latest';
-  var CACHE_KEY = 'zorbit.release.v2';
+  var CACHE_KEY = 'zorbit.release.v3';
+  var CACHE_MS = 10 * 60 * 1000;   // spares the API's 60 calls an hour per IP, but a release shows up within minutes
   var FALLBACK = 'https://github.com/combwizard/zorbit/releases/latest';
 
   function toast(msg) {
@@ -37,7 +38,7 @@
   function enhanceDownloads() {
     var cached = null;
     try { cached = JSON.parse(sessionStorage.getItem(CACHE_KEY) || 'null'); } catch (e) {}
-    if (cached && cached.url) {
+    if (cached && cached.url && Date.now() - (cached.at || 0) < CACHE_MS) {
       setDownloadLinks(cached.url, cached.version, cached.portableUrl);
       return;
     }
@@ -51,7 +52,7 @@
         var url = setup && setup.browser_download_url ? setup.browser_download_url : FALLBACK;
         var portableUrl = portable && portable.browser_download_url;
         try {
-          sessionStorage.setItem(CACHE_KEY, JSON.stringify({ url: url, version: version, portableUrl: portableUrl || '' }));
+          sessionStorage.setItem(CACHE_KEY, JSON.stringify({ url: url, version: version, portableUrl: portableUrl || '', at: Date.now() }));
         } catch (e) {}
         setDownloadLinks(url, setup ? version : null, portableUrl);
       })
