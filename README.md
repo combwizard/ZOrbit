@@ -34,7 +34,7 @@ If you know pie menus from Blender or marking menus from Maya, ZOrbit brings tha
 - **Submenus.** Rings can open other rings, so a handful of hotkeys can reach a lot. Hover a submenu and it opens on the spot, so one stroke can reach an item two rings deep.
 - **Fan-out submenus.** Switch a menu to fan out and it opens in place: its items spread in an arc beyond its slot while the ring you came from stays put. Fans can open fans, up to three deep.
 - **Tags and a browser.** Tag your brushes, alphas, materials and textures in Studio, colour their slots by tag (an icon tint, a glow, or a band through the ring), and give a slot a tag to open a fan of every item that carries it. A hotkey (Alt+B) opens a browser over ZBrush with four tabs (brushes, alphas, materials and textures), search, folders, tag chips and thumbnails; Enter picks the item. Star your favourites with one press, and a Recent list shows what you picked last.
-- **ZOrbit Studio.** Edit menus with a live preview of the real ring. Drag brushes in from a searchable library with thumbnails, record hotkeys, change colours, size and animation.
+- **ZOrbit Studio.** Edit menus with a live preview of the real ring. Drag brushes in from a searchable library with thumbnails, record hotkeys, change colours, size and animation. A Setup screen walks a new install through finding ZBrush and trying the ring, and Import and export moves your menus, settings and tags to another PC.
 - **Twelve open animations**, from instant to a swirling spiral, plus ring size, dead zone and label options.
 - **Starts and stops with ZBrush.** There is nothing to launch by hand.
 - **Safe with your stroke.** A pick that arrives mid-stroke waits until you lift the pen.

@@ -92,12 +92,29 @@
 - [ ] Favourites: manual drag-to-reorder and several named favourite tabs (XMD Toolbox style); a mini-mode strip of
       favourites over ZBrush
 
+### Profiles
+
+- [ ] Profiles for different ZBrush projects or jobs (hard-surface, creature, a client's pipeline): each profile
+      has its own menus, settings, hotkeys, tags and favourites, so a ring can be set up for one kind of work and
+      swapped out for another
+  - [ ] Decide what a profile holds: `radial.json` (menus, ring settings, browser hotkey) and `tags.json` for
+        sure; auto-slot usage (`usage.json`) and the Recent list probably stay per user, not per profile
+  - [ ] Switch from the tray menu and from Studio (a profile picker in the top bar), and optionally with a hotkey
+        that cycles them; the ring, the browser and the Studio all follow at once, with no restart
+  - [ ] Optional automatic switch when ZBrush opens a project or tool whose name matches a rule (the window title
+        carries the file name), with a toast saying which profile it chose
+  - [ ] New profile: start empty, from the starter menus, or as a copy of the current one; rename, duplicate,
+        delete (the last one cannot be deleted); the file layout could be `%APPDATA%\ZOrbit\profiles\<name>\`
+        with the current files becoming the "Default" profile, so an existing install upgrades with no change
+  - [ ] Settings > Import and export already moves a menus, settings and tags file between machines: a profile
+        export/import can reuse it
+
 ### Studio
 
 - [x] First-run wizard: find ZBrush, pick eight brushes, try the ring once (Setup screen; brushes are a preview plus a hand-off to Menus)
 - [ ] A short guided tour, offered on first run and under Help (Setup ends with a "What's where" step; the tour itself is not done)
 - [ ] Reorder the Settings cards: Ring geometry, Colours, Labels, Tag colours (the look); Open animation, Behaviour
-      (the feel); Brush browser, ZBrush bridge; then the cards that save straight away: Older ZBrush, Tags,
+      (the feel); Browser, ZBrush bridge; then the cards that save straight away: Older ZBrush, Tags,
       Studio. Do it by sorting the built cards by name before the "On this page" list is made, not by moving
       their code, and put the same order in the Settings row of the user guide's Studio table. Import and export
       comes last, after Studio. Optionally a
