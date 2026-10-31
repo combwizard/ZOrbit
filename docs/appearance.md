@@ -28,10 +28,11 @@ These are on the Settings screen in Studio, and under `"ring"` in `radial.json`.
 Sizes are scaled for high-DPI screens automatically.
 
 The radius is a minimum. When a menu has so many items that neighbouring slots would sit closer than 1.25 slot widths apart, the ring grows until they do not. With the default slot size that starts at 10 items: 12 items make a ring about 174 pixels in radius, 24 items about 345. The Studio preview grows the same way, so lowering **Ring radius** changes nothing once a menu is past that point. Raise **Slot size** or cut the number of items to keep the ring smaller. Names in Chinese, Japanese or Korean are drawn with Microsoft YaHei, Yu Gothic or Malgun Gothic, whichever Windows has; other names use Segoe UI.
+Studio's [Simple mode](studio.md#simple-and-full-mode) shows only some of these. Its **Ring size** slider moves `radius`, `slot` and `dead_zone` together and keeps their proportions. Full mode has the three separate sliders, and is the only mode that shows `hover_submenus`, `tap_ms`, `timeout_s`, the `tag_` settings and `colors`. The animation, `labels` and `flick` are in both. What Simple hides keeps its value.
 
 ### Colours
 
-`ring.colors` takes `#rrggbb` values:
+`ring.colors` takes `#rrggbb` values. In Studio they are on the **Colours** card, which needs [Full mode](studio.md#simple-and-full-mode).
 
 | Colour | Default | Used for |
 |---|---|---|
@@ -55,7 +56,7 @@ Anything you leave out keeps its default. Values outside the allowed range are r
 
 ### Tag colours
 
-The colour of an item's first tag (see [Tags](tags.md)) can show on its slot in three ways: an icon tint, a glow and a band. In Studio they are the three groups of the **Tag colours** card on the Settings screen, each with its own switch. Beside them is a preview. It shows the current menu if it has a tagged brush, and otherwise a sample ring of your brushes coloured with your tags, so every change is visible.
+The colour of an item's first tag (see [Tags](tags.md)) can show on its slot in three ways: an icon tint, a glow and a band. In Studio they are the three groups of the **Tag colours** card on the Settings screen (Full mode), each with its own switch. Beside them is a preview. It shows the current menu if it has a tagged brush, and otherwise a sample ring of your brushes coloured with your tags, so every change is visible.
 
 ![A ring of eight brushes with two tags: Blocking in lime green, Detailing in violet, and two untagged slots. Each slot has a coloured rim and tint, and the band behind them follows the tags](images/tag-colours.png)
 

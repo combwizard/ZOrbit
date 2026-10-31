@@ -120,14 +120,14 @@ const KIND = {
   alpha: { label: 'Alpha', icon: 'k_alpha', hint: 'Select an alpha' },
   material: { label: 'Material', icon: 'k_material', hint: 'Select a material' },
   texture: { label: 'Texture', icon: 'k_texture', hint: 'Select a texture' },
-  press: { label: 'Press', icon: 'k_press', hint: 'Press any ZBrush button' },
-  set: { label: 'Set', icon: 'k_set', hint: 'Set a slider or value' },
-  toggle: { label: 'Toggle', icon: 'k_toggle', hint: 'Flip a switch' },
-  steps: { label: 'Steps', icon: 'k_steps', hint: 'Run several actions in order' },
+  press: { label: 'Press', icon: 'k_press', full: true, hint: 'Press any ZBrush button' },
+  set: { label: 'Set', icon: 'k_set', full: true, hint: 'Set a slider or value' },
+  toggle: { label: 'Toggle', icon: 'k_toggle', full: true, hint: 'Flip a switch' },
+  steps: { label: 'Steps', icon: 'k_steps', full: true, hint: 'Run several actions in order' },
   menu: { label: 'Submenu', icon: 'k_menu', hint: 'Open another ring' },
-  auto: { label: 'Auto', icon: 'k_auto', hint: 'A slot filled with a brush you pick often' },
-  tag: { label: 'Tag', icon: 'tag', hint: 'Every item with a tag: brushes first, most used first, then alphas, materials and textures' },
-  browser: { label: 'Browser', icon: 'k_browser', hint: 'Open the browser' },
+  auto: { label: 'Auto', icon: 'k_auto', full: true, hint: 'A slot filled with a brush you pick often' },
+  tag: { label: 'Tag', icon: 'tag', full: true, hint: 'Every item with a tag: brushes first, most used first, then alphas, materials and textures' },
+  browser: { label: 'Browser', icon: 'k_browser', full: true, hint: 'Open the browser' },
 };
 /* The kinds of asset the library holds (brushes, alphas, materials, textures) and their wording; every "brush/brushes" string reads from here. */
 const KINDS = {
@@ -188,7 +188,7 @@ const S = {
   dock: { kind: 'brush', cat: 'All', q: '' },
   pop: { kind: 'brush', cat: 'All', q: '', size: 96 }, popOnTop: true, popSide: 'left', popColumn: true,   // the popout's browser state, whether its window stays above others, and the side of its folders column
   status: null,
-  prefs: { show_licence: true, setup_done: true },   // setup_done: boot tests === false, so a failed get_prefs never sends anyone to Setup
+  prefs: { show_licence: true, setup_done: true, mode: '' },   // setup_done: boot tests === false, so a failed get_prefs never sends anyone to Setup
   ready: false, fatal: false,                 // ready after the first screen is up; fatal when the recovery screen is showing
   saving: false, savePromise: null, mtimeNs: null,
   dirtySent: undefined, dirtySeq: 0, dirtyFlight: null,
@@ -215,6 +215,47 @@ const ranges = () => (S.opts && S.opts.ring_ranges) || FALLBACK_RANGES;
 const menus = () => S.cfg.menus;
 const curMenu = () => S.cfg.menus[S.menuId];
 const curItem = () => { const m = curMenu(); return m && S.itemIdx !== null ? m.items[S.itemIdx] : undefined; };
+
+/* ---- Simple and Full mode. The mode only changes what Studio shows; the ring, the app and radial.json never see it.
+   An undecided mode, a failed get_prefs and the popout (which never reads prefs) all show everything. */
+const isFull = () => S.prefs.mode !== 'simple';
+const kindIsFull = k => !!(KIND[k] && KIND[k].full);
+/* Ring settings that only Full shows, with the names the "changed in Full mode" note uses. */
+const FULL_RING = { tag_colors: 'Tag colours', tag_band: 'Tag colours', tag_band_opacity: 'Tag colours', tag_glow_opacity: 'Tag colours', tag_tint_opacity: 'Tag colours',
+  tag_tint_style: 'Tag colours', tag_tint_blend: 'Tag colours', colors: 'Colours', hover_submenus: 'Open submenus on hover', tap_ms: 'Tap time', timeout_s: 'Auto-close' };
+const FULL_CARDS = new Set(['set-tag-colours', 'set-colours', 'set-zbrush-bridge', 'set-older-zbrush', 'set-tags']);
+/* A menu with an open animation, fan out or swallow turned off: the Menu tab shows those fields only in Full. */
+const menuFullSet = m => !!m && (!!m.animation || m.fan === true || m.swallow === false);
+/* Names (deduplicated, in settings order) of Full-only settings that differ from the defaults. */
+function fullOnlyChanges(cfg) {
+  const names = [], add = n => { if (!names.includes(n)) names.push(n); };
+  const r = (cfg && cfg.ring && typeof cfg.ring === 'object') ? cfg.ring : {};
+  for (const k of Object.keys(FULL_RING)) {
+    if (k === 'colors' || !(k in r)) continue;
+    if (JSON.stringify(r[k]) !== JSON.stringify(S.defaults[k])) add(FULL_RING[k]);
+  }
+  if (r.colors && typeof r.colors === 'object' && Object.keys(r.colors).some(c => String(r.colors[c]).toLowerCase() !== String((S.defaults.colors || {})[c]).toLowerCase())) add('Colours');
+  const b = cfg && cfg.bridge;
+  if (b && typeof b === 'object') {
+    const key = String(b.key || '').trim().toLowerCase();
+    if ((b.mode !== undefined && b.mode !== 'auto') || (key && key !== 'f9')) add('ZBrush bridge');
+  }
+  return names;
+}
+const needsFull = cfg => fullOnlyChanges(cfg).length > 0 || Object.values((cfg && cfg.menus) || {}).some(m => m && (menuFullSet(m) || (Array.isArray(m.items) && m.items.some(it => kindIsFull(kindOf(it))))));
+/* Would going to this problem target land on something Simple hides? */
+function targetNeedsFull(t) {
+  if (!t) return false;
+  if (t.kind === 'settings') return FULL_CARDS.has(t.card) || !!(t.key && FULL_RING[t.key]);
+  if (t.kind === 'menu') return t.field === 'id' || t.field === 'animation';
+  if (t.kind === 'item') { const m = S.cfg.menus[t.menuId], it = m && m.items && m.items[t.index]; return !!it && kindIsFull(kindOf(it)); }
+  return false;
+}
+/* One line saying what an item targets; the item rows and the read-only line in Simple share it. */
+function itemSub(it) {
+  const k = kindOf(it);
+  return k === 'auto' ? 'filled from your picks' : k === 'tag' ? (it.tag ? 'all items tagged ' + tagName(it.tag) : '(not set)') : k === 'browser' ? 'opens the ' + K(it.kind).one + ' browser' + (it.browser ? ' for ' + tagName(it.browser) : '') : k === 'steps' ? plural((it.steps || []).length, 'step') : (k === 'set' ? `${targetOf(it)} = ${it.value}` : targetOf(it) || '(not set)');
+}
 
 function defaultLabel(it) {
   const k = kindOf(it);
@@ -1414,7 +1455,7 @@ function buildMenusScreen(root) {
   };
 
   /* --- items list */
-  const addBtn = h('button', { class: 'btn small', type: 'button', onclick: e => popover(e.currentTarget, Object.keys(KIND).map(k => ({ icon: KIND[k].icon, label: KIND[k].label, hint: KIND[k].hint, fn: () => addItem(k) }))) }, icon('plus', 13), 'Add item');
+  const addBtn = h('button', { class: 'btn small', type: 'button', onclick: e => popover(e.currentTarget, Object.keys(KIND).filter(k => isFull() || !KIND[k].full).map(k => ({ icon: KIND[k].icon, label: KIND[k].label, hint: KIND[k].hint, fn: () => addItem(k) }))) }, icon('plus', 13), 'Add item');
   R.itemList = () => {
     const m = curMenu();
     const back = S.cameFrom && S.cameFrom.menuId !== S.menuId ? S.cfg.menus[S.cameFrom.menuId] : null;
@@ -1487,7 +1528,7 @@ function renderItemList(box, menuId, compact) {
   }
   m.items.forEach((it, i) => {
     const k = kindOf(it), ok = itemUsable(it);
-    const sub = k === 'auto' ? 'filled from your picks' : k === 'tag' ? (it.tag ? 'all items tagged ' + tagName(it.tag) : '(not set)') : k === 'browser' ? 'opens the ' + K(it.kind).one + ' browser' + (it.browser ? ' for ' + tagName(it.browser) : '') : k === 'steps' ? plural((it.steps || []).length, 'step') : (k === 'set' ? `${targetOf(it)} = ${it.value}` : targetOf(it) || '(not set)');
+    const sub = itemSub(it);
     const row = h('div', { class: 'irow k-' + k + (!compact && i === S.itemIdx ? ' sel' : '') + (ok ? '' : ' bad'), role: 'option', tabindex: '-1', dataset: { i, menu: menuId },
       title: itemLabel(it) + '\n' + KIND[k].label + ': ' + sub,                    // the full name and target, for a row too narrow to show them
       'aria-selected': !compact && i === S.itemIdx ? 'true' : 'false' },
@@ -1828,11 +1869,12 @@ function buildItemInspector() {
     return box;
   }
   const i = S.itemIdx, k = kindOf(it);
+  const locked = !isFull() && kindIsFull(k);          // a Full-only item in Simple: shown read-only, still deletable, duplicable and convertible
   box.append(h('div', { class: 'insp-head' }, itemThumb(it, 36), h('div', { class: 'insp-title' }, h('b', null, itemLabel(it)), h('span', null, `Item ${i + 1} of ${m.items.length}`)),
     h('div', { class: 'spacer' }), iconBtn('copy', 'Duplicate item', () => dupItem(i)), iconBtn('trash', 'Delete item', e => { if (e.detail > 1) return; delItem(i); const t = $('.irow.sel') || $('.items-panel .col-head .btn'); if (t) t.focus(); }, 'danger')));    // delItem already selected the neighbour, as the row's own button does
 
   /* action type */
-  const seg = h('div', { class: 'kinds', role: 'radiogroup', 'aria-label': 'Action type' }, Object.keys(KIND).map(kk =>
+  const seg = h('div', { class: 'kinds', role: 'radiogroup', 'aria-label': 'Action type' }, Object.keys(KIND).filter(kk => isFull() || !KIND[kk].full || kk === k).map(kk =>
     h('button', { class: 'kind' + (kk === k ? ' on' : '') + ' k-' + kk, type: 'button', role: 'radio', 'aria-checked': kk === k ? 'true' : 'false', title: KIND[kk].hint,
       onclick: () => {
         if (kk === k) return;
@@ -1850,11 +1892,14 @@ function buildItemInspector() {
   const labelInp = textInput(it.label || '', v => { if (v.trim()) it.label = v; else delete it.label; commit(); updateHead(); }, { placeholder: defaultLabel(it), label: 'Label' });
   const updateHead = () => { setText($('.insp-title b', box), itemLabel(it)); labelInp.placeholder = defaultLabel(it); };
 
-  if (k === 'auto') {
+  if (locked) {
+    box.append(field(KIND[k].label, h('div', { class: 'locked-line' }, KIND[k].label + ': ' + itemSub(it)),
+      [linkBtn('Edit in Full mode', () => setMode('full'))]));
+    if (k === 'auto') return box;
+  } else if (k === 'auto') {
     box.append(field('Right now', autoNow(m, i), 'The brush you pick most often from any ring, apart from the brushes this menu already has. Picks fade with a two-week half-life. A newcomer has to come out on top twice in a row before it takes a slot, and it takes the slot of a brush you have stopped using, so the rest of the ring stays put.'));
     return box;
-  }
-  if (k === 'tag' || k === 'browser') {
+  } else if (k === 'tag' || k === 'browser') {
     box.append(tagTargetField(it, k, updateHead));
   } else if (k !== 'steps') {
     const placeholders = { ...Object.fromEntries(LIB_KINDS.map(lk => [lk, 'Search ' + K(lk).many + ', e.g. ' + K(lk).eg])), press: 'Item path, e.g. Tool:Masking:Clear', set: 'Item path, e.g. Draw:Draw Size', toggle: 'Item path, e.g. Transform:Activate Symmetry', menu: 'Pick a menu' };
@@ -2017,6 +2062,7 @@ function buildMenuProps() {
   const m = curMenu(), id = S.menuId;
   const box = h('div', { class: 'insp' });
   if (!m) return emptyState('menus', 'No menu selected', '');
+  const full = isFull();
   const titleInp = textInput(m.title || '', v => { m.title = v; commit(); if (R.head) R.head(); }, { placeholder: id, label: 'Menu title' });
   box.append(sectionTitle('Menu', 'Shown in the list and at the ring centre'), field('Title', titleInp));
   const idErr = h('div', { class: 'fhint bad id-err', role: 'alert', hidden: true });
@@ -2034,7 +2080,7 @@ function buildMenuProps() {
   idInp.addEventListener('keydown', e => { if (e.key === 'Escape') { e.stopPropagation(); idInp.value = id; idShow(''); } });
   const idNotes = [h('div', { class: 'fhint' }, 'Used to link submenus. Renaming updates the items that open this menu.')];
   if (m.items.some(x => kindOf(x) === 'auto')) idNotes.push(h('div', { class: 'fhint' }, 'Renaming resets the learned auto slots for this menu.'));
-  box.append(field('Id', idInp, h('div', { class: 'id-notes' }, idErr, ...idNotes)));
+  if (full) box.append(field('Id', idInp, h('div', { class: 'id-notes' }, idErr, ...idNotes)));
 
   // The file order decides: of two menus with one hotkey, the first opens (and any menu beats the browser).
   const clash = owner => {
@@ -2058,12 +2104,13 @@ function buildMenuProps() {
   const swallowNeed = h('div', { class: 'fhint warn' }, 'Set a hotkey first.');
   syncSwallow = () => { const none = !m.hotkey; $('input', swallowSw).disabled = none; swallowSw.title = none ? 'Set a hotkey first' : ''; swallowNeed.hidden = !none; };   // a submenu has no key to hide
   syncSwallow();
-  box.append(h('div', { class: 'field row' }, h('div', { class: 'grow' }, h('span', { class: 'flabel' }, 'Swallow hotkey'),
+  if (full) box.append(h('div', { class: 'field row' }, h('div', { class: 'grow' }, h('span', { class: 'flabel' }, 'Swallow hotkey'),
     h('div', { class: 'fhint' }, 'Hides the key from ZBrush while the ring is in use, so it does not also trigger ZBrush\'s own shortcut for that key. Turn off if you want the key to keep working in ZBrush too.'), swallowNeed),
     swallowSw));
 
+  if (!full && menuFullSet(m)) box.append(h('div', { class: 'fhint' }, 'Open animation, Fan out or Swallow hotkey are set for this menu in Full mode. ', linkBtn('Switch to Full mode', () => setMode('full'))));
   const refs = referrers(id);
-  box.append(sectionTitle('Used by'), refs.length
+  if (full) box.append(sectionTitle('Used by'), refs.length
     ? h('div', { class: 'refs' }, refs.map(r => h('button', { class: 'chip cyan', type: 'button', title: 'Go to this item', onclick: () => { selectMenu(r.menuId); selectItem(r.index); } },
       icon('k_menu', 12), (S.cfg.menus[r.menuId].title || r.menuId) + ' / ' + (r.index + 1))))
     : h('div', { class: 'fhint' }, m.hotkey ? 'Opened from ZBrush by its hotkey.' : 'Nothing opens this menu yet. Add a Submenu item in another menu that points to it.'));
@@ -2083,9 +2130,9 @@ function buildMenuProps() {
   } }, h('option', { value: '', selected: !m.animation }, 'Same as Settings (' + animTitle(ringAnim()) + ')'),
     anims.map(a => h('option', { value: a, selected: m.animation === a }, animTitle(a))));
   paintAnimHint();
-  box.append(sectionTitle('Open animation'), h('div', { class: 'field' }, animSel, animHint), h('div', { class: 'btn-row' },
+  if (full) box.append(sectionTitle('Open animation'), h('div', { class: 'field' }, animSel, animHint), h('div', { class: 'btn-row' },
     h('button', { class: 'btn', type: 'button', onclick: () => R.playAnim && R.playAnim() }, icon('play', 13), 'Preview animation')));
-  box.append(sectionTitle('As a submenu'), h('div', { class: 'field row' }, h('div', { class: 'grow' }, h('span', { class: 'flabel' }, 'Fan out when opened from another menu'),
+  if (full) box.append(sectionTitle('As a submenu'), h('div', { class: 'field row' }, h('div', { class: 'grow' }, h('span', { class: 'flabel' }, 'Fan out when opened from another menu'),
     h('div', { class: 'fhint' }, 'Instead of a new ring, the items spread out around this menu\'s slot and the ring stays in view.' + (m.hotkey ? ' This only applies when it is opened as a submenu; its hotkey still opens a ring.' : ''))),
     toggleSwitch(m.fan === true, v => { if (v) m.fan = true; else delete m.fan; commit(); }, 'Fan out when opened from another menu')));
   box.append(sectionTitle('Manage'), h('div', { class: 'btn-row' },
@@ -2864,12 +2911,12 @@ function makeBrowser({ compact, st, host = STUDIO_HOST, kindUi = compact ? 'comp
     const clear = tagFilterOn() ? h('button', { class: 'link tag-clear', type: 'button', onclick: clearTagFilter }, 'Clear') : null;
     if (compact) {
       tagRow.hidden = !own.length;
-      tagRow.replaceChildren(...[...chips, clear, h('button', { class: 'ibtn tag-manage', type: 'button', title: 'Manage tags...', 'aria-label': 'Manage tags', onclick: () => openTagManager() }, icon('tag', 14))].filter(Boolean));
+      tagRow.replaceChildren(...[...chips, clear, isFull() ? h('button', { class: 'ibtn tag-manage', type: 'button', title: 'Manage tags...', 'aria-label': 'Manage tags', onclick: () => openTagManager() }, icon('tag', 14)) : null].filter(Boolean));
     } else {
       tagSec.replaceChildren(...[h('div', { class: 'tag-head' }, h('span', { class: 'micro side-title' }, 'Tags'), clear),
         own.length ? h('div', { class: 'tagchips' }, chips) : h('div', { class: 'tag-none fhint' }, `No tags yet. Select ${W().many} and press Tag to make one.`),
         S.tagsErr ? h('div', { class: 'fhint bad' }, S.tagsErr) : null,
-        manageTagsBtn('btn small tag-manage')].filter(Boolean));
+        isFull() || POPOUT ? manageTagsBtn('btn small tag-manage') : null].filter(Boolean));
     }
     if (fk !== null) { const t = $$('[data-tk]', host).find(x => x.dataset.tk === fk); if (t) t.focus(); }
   }
@@ -3228,33 +3275,55 @@ function tidyRing() {
   if (!had) delete S.cfg.ring;
 }
 /* Sets a ring value, or drops its key when it equals the default (the file then says nothing about it). */
+function ringSet(k, v) {
+  if (v !== S.defaults[k]) ensureRing()[k] = v; else delete ensureRing()[k];
+}
 function putRing(k, v) {
   if (v !== S.defaults[k]) { setRing(k, v); return; }
-  delete ensureRing()[k]; tidyRing(); commit();
+  ringSet(k, v); tidyRing(); commit();
 }
-function sliderRow({ label, hint, key, step = 1, unit = '', scale = 1, onLive }) {   // scale: shown = stored * scale (0-1 opacity as 0-100 %)
+/* get/put/clear/isSet let a row drive more than its own key (see sizeRow); the defaults are the plain one-key behaviour. */
+function sliderRow({ label, hint, key, step = 1, unit = '', scale = 1, onLive, get = () => ringNum(key), put = v => putRing(key, v),
+  clear = () => { delete ensureRing()[key]; tidyRing(); commit(); }, isSet = () => key in ring() && ring()[key] !== S.defaults[key] }) {   // scale: shown = stored * scale (0-1 opacity as 0-100 %)
   const [lo, hi] = ranges()[key] || [0, 100];
   const min = lo * scale, max = hi * scale;
   const disp = v => Number((v * scale).toFixed(6)), store = d => Number((d / scale).toFixed(6));
-  const range = h('input', { type: 'range', min, max, step, value: disp(ringNum(key)), 'aria-label': label, dataset: { fk: key + '/range' } });
-  const num = h('input', { class: 'inp mono num', type: 'number', min, max, step, value: disp(ringNum(key)), 'aria-label': label + ' value', dataset: { fk: key + '/num' } });
-  const reset = iconBtn('undo', 'Reset to default (' + disp(S.defaults[key]) + (scale !== 1 ? unit : '') + ')', () => { delete ensureRing()[key]; tidyRing(); commit(); sync(ringNum(key)); onLive && onLive(); }, 'reset');
+  const range = h('input', { type: 'range', min, max, step, value: disp(get()), 'aria-label': label, dataset: { fk: key + '/range' } });
+  const num = h('input', { class: 'inp mono num', type: 'number', min, max, step, value: disp(get()), 'aria-label': label + ' value', dataset: { fk: key + '/num' } });
+  const reset = iconBtn('undo', 'Reset to default (' + disp(S.defaults[key]) + (scale !== 1 ? unit : '') + ')', () => { clear(); sync(get()); onLive && onLive(); }, 'reset');
   reset.dataset.fk = key + '/reset';
   const note = h('span', { class: 'num-hint', role: 'status' });
   let noteT = 0;
   const say = t => { clearTimeout(noteT); note.textContent = t; if (t) noteT = setTimeout(() => { note.textContent = ''; }, 2000); };
-  const sync = v => { range.value = num.value = disp(v); range.style.setProperty('--pct', ((v - lo) / (hi - lo)) * 100 + '%'); reset.style.visibility = key in ring() && ring()[key] !== S.defaults[key] ? 'visible' : 'hidden'; };
-  range.addEventListener('input', () => { const v = store(Number(range.value)); putRing(key, v); sync(v); onLive && onLive(); });
+  const sync = v => { range.value = num.value = disp(v); range.style.setProperty('--pct', ((v - lo) / (hi - lo)) * 100 + '%'); reset.style.visibility = isSet() ? 'visible' : 'hidden'; };
+  range.addEventListener('input', () => { const v = store(Number(range.value)); put(v); sync(v); onLive && onLive(); });
   num.addEventListener('change', () => {
     const raw = num.value.trim(), n = Number(raw);
-    if (raw === '' || !Number.isFinite(n)) { sync(ringNum(key)); say(''); return; }     // nothing usable typed: keep what was there
+    if (raw === '' || !Number.isFinite(n)) { sync(get()); say(''); return; }     // nothing usable typed: keep what was there
     const snapped = Number((min + Math.round((n - min) / step) * step).toFixed(6)), v = store(clamp(snapped, min, max));
     say(n < min || n > max ? 'Kept within ' + min + ' to ' + max : '');
-    if (v !== ringNum(key)) { putRing(key, v); onLive && onLive(); }
+    if (v !== get()) { put(v); onLive && onLive(); }
     sync(v);
   });
-  sync(ringNum(key));
+  sync(get());
   return h('div', { class: 'srow' }, h('div', { class: 'slabel' }, h('span', null, label), hint ? h('small', null, hint) : null), h('div', { class: 'sctl' }, range, h('span', { class: 'nwrap' }, num, unit ? h('em', null, unit) : null, note), reset));
+}
+/* Simple mode's one size slider: it moves radius, slot and dead zone together, keeping the proportions the ring had when the gesture began. */
+function sizeRow(live) {
+  const KEYS = ['radius', 'slot', 'dead_zone'];
+  let base = null;
+  const row = sliderRow({ label: 'Ring size', hint: 'How big the ring is. Slots and the dead zone scale with it.', key: 'radius', unit: 'px', onLive: live,
+    put: v => {
+      if (!base) base = { radius: ringNum('radius'), slot: ringNum('slot'), dead_zone: ringNum('dead_zone') };
+      const f = base.radius ? v / base.radius : 1;
+      ringSet('radius', v);
+      for (const k of ['slot', 'dead_zone']) { const [lo, hi] = ranges()[k] || [0, 1000]; ringSet(k, clamp(Math.round(base[k] * f), lo, hi)); }
+      tidyRing(); commit();
+    },
+    clear: () => { for (const k of KEYS) delete ensureRing()[k]; tidyRing(); commit(); },
+    isSet: () => KEYS.some(k => k in ring() && ring()[k] !== S.defaults[k]) });
+  for (const ev of ['pointerdown', 'keydown', 'focusin']) row.addEventListener(ev, () => { base = null; }, true);   // each gesture starts from the ring as it is now
+  return row;
 }
 function switchRow({ label, hint, key }) {
   const v = ring()[key];
@@ -3294,7 +3363,7 @@ function setZsBadge(n) {
   const rb = document.querySelector('.rail-btn[data-screen="settings"]');
   if (rb) {
     rb.classList.toggle('has-badge', n > 0);
-    rb.title = 'Settings (Alt+3)' + (n ? ' – ' + (n === 1 ? 'a ZBrush plugin needs' : n + ' ZBrush plugins need') + ' updating' : '');
+    rb.title = 'Settings (Alt+3)' + (n ? ' – ' + (n === 1 ? 'a ZBrush plugin needs' : n + ' ZBrush plugins need') + ' updating' + (isFull() ? '' : ' (Setup, step 1, or Full mode)') : '');
   }
   const tb = document.querySelector('.toc-item[data-card="set-older-zbrush"]');
   if (tb) { tb.classList.toggle('has-badge', n > 0); tb.title = n ? 'Update available' : ''; }
@@ -3407,15 +3476,22 @@ function buildSettingsScreen(root) {
     toc.replaceChildren(h('div', { class: 'micro toc-head' }, 'On this page'), ...tocItems.map(it => it.btn));
     markActive();
   };
-  R.gotoCard = id => { const it = tocItems.find(t => t.card.id === id); if (it) it.btn.click(); };
+  R.gotoCard = id => {
+    let it = tocItems.find(t => t.card.id === id);
+    if (!it && id === 'set-ring-geometry') it = tocItems.find(t => t.card.id === 'set-ring-size');     // Simple's one-slider card
+    if (it) it.btn.click();
+  };
   let tocRaf = 0;
   const unpin = () => { if (pinned) { pinned = null; markActive(); } };
   for (const ev of ['wheel', 'keydown', 'pointerdown', 'touchstart']) scroll.addEventListener(ev, unpin, { passive: true });
   scroll.addEventListener('scroll', () => { if (!tocRaf) tocRaf = requestAnimationFrame(() => { tocRaf = 0; markActive(); }); }, { passive: true });
 
   const build = () => {
+    const full = isFull();
     page.replaceChildren();
     page.append(h('div', { class: 'page-head' }, h('h1', null, 'Settings', h('em', null, 'Appearance and behaviour')), h('p', null, 'How the ring looks, how it opens, and how the app talks to ZBrush. Changes show in the previews straight away and are saved with the Save button.')));
+    const hiddenSet = full ? [] : fullOnlyChanges(S.cfg);      // not a .card, so it is not in the contents list
+    if (hiddenSet.length) page.append(h('div', { class: 'mode-note', role: 'status' }, 'Changed in Full mode and not shown here: ' + hiddenSet.join(', ') + '. ', linkBtn('Switch to Full mode', () => setMode('full'))));
 
     /* --- geometry with live preview */
     const pimg = h('img', { class: 'ring-img', alt: 'Ring preview', draggable: false });
@@ -3425,21 +3501,22 @@ function buildSettingsScreen(root) {
     let msize = 447;
     const paintDZ = () => { const k = (pwrap.clientWidth || 280) / msize, d = ringNum('dead_zone') * 2 * k; dz.style.width = dz.style.height = d + 'px'; };
     const live = () => { paintDZ(); };
-    page.append(card('Ring geometry', 'Size and spacing of the ring', h('div', { class: 'split' },
-      h('div', { class: 'split-main' },
+    page.append(card(full ? 'Ring geometry' : 'Ring size', full ? 'Size and spacing of the ring' : 'How big the ring is', h('div', { class: 'split' },
+      h('div', { class: 'split-main' }, ...(full ? [
         sliderRow({ label: 'Ring radius', hint: 'Distance from the centre to the slots', key: 'radius', unit: 'px', onLive: live }),
         sliderRow({ label: 'Slot size', hint: 'Diameter of each icon disc', key: 'slot', unit: 'px', onLive: live }),
-        sliderRow({ label: 'Dead zone', hint: 'No slot is picked this close to the centre (dashed circle)', key: 'dead_zone', unit: 'px', onLive: live })),
+        sliderRow({ label: 'Dead zone', hint: 'No slot is picked this close to the centre (dashed circle)', key: 'dead_zone', unit: 'px', onLive: live })] : [sizeRow(live)])),
       pbox)));
+    let cbox = null, cimg = null, paintTagPrev = null;         // the Colours and Tag colours cards, which only Full builds
     R.preview = async () => {
       const none = !curMenu() || !usableIdx(S.menuId).length;
-      pbox.classList.toggle('none', none); cbox.classList.toggle('none', none);
-      paintTagPrev();                                          // its own picture: the sample ring when this menu has no tagged brush
+      pbox.classList.toggle('none', none); if (cbox) cbox.classList.toggle('none', none);
+      if (paintTagPrev) paintTagPrev();                                          // its own picture: the sample ring when this menu has no tagged brush
       if (none) return;
       const ver = S.version;
       const res = await RingLoader.get(S.menuId, null);       // one request feeds the geometry, animation and colour previews
       if (!res || ver !== S.version || !res.image) return;
-      cimg.src = res.image;
+      if (cimg) cimg.src = res.image;
       if (settingsPlayer.state === 'idle') { pimg.src = res.image; aimg.src = res.image; }
       msize = res.size || msize; paintDZ();
     };
@@ -3462,160 +3539,165 @@ function buildSettingsScreen(root) {
     page.append(card('Open animation', 'Pick one to see it play', h('div', { class: 'split anim-split' }, astage,
       choiceCards(anims.map(a => [a, a[0].toUpperCase() + a.slice(1), ANIM_INFO[a] || '']), cur, v => { settingsPlayer.stop(); setRing('animation', v); setTimeout(() => abtn.onclick(), 0); }, 'anim-cards', 'Open animation')),
       h('div', { class: 'fhint' }, own.length
-        ? 'Used by every menu except ' + own.map(t => '\u201c' + t + '\u201d').join(', ') + ', which ' + (own.length === 1 ? 'has its own' : 'have their own') + ' (set on the Menus screen).'
-        : 'Used by every menu. A menu can have its own instead: pick it on the Menus screen.')));
+        ? 'Used by every menu except ' + own.map(t => '\u201c' + t + '\u201d').join(', ') + ', which ' + (own.length === 1 ? 'has its own' : 'have their own') + (isFull() ? ' (set on the Menus screen).' : ' (set in Full mode, on the Menus screen).')
+        : 'Used by every menu. A menu can have its own instead: pick it on the Menus screen' + (isFull() ? '.' : ' in Full mode.'))));
 
     /* --- labels */
     const labelOpts = (S.opts && S.opts.labels) || ['name', 'none'];
     const LAB = { name: ['Icon and name', 'Each slot shows its label underneath.'], none: ['Icon only', 'A cleaner ring. Names appear only in this Studio.'] };
     page.append(card('Labels', null, choiceCards(labelOpts.map(l => [l, (LAB[l] || [l, ''])[0], (LAB[l] || [l, ''])[1]]), ring().labels || S.defaults.labels, v => setRing('labels', v), 'two', 'Labels')));
 
-    /* --- tag colours: how a brush's first tag shows on its slot (tag slots always show their tag's colour).
-       Three effects, each a switch with its own controls; tint and glow together are the stored tag_colors. */
-    const tc = () => ring().tag_colors || S.defaults.tag_colors || 'tint';
-    const tintOn = () => tc() === 'tint' || tc() === 'both', glowOn = () => tc() === 'glow' || tc() === 'both';
-    const setTc = (tint, glow) => setRing('tag_colors', tint && glow ? 'both' : tint ? 'tint' : glow ? 'glow' : 'none');
-    const bandDef = S.defaults.tag_band && S.defaults.tag_band !== 'none' ? S.defaults.tag_band : 'medium';
-    let bandWas = ring().tag_band && ring().tag_band !== 'none' ? ring().tag_band : bandDef;     // the thickness to come back to
-    const bandOn = () => (ring().tag_band || S.defaults.tag_band) !== 'none';
-    const cap = t => t[0].toUpperCase() + t.slice(1);
-    const tcRows = [];                                    // [row, is its effect on]: rows of a switched-off effect are dimmed and disabled
-    const paintTc = () => {
-      for (const [row, on] of tcRows) {
-        const live = on();
-        row.classList.toggle('off', !live);
-        row.querySelectorAll('input, button').forEach(c => { c.disabled = !live; });
-      }
-    };
-    const segRow = ({ label, hint, key, opts, on, onPick }) => {
-      const row = h('div', { class: 'srow' }, h('div', { class: 'slabel' }, h('span', null, label), hint ? h('small', null, hint) : null),
-        choiceCards(opts, onPick ? bandWas : ring()[key] || S.defaults[key], onPick || (v => setRing(key, v)), 'seg', label));
-      tcRows.push([row, on]); return row;
-    };
-    const opacity = (key, on) => { const row = sliderRow({ label: 'Opacity', key, step: 5, scale: 100, unit: '%' }); tcRows.push([row, on]); return row; };
-    const group = ({ label, hint, on, set, rows }) => h('div', { class: 'tgroup' },
-      h('div', { class: 'tg-head' }, h('div', { class: 'slabel' }, h('span', null, label), h('small', null, hint)), toggleSwitch(on(), v => { set(v); paintTc(); }, label)),
-      h('div', { class: 'tg-body' }, ...rows));
-    const bandOpts = ((S.opts && S.opts.tag_bands) || ['none', 'hairline', 'narrow', 'medium', 'wide']).filter(v => v !== 'none').map(v => [v, cap(v), '']);
-    const BLEND = { multiply: 'Darken', overlay: 'Keep highlights' };
-    const timg = h('img', { class: 'ring-img pending', alt: 'Ring preview with the current tag colours', draggable: false, onload: () => timg.classList.remove('pending') });   // hidden until it has a picture
-    const tcap = h('div', { class: 'mini-cap micro' });
-    const tnote = h('div', { class: 'fhint' });
-    const tbox = h('div', { class: 'mini-stage' }, h('div', { class: 'stage-rings', 'aria-hidden': 'true' }), h('div', { class: 'mini-wrap' }, timg), tcap);
-    // The current menu when it has a tagged brush to show, else the backend's sample ring.
-    const hasTagged = m => !!m && (m.items || []).some(it => { const ik = kindOf(it); return isLib(ik) && firstTag(ik, it[ik]); });
-    let tTok = 0;
-    const paintTagPrev = async () => {
-      const sample = !hasTagged(curMenu()), tok = ++tTok, ver = S.version;
-      tcap.textContent = sample ? 'Sample ring' : 'Preview: ' + (curMenu().title || S.menuId);
-      tnote.textContent = sample ? 'This menu has no tagged items yet, so the sample puts your tags on a few library brushes.' : '';
-      const res = await RingLoader.get(sample ? SAMPLE_MENU : S.menuId, null, null, 'tags');
-      if (tok !== tTok || !res || ver !== S.version) return;
-      if (res.image) timg.src = res.image;
-      else if (res.error || (res.problems || []).length) tnote.textContent = 'No preview: ' + (res.problems || [])[0];
-    };
-    page.append(card('Tag colours', "How a brush's tags show on its slots", h('div', { class: 'split tag-split' }, h('div', { class: 'split-main' },
-      group({ label: 'Icon tint', hint: 'A coloured rim, and the tag colour laid over the icon', on: tintOn, set: v => setTc(v, glowOn()), rows: [
-        opacity('tag_tint_opacity', tintOn),
-        segRow({ label: 'Style', hint: 'Gradient is stronger towards the rim', key: 'tag_tint_style', on: tintOn, opts: ((S.opts && S.opts.tint_styles) || ['flat', 'gradient']).map(v => [v, cap(v), '']) }),
-        segRow({ label: 'Blend', key: 'tag_tint_blend', on: tintOn, opts: ((S.opts && S.opts.tint_blends) || ['multiply', 'overlay']).map(v => [v, BLEND[v] || cap(v), '']) })] }),
-      group({ label: 'Glow', hint: 'A soft halo in the tag colour around the slot', on: glowOn, set: v => setTc(tintOn(), v), rows: [
-        opacity('tag_glow_opacity', glowOn)] }),
-      group({ label: 'Band', hint: 'A coloured strip through the slots, one stretch per slot', on: bandOn, set: v => setRing('tag_band', v ? bandWas : 'none'), rows: [
-        segRow({ label: 'Thickness', on: bandOn, opts: bandOpts, onPick: v => { bandWas = v; setRing('tag_band', v); } }),
-        opacity('tag_band_opacity', bandOn)] })),
-      h('div', { class: 'tag-prev' }, tbox, tnote))));
-    paintTc();
+    if (full) {
+      /* --- tag colours: how a brush's first tag shows on its slot (tag slots always show their tag's colour).
+         Three effects, each a switch with its own controls; tint and glow together are the stored tag_colors. */
+      const tc = () => ring().tag_colors || S.defaults.tag_colors || 'tint';
+      const tintOn = () => tc() === 'tint' || tc() === 'both', glowOn = () => tc() === 'glow' || tc() === 'both';
+      const setTc = (tint, glow) => setRing('tag_colors', tint && glow ? 'both' : tint ? 'tint' : glow ? 'glow' : 'none');
+      const bandDef = S.defaults.tag_band && S.defaults.tag_band !== 'none' ? S.defaults.tag_band : 'medium';
+      let bandWas = ring().tag_band && ring().tag_band !== 'none' ? ring().tag_band : bandDef;     // the thickness to come back to
+      const bandOn = () => (ring().tag_band || S.defaults.tag_band) !== 'none';
+      const cap = t => t[0].toUpperCase() + t.slice(1);
+      const tcRows = [];                                    // [row, is its effect on]: rows of a switched-off effect are dimmed and disabled
+      const paintTc = () => {
+        for (const [row, on] of tcRows) {
+          const live = on();
+          row.classList.toggle('off', !live);
+          row.querySelectorAll('input, button').forEach(c => { c.disabled = !live; });
+        }
+      };
+      const segRow = ({ label, hint, key, opts, on, onPick }) => {
+        const row = h('div', { class: 'srow' }, h('div', { class: 'slabel' }, h('span', null, label), hint ? h('small', null, hint) : null),
+          choiceCards(opts, onPick ? bandWas : ring()[key] || S.defaults[key], onPick || (v => setRing(key, v)), 'seg', label));
+        tcRows.push([row, on]); return row;
+      };
+      const opacity = (key, on) => { const row = sliderRow({ label: 'Opacity', key, step: 5, scale: 100, unit: '%' }); tcRows.push([row, on]); return row; };
+      const group = ({ label, hint, on, set, rows }) => h('div', { class: 'tgroup' },
+        h('div', { class: 'tg-head' }, h('div', { class: 'slabel' }, h('span', null, label), h('small', null, hint)), toggleSwitch(on(), v => { set(v); paintTc(); }, label)),
+        h('div', { class: 'tg-body' }, ...rows));
+      const bandOpts = ((S.opts && S.opts.tag_bands) || ['none', 'hairline', 'narrow', 'medium', 'wide']).filter(v => v !== 'none').map(v => [v, cap(v), '']);
+      const BLEND = { multiply: 'Darken', overlay: 'Keep highlights' };
+      const timg = h('img', { class: 'ring-img pending', alt: 'Ring preview with the current tag colours', draggable: false, onload: () => timg.classList.remove('pending') });   // hidden until it has a picture
+      const tcap = h('div', { class: 'mini-cap micro' });
+      const tnote = h('div', { class: 'fhint' });
+      const tbox = h('div', { class: 'mini-stage' }, h('div', { class: 'stage-rings', 'aria-hidden': 'true' }), h('div', { class: 'mini-wrap' }, timg), tcap);
+      // The current menu when it has a tagged brush to show, else the backend's sample ring.
+      const hasTagged = m => !!m && (m.items || []).some(it => { const ik = kindOf(it); return isLib(ik) && firstTag(ik, it[ik]); });
+      let tTok = 0;
+      paintTagPrev = async () => {
+        const sample = !hasTagged(curMenu()), tok = ++tTok, ver = S.version;
+        tcap.textContent = sample ? 'Sample ring' : 'Preview: ' + (curMenu().title || S.menuId);
+        tnote.textContent = sample ? 'This menu has no tagged items yet, so the sample puts your tags on a few library brushes.' : '';
+        const res = await RingLoader.get(sample ? SAMPLE_MENU : S.menuId, null, null, 'tags');
+        if (tok !== tTok || !res || ver !== S.version) return;
+        if (res.image) timg.src = res.image;
+        else if (res.error || (res.problems || []).length) tnote.textContent = 'No preview: ' + (res.problems || [])[0];
+      };
+      page.append(card('Tag colours', "How a brush's tags show on its slots", h('div', { class: 'split tag-split' }, h('div', { class: 'split-main' },
+        group({ label: 'Icon tint', hint: 'A coloured rim, and the tag colour laid over the icon', on: tintOn, set: v => setTc(v, glowOn()), rows: [
+          opacity('tag_tint_opacity', tintOn),
+          segRow({ label: 'Style', hint: 'Gradient is stronger towards the rim', key: 'tag_tint_style', on: tintOn, opts: ((S.opts && S.opts.tint_styles) || ['flat', 'gradient']).map(v => [v, cap(v), '']) }),
+          segRow({ label: 'Blend', key: 'tag_tint_blend', on: tintOn, opts: ((S.opts && S.opts.tint_blends) || ['multiply', 'overlay']).map(v => [v, BLEND[v] || cap(v), '']) })] }),
+        group({ label: 'Glow', hint: 'A soft halo in the tag colour around the slot', on: glowOn, set: v => setTc(tintOn(), v), rows: [
+          opacity('tag_glow_opacity', glowOn)] }),
+        group({ label: 'Band', hint: 'A coloured strip through the slots, one stretch per slot', on: bandOn, set: v => setRing('tag_band', v ? bandWas : 'none'), rows: [
+          segRow({ label: 'Thickness', on: bandOn, opts: bandOpts, onPick: v => { bandWas = v; setRing('tag_band', v); } }),
+          opacity('tag_band_opacity', bandOn)] })),
+        h('div', { class: 'tag-prev' }, tbox, tnote))));
+      paintTc();
 
-    /* --- colours (the preview is the same picture as the geometry card's: one request per edit) */
-    const colorPaints = [];
-    const colorRows = Object.keys(COLOR_INFO).map(k => {
-      const sw = h('input', { type: 'color', class: 'swatch', value: colorVal(k), 'aria-label': COLOR_INFO[k][0] + ' colour' });
-      const hex = h('input', { class: 'inp mono hex', type: 'text', value: colorVal(k), maxlength: '7', spellcheck: 'false', 'aria-label': COLOR_INFO[k][0] + ' hex value' });
-      const hmsg = h('span', { class: 'hex-msg', role: 'status' });
-      const rs = iconBtn('undo', 'Reset to default (' + S.defaults.colors[k] + ')', () => { const c = ring().colors; if (c) { delete c[k]; if (!Object.keys(c).length) delete ring().colors; } commit(); paint(); }, 'reset');
-      const showReset = v => { rs.style.visibility = v.toLowerCase() !== S.defaults.colors[k].toLowerCase() ? 'visible' : 'hidden'; };
-      const paint = () => { const v = colorVal(k); sw.value = v; hex.value = v; hex.classList.remove('bad'); hmsg.textContent = ''; showReset(v); };
-      sw.addEventListener('input', () => { setColor(k, sw.value); paint(); });
-      hex.addEventListener('input', () => {
-        const n = normHex(hex.value), bad = !n;
-        hex.classList.toggle('bad', bad); hmsg.textContent = bad ? 'Use #rrggbb' : '';
-        if (n && hex.value.trim().replace('#', '').length === 6) { setColor(k, n); sw.value = n; showReset(n); }   // short forms wait for Enter or blur
+      /* --- colours (the preview is the same picture as the geometry card's: one request per edit) */
+      const colorPaints = [];
+      const colorRows = Object.keys(COLOR_INFO).map(k => {
+        const sw = h('input', { type: 'color', class: 'swatch', value: colorVal(k), 'aria-label': COLOR_INFO[k][0] + ' colour' });
+        const hex = h('input', { class: 'inp mono hex', type: 'text', value: colorVal(k), maxlength: '7', spellcheck: 'false', 'aria-label': COLOR_INFO[k][0] + ' hex value' });
+        const hmsg = h('span', { class: 'hex-msg', role: 'status' });
+        const rs = iconBtn('undo', 'Reset to default (' + S.defaults.colors[k] + ')', () => { const c = ring().colors; if (c) { delete c[k]; if (!Object.keys(c).length) delete ring().colors; } commit(); paint(); }, 'reset');
+        const showReset = v => { rs.style.visibility = v.toLowerCase() !== S.defaults.colors[k].toLowerCase() ? 'visible' : 'hidden'; };
+        const paint = () => { const v = colorVal(k); sw.value = v; hex.value = v; hex.classList.remove('bad'); hmsg.textContent = ''; showReset(v); };
+        sw.addEventListener('input', () => { setColor(k, sw.value); paint(); });
+        hex.addEventListener('input', () => {
+          const n = normHex(hex.value), bad = !n;
+          hex.classList.toggle('bad', bad); hmsg.textContent = bad ? 'Use #rrggbb' : '';
+          if (n && hex.value.trim().replace('#', '').length === 6) { setColor(k, n); sw.value = n; showReset(n); }   // short forms wait for Enter or blur
+        });
+        const apply = () => { const n = normHex(hex.value); if (n && n !== colorVal(k).toLowerCase()) setColor(k, n); paint(); };
+        hex.addEventListener('blur', apply);
+        hex.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); apply(); } });
+        colorPaints.push(paint);
+        paint();
+        return h('div', { class: 'crow' }, sw, h('div', { class: 'slabel' }, h('span', null, COLOR_INFO[k][0]), h('small', null, COLOR_INFO[k][1])), h('div', { class: 'hexwrap' }, hex, hmsg), rs);
       });
-      const apply = () => { const n = normHex(hex.value); if (n && n !== colorVal(k).toLowerCase()) setColor(k, n); paint(); };
-      hex.addEventListener('blur', apply);
-      hex.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); apply(); } });
-      colorPaints.push(paint);
-      paint();
-      return h('div', { class: 'crow' }, sw, h('div', { class: 'slabel' }, h('span', null, COLOR_INFO[k][0]), h('small', null, COLOR_INFO[k][1])), h('div', { class: 'hexwrap' }, hex, hmsg), rs);
-    });
-    const cimg = h('img', { class: 'ring-img', alt: 'Ring preview with the current colours', draggable: false });
-    const cbox = h('div', { class: 'mini-stage' }, h('div', { class: 'stage-rings', 'aria-hidden': 'true' }), h('div', { class: 'mini-wrap' }, cimg), h('div', { class: 'mini-cap micro' }, 'Preview: ' + ((curMenu() && curMenu().title) || '')));
-    page.append(card('Colours', 'Applied to the ring in the app', h('div', { class: 'split' }, h('div', { class: 'split-main' }, h('div', { class: 'colors' }, colorRows)), cbox),
-      h('div', { class: 'btn-row' }, h('button', { class: 'btn small', type: 'button', onclick: () => { delete ensureRing().colors; commit(); colorPaints.forEach(f => f()); } }, icon('undo', 12), 'Reset all colours'))));
+      cimg = h('img', { class: 'ring-img', alt: 'Ring preview with the current colours', draggable: false });
+      cbox = h('div', { class: 'mini-stage' }, h('div', { class: 'stage-rings', 'aria-hidden': 'true' }), h('div', { class: 'mini-wrap' }, cimg), h('div', { class: 'mini-cap micro' }, 'Preview: ' + ((curMenu() && curMenu().title) || '')));
+      page.append(card('Colours', 'Applied to the ring in the app', h('div', { class: 'split' }, h('div', { class: 'split-main' }, h('div', { class: 'colors' }, colorRows)), cbox),
+        h('div', { class: 'btn-row' }, h('button', { class: 'btn small', type: 'button', onclick: () => { delete ensureRing().colors; commit(); colorPaints.forEach(f => f()); } }, icon('undo', 12), 'Reset all colours'))));
+    }
 
     /* --- behaviour */
     page.append(card('Behaviour', null,
       switchRow({ label: 'Flick to pick', hint: 'Moving the cursor out past a slot picks it straight away, without releasing the hotkey or clicking.', key: 'flick' }),
-      switchRow({ label: 'Open submenus on hover', hint: 'Reaching a submenu slot opens that submenu, centred on the slot. Keep holding the hotkey to pick in it by releasing or flicking.', key: 'hover_submenus' }),
-      sliderRow({ label: 'Tap time', hint: 'A hotkey press shorter than this is a tap: the ring stays open for a click. Holding longer and releasing picks the item under the cursor.', key: 'tap_ms', step: 10, unit: 'ms' }),
-      sliderRow({ label: 'Auto-close', hint: 'An open ring closes by itself after this long.', key: 'timeout_s', unit: 's' })));
+      ...(full ? [
+        switchRow({ label: 'Open submenus on hover', hint: 'Reaching a submenu slot opens that submenu, centred on the slot. Keep holding the hotkey to pick in it by releasing or flicking.', key: 'hover_submenus' }),
+        sliderRow({ label: 'Tap time', hint: 'A hotkey press shorter than this is a tap: the ring stays open for a click. Holding longer and releasing picks the item under the cursor.', key: 'tap_ms', step: 10, unit: 'ms' }),
+        sliderRow({ label: 'Auto-close', hint: 'An open ring closes by itself after this long.', key: 'timeout_s', unit: 's' })] : [])));
 
-    /* --- bridge */
-    const bridge = () => { if (!S.cfg.bridge || typeof S.cfg.bridge !== 'object') S.cfg.bridge = {}; return S.cfg.bridge; };
-    const bmode = (S.cfg.bridge && S.cfg.bridge.mode) || 'auto';
-    const keyWrap = h('div', { class: 'bridge-key' });
-    let paintZNote = () => {};      // the Older ZBrush card's paragraph about binding the key; set further down
-    const paintKey = () => {
-      const mode = (S.cfg.bridge && S.cfg.bridge.mode) || 'auto';
-      keyWrap.classList.toggle('dim', mode === 'message');
-      keyWrap.replaceChildren(field('Bridge key', hotkeyField({ what: 'Bridge key', value: (S.cfg.bridge && S.cfg.bridge.key) || '', mods: { ctrl: false, alt: true, shift: false }, placeholder: 'Not set (F9 is the usual choice)',
-        onChange: v => { if (v) bridge().key = v; else delete bridge().key; commit(); paintZNote(); } }),
-        mode === 'message' ? 'Not used in Message mode, but kept in case you switch back.' : 'Must be bound in ZBrush to Zplugin > ZOrbit > Apply. Ctrl and Shift are rejected because ZBrush reads them as mask and smooth. A bare F-key is best.'));
-    };
-    page.append(card('ZBrush bridge', 'How a pick reaches ZBrush',
-      choiceCards(['auto', 'message', 'key'].map(m => [m, BRIDGE_INFO[m][0], BRIDGE_INFO[m][1]]), bmode, v => { bridge().mode = v; commit(); paintKey(); }, 'bridge-cards', 'How a pick reaches ZBrush'),
-      keyWrap));
-    paintKey();
+    if (full) {
+      /* --- bridge */
+      const bridge = () => { if (!S.cfg.bridge || typeof S.cfg.bridge !== 'object') S.cfg.bridge = {}; return S.cfg.bridge; };
+      const bmode = (S.cfg.bridge && S.cfg.bridge.mode) || 'auto';
+      const keyWrap = h('div', { class: 'bridge-key' });
+      let paintZNote = () => {};      // the Older ZBrush card's paragraph about binding the key; set further down
+      const paintKey = () => {
+        const mode = (S.cfg.bridge && S.cfg.bridge.mode) || 'auto';
+        keyWrap.classList.toggle('dim', mode === 'message');
+        keyWrap.replaceChildren(field('Bridge key', hotkeyField({ what: 'Bridge key', value: (S.cfg.bridge && S.cfg.bridge.key) || '', mods: { ctrl: false, alt: true, shift: false }, placeholder: 'Not set (F9 is the usual choice)',
+          onChange: v => { if (v) bridge().key = v; else delete bridge().key; commit(); paintZNote(); } }),
+          mode === 'message' ? 'Not used in Message mode, but kept in case you switch back.' : 'Must be bound in ZBrush to Zplugin > ZOrbit > Apply. Ctrl and Shift are rejected because ZBrush reads them as mask and smooth. A bare F-key is best.'));
+      };
+      page.append(card('ZBrush bridge', 'How a pick reaches ZBrush',
+        choiceCards(['auto', 'message', 'key'].map(m => [m, BRIDGE_INFO[m][0], BRIDGE_INFO[m][1]]), bmode, v => { bridge().mode = v; commit(); paintKey(); }, 'bridge-cards', 'How a pick reaches ZBrush'),
+        keyWrap));
+      paintKey();
 
-    /* --- ZScript bridge for ZBrush 2022-2025 (acts straight away, not part of the menus) */
-    const zbox = h('div', { class: 'zrows' }, h('div', { class: 'fhint' }, 'Looking for ZBrush...'));
-    let zCount = null;          // installs found by the last look; null until the first answer
-    const znote = h('div', { class: 'fhint', hidden: true });
-    // The plugin's Apply button brings F9 as its own hotkey (ZOrbitBridge.txt); any other key is bound by hand.
-    // Derived from the key chosen above every time, and compared as a whole chord: "Alt+F9" is not "F9".
-    paintZNote = () => {
-      const zkey = ((S.cfg.bridge && S.cfg.bridge.key) || 'F9').trim();
-      const bind = zkey.toLowerCase() === 'f9'
-        ? ['After installing, restart ZBrush. Apply comes with ', h('b', null, 'F9'), ' as its hotkey, so there is nothing to bind.']
-        : ['After installing, restart ZBrush, Ctrl+Alt+click Zplugin > ZOrbit > Apply, press', h('b', null, zkey), ' and choose Preferences > Hotkeys > Store. (Only F9 works without this step.)'];
-      znote.hidden = !zCount;
-      znote.replaceChildren('These versions have no Python API, so they get a ZScript plugin with the same Zplugin > ZOrbit palette. It has no listener, so every pick there uses the bridge key, whatever the mode above. ', ...bind, ' A ZBrush under Program Files asks for administrator rights to install.');
-    };
-    let zgen = 0;                                              // a slower earlier listing must not replace a newer one
-    const zpaint = async () => {
-      if (R.zpaint && R.zpaint !== zpaint) return R.zpaint();   // this card was rebuilt (undo, reload): paint the live one
-      const gen = ++zgen;
-      let r;
-      try { r = await call('get_zscript_bridge'); if (gen !== zgen) return; } catch (e) { if (gen !== zgen) return; zbox.replaceChildren(h('div', { class: 'fhint bad' }, 'Could not look for ZBrush: ' + e.message)); return; }
-      setZsBadge(zsOutdated(r));
-      lz.paint(r);
-      zCount = r.installs.length;
+      /* --- ZScript bridge for ZBrush 2022-2025 (acts straight away, not part of the menus) */
+      const zbox = h('div', { class: 'zrows' }, h('div', { class: 'fhint' }, 'Looking for ZBrush...'));
+      let zCount = null;          // installs found by the last look; null until the first answer
+      const znote = h('div', { class: 'fhint', hidden: true });
+      // The plugin's Apply button brings F9 as its own hotkey (ZOrbitBridge.txt); any other key is bound by hand.
+      // Derived from the key chosen above every time, and compared as a whole chord: "Alt+F9" is not "F9".
+      paintZNote = () => {
+        const zkey = ((S.cfg.bridge && S.cfg.bridge.key) || 'F9').trim();
+        const bind = zkey.toLowerCase() === 'f9'
+          ? ['After installing, restart ZBrush. Apply comes with ', h('b', null, 'F9'), ' as its hotkey, so there is nothing to bind.']
+          : ['After installing, restart ZBrush, Ctrl+Alt+click Zplugin > ZOrbit > Apply, press', h('b', null, zkey), ' and choose Preferences > Hotkeys > Store. (Only F9 works without this step.)'];
+        znote.hidden = !zCount;
+        znote.replaceChildren('These versions have no Python API, so they get a ZScript plugin with the same Zplugin > ZOrbit palette. It has no listener, so every pick there uses the bridge key, whatever the mode above. ', ...bind, ' A ZBrush under Program Files asks for administrator rights to install.');
+      };
+      let zgen = 0;                                              // a slower earlier listing must not replace a newer one
+      const zpaint = async () => {
+        if (R.zpaint && R.zpaint !== zpaint) return R.zpaint();   // this card was rebuilt (undo, reload): paint the live one
+        const gen = ++zgen;
+        let r;
+        try { r = await call('get_zscript_bridge'); if (gen !== zgen) return; } catch (e) { if (gen !== zgen) return; zbox.replaceChildren(h('div', { class: 'fhint bad' }, 'Could not look for ZBrush: ' + e.message)); return; }
+        setZsBadge(zsOutdated(r));
+        lz.paint(r);
+        zCount = r.installs.length;
+        paintZNote();
+      };
+      const lz = legacyRows(zbox, { refresh: zpaint });
+      const addBtn = h('button', { class: 'btn small', type: 'button', onclick: () => lz.addFolder() }, icon('folder', 12), 'Add a ZBrush folder...');
+      page.append(card('Older ZBrush', 'ZBrush 2022 to 2025. Acts straight away.', znote, zbox, h('div', { class: 'btn-row' }, addBtn)));
       paintZNote();
-    };
-    const lz = legacyRows(zbox, { refresh: zpaint });
-    const addBtn = h('button', { class: 'btn small', type: 'button', onclick: () => lz.addFolder() }, icon('folder', 12), 'Add a ZBrush folder...');
-    page.append(card('Older ZBrush', 'ZBrush 2022 to 2025. Acts straight away.', znote, zbox, h('div', { class: 'btn-row' }, addBtn)));
-    paintZNote();
-    R.zpaint = zpaint;
-    zpaint();
+      R.zpaint = zpaint;
+      zpaint();
 
-    /* --- tags (saved as they change in tags.json, not part of the menus file) */
-    page.append(card('Tags', 'Labels for your brushes, alphas, materials and textures. Saved straight away.',
-      h('div', { class: 'field row' }, h('div', { class: 'grow' }, h('span', { class: 'flabel' }, 'Brush tags'),
-        h('div', { class: 'fhint' }, 'Tags group your brushes, alphas, materials and textures so you can filter the Library by them. An item can carry several. Tags are not part of Save or Undo.'),
-        h('div', { class: 'fhint mono tag-path', hidden: !S.tagsPath }, S.tagsPath)),
-        manageTagsBtn('btn'))));
+      /* --- tags (saved as they change in tags.json, not part of the menus file) */
+      page.append(card('Tags', 'Labels for your brushes, alphas, materials and textures. Saved straight away.',
+        h('div', { class: 'field row' }, h('div', { class: 'grow' }, h('span', { class: 'flabel' }, 'Brush tags'),
+          h('div', { class: 'fhint' }, 'Tags group your brushes, alphas, materials and textures so you can filter the Library by them. An item can carry several. Tags are not part of Save or Undo.'),
+          h('div', { class: 'fhint mono tag-path', hidden: !S.tagsPath }, S.tagsPath)),
+          manageTagsBtn('btn'))));
+    }
 
     /* --- browser (browser.hotkey; the object is dropped again when it ends up empty) */
     const browserObj = () => { if (!S.cfg.browser || typeof S.cfg.browser !== 'object') S.cfg.browser = {}; return S.cfg.browser; };
@@ -3998,7 +4080,7 @@ const USER_GUIDE_URL = 'https://zorbit.lol/docs/';
 const SETUP_WHERE = [
   ['Menus', 'Edit the rings and what each slot does', 'menus'],
   ['Library', 'Every brush ZBrush can load, with tags', 'library'],
-  ['Settings', 'Size, animation, colours, the bridge', 'settings'],
+  ['Settings', 'Size, animation and labels. Full mode adds colours and the bridge', 'settings'],
   ['Status', 'Is everything running, and the logs', 'status'],
   ['User guide', 'The whole manual, at zorbit.lol/docs', null]];
 
@@ -4068,7 +4150,7 @@ function buildSetupScreen(root) {
       const out = [h('div', { class: 'sub-checks' }, ...s.checks.map(c => subCheck(c.ok ? 'ok' : 'pending', c.label, c.sub)))];
       if (s.hint) {
         out.push(note(s.hint.text, true));
-        if (s.hint.settings) out.push(h('div', { class: 'btn-row' }, h('button', { class: 'btn small', type: 'button', onclick: () => showScreen('settings') }, 'Open Settings')));
+        if (s.hint.settings) out.push(h('div', { class: 'btn-row' }, h('button', { class: 'btn small', type: 'button', onclick: () => openSettingsCard('set-zbrush-bridge') }, 'Open Settings')));
         if (s.hint.status) out.push(h('div', { class: 'btn-row' }, h('button', { class: 'btn small', type: 'button', onclick: () => showScreen('status') }, 'Open Status')));
       }
       out.push(h('div', { class: 'btn-row' }, h('button', { class: 'btn small', type: 'button', title: 'Forget what happened so far and watch for a new try',
@@ -4088,7 +4170,8 @@ function buildSetupScreen(root) {
       return [h('div', { class: 'setup-where' }, ...SETUP_WHERE.map(([name, text, screen]) => h('div', { class: 'zrow' },
         h('div', { class: 'grow' }, h('b', null, name), h('small', null, text)),
         screen ? h('button', { class: 'btn small', type: 'button', onclick: () => showScreen(screen) }, 'Open')
-          : h('button', { class: 'btn small', type: 'button', onclick: async () => { try { await call('open_url', USER_GUIDE_URL); } catch (e) { toast('Could not open the link.', { tone: 'warn' }); } } }, icon('external', 12), 'Open'))))];
+          : h('button', { class: 'btn small', type: 'button', onclick: async () => { try { await call('open_url', USER_GUIDE_URL); } catch (e) { toast('Could not open the link.', { tone: 'warn' }); } } }, icon('external', 12), 'Open')))),
+        h('div', { class: 'fhint' }, 'Studio starts in Simple mode, which shows the settings most people use. The switch at the top turns on Full mode.')];
     } };
 
   const renderStep = (el, s, n) => {
@@ -4213,11 +4296,11 @@ function describeProblem(raw) {
   }
   if ((m = /^ring\.colors\.(\w+): (.+) is not a #rrggbb colour$/s.exec(raw))) {
     const nm = COLOR_INFO[m[1]] ? COLOR_INFO[m[1]][0] : m[1];
-    return out(`${nm} colour ${unq(m[2])} is not a #rrggbb value`, { kind: 'settings', card: 'set-colours' });
+    return out(`${nm} colour ${unq(m[2])} is not a #rrggbb value`, { kind: 'settings', card: 'set-colours', key: 'colors' });
   }
   if ((m = /^ring\.(\w+): (.*)$/s.exec(raw))) {
     const key = m[1], body = m[2], nm = RING_NAME[key] || key, card = RING_CARD[key];
-    const target = card ? { kind: 'settings', card } : null;
+    const target = card ? { kind: 'settings', card, key } : null;
     let r;
     if ((r = /^(.+) must be a number from (\S+) to (\S+)$/s.exec(body))) return out(`${nm} ${unq(r[1])} is outside ${r[2]} to ${r[3]}`, target);
     if ((r = /^(.+) must be true or false$/s.exec(body))) return out(`${nm} must be on or off, not ${unq(r[1])}`, target);
@@ -4272,6 +4355,7 @@ function paintMarkers() {
 function goToProblem(t) {
   S.problemsOpen = false; renderProblems();
   if (!t) return;
+  if (!isFull() && targetNeedsFull(t)) { setMode('full'); toast('Switched to Full mode to show this.', { ms: 3500 }); }
   if (t.kind === 'settings') {
     const same = S.screen === 'settings';
     showScreen('settings', { fresh: true });
@@ -4643,6 +4727,33 @@ function licenceVisible() { return S.prefs.show_licence !== false; }
 function applyPrefs() {
   const btn = document.querySelector('.rail-btn[data-screen="licence"]');
   if (btn) btn.hidden = !licenceVisible();
+  const full = isFull();                                    // roving tabindex: the chosen button is the one Tab stop
+  modeBtns().forEach(b => { const on = (b.dataset.mode === 'full') === full; b.classList.toggle('on', on); b.setAttribute('aria-checked', on ? 'true' : 'false'); b.tabIndex = on ? 0 : -1; });
+}
+const modeBtns = () => $$('#modeSeg .seg-btn');          // none in the popout
+/* Rebuilds what the mode changes, in place: showScreen would return early for the screen already shown. */
+function applyMode() {
+  if (openPopover) openPopover();
+  if (comboClose) comboClose();
+  if (S.screen === 'menus' && R.right) {
+    const tb = $('.tab-body'), top = tb ? tb.scrollTop : 0;
+    R.right();
+    const nb = $('.tab-body'); if (nb) nb.scrollTop = top;
+  } else if (S.screen === 'settings' && R.settings) R.settings();
+  for (const b of browsers.values()) b.updateTags();
+}
+/* Switches the mode. The pref is set at once, so what the caller does next already sees it; a failed save puts the old mode back. */
+async function setMode(v) {
+  if (!S.ready || S.fatal || v === S.prefs.mode || (v !== 'simple' && v !== 'full')) return;
+  const ok = setPref('mode', v);
+  applyMode();
+  if (!(await ok)) applyMode();
+}
+/* Settings, at one card; Full-only cards switch to Full first. */
+function openSettingsCard(id) {
+  if (!isFull() && FULL_CARDS.has(id)) { setMode('full'); toast('Switched to Full mode to show this.', { ms: 3500 }); }
+  showScreen('settings');
+  requestAnimationFrame(() => R.gotoCard && R.gotoCard(id));
 }
 /* Resolves true when the backend stored it. On a failed write the old value comes back, a toast says so, and false lets
    a toggleSwitch put itself back. */
@@ -4729,6 +4840,7 @@ function recovery(res) {
   // The screens need the menus: the rail and Alt+1 to Alt+6 do nothing until the file is fixed, so the rail looks that way.
   $$('.rail-btn').forEach(b => { b.classList.remove('on'); b.setAttribute('aria-current', 'false'); b.setAttribute('aria-disabled', 'true'); b.title = 'Fix or reset the menus file first'; });
   $('#saveBtn').disabled = true; $('#revertBtn').disabled = true;
+  modeBtns().forEach(b => { b.disabled = true; });
   if (path) setPathHint(path);
   const run = async (btn, method) => {
     btn.disabled = true;
@@ -4766,6 +4878,10 @@ async function boot() {
   adoptConfig(cfgRes);
   S.opts = opts; S.defaults = Object.assign({}, FALLBACK_DEFAULTS, cfgRes.defaults || (opts && opts.ring_defaults) || {});
   S.defaults.colors = Object.assign({}, FALLBACK_DEFAULTS.colors, S.defaults.colors || {});
+  if (prefR.status === 'fulfilled' && prefR.value && S.prefs.mode !== 'simple' && S.prefs.mode !== 'full') {   // first start with this build: new installs get Simple, a config that needs Full gets Full
+    S.prefs.mode = S.prefs.setup_done === false ? 'simple' : (needsFull(S.cfg) ? 'full' : 'simple');
+    call('set_pref', 'mode', S.prefs.mode).catch(() => {});
+  }
   const ids = Object.keys(S.cfg.menus);
   S.menuId = params.get('menu') && S.cfg.menus[params.get('menu')] ? params.get('menu') : (ids.find(id => S.cfg.menus[id].hotkey) || ids[0] || null);
   const m0 = curMenu();
@@ -4783,6 +4899,7 @@ async function boot() {
   S.ready = true;
   rememberSel(); updateHistButtons();
   $('#saveBtn').disabled = false;
+  modeBtns().forEach(b => { b.disabled = false; });
   refreshZsBadge();
   if (S.screen !== 'setup') refreshSetupBadge();
   if (S.screen !== 'status') refreshAppDown();
@@ -4823,6 +4940,18 @@ function init() {
   $('#undoBtn').append(icon('undo', 16)); $('#redoBtn').append(icon('redo', 16));
   $('#browserBtn').prepend(icon('k_browser', 13));
   $('#browserBtn').addEventListener('click', openBrowserFromButton);   // works before the config loads: the browser needs none
+  const modeSeg = $('#modeSeg');                                       // Simple / Full; the popout has no such control
+  if (modeSeg) {
+    modeBtns().forEach(b => b.addEventListener('click', () => setMode(b.dataset.mode)));
+    modeSeg.addEventListener('keydown', e => {
+      if (e.ctrlKey || e.altKey || e.metaKey || e.shiftKey || !['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) return;
+      const btns = modeBtns(), at = btns.indexOf(document.activeElement);
+      if (at < 0) return;
+      e.preventDefault();
+      const to = btns[(at + 1) % btns.length];
+      setMode(to.dataset.mode); to.focus();
+    });
+  }
   $('#undoBtn').addEventListener('click', () => { if (S.ready && !S.fatal) undo(); });
   $('#redoBtn').addEventListener('click', () => { if (S.ready && !S.fatal) redo(); });
   $('#problemsBtn').addEventListener('click', () => { S.problemsOpen = !S.problemsOpen; renderProblems(); });

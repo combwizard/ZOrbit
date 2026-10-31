@@ -66,8 +66,8 @@ h1, h2, h3, p { margin: 0; }
   background: var(--bg2); border-bottom: 1px solid var(--line);
 }
 /* Custom window chrome: the header is the title bar (native drag via WebView2 non-client regions). */
-.topbar { app-region: drag; -webkit-app-region: drag; padding-right: 0; user-select: none; }
-.topbar button, .topbar input, .topbar a, .topbar [role="button"], .topbar .no-drag, .topbar .path-hint { app-region: no-drag; -webkit-app-region: no-drag; }
+.topbar { -webkit-app-region: drag; app-region: drag; padding-right: 0; user-select: none; }
+.topbar button, .topbar input, .topbar a, .topbar [role="button"], .topbar .no-drag, .topbar .path-hint { -webkit-app-region: no-drag; app-region: no-drag; }
 .brand { display: flex; align-items: center; gap: 10px; flex: 0 1 auto; min-width: 0; overflow: hidden; }       /* the brand gives way first, so the window buttons stay in view */
 .logo { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%;
   filter: drop-shadow(0 0 6px rgba(248, 107, 51, .35)); }
@@ -76,6 +76,12 @@ h1, h2, h3, p { margin: 0; }
 .wordmark .z { color: var(--accent); }                      /* the Z of ZOrbit is orange wherever the name is drawn */
 .version-chip { white-space: nowrap; flex: none; font-size: 10.5px; color: var(--sub); padding: 3px 2px; border-radius: 4px; background: none; border: 0; }
 .version-chip:hover { color: var(--text); text-decoration: underline; text-underline-offset: 2px; }
+.mode-seg { display: inline-flex; align-items: center; flex: none; height: 26px; padding: 2px; border-radius: 99px; background: var(--bg1); border: 1px solid var(--line); }
+.seg-btn { height: 20px; padding: 0 11px; border: 0; border-radius: 99px; background: none; color: var(--sub); font: 600 11.5px/20px var(--font); cursor: pointer; }
+.seg-btn:hover { color: var(--text); }
+.seg-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.seg-btn:disabled { opacity: .5; cursor: default; }
+.seg-btn.on { color: var(--accent); background: rgba(248, 107, 51, .08); }
 .version-chip.has-update { display: inline-flex; align-items: center; gap: 5px; }
 .version-chip .upd-dot { color: var(--accent); flex: none; overflow: visible;
   filter: drop-shadow(0 0 2px rgba(248, 107, 51, .9)) drop-shadow(0 0 6px rgba(248, 107, 51, .6));
@@ -102,7 +108,7 @@ h1, h2, h3, p { margin: 0; }
 }
 .problems-pill:hover { background: rgba(240, 192, 64, .2); }
 .dirty { display: flex; align-items: center; gap: 8px; flex: none; white-space: nowrap; color: var(--sub); font-size: 12px; margin-right: 4px; }
-.histctl, .topbar > .btn { flex: none; }
+.histctl, .topbar > .btn, .mode-seg { flex: none; }
 .dirty .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 8px var(--accent); animation: pulse 1.8s ease-in-out infinite; }
 @keyframes pulse { 50% { opacity: .45; } }
 
@@ -426,6 +432,8 @@ body.dragging, body.dragging * { cursor: grabbing !important; }
 .items-panel { flex: 1 1 36%; min-height: 160px; display: flex; flex-direction: column; background: var(--bg2); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
 .items-note { flex: none; display: flex; align-items: center; gap: 8px; padding: 7px 14px; font-size: 12px; line-height: 1.35; color: var(--amber); background: rgba(240, 192, 64, .07); border-bottom: 1px solid rgba(240, 192, 64, .2); }
 .items-note .ico { flex: none; }
+.mode-note { flex: none; display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; margin: 0 0 14px; padding: 7px 14px; font-size: 12px; line-height: 1.35; color: var(--amber); background: rgba(240, 192, 64, .07); border-bottom: 1px solid rgba(240, 192, 64, .2); }
+.locked-line { font-size: 13px; color: var(--text); padding: 6px 0; overflow-wrap: anywhere; }
 .ilist { flex: 1; overflow: auto; padding: 6px; position: relative; display: flex; flex-direction: column; gap: 2px; }
 .ilist.drop-over { background: rgba(248, 107, 51, .03); }
 .ilist.ins-end { box-shadow: inset 0 -2px 0 var(--accent); }
@@ -895,11 +903,11 @@ body.dragging .irow:hover { background: transparent; }
 .pop { background: var(--bg1); }
 .pop > .loading { flex: 1; display: grid; place-items: center; color: var(--sub); font-size: 12.5px; }
 .pop-head { flex: none; height: 40px; display: flex; align-items: center; gap: 8px; padding: 0 0 0 14px; background: var(--bg2); border-bottom: 1px solid var(--line);
-  app-region: drag; -webkit-app-region: drag; user-select: none; }
-.pop-head button, .pop-head input { app-region: no-drag; -webkit-app-region: no-drag; }
+  -webkit-app-region: drag; app-region: drag; user-select: none; }
+.pop-head button, .pop-head input { -webkit-app-region: no-drag; app-region: no-drag; }
 .pop-logo { display: inline-flex; flex: none; color: var(--accent); filter: drop-shadow(0 0 5px rgba(248, 107, 51, .35)); }
 .pop-logo svg { display: block; }
-.pop-head .ktabs { height: 100%; padding: 0 4px; border-bottom: 0; app-region: no-drag; -webkit-app-region: no-drag; }
+.pop-head .ktabs { height: 100%; padding: 0 4px; border-bottom: 0; -webkit-app-region: no-drag; app-region: no-drag; }
 .pop-head .ktab { height: 100%; }
 .pop-head .pin-btn { width: 30px; height: 30px; }
 .pop-head .pin-btn[aria-pressed="true"] { color: var(--accent); background: var(--accent-wash); }

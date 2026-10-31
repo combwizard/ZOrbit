@@ -14,7 +14,7 @@ Windows marked the unzipped files as downloaded, and ZOrbit could not remove the
 
 ### I upgraded from Radial Menu for ZBrush and F9 stopped working
 
-The palette was renamed, so a hotkey you bound by hand to the old **Apply** does not carry over in ZBrush 2026. Ctrl+Alt+click **Zplugin > ZOrbit > Apply**, press **F9**, then click **Preferences > Hotkeys > Store**. ZBrush 2022 to 2025: update the plugin in **Studio > Settings > Older ZBrush**; it binds F9 if **Apply** has no hotkey. Your menus were copied from `%APPDATA%\RadialMenu` to `%APPDATA%\ZOrbit` on the first start, and learned auto slots from `%LOCALAPPDATA%\RadialMenu`. The old folders are left in place; you can delete them.
+The palette was renamed, so a hotkey you bound by hand to the old **Apply** does not carry over in ZBrush 2026. Ctrl+Alt+click **Zplugin > ZOrbit > Apply**, press **F9**, then click **Preferences > Hotkeys > Store**. ZBrush 2022 to 2025: update the plugin in **Studio > Setup** step 1 (or **Settings > Older ZBrush** in Full mode); it binds F9 if **Apply** has no hotkey. Your menus were copied from `%APPDATA%\RadialMenu` to `%APPDATA%\ZOrbit` on the first start, and learned auto slots from `%LOCALAPPDATA%\RadialMenu`. The old folders are left in place; you can delete them.
 
 ## The ring does not open
 
@@ -52,7 +52,7 @@ On Studio's **Status** screen, the listener card should say **Connected**. In ZB
 
 ### ZBrush 2022 to 2025: the ring opens, but picks do nothing
 
-Picks there only arrive through the bridge key. Hover **Zplugin > ZOrbit > Apply** in that ZBrush: its hotkey should match the bridge key in Studio (F9 unless you changed it). The plugin binds F9 itself when **Apply** has no hotkey, but only once it is up to date, so update it if **Settings > Older ZBrush** says **Update available**. For any other key, check that it is bound to **Apply** and that you clicked **Preferences > Hotkeys > Store**; a binding that was not stored is gone after a restart. If the palette is missing, install the plugin again in **Studio > Settings > Older ZBrush** and restart that ZBrush. `zscript_bridge.log` shows what the last pick did.
+Picks there only arrive through the bridge key. Hover **Zplugin > ZOrbit > Apply** in that ZBrush: its hotkey should match the bridge key in Studio (F9 unless you changed it). The plugin binds F9 itself when **Apply** has no hotkey, but only once it is up to date, so update it if **Setup** step 1 (or **Settings > Older ZBrush** in Full mode) says **Update available**. For any other key, check that it is bound to **Apply** and that you clicked **Preferences > Hotkeys > Store**; a binding that was not stored is gone after a restart. If the palette is missing, install the plugin again from **Studio > Setup** step 1 and restart that ZBrush. `zscript_bridge.log` shows what the last pick did.
 
 Messages Studio can give when you install the plugin:
 
@@ -101,11 +101,17 @@ No installed item carries that tag, or the tag no longer exists (the problems pi
 
 ### My slots are not coloured by tag
 
-Check **Settings > Tag colours**: the **Icon tint**, **Glow** and **Band** switches may all be off. Only an item's first tag colours its slot, and an item with no tag is not coloured. A change made by hand to `tags.json` shows within a moment.
+Check **Settings > Tag colours** (Full mode): the **Icon tint**, **Glow** and **Band** switches may all be off. Only an item's first tag colours its slot, and an item with no tag is not coloured. A change made by hand to `tags.json` shows within a moment.
 
 ### A slot shows letters instead of a picture
 
 Letters mean ZOrbit could not read a picture for the slot. The item still works when you pick it. For a brush, either no `.zbp` was found for the name, or its icon is in a format ZOrbit does not know. A material with no icon in its `.zmt` file (some old MatCap files) and an EXR texture show letters too. For other items it is the normal placeholder; set an `icon` to change it.
+
+## Studio
+
+### I cannot find a setting in Studio
+
+Studio may be in Simple mode, which hides some settings and item types. Press **Full** in the top bar. A hidden setting keeps its value, so nothing is lost by switching. If a Full-only setting is not at its default, the top of the Settings page names it and has a **Switch to Full mode** link. [Simple and Full mode](studio.md#simple-and-full-mode) lists what each mode shows.
 
 ## Your menus file
 

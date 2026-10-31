@@ -37,7 +37,7 @@ In ZBrush 2026 the palette is now **Zplugin > ZOrbit**. If you bound F9 to the o
 
 These versions load plugins only from their own `ZStartup\ZPlugs64` folder, so Studio puts the plugin there:
 
-1. Open **ZOrbit Studio** and go to **Settings > Older ZBrush**. It lists the 2022 to 2025 versions it found. If yours is missing, use **Add a ZBrush folder**. The **Setup** screen (Alt+6) lists the same versions with the same **Install** button.
+1. Open **ZOrbit Studio** and go to the **Setup** screen (Alt+6). Step 1 lists the 2022 to 2025 versions it found. If yours is missing, use **Add a ZBrush folder**. The same list, with the same **Install** button, is in **Settings > Older ZBrush** in [Full mode](studio.md#simple-and-full-mode).
 2. Click **Install**. A ZBrush under Program Files asks for administrator rights once.
 3. Restart that ZBrush.
 

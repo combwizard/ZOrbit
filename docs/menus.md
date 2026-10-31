@@ -8,8 +8,8 @@ A menu is a named list of items shown as one ring. Menus live in one file, `%APP
 - A menu **without a hotkey** is a submenu: it opens when you pick an item of type `menu` in another ring.
 - Rings work best with 4 to 12 items. They are spread evenly around the circle. **Ring radius** is a minimum: a menu with more items makes the ring wider so the slots keep a gap (see [Appearance](appearance.md#appearance-and-behaviour-settings)). Past 12 the ring gets large, and with very many items the angle between neighbouring slots is small, so they are harder to hit. Shrink **Slot size** or split the menu into submenus. Studio shows a note above the item list when a menu has more than 12.
 - At least one menu needs a hotkey, otherwise nothing can open the ring.
-- A menu can have its own open animation (`"animation": "spiral"`, or pick one in the menu settings in Studio). Without one it uses `ring.animation`. See [Open animations](appearance.md#open-animations).
-- A menu can **fan out** when it is opened as a submenu (`"fan": true`, or switch on **Fan out when opened from another menu** in the menu settings in Studio). See [Submenu](#submenu).
+- A menu can have its own open animation (`"animation": "spiral"`, or pick one in the menu settings in Studio's Full mode). Without one it uses `ring.animation`. See [Open animations](appearance.md#open-animations).
+- A menu can **fan out** when it is opened as a submenu (`"fan": true`, or switch on **Fan out when opened from another menu** in the menu settings in Studio's Full mode). See [Submenu](#submenu).
 
 Starter menus ship with ZOrbit: **Brushes** (Q), with submenus **More Brushes** (its slot shows the ClayTubes picture), **Tools** (masking, symmetry, PolyFrame, LazyMouse and other switches, a **Browser** slot that opens the [browser](browser.md), and a **Favourites** slot) and **SubDivide** (a row of stroke subdivide sizes). They use only brushes that come with ZBrush. **Swallow hotkey** is off for the starter **Brushes** menu, so ZBrush still sees **Q** and goes to Draw mode as the ring opens. New installs get the **Favourites** slot in **Tools**; existing menus are not changed.
 
@@ -31,6 +31,8 @@ Every item does exactly one thing. Besides the action, an item can have a `label
 | `auto` | A slot that holds a brush you pick often. ZOrbit fills it. |
 | `tag` | Opens a fan of every installed item that carries a tag, or the Favourites tag: brushes first, most used first, then alphas, materials and textures. |
 | `browser` | Opens the [browser](browser.md) on one of its tabs, optionally on one tag. |
+
+Studio's [Simple mode](studio.md#simple-and-full-mode) offers `brush`, `alpha`, `material`, `texture` and `menu` in **Add item**. The other types (`press`, `set`, `toggle`, `steps`, `auto`, `tag` and `browser`) need Full mode. An existing item of one of those types still shows in the list and on the ring, and still works. Select it in Simple and the inspector shows its type and what it does on one line, with an **Edit in Full mode** link. Its label and icon can still be changed, except on an `auto` slot.
 
 ### Brush
 
@@ -73,8 +75,8 @@ Thumbnails: a material uses the icon stored in its `.zmt` file. A few old MatCap
 placeholder. An alpha or texture uses its image file. EXR textures have no thumbnail, so they show the placeholder too.
 Thumbnails are cached in `%LOCALAPPDATA%\ZOrbit\thumbs`.
 
-ZBrush 2022 to 2025 get these through the [ZScript plugin](install.md#zbrush-2022-to-2025). Until you update it in **Studio > Settings > Older ZBrush >
-Update**, the old plugin skips them.
+ZBrush 2022 to 2025 get these through the [ZScript plugin](install.md#zbrush-2022-to-2025). Until you update it (**Update** on the ZBrush's row in Studio's **Setup** step 1, or in
+**Settings > Older ZBrush** in Full mode), the old plugin skips them.
 
 ### Press
 

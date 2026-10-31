@@ -65,6 +65,7 @@ SHOTS = {
     "studio-item": dict(q="screen=menus&menu=tools&item=8"),
     "studio-library": dict(q="screen=library"),
     "studio-settings": dict(q="screen=settings"),
+    "studio-settings-simple": dict(q="screen=settings&mode=simple"),
     "setup": dict(q="screen=setup&zb=both&ringtried=done"),
     "setup-restart": dict(q="screen=setup&zb=2026&zbstale"),
     "browser": dict(page="popout.html", q="kind=brush", size=(980, 680)),

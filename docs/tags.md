@@ -35,7 +35,7 @@ still counts as untagged.
 
 ## Managing tags
 
-**Manage tags...** (under the chips in the Library, or on **Settings > Tags**) opens the tag manager. Each row has:
+**Manage tags...** (under the chips in the Library, or on **Settings > Tags**; both need [Full mode](studio.md#simple-and-full-mode)) opens the tag manager. Each row has:
 
 - a swatch: click it for the eight preset colours, or type any `#rrggbb` value;
 - the name: edit it and press Enter, or leave the field, to rename the tag. If another tag already has that name, you are asked to **Merge into** it or keep them apart. Merging asks you to confirm first (**Cancel** is the default), then puts the items of this tag on the other one (in the same place in each item's list, so the colour cue stays) and removes this tag;

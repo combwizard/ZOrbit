@@ -21,7 +21,7 @@ Slots are laid out clockwise starting at the top. A slot with a small arrow badg
 
 1. Open **ZOrbit Studio** from the Start menu (or from ZBrush: **Zplugin > ZOrbit > Studio**).
 2. On the **Menus** screen, pick a menu on the left. The ring preview in the middle is drawn by the same code that draws it inside ZBrush.
-3. Drag brushes from the **Library** onto the ring, or use **Add item** for buttons, sliders and switches.
+3. Drag brushes from the **Library** onto the ring, or use **Add item** to add a brush, alpha, material, texture or submenu. Studio starts in **Simple** mode, which shows the everyday controls. Press **Full** in the top bar for buttons, sliders, switches and the rest (see [Simple and Full mode](studio.md#simple-and-full-mode)).
 4. Click **Save** (Ctrl+S). The next time you open the ring in ZBrush it uses your changes. There is no need to restart anything.
 
 <p align="center">

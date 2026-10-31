@@ -19,7 +19,7 @@ The app exits when ZBrush does.
 
 ## How picks reach ZBrush (bridge modes)
 
-When you pick a slot, the app has to tell ZBrush. It writes the request to a file and then triggers the plugin in one of two ways. The `bridge` section of `radial.json` (and **Settings > ZBrush bridge** in Studio) chooses:
+When you pick a slot, the app has to tell ZBrush. It writes the request to a file and then triggers the plugin in one of two ways. The `bridge` section of `radial.json` (and **Settings > ZBrush bridge** in Studio, which needs [Full mode](studio.md#simple-and-full-mode)) chooses:
 
 ```json
 "bridge": {"mode": "auto", "key": "F9"}
@@ -31,7 +31,7 @@ When you pick a slot, the app has to tell ZBrush. It writes the request to a fil
 | `message` | Posts a window message to a hidden listener inside ZBrush. No keystroke is sent, so nothing can collide with your own shortcuts. If the listener is not available, the pick is dropped and logged. |
 | `key` | Presses the bridge key every time. |
 
-![Settings > ZBrush bridge: the Auto, Message and Key modes with Auto selected, and the bridge key field set to F9 with Record and Clear buttons](images/settings-bridge.png)
+![Settings > ZBrush bridge (Full mode): the Auto, Message and Key modes with Auto selected, and the bridge key field set to F9 with Record and Clear buttons](images/settings-bridge.png)
 
 The **message** route needs nothing from you. It works once the plugin has loaded and its listener is verified (see **Zplugin > ZOrbit > Status**).
 
@@ -51,9 +51,9 @@ Failures the plugin reports (a brush that is not installed, a button path that d
 
 ### ZBrush 2022 to 2025
 
-These versions have no Python API, so they get a ZScript plugin with the same palette. Studio installs it (the steps are in [Install and uninstall](install.md#zbrush-2022-to-2025)): **Settings > Older ZBrush** lists the 2022 to 2025 versions it found, with **Install**, **Update** and **Remove** for each, and **Add a ZBrush folder** for one it missed (a folder you added can be forgotten again with the x next to it). The plugin goes into that ZBrush's `ZStartup\ZPlugs64` (the only place these versions load plugins from), together with a `ZOrbitData` folder. A ZBrush under Program Files asks for administrator rights: the row says "approve the prompt" while Windows waits for you, for up to five minutes. The elevated step checks that the destination is a ZBrush plugin folder and builds the plugin files from the installation's own copies, so nothing from a user-writable folder is copied with administrator rights.
+These versions have no Python API, so they get a ZScript plugin with the same palette. Studio installs it (the steps are in [Install and uninstall](install.md#zbrush-2022-to-2025)): **Setup** step 1 (and **Settings > Older ZBrush** in Full mode) lists the 2022 to 2025 versions it found, with **Install**, **Update** and **Remove** for each, and **Add a ZBrush folder** for one it missed (a folder you added can be forgotten again with the x next to it). The plugin goes into that ZBrush's `ZStartup\ZPlugs64` (the only place these versions load plugins from), together with a `ZOrbitData` folder. A ZBrush under Program Files asks for administrator rights: the row says "approve the prompt" while Windows waits for you, for up to five minutes. The elevated step checks that the destination is a ZBrush plugin folder and builds the plugin files from the installation's own copies, so nothing from a user-writable folder is copied with administrator rights.
 
-![Settings > Older ZBrush: a row for ZBrush 2022 marked Not installed with an Install button, a row for ZBrush 2024 marked Update available with Update and Remove buttons, and Add a ZBrush folder](images/settings-older-zbrush.png)
+![Settings > Older ZBrush (Full mode): a row for ZBrush 2022 marked Not installed with an Install button, a row for ZBrush 2024 marked Update available with Update and Remove buttons, and Add a ZBrush folder](images/settings-older-zbrush.png)
 
 Differences from ZBrush 2026 and newer:
 
