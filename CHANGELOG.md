@@ -57,8 +57,8 @@ All notable changes to this project are listed here. The format follows
   the characters (Microsoft YaHei, Yu Gothic, Malgun Gothic) instead of empty boxes. A long menu title is shortened
   with an ellipsis instead of running across the slots.
 - Installer: updating no longer leaves files of older versions behind in the install folder. Uninstalling removes
-  the plugin from ZBrush 2022 to 2025 in the usual folders under Program Files (one UAC prompt each), lists any
-  folder it could not clean, and removes the install folder. A machine-wide `ZBRUSH_PLUGIN_PATH` is no longer
+  the plugin from every ZBrush 2022 to 2025 that Setup lists, wherever it is installed (one UAC prompt for each
+  one under Program Files), lists any folder it could not clean, and removes the install folder. A machine-wide `ZBRUSH_PLUGIN_PATH` is no longer
   shadowed: when you have no user value, the new one starts from the machine entries (installer and Setup's
   **Fix**).
 - ZBrush 2022 to 2025: the plugin installs without its start shortcuts when PowerShell is restricted (Constrained

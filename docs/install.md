@@ -57,7 +57,7 @@ Open **Windows Settings > Apps > Installed apps**, find **ZOrbit** and choose **
 
 The uninstaller closes ZOrbit first. If Studio is open it stops and asks you to close Studio yourself, so unsaved changes are never lost.
 
-It also removes the plugin from a ZBrush 2022 to 2025 when it can. It looks in the usual folders under `C:\Program Files` (`Maxon ZBrush 20xx`, `Pixologic\ZBrush 20xx` and `Maxon\ZBrush 20xx`) and asks for administrator rights once for each ZBrush it cleans. If it could not clean a folder, it lists it, and you delete `ZOrbitBridge.zsc` and the `ZOrbitData` folder from that ZBrush's `ZStartup\ZPlugs64` yourself. A ZBrush you added by hand in Studio is not searched. For those, remove the plugin first with **Studio > Settings > Older ZBrush > Remove**.
+It also removes the plugin from every ZBrush 2022 to 2025 that Studio's **Setup** lists: the ones Windows knows about, the ones ZBrush recorded and the ones you added by hand. A ZBrush under `C:\Program Files` asks for administrator rights once. If a folder could not be cleaned, the uninstaller lists it, and you delete `ZOrbitBridge.zsc` and the `ZOrbitData` folder from that ZBrush's `ZStartup\ZPlugs64` yourself.
 
 When nothing else is left in the install folder, the uninstaller removes the folder too.
 

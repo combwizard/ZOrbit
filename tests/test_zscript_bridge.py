@@ -286,3 +286,41 @@ def test_elevated_main_installs_without_shortcuts(tmp_path, fake_build, monkeypa
     stage.mkdir()
     assert zb.elevated_main(["--zscript-copy", str(stage), plugs]) == 0
     assert zb.shortcuts_skipped(plugs)
+
+
+# --- the uninstaller's question --------------------------------------------------------------------
+
+def test_installed_in_lists_known_folders_with_the_plugin(tmp_path, monkeypatch):
+    a, a_plugs = make_zbrush(tmp_path, "ZBrush 2022")
+    b, b_plugs = make_zbrush(tmp_path, "ZBrush 2023")          # no plugin
+    c, c_plugs = make_zbrush(tmp_path, "ZBrush 2024")          # the old name, added by hand in Studio
+    d, d_plugs = make_zbrush(tmp_path, "ZBrush 2025")          # listed twice, once with another case
+    open(os.path.join(a_plugs, zb.PLUGIN), "wb").close()
+    open(os.path.join(c_plugs, zb.LEGACY_PLUGIN), "wb").close()
+    open(os.path.join(d_plugs, zb.PLUGIN), "wb").close()
+    monkeypatch.setattr(zb.installs, "find_installs",
+                        lambda: [{"path": a}, {"path": b}, {"path": d}, {"path": d.upper()}])
+    cfg = tmp_path / "cfg"
+    cfg.mkdir()
+    (cfg / "studio.json").write_text('{"zbrush_folders": ["%s", 7]}' % c.replace("\\", "\\\\"), encoding="utf-8")
+    monkeypatch.setattr(paths, "CONFIG_DIR", str(cfg))
+    assert zb.installed_in() == [a_plugs, d_plugs, c_plugs]
+
+
+def test_installed_in_without_studio_file(tmp_path, monkeypatch):
+    monkeypatch.setattr(zb.installs, "find_installs", lambda: [])
+    monkeypatch.setattr(paths, "CONFIG_DIR", str(tmp_path / "missing"))
+    assert zb.installed_in() == []
+
+
+def test_list_main_writes_one_folder_per_line_with_a_bom(tmp_path, monkeypatch):
+    a, a_plugs = make_zbrush(tmp_path, "ZBrush 2022")
+    open(os.path.join(a_plugs, zb.PLUGIN), "wb").close()
+    monkeypatch.setattr(zb, "installed_in", lambda: [a_plugs])
+    out = tmp_path / "list.txt"
+    assert zb.list_main(["--zscript-list", str(out)]) == 0
+    raw = out.read_bytes()
+    assert raw.startswith(b"\xef\xbb\xbf") and raw.endswith(b"\r\n")
+    assert raw.decode("utf-8-sig").splitlines() == [a_plugs]
+    assert zb.list_main(["--zscript-list"]) == 1
+    assert zb.list_main(["--zscript-list", str(tmp_path / "no" / "dir" / "x.txt")]) == 1

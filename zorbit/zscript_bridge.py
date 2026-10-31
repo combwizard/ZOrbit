@@ -28,6 +28,7 @@ from __future__ import annotations
 import ctypes
 import ctypes.wintypes as w
 import filecmp
+import json
 import os
 import shutil
 import subprocess
@@ -415,6 +416,45 @@ def _remove(install_path) -> dict:
     os.makedirs(STAGE_DIR, exist_ok=True)
     ok, msg = _run_elevated(["--zscript-remove", STAGE_DIR, dest])
     return {"ok": ok, "elevated": True, "message": "Removed. Restart ZBrush to unload it." if ok else msg}
+
+
+def installed_in() -> list[str]:
+    """The ZPlugs64 folders that hold the plugin (or the one from before the rename), in every ZBrush this PC
+    knows about: the installations Windows lists, the ones ZBrush recorded and the ones added by hand in Studio.
+    The uninstaller asks this instead of guessing folders under Program Files."""
+    folders = [i["path"] for i in installs.find_installs()]
+    try:
+        with open(os.path.join(paths.CONFIG_DIR, "studio.json"), encoding="utf-8") as f:
+            data = json.load(f)
+        if isinstance(data, dict):
+            folders += [p for p in data.get("zbrush_folders", []) if isinstance(p, str)]
+    except (OSError, ValueError):
+        pass
+    out, seen = [], set()
+    for p in folders:
+        dest = os.path.normpath(zplugs(p))
+        key = os.path.normcase(dest)
+        if key in seen:
+            continue
+        seen.add(key)
+        if os.path.isfile(os.path.join(dest, PLUGIN)) or os.path.isfile(os.path.join(dest, LEGACY_PLUGIN)):
+            out.append(dest)
+    return out
+
+
+def list_main(args) -> int:
+    """Entry for ZOrbit.exe --zscript-list <file>: writes installed_in() to the file, one folder per line, as
+    UTF-8 with a byte order mark (Inno Setup's LoadStringsFromFile reads that). Reads only; exit code 1 when the
+    file cannot be written."""
+    if len(args) != 2 or args[0] != "--zscript-list":
+        return 1
+    try:
+        with open(args[1], "w", encoding="utf-8-sig", newline="\r\n") as f:
+            for dest in installed_in():
+                f.write(dest + "\n")
+        return 0
+    except OSError:
+        return 1
 
 
 def check_dest(dest) -> str | None:

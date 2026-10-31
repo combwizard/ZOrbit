@@ -13,6 +13,8 @@
   ZOrbit.exe --zscript-copy|--zscript-remove <stage> <dest>
                                      internal: the Studio runs this as administrator to put the ZScript
                                      bridge into (or take it out of) a ZBrush 2022-2025 under Program Files
+  ZOrbit.exe --zscript-list <file>   internal: the uninstaller asks which ZBrush 2022-2025 plugin folders hold
+                                     the ZScript bridge; one folder per line
 
 From source: python zorbit/main.py [same arguments]
 """
@@ -44,6 +46,9 @@ def main() -> int:
     if args and args[0] in ("--zscript-copy", "--zscript-remove"):
         import zscript_bridge             # elevated helper: touches nothing but those files
         return zscript_bridge.elevated_main(args)
+    if args and args[0] == "--zscript-list":
+        import zscript_bridge             # for the uninstaller: reads only, writes nothing but that file
+        return zscript_bridge.list_main(args)
     unblock_bundle()
     if "--selftest" in args:
         import selftest                   # imports the app on purpose; the other paths load only what they use

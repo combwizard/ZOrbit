@@ -435,16 +435,24 @@ begin
       mbError, MB_OK, IDOK);
 end;
 
-{ Takes ZOrbit's ZScript plugin out of one ZBrush 2022 to 2025 folder (ZPlugs64). It lives under Program Files, so
-  the app's own remover runs elevated (one UAC prompt). The result is judged by whether the file is gone. }
+function PluginIn(const ZPlugs: String): Boolean;
+begin
+  Result := FileExists(ZPlugs + '\ZOrbitBridge.zsc') or FileExists(ZPlugs + '\RadialMenuBridge.zsc');
+end;
+
+{ Takes ZOrbit's ZScript plugin out of one ZBrush 2022 to 2025 folder (ZPlugs64) with the app's own remover: a plain
+  run first (a ZBrush outside Program Files needs no more), then as administrator (one UAC prompt) when the plugin is
+  still there. The result is judged by whether the file is gone. }
 procedure RemoveZScriptPlugin(const ZPlugs: String);
 var
+  Params: String;
   ResultCode: Integer;
 begin
-  ShellExec('runas', ExpandConstant('{app}\{#AppExe}'),
-    '--zscript-remove "' + ExpandConstant('{app}\stage') + '" "' + ZPlugs + '"', '', SW_HIDE, ewWaitUntilTerminated,
-    ResultCode);
-  if FileExists(ZPlugs + '\ZOrbitBridge.zsc') then
+  Params := '--zscript-remove "' + ExpandConstant('{app}\stage') + '" "' + ZPlugs + '"';
+  Exec(ExpandConstant('{app}\{#AppExe}'), Params, '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  if PluginIn(ZPlugs) then
+    ShellExec('runas', ExpandConstant('{app}\{#AppExe}'), Params, '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  if PluginIn(ZPlugs) then
     PluginLeftovers := PluginLeftovers + #13#10 + ZPlugs;
 end;
 
@@ -461,7 +469,7 @@ begin
         if (FindRec.Attributes and FILE_ATTRIBUTE_DIRECTORY) <> 0 then
         begin
           ZPlugs := ExtractFilePath(Pattern) + FindRec.Name + '\ZStartup\ZPlugs64';
-          if FileExists(ZPlugs + '\ZOrbitBridge.zsc') then
+          if PluginIn(ZPlugs) then
             RemoveZScriptPlugin(ZPlugs);
         end;
       until not FindNext(FindRec);
@@ -471,14 +479,36 @@ begin
   end;
 end;
 
-{ Best effort, never fails the uninstall. Only the usual ZBrush folders are searched; a ZBrush the user added by
-  hand in Studio is not found. Says so for any folder where the plugin is still there. }
+{ Best effort, never fails the uninstall. The app says which plugin folders hold the plugin (ZOrbit.exe
+  --zscript-list: every ZBrush that Windows lists, that ZBrush recorded or that was added by hand in Studio). Only
+  when the app cannot answer are the usual ZBrush folders under Program Files searched instead. Says so for any
+  folder where the plugin is still there. }
 procedure RemoveZScriptPlugins;
+var
+  ListFile, ZPlugs: String;
+  Lines: TArrayOfString;
+  i, ResultCode: Integer;
 begin
   PluginLeftovers := '';
-  FindAndRemoveZScriptPlugins(ExpandConstant('{commonpf}\Maxon ZBrush 20??'));
-  FindAndRemoveZScriptPlugins(ExpandConstant('{commonpf}\Pixologic\ZBrush 20??'));
-  FindAndRemoveZScriptPlugins(ExpandConstant('{commonpf}\Maxon\ZBrush 20??'));
+  ListFile := ExpandConstant('{tmp}\zscript-plugins.txt');
+  DeleteFile(ListFile);
+  if Exec(ExpandConstant('{app}\{#AppExe}'), '--zscript-list "' + ListFile + '"', '', SW_HIDE, ewWaitUntilTerminated,
+      ResultCode) and (ResultCode = 0) and LoadStringsFromFile(ListFile, Lines) then
+  begin
+    for i := 0 to GetArrayLength(Lines) - 1 do
+    begin
+      ZPlugs := RemoveBackslashUnlessRoot(Trim(Lines[i]));
+      if (ZPlugs <> '') and PluginIn(ZPlugs) then
+        RemoveZScriptPlugin(ZPlugs);
+    end;
+  end
+  else
+  begin
+    FindAndRemoveZScriptPlugins(ExpandConstant('{commonpf}\Maxon ZBrush 20??'));
+    FindAndRemoveZScriptPlugins(ExpandConstant('{commonpf}\Pixologic\ZBrush 20??'));
+    FindAndRemoveZScriptPlugins(ExpandConstant('{commonpf}\Maxon\ZBrush 20??'));
+  end;
+  DeleteFile(ListFile);
   if PluginLeftovers <> '' then
     SuppressibleMsgBox('ZOrbit could not remove its plugin from these ZBrush folders:' + #13#10 + PluginLeftovers
       + #13#10#13#10 + 'To finish, delete ZOrbitBridge.zsc and the ZOrbitData folder from each of them.',
