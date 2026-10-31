@@ -1,120 +1,40 @@
 # TODO
 
-## Next
+The roadmap and the ideas list are on GitHub now, one issue per item, so people can comment on each one and add a
+thumbs-up:
 
-- [ ] Profiles for different ZBrush projects or jobs (hard-surface, creature, a client's pipeline): each profile
-      has its own menus, settings, hotkeys, tags and favourites, so a ring can be set up for one kind of work and
-      swapped out for another
-  - [ ] Decide what a profile holds: `radial.json` (menus, ring settings, browser hotkey) and `tags.json` for
-        sure; auto-slot usage (`usage.json`) and the Recent list probably stay per user, not per profile
-  - [ ] Switch from the tray menu and from Studio (a profile picker in the top bar), and optionally with a hotkey
-        that cycles them; the ring, the browser and the Studio all follow at once, with no restart
-  - [ ] Optional automatic switch when ZBrush opens a project or tool whose name matches a rule (the window title
-        carries the file name), with a toast saying which profile it chose
-  - [ ] New profile: start empty, from the starter menus, or as a copy of the current one; rename, duplicate,
-        delete (the last one cannot be deleted); the file layout could be `%APPDATA%\ZOrbit\profiles\<name>\`
-        with the current files becoming the "Default" profile, so an existing install upgrades with no change
-  - [ ] Settings > Import and export already moves a menus, settings and tags file between machines: a profile
-        export/import can reuse it
+- [Roadmap board](https://github.com/users/combwizard/projects/2): Next, In progress, Later, Ideas, Done
+- [Milestone 1.0](https://github.com/combwizard/ZOrbit/milestone/1): what has to be done or checked before 1.0
+- [Ideas, most wanted first](https://github.com/combwizard/ZOrbit/issues?q=is%3Aissue%20is%3Aopen%20label%3Aidea%20sort%3Areactions-%2B1-desc)
 
-- [ ] Support ZBrush 2022–2025 (ZScript bridge in `bridge/zscript/`, Studio: Settings > Older ZBrush)
-  - [ ] 2022: load a brush that isn't loaded yet, press/set/toggle, steps, Status, Studio button
-    - The 2026 bridge had to press a freshly loaded brush again once ZBrush had added its button (a timer on
-      the listener). The ZScript bridge presses it straight after `Brush:Load Brush` too: check whether 2022
-      selects it, and if not, retry the press (ZScript has no timer: a second Apply, or `[Delay]`)
-  - [ ] Let the plugin bind its own Apply hotkey (F9 is stored as code 88: `[ZPLUGIN:ZORBIT:APPLY,88]`)
-    - The plugin runs `[ISetHotkey, …Apply, 88]` at load when `[IGetHotkey]` is 0 (the `IButton` hotkey
-      argument did nothing in 2022). F9 applies picks in 2022 with no stored binding, but the log says
-      "at load: 0, now: 0": `IGetHotkey` reads 0 even after `ISetHotkey` worked, so the "already has a hotkey"
-      guard may never hold
-    - [ ] Check that a key the user binds and stores still wins over F9 (bind Alt+F9 or F10 and Store, restart).
-          If it doesn't, drop the guard and say in the docs that a custom key needs F9 set there too, or
-          read the stored key from `StartupHotkeys.txt` instead
-    - [ ] Check 2023 and 2025 with the new `.zsc`
-    - [ ] Restore 2022's own binding afterwards if wanted (`StartupHotkeys.txt.bak-zorbit`)
-  - [ ] Unverified ZScript details: `[Val]` on a set value
-  - [ ] Test the UAC path with a ZBrush under Program Files
-  - [ ] Slow fallback when request.txt is still there ~1 s after the bridge key (key not bound, or bound to
-        another key): write the pick as a one-off script and run `ZBrush.exe <script>`. Covers the
-        `IGetHotkey` guard question above too
-    - [ ] First check in 2022 that `ZBrush.exe <script>` runs it in the open ZBrush, not a second instance
-    - [ ] "Bridge didn't respond" warning only when the fallback also leaves request.txt behind
-  - [ ] Uninstalling ZOrbit leaves the plugin in each ZBrush (it can't elevate): say so, or offer removal
+Below are my own notes: checks of changes I made and internal clean-ups that nobody else would vote on.
 
-## Later
+## Checks in ZBrush
 
-- [ ] macOS support
-  - Bridge: replace the WM_APP listener window and WM_TIMER retries with another IPC path.
-  - App: global hotkey, ring overlay, tray (menu bar) and window handling are all Win32 today (`win32.py`, `ring.py`, `radiald.py`, `tray.py`, `studio.py`).
-  - Hotkey and cursor tracking need the Accessibility permission.
-  - Config path: `~/Library/Application Support` instead of `%APPDATA%`.
-  - Packaging: `.dmg`/`.pkg` instead of Inno Setup. Unsigned apps hit Gatekeeper harder than SmartScreen, so this likely needs an Apple Developer account and notarization.
-
-## Ideas
-
-### Bridge
-
-- [ ] A failed pick has no sign on screen (UX audit). Message mode with no listener, ZBrush not in front
-      and an empty auto or tag slot all end in a log line only, and the "file not found" placeholder looks the same as
-      "no thumbnail". Show something (a short toast near the cursor, a different placeholder). It goes with the
-      "Bridge didn't respond" warning item under Support ZBrush 2022-2025 above
 - [ ] Test two bridge changes in ZBrush: the "(Edit mode is off)" note on brush picks, and deleting a leftover
       `request.json`/`request.txt` when the bridge loads
   - [ ] ZScript side: recompile in 2022, install, check `[IGet, "Transform:Edit"]` and `FileDelete` there
   - [ ] Python side: reload in 2026 and check `bridge.log` ends with "bridge loaded" again
-- [ ] ZBrush 2026 can move the user asset folder (Preferences > Asset Directory, `ZBRUSH_USER_ASSETS_DIR`).
-      `brushes.zbrush_dirs()` reads only `userassets_path.txt`; have the bridge write
-      `zbc.resolve_path("ZPLUGINDATA_")` to a file the app reads
 - [ ] Check in ZBrush 2026 and 2022 that an imported alpha or texture gets a button named by its file stem (else
       every pick re-imports); check that `Texture:Import` takes .exr
 
-### Ring
+## Studio window
 
-- [ ] Auto slots: unpinned slots refill from usage (decay with a ~2 week half-life; a newcomer must win twice
-      in a row before it takes a slot, so the ring doesn't reshuffle). A simpler first step: a "Recent brushes" ring
-- [ ] Right-click the open ring: Keep (pin), Remove, Hide, without opening Studio
-- [ ] More item kinds: macro, load a tool/project/UI layout
-  - [ ] Load project: an "always the newest" option that opens the latest file in a folder, so saving
-        `Blockout_012` after `_011` needs no menu edit
-- [ ] Capture item: save the viewport (`Document:Export`) as a timestamped PNG in a folder chosen in Studio
-- [ ] Match ZBrush's interface colours: read `Preferences:IColors:*` in the bridge and offer them as a ring theme
-- [ ] Per-slot glow colour; slot shapes (circle, rounded square); hub size; a "ring is full" message in Studio
+- [ ] Test the 0.10.1 flash fix on the PC that reported the black flash (open, and leaving maximised)
+- [ ] Untested after the flash fix: drag a maximised window off the top, Win+Shift+Arrow to another monitor and
+      restore, snap layouts
+- [ ] Custom title bar through `WM_NCCALCSIZE` instead of removing `WS_CAPTION` (`winframe.custom_frame`). With
+      the caption style kept, Windows and WinForms agree on the window size, so the restore correction, the
+      `WM_GETMINMAXINFO` work-area limit and the normal-rectangle tracker can all go, and `GetWindowPlacement`
+      becomes right again. The catch: the top resize edge is inside the area WebView2 covers (keep a thin top
+      border, or hit-test it). Test on Windows 10 and 11, Aero Snap, drag off the top, two monitors
 
-### Tags and the browser
+## Clean-ups
 
-- [ ] Any / All toggle for the tag chips (they match any chosen tag today)
-- [ ] A segmented slot border when a brush has several tags (only the first colours it now)
-- [ ] Group same-tag slots: an option to draw a ring with each tag's slots side by side, so the band forms
-      solid arcs (it would move slots, so it needs to be per menu and off by default)
-- [ ] The tag band along a fan's arc (only the ring has it; a fan's slots take the tint and glow)
-- [ ] Idle exit for the browser process: quit after a while unused and start again on the next press
-- [ ] `ring.tag_limit`: change the 12-slot cap of a tag fan
-- [ ] Favourites: manual drag-to-reorder and several named favourite tabs (XMD Toolbox style); a mini-mode strip of
-      favourites over ZBrush
-
-### Studio
-
-- [ ] A short guided tour, offered on first run and under Help (Setup ends with a "What's where" step; the tour itself is not done)
 - [ ] Reorder the Settings cards: Ring geometry, Colours, Labels, Tag colours (the look); Open animation, Behaviour
       (the feel); Browser, ZBrush bridge; then the cards that save straight away: Older ZBrush, Tags,
       Studio. Do it by sorting the built cards by name before the "On this page" list is made, not by moving
       their code, and put the same order in the Settings row of the user guide's Studio table. Import and export
       comes last, after Studio. Optionally a
       **Manage tags...** button in the Tag colours card
-- [ ] Custom title bar through `WM_NCCALCSIZE` instead of removing `WS_CAPTION` (`winframe.custom_frame`). With
-      the caption style kept, Windows and WinForms agree on the window size, so the restore correction, the
-      `WM_GETMINMAXINFO` work-area limit and the normal-rectangle tracker can all go, and `GetWindowPlacement`
-      becomes right again. The catch: the top resize edge is inside the area WebView2 covers (keep a thin top
-      border, or hit-test it). Test on Windows 10 and 11, Aero Snap, drag off the top, two monitors
-- [ ] Test the 0.10.1 flash fix on the PC that reported the black flash (open, and leaving maximised)
-- [ ] Untested after the flash fix: drag a maximised window off the top, Win+Shift+Arrow to another monitor and
-      restore, snap layouts
-
-### macOS notes
-
-- Ask for Accessibility once and show its state on the Status screen
-- Open the ring over ZBrush without bringing our app to the front; watch for stuck modifiers and non-Latin
-  input sources
-- ZScript on a Mac: `FileNameSetNext` needs a `!:` prefix on paths; ZBrush 2023+ needs the universal
-  `ZFileUtilsU.lib`
-- Ship separate Apple Silicon and Intel builds, signed and notarized
+- [ ] Idle exit for the browser process: quit after a while unused and start again on the next press

@@ -1,5 +1,8 @@
 blank_issues_enabled: true
 contact_links:
+  - name: Roadmap and ideas
+    url: https://github.com/users/combwizard/projects/2
+    about: What's planned, and ideas others have had. Add a thumbs-up or a comment to an idea that's already there.
   - name: Documentation
     url: https://zorbit.lol/docs/
     about: Every setting and item type, hotkeys, files and logs, and troubleshooting.

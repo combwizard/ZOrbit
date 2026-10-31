@@ -17,6 +17,7 @@ If you know pie menus from Blender or marking menus from Maya, ZOrbit brings tha
 **Contents**
 
 - [Documentation](#documentation)
+- [Roadmap and ideas](#roadmap-and-ideas)
 - [Features](#features)
 - [Requirements](#requirements)
 - [Install](#install)
@@ -30,6 +31,10 @@ If you know pie menus from Blender or marking menus from Maya, ZOrbit brings tha
 ## Documentation
 
 The full documentation is at **[zorbit.lol/docs](https://zorbit.lol/docs/)**: every setting and item type, tags, the browser, hotkeys, files and logs, and how ZOrbit talks to ZBrush.
+
+## Roadmap and ideas
+
+The **[roadmap board](https://github.com/users/combwizard/projects/2)** shows what's next, what's later and the ideas that aren't planned yet. Each card is an issue: add a thumbs-up to the ones you want, or comment on how you'd use them. Have ZBrush 2023 or 2025? The [needs testing](https://github.com/combwizard/zorbit/issues?q=is%3Aissue%20is%3Aopen%20label%3A%22needs%20testing%22) issues list a few quick checks.
 
 ## Features
 

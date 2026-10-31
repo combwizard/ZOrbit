@@ -6,6 +6,9 @@ body:
     attributes:
       value: |
         One line is plenty. "I didn't get what this button does" helps as much as a crash report.
+
+        Got an idea? It may be on the [roadmap](https://github.com/users/combwizard/projects/2) already. If it is,
+        add a thumbs-up or a comment there.
   - type: textarea
     id: feedback
     attributes:

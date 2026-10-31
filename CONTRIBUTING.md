@@ -12,6 +12,13 @@ Bug reports and ideas are welcome on the
 - the last lines of `%LOCALAPPDATA%\ZOrbit\radiald.log` and `bridge.log`. Look them over first and remove
   anything you would rather not share.
 
+What's planned is on the [roadmap board](https://github.com/users/combwizard/projects/2), and every idea there is
+an issue of its own. Add a thumbs-up to the ideas you want and comment on how you'd use them.
+[This list](https://github.com/combwizard/zorbit/issues?q=is%3Aissue%20is%3Aopen%20label%3Aidea%20sort%3Areactions-%2B1-desc)
+puts the ideas with the most thumbs-ups first. Issues marked
+[needs testing](https://github.com/combwizard/zorbit/issues?q=is%3Aissue%20is%3Aopen%20label%3A%22needs%20testing%22)
+ask for someone with a particular ZBrush version to try something.
+
 Report security problems privately, as [SECURITY.md](SECURITY.md) describes. Everyone taking part is expected to
 follow the [code of conduct](CODE_OF_CONDUCT.md).
 
