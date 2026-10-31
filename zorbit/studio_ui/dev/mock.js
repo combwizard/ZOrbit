@@ -306,6 +306,10 @@
   // By default the app runs along with ZBrush. ?appoff, ?startfail and a ?status other than up leave it off until Start app succeeds.
   var appRunning = function () { return zbRunning() && (appStarted || q.get('status') === 'up' || !(q.has('appoff') || q.has('startfail') || q.has('status'))); };
   var firstDone = false, firstRun = function () { return q.has('firstrun') && !firstDone; };   // ?firstrun holds until Finish or Skip in this page; a reload starts it again
+  // Under ?firstrun or ?mode= the Studio mode lives only in this page (else one ?firstrun visit would flip every later
+  // page to Simple): set_pref keeps it here and every reply reports it, so the app's merge of a reply cannot undo it.
+  var pageMode = null;
+  function modeOf(p) { if (pageMode !== null) p.mode = pageMode; else if (q.get('mode')) p.mode = q.get('mode'); else if (firstRun()) p.mode = ''; return p; }
   var lsGet = function (k) { try { return localStorage.getItem(k); } catch (e) { return null; } };
   var envRegistered = function () { return !q.has('noenv') || lsGet('rm_env') === '1'; };
   var bridgeOk = function () { return !q.has('nobridge'); };
@@ -735,8 +739,8 @@
       return sleep(100).then(function () { return { ok: true, message: 'Forgot ' + path + '. The folder itself was not touched.' }; });
     },
     // ?firstrun answers setup_done false until Finish or Skip, so a reload goes back to Setup
-    get_prefs: function () { var p = Object.assign({ show_licence: true, check_updates: true, last_screen: 'menus', setup_done: true, mode: 'full' }, JSON.parse(localStorage.getItem('rm_prefs') || '{}')); if (firstRun()) { p.setup_done = false; p.mode = ''; } if (q.get('mode')) p.mode = q.get('mode'); return Promise.resolve(p); },
-    set_pref: function (k, v) { if (q.has('prefsfail') && k !== 'last_screen') return sleep(80).then(function () { throw new Error('disk full (mock)'); }); var p = Object.assign({ show_licence: true, check_updates: true, last_screen: 'menus', setup_done: true, mode: 'full' }, JSON.parse(localStorage.getItem('rm_prefs') || '{}')); p[k] = v; try { if (!(k === 'mode' && firstRun())) localStorage.setItem('rm_prefs', JSON.stringify(p)); } catch (e) {} if (k === 'setup_done' && v === true) firstDone = true; if (firstRun()) p.setup_done = false; return Promise.resolve(p); },
+    get_prefs: function () { var p = Object.assign({ show_licence: true, check_updates: true, last_screen: 'menus', setup_done: true, mode: 'full' }, JSON.parse(localStorage.getItem('rm_prefs') || '{}')); if (firstRun()) p.setup_done = false; return Promise.resolve(modeOf(p)); },
+    set_pref: function (k, v) { if (q.has('prefsfail') && k !== 'last_screen') return sleep(80).then(function () { throw new Error('disk full (mock)'); }); var p = Object.assign({ show_licence: true, check_updates: true, last_screen: 'menus', setup_done: true, mode: 'full' }, JSON.parse(localStorage.getItem('rm_prefs') || '{}')); p[k] = v; var pageOnly = k === 'mode' && (q.has('firstrun') || q.get('mode')); if (pageOnly) pageMode = v; else try { localStorage.setItem('rm_prefs', JSON.stringify(p)); } catch (e) {} if (k === 'setup_done' && v === true) firstDone = true; if (firstRun()) p.setup_done = false; return Promise.resolve(modeOf(p)); },
     set_dirty: function () { return Promise.resolve(true); },
     close_now: function () { console.log('[mock] close_now'); return Promise.resolve(true); },
     win_minimize: function () { return Promise.resolve(); },

@@ -40,8 +40,8 @@ Studio switches to Full by itself when you ask for something Simple hides. Click
 
 Which mode Studio starts in:
 
-- A fresh install starts in Simple.
-- After an upgrade, Studio opens in Full if your menus or settings use something Simple hides, and in Simple otherwise. The starter menus use Press, Set, Toggle, Steps, Tag and Browser items, so an upgrade that kept them opens in Full.
+- A fresh install starts in Simple. So does a setup that has never been through Studio's Setup screen, even one with edited menus: Setup opens first, and the switch is there afterwards.
+- After an upgrade, if you have used Studio before, it opens in Full if your menus or settings use something Simple hides, and in Simple otherwise. The starter menus use Press, Set, Toggle, Steps, Tag and Browser items, so an upgrade that kept them opens in Full.
 - After that, Studio opens in the mode you left it in.
 
 The choice is kept in `studio.json` as `mode` (`simple` or `full`). It is a Studio preference, so it is not part of an [export](files.md#import-and-export) and it does not change the ring. The [browser](browser.md) window has no switch and always shows everything.

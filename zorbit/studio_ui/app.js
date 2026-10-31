@@ -3311,18 +3311,23 @@ function sliderRow({ label, hint, key, step = 1, unit = '', scale = 1, onLive, g
 /* Simple mode's one size slider: it moves radius, slot and dead zone together, keeping the proportions the ring had when the gesture began. */
 function sizeRow(live) {
   const KEYS = ['radius', 'slot', 'dead_zone'];
-  let base = null;
+  // base is the ring at the start of a gesture; slot and dead zone are scaled from it, not from their last rounded
+  // value, so a slow drag does not drift. A run of arrow keys keeps one base (a 1 px step from a fresh base would
+  // round slot and dead zone to no change at all); it is taken again when something else moved the radius since
+  // this row last wrote it (undo, say), on a new pointer gesture and when the row gets focus.
+  let base = null, last = null;
   const row = sliderRow({ label: 'Ring size', hint: 'How big the ring is. Slots and the dead zone scale with it.', key: 'radius', unit: 'px', onLive: live,
     put: v => {
-      if (!base) base = { radius: ringNum('radius'), slot: ringNum('slot'), dead_zone: ringNum('dead_zone') };
+      if (!base || ringNum('radius') !== last) base = { radius: ringNum('radius'), slot: ringNum('slot'), dead_zone: ringNum('dead_zone') };
       const f = base.radius ? v / base.radius : 1;
       ringSet('radius', v);
       for (const k of ['slot', 'dead_zone']) { const [lo, hi] = ranges()[k] || [0, 1000]; ringSet(k, clamp(Math.round(base[k] * f), lo, hi)); }
       tidyRing(); commit();
+      last = ringNum('radius');
     },
-    clear: () => { for (const k of KEYS) delete ensureRing()[k]; tidyRing(); commit(); },
+    clear: () => { for (const k of KEYS) delete ensureRing()[k]; tidyRing(); commit(); base = null; },
     isSet: () => KEYS.some(k => k in ring() && ring()[k] !== S.defaults[k]) });
-  for (const ev of ['pointerdown', 'keydown', 'focusin']) row.addEventListener(ev, () => { base = null; }, true);   // each gesture starts from the ring as it is now
+  for (const ev of ['pointerdown', 'focusin']) row.addEventListener(ev, () => { base = null; }, true);
   return row;
 }
 function switchRow({ label, hint, key }) {
@@ -4047,7 +4052,7 @@ function deriveSteps(d, tryFrom, ctx) {
   else if (sent && !did && now - pk.at > 4) {
     // ZBrush did answer, with a failure: the bridge log line says what (the same seq, so it is this pick)
     const failed = !!(lp && lp.ok === false && pk.seq != null && lp.seq === pk.seq && lp.at >= pk.at - 2);
-    hint = failed ? { text: lp.text } : ({ key: { text: 'ZBrush did not react to the bridge key. Bind it to Zplugin > ZOrbit > Apply (Settings > ZBrush bridge).', settings: true },
+    hint = failed ? { text: lp.text } : ({ key: { text: 'ZBrush did not react to the bridge key. Bind it to Zplugin > ZOrbit > Apply (Settings > ZBrush bridge, in Full mode).', settings: true },
       listener: { text: 'The plugin did not act on the pick. Open the logs folder from Status and read bridge.log.', status: true },
       zscript: { text: 'ZBrush did not react to F9. Check Zplugin > ZOrbit > Apply has the hotkey.' } }[pk.route]
       || { text: pk.reason || 'ZBrush did not confirm the pick.' });
