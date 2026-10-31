@@ -82,7 +82,6 @@ h1, h2, h3, p { margin: 0; }
   animation: upd-glow 2.4s ease-in-out infinite; }
 .version-chip .upd-new { color: var(--accent); text-shadow: 0 0 6px rgba(248, 107, 51, .55); }
 @keyframes upd-glow { 50% { filter: drop-shadow(0 0 1px rgba(248, 107, 51, .6)) drop-shadow(0 0 3px rgba(248, 107, 51, .2)); } }
-@media (prefers-reduced-motion: reduce) { .version-chip .upd-dot { animation: none; } }
 .winctl { display: flex; align-self: stretch; margin-left: 10px; }
 .winbtn { width: 46px; border: 0; background: transparent; color: var(--sub); display: grid; place-items: center;
   transition: background .12s, color .12s; }
