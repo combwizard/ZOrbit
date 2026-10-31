@@ -53,8 +53,8 @@ RestartApplications=no
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Messages]
-FinishedLabel=Setup has finished installing [name] on your computer.%n%nRestart ZBrush once so it loads the ZOrbit plugin.
-FinishedLabelNoIcons=Setup has finished installing [name] on your computer.%n%nRestart ZBrush once so it loads the ZOrbit plugin.
+FinishedLabel=Setup has finished installing [name] on your computer.%n%nZBrush 2026 and newer: restart ZBrush once so it loads the plugin.%nZBrush 2022 to 2025: open ZOrbit Studio, go to Setup and press Install next to your ZBrush, then restart it.
+FinishedLabelNoIcons=Setup has finished installing [name] on your computer.%n%nZBrush 2026 and newer: restart ZBrush once so it loads the plugin.%nZBrush 2022 to 2025: open ZOrbit Studio, go to Setup and press Install next to your ZBrush, then restart it.
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked

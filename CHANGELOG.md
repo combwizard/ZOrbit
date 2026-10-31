@@ -21,6 +21,9 @@ All notable changes to this project are listed here. The format follows
 
 ### Changed
 
+- The installer's last page says what to do next for ZBrush 2026 and newer (restart it) and for ZBrush 2022 to
+  2025 (install the plugin from Studio's Setup screen). The plugin's "app was not found" dialog covers the
+  installer, the portable zip and running from source.
 - Studio: a new menu's id comes from its title (**Sculpting** becomes `sculpting`) instead of `menu`, `menu_2` and
   so on, and follows the title until the menu is saved or you type an id yourself. Accented letters are kept
   without the accent.

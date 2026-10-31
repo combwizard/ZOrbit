@@ -372,8 +372,9 @@ def _spawn(cmd, errlog_name=None):
 
 
 def _not_installed():
-    zbc.message_ok("ZOrbit: the app was not found.\n\nRun the ZOrbit installer again, or start "
-                   "\"ZOrbit Studio\" from the Start menu once.", "ZOrbit")
+    zbc.message_ok("ZOrbit: the app was not found.\n\nIf you installed ZOrbit with its installer, start "
+                   "\"ZOrbit Studio\" from the Start menu once. If you use the portable zip or run from "
+                   "source, start ZOrbit.exe (or the app) once so it records where it is.", "ZOrbit")
 
 
 def app_running() -> bool:

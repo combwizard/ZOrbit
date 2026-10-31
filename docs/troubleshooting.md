@@ -1,6 +1,6 @@
 # Troubleshooting
 
-Entries are grouped by what you see. Studio's **Setup** screen (Alt+6) is the quickest first check: it looks at ZBrush, the plugin and the app, and says which step is missing. The log files named below are listed under [Logs](#logs).
+Entries are grouped by what you see. Studio's **Setup** screen (Alt+5) is the quickest first check: it looks at ZBrush, the plugin and the app, and says which step is missing. The log files named below are listed under [Logs](#logs).
 
 ## Installing
 
@@ -20,12 +20,14 @@ The palette was renamed, so a hotkey you bound by hand to the old **Apply** does
 
 ### Pressing the hotkey does nothing
 
-1. Open Studio's **Setup** screen (Alt+6). It checks ZBrush, the plugin and the app, and says which step is missing. An amber dot on its button in the rail means a check is failing.
+1. Open Studio's **Setup** screen (Alt+5). It checks ZBrush, the plugin and the app, and says which step is missing. An amber dot on its button in the rail means a check is failing.
 
     ![The Setup screen with ZBrush found ticked, and the Plugin loaded in ZBrush step waiting: ZBrush 2026 shows Restart ZBrush because it was started before the plugin was set up](images/setup-restart.png)
 
 2. Is ZBrush the front window? The hotkey is ignored everywhere else.
-3. In ZBrush, open **Zplugin > ZOrbit > Status**. It should say the listener is verified and the app is running. If the palette is missing, ZBrush did not load the plugin. Restart ZBrush and check that your user environment variable `ZBRUSH_PLUGIN_PATH` (in Windows' environment variables, user section) contains the plugin folder. As a one-off you can also load `zorbit_bridge.py` with **ZScript > Python Scripting > Load**. If the plugin failed while starting, `bridge.log` (in `%LOCALAPPDATA%\ZOrbit`) holds the error, after a line that says "the plugin could not start".
+3. In ZBrush, open **Zplugin > ZOrbit**. If the palette is missing, ZBrush did not load the plugin. On Studio's **Setup** screen, press **Fix** next to your ZBrush if it shows that button, then restart ZBrush. If there is no **Fix**, or the palette is still missing, the next steps depend on your version:
+    - **ZBrush 2026 and newer:** the plugin folder (`<install folder>\bridge`, the one that holds `zorbit_bridge.py`) must be in your user environment variable `ZBRUSH_PLUGIN_PATH` (in Windows' environment variables, user section). As a one-off you can also load `zorbit_bridge.py` with **ZScript > Python Scripting > Load**. **Zplugin > ZOrbit > Status** should say the listener is verified and the app is running. If the plugin failed while starting, `bridge.log` (in `%LOCALAPPDATA%\ZOrbit`) holds the error, after a line that says "the plugin could not start". Its listener line says whether the listener is up.
+    - **ZBrush 2022 to 2025:** the **Zplugin > ZOrbit** palette comes from the ZScript plugin, not from `ZBRUSH_PLUGIN_PATH`. If it is missing, install the plugin from the **Setup** screen or from **Settings > Older ZBrush** (Full mode), then restart that ZBrush. `zscript_launch.log` and `zscript_bridge.log` (in `%LOCALAPPDATA%\ZOrbit`) show whether the plugin started the app and what the last pick did. See also [ZBrush 2022 to 2025: the ring opens, but picks do nothing](#zbrush-2022-to-2025-the-ring-opens-but-picks-do-nothing).
 4. If the status says the app is not running, press **Start App**, then read `app_stderr.log` and `radiald.log`.
 5. In Studio, check for the **problems** pill. A menu with no usable items, a duplicate hotkey or a hotkey the app cannot read all stop a ring from opening.
 6. Another program may grab the same key before it reaches the app. Try a different hotkey.
@@ -125,7 +127,7 @@ Studio keeps the last version as `radial.json.bak`. If you edit the file by hand
 - **Start from defaults** replaces the file with the built-in menus, after a confirmation. The unreadable file is kept as `radial.json.broken`.
 - **Try again** reloads Studio, for when you have fixed the file by hand.
 
-The rail and the **Alt+1** to **Alt+6** keys do nothing, and the rail is dimmed, until the file loads. Nothing is changed or saved until you choose a button.
+The rail and the **Alt+1** to **Alt+5** keys do nothing, and the rail is dimmed, until the file loads. Nothing is changed or saved until you choose a button.
 
 A section of the wrong type, for example `"ring": "big"`, is reported with the section name, and the defaults are used for it. A brush, alpha, material or texture name may not contain `\ / :` or `..`, and an `icon` may not point at a network path; the problem names the item, and a bad name skips the item. A byte-order mark left by an editor is accepted. Deleting `radial.json` makes the app create a fresh one from the starter menus.
 

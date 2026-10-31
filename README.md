@@ -65,17 +65,17 @@ A menu can open as a fan: hover its slot and its items spread out beyond it, wit
 ## Requirements
 
 - Windows 10 or 11
-- ZBrush 2022 or newer. ZBrush 2026 and newer load the Python plugin that the installer sets up. ZBrush 2022 to 2025 have no Python API, so they get a ZScript plugin, which you install from Studio (see [ZBrush 2022 to 2025](https://zorbit.lol/docs/install/#zbrush-2022-to-2025)).
+- ZBrush 2022 or newer. ZBrush 2026 and newer load the Python plugin that the installer sets up. ZBrush 2022 to 2025 have no Python API, so they get a ZScript plugin, which you install from Studio (see [ZBrush 2022 to 2025](https://zorbit.lol/docs/install/#zbrush-2022-to-2025)). ZBrush Core and ZBrushCore Mini are not supported, because they do not load plugins.
 - The Microsoft Edge WebView2 runtime, which Studio uses for its window. It is part of Windows 11 and of up-to-date Windows 10.
 
 ## Install
 
 1. Download the installer from the [Releases page](https://github.com/combwizard/zorbit/releases).
-2. Run it. It installs for your user only and does not need administrator rights. It adds the plugin folder to your `ZBRUSH_PLUGIN_PATH` user environment variable and creates a Start menu shortcut called **ZOrbit Studio**.
-3. **Restart ZBrush once.** ZBrush reads `ZBRUSH_PLUGIN_PATH` only when it starts.
+2. Run it. It installs for your user only and does not need administrator rights. It adds the plugin folder to your `ZBRUSH_PLUGIN_PATH` user environment variable and creates two Start menu shortcuts, **ZOrbit Studio** and **ZOrbit Browser**, plus an optional desktop icon.
+3. **ZBrush 2026 and newer:** restart ZBrush once (it reads `ZBRUSH_PLUGIN_PATH` only when it starts). **ZBrush 2022 to 2025:** open **ZOrbit Studio**, go to **Setup**, press **Install** next to your ZBrush (approve the Windows prompt if it asks), then restart that ZBrush.
 4. Open a canvas, hover over it and press **Q**.
 
-The first time you open **ZOrbit Studio** it starts on its **Setup** screen. Setup walks through the rest: it finds your ZBrush, tells you whether to restart it, installs the plugin for ZBrush 2022 to 2025, and has you try the ring once. You can reopen it any time with Alt+6.
+The first time you open **ZOrbit Studio** it starts on its **Setup** screen. Setup walks through the rest: it finds your ZBrush, tells you whether to restart it, lists each ZBrush 2022 to 2025 with an **Install** button, and has you try the ring once. You can reopen it any time with Alt+5.
 
 The first run puts a starter set of menus in `%APPDATA%\ZOrbit\radial.json`. They use only brushes that come with ZBrush.
 
@@ -83,7 +83,7 @@ The first run puts a starter set of menus in `%APPDATA%\ZOrbit\radial.json`. The
 
 The installer is not code-signed yet. Code-signing certificates cost money every year, and this is a free hobby project, so Windows SmartScreen shows its warning for any program it does not recognise. The warning does not mean it found a problem.
 
-To continue, click **More info**, then **Run anyway**. If you would rather not run a binary you did not build, the whole source is in this repository and [Build from source](#build-from-source) explains how to make the installer yourself.
+To continue, click **More info**, then **Run anyway**. If you would rather not run a binary you did not build, the whole source is in this repository and [Build from source](#build-from-source) explains how to make the installer yourself. If Windows offers no **Run anyway**, or an antivirus removed the program, see [Smart App Control and antivirus](https://zorbit.lol/docs/install/#smart-app-control-and-antivirus).
 
 ## First steps
 
@@ -101,8 +101,10 @@ The [documentation](https://zorbit.lol/docs/) covers every setting and item type
 ## Upgrading, uninstalling and troubleshooting
 
 - **Upgrading from Radial Menu for ZBrush:** run the new installer over the old one. Your menus and settings are copied over on the first start. See [Upgrading from Radial Menu for ZBrush](https://zorbit.lol/docs/install/#upgrading-from-radial-menu-for-zbrush).
+- **Updating:** run the new installer over the old one. Your menus, settings and tags stay. See [Updating](https://zorbit.lol/docs/install/#updating).
+- **Portable zip:** unzip it somewhere permanent and press **Fix** on Studio's **Setup** screen. See [Portable zip](https://zorbit.lol/docs/install/#portable-zip).
 - **ZBrush 2022 to 2025:** these versions get a ZScript plugin that you install from Studio. See [ZBrush 2022 to 2025](https://zorbit.lol/docs/install/#zbrush-2022-to-2025).
-- **Uninstall:** remove ZOrbit in **Windows Settings > Apps > Installed apps**. Remove the plugin from a ZBrush 2022 to 2025 first. See [Uninstall](https://zorbit.lol/docs/install/#uninstall).
+- **Uninstall:** remove ZOrbit in **Windows Settings > Apps > Installed apps**. The uninstaller also removes the plugin from the ZBrush 2022 to 2025 that Setup lists. See [Uninstall](https://zorbit.lol/docs/install/#uninstall).
 - **How it works:** a small app draws the ring outside ZBrush, and a plugin inside ZBrush carries out the pick. See [How ZOrbit talks to ZBrush](https://zorbit.lol/docs/bridge/).
 - **Something not working?** See [Troubleshooting](https://zorbit.lol/docs/troubleshooting/).
 
@@ -121,19 +123,7 @@ To run straight from a checkout while you work on the code, use `tools\dev-insta
 
 ## Licence
 
-| | |
-|---|---|
-| **Licence key** | `FCKGW-RHQQ2-YXRKT-8TG6W-2B7Q8` |
-| **Status** | Activated |
-| **Seats** | All of them |
-| **Expires** | Never |
-| **Price** | 0.00 |
-
-**Just kidding.** There is no licence key, no account, no trial and no expiry date. ZOrbit is licensed under the **GNU General Public License v3.0** (see [LICENSE](LICENSE)): free to use on as many machines as you like, to study, change and share. It stays free: if you distribute a modified version, you must also publish its source under the same licence. You are licensed. Forever.
-
-(The Studio has the same Licence screen. Its buttons work exactly as well as this table does. Not amused? Hide it with the link at the bottom of that page, or in Settings > Studio.)
-
-Third-party components and their licences are listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Contributions are welcome; see [CONTRIBUTING.md](CONTRIBUTING.md).
+ZOrbit is licensed under the **GNU General Public License v3.0** (see [LICENSE](LICENSE)). You can use it on as many machines as you like, and study, change and share it. If you distribute a modified version, you must publish its source under the same licence. The licences of the bundled libraries are listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Contributions are welcome; see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Disclaimer
 
