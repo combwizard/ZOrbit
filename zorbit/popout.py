@@ -41,6 +41,7 @@ import queue
 import sys
 import threading
 import time
+import traceback
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
@@ -50,6 +51,7 @@ import fsutil               # noqa: E402
 import paths                # noqa: E402
 import radiald              # noqa: E402
 import webapi               # noqa: E402
+import webview2              # noqa: E402
 import win32 as W           # noqa: E402
 import winframe             # noqa: E402
 
@@ -284,6 +286,7 @@ class Popout:
         self.prev_fg = 0                     # the window to hand the focus back to
         self._placed = False                 # the window has had its first position
         self._was_max = False                # it was maximised when it was last hidden
+        self.session_ending = False          # Windows is shutting down, restarting or signing out: let the window close
         self._pending = None                 # (tag, zbrush hwnd, kind) to show once ready
         self._lock = threading.RLock()       # show, hide and pick run one at a time
         self._loaded = threading.Event()
@@ -377,7 +380,31 @@ class Popout:
     def on_hwnd(self, hwnd):
         """From custom_frame, on the worker thread, before the frame is changed."""
         self.hwnd = int(hwnd)
-        winframe.limit_maximise_to_work_area(hwnd)           # maximise stops at the taskbar; tracks the normal rectangle
+        # maximise stops at the taskbar; tracks the normal rectangle; sees Windows ending the session
+        winframe.limit_maximise_to_work_area(hwnd, on_query_end=self.on_query_end, on_end=self.on_end_session)
+
+    def on_query_end(self):
+        """WM_QUERYENDSESSION (UI thread): the window must not veto it, as on_closing does for the close button."""
+        if not self.session_ending:
+            _log("Windows is ending the session; the window will close")
+        self.session_ending = True
+
+    def on_end_session(self, ending):
+        """WM_ENDSESSION (UI thread). ending: the session really ends, else something cancelled it. Saves the
+        window and goes: Windows stops the process soon after this returns, and it must not need the page."""
+        if not ending:
+            _log("the session end was cancelled")
+            self.session_ending = False
+            return
+        self.session_ending = True
+        self.quitting = True
+        try:
+            if self.visible():
+                self._save_placement()
+        except Exception as e:
+            _log(f"could not save the window at session end: {e!r}")
+        _log("session ended; exiting")
+        threading.Timer(2.0, os._exit, args=(0,)).start()       # WinForms is closing the form; this is the backstop
 
     def on_loaded(self):
         _log("page loaded")
@@ -466,6 +493,16 @@ class Popout:
         wa = winframe.work_area(zb or self.prev_fg or W.GetForegroundWindow() or 0)
         return wa.left + (wa.right - wa.left - wd) // 2, wa.top + (wa.bottom - wa.top - ht) // 2, wd, ht, False
 
+    def _on_screen(self, zb=0):
+        """A window left on a monitor that has since gone is brought back onto one: centred on the screen of the
+        ZBrush window the request named, else the primary one. Checked on every show, not only the first."""
+        try:
+            near = zb if zb and W.IsWindow(zb) else self.prev_fg
+            if winframe.bring_on_screen(self.hwnd, near):
+                _log("the window was off every screen; moved onto one")
+        except Exception as e:
+            _log(f"on-screen check failed: {e!r}")
+
     def _z_order(self):
         return winframe.HWND_TOPMOST if self.on_top else winframe.HWND_NOTOPMOST
 
@@ -529,6 +566,7 @@ class Popout:
             if was_visible:
                 if user32.IsIconic(self.hwnd):
                     user32.ShowWindow(self.hwnd, SW_RESTORE)
+                self._on_screen(zb)
                 winframe.user32.SetWindowPos(self.hwnd, self._z_order(), 0, 0, 0, 0,
                                              W.SWP_NOMOVE | W.SWP_NOSIZE | W.SWP_SHOWWINDOW)
             else:                                      # shown through pywebview: the form has to know it is visible, or the
@@ -538,6 +576,7 @@ class Popout:
                     winframe.user32.SetWindowPos(self.hwnd, self._z_order(), x, y, wd, ht, W.SWP_NOACTIVATE)
                     self._placed = True
                 else:
+                    self._on_screen(zb)                # the screen it was on may be gone since it was hidden
                     winframe.user32.SetWindowPos(self.hwnd, self._z_order(), 0, 0, 0, 0,
                                                  W.SWP_NOMOVE | W.SWP_NOSIZE | W.SWP_NOACTIVATE)
                 self.window.show()
@@ -681,7 +720,7 @@ class Popout:
     def on_closing(self):
         """pywebview 'closing' (UI thread; False cancels): Alt+F4 and the like only close the window, which is hidden
         (or ends the process: see close)."""
-        if self.quitting:
+        if self.quitting or self.session_ending:       # the session ending must not be vetoed: it would block shutdown
             return None
         threading.Thread(target=self.close, kwargs={"why": "close requested"}, daemon=True).start()   # hiding needs the UI thread free
         return False
@@ -711,10 +750,21 @@ def main(args) -> int:
     mutex = kernel32.CreateMutexW(None, False, MUTEX)
     if ctypes.get_last_error() == W.ERROR_ALREADY_EXISTS:
         return _forward(opts)
+    try:
+        return _run(opts, mutex)
+    except Exception:                                    # the process has no console: popout.log is the only place to see why
+        _log("popout failed:\n" + traceback.format_exc())
+        return 1
+
+
+def _run(opts, mutex) -> int:
     pop = Popout(opts)
     pop.start_ctl()
     if opts["show"]:
         pop._pending = (opts["tag"], opts["zbrush"], opts["kind"])
+    if not webview2.require(_log, show_message=opts["show"]):     # a pre-warm only logs: nobody asked for a window
+        pop.stop_ctl()
+        return 1
     import webview
     _log("pywebview imported")
     try:                                                 # own identity, not Python's

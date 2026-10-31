@@ -110,6 +110,63 @@ def work_area(hwnd) -> w.RECT:
     return mi.rcWork
 
 
+def _primary_work_area() -> w.RECT:
+    user32.MonitorFromPoint.restype = w.HMONITOR
+    user32.MonitorFromPoint.argtypes = [w.POINT, w.DWORD]
+    mi = _MONITORINFO()
+    mi.cbSize = ctypes.sizeof(_MONITORINFO)
+    user32.GetMonitorInfoW(user32.MonitorFromPoint(w.POINT(0, 0), 1), ctypes.byref(mi))      # MONITOR_DEFAULTTOPRIMARY
+    return mi.rcWork
+
+
+def on_a_screen(left, top, right, bottom, maximised=False) -> bool:
+    """The rectangle is on a monitor that exists, with enough of its top edge on that monitor's work area to grab
+    the header (200 px wide, not below the bottom). A maximised window only has to touch a monitor."""
+    user32.MonitorFromRect.restype = w.HMONITOR
+    user32.MonitorFromRect.argtypes = [ctypes.POINTER(w.RECT), w.DWORD]
+    mon = user32.MonitorFromRect(ctypes.byref(w.RECT(left, top, right, bottom)), 0)       # MONITOR_DEFAULTTONULL
+    if not mon:
+        return False
+    if maximised:
+        return True
+    mi = _MONITORINFO()
+    mi.cbSize = ctypes.sizeof(_MONITORINFO)
+    if not user32.GetMonitorInfoW(mon, ctypes.byref(mi)):
+        return True
+    wa = mi.rcWork
+    return min(right, wa.right) - max(left, wa.left) >= 200 and wa.top - 16 <= top <= wa.bottom - 48
+
+
+def bring_on_screen(hwnd, near=0) -> bool:
+    """A window that was left on a monitor that is gone (or half off one) is centred on the work area of the
+    window near (a ZBrush window), else of the primary monitor. Moves only; the size is kept, shrunk to fit.
+    A maximised window is put over that work area, and the rectangle it restores to is centred there too.
+    A minimised window is left alone. True when it was moved."""
+    if user32.IsIconic(hwnd):
+        return False
+    r = w.RECT()
+    if not user32.GetWindowRect(hwnd, ctypes.byref(r)):
+        return False
+    zoomed = bool(user32.IsZoomed(hwnd))
+    if on_a_screen(r.left, r.top, r.right, r.bottom, zoomed):
+        return False
+    user32.IsWindow.argtypes = [w.HWND]
+    wa = work_area(near) if near and user32.IsWindow(near) else _primary_work_area()
+    wd, ht = min(r.right - r.left, wa.right - wa.left), min(r.bottom - r.top, wa.bottom - wa.top)
+    x, y = wa.left + (wa.right - wa.left - wd) // 2, wa.top + (wa.bottom - wa.top - ht) // 2
+    if zoomed:
+        st = _subclass.get(hwnd, (None, None, None))[2]
+        if st and st["normal"]:                            # a restore must land here too, not on the gone screen
+            nw, nh = st["normal"][2] - st["normal"][0], st["normal"][3] - st["normal"][1]
+            nw, nh = min(nw, wa.right - wa.left), min(nh, wa.bottom - wa.top)
+            nx, ny = wa.left + (wa.right - wa.left - nw) // 2, wa.top + (wa.bottom - wa.top - nh) // 2
+            st["normal"] = (nx, ny, nx + nw, ny + nh)
+        b = user32.GetSystemMetrics(32) + user32.GetSystemMetrics(92)          # SIZEFRAME + PADDEDBORDER
+        x, y, wd, ht = wa.left - b, wa.top - b, wa.right - wa.left + 2 * b, wa.bottom - wa.top + 2 * b
+    user32.SetWindowPos(hwnd, None, x, y, wd, ht, 0x0004 | 0x0010)             # NOZORDER NOACTIVATE
+    return True
+
+
 class _MINMAXINFO(ctypes.Structure):
     _fields_ = [("ptReserved", w.POINT), ("ptMaxSize", w.POINT), ("ptMaxPosition", w.POINT),
                 ("ptMinTrackSize", w.POINT), ("ptMaxTrackSize", w.POINT)]
@@ -131,11 +188,14 @@ def _same_monitor(a, b) -> bool:
     return user32.MonitorFromRect(ctypes.byref(w.RECT(*a)), 2) == user32.MonitorFromRect(ctypes.byref(w.RECT(*b)), 2)
 
 
-def limit_maximise_to_work_area(hwnd):
+def limit_maximise_to_work_area(hwnd, on_query_end=None, on_end=None):
     """Subclasses the window to answer WM_GETMINMAXINFO. Without a caption Windows maximises over the
     whole monitor (taskbar included); this makes double-click, Win+Up, snap-to-top and our button all
     maximise to the work area, with the usual invisible-border overhang. It also tracks the window's normal
-    (restored) rectangle (see normal_rect) and makes a restore land on it. Everything else passes through."""
+    (restored) rectangle (see normal_rect) and makes a restore land on it. Everything else passes through.
+    Windows shutting down, restarting or signing out: on_query_end() is called on WM_QUERYENDSESSION, before the
+    window is asked to close, and the answer is always "yes, go ahead"; on_end(ending) on WM_ENDSESSION (ending is
+    false when something else cancelled it). Both run on the UI thread: keep them short."""
     user32.GetWindowLongPtrW.restype = ctypes.c_void_p
     user32.GetWindowLongPtrW.argtypes = [w.HWND, ctypes.c_int]
     user32.SetWindowLongPtrW.restype = ctypes.c_void_p
@@ -144,6 +204,7 @@ def limit_maximise_to_work_area(hwnd):
     user32.CallWindowProcW.argtypes = [ctypes.c_void_p, w.HWND, w.UINT, w.WPARAM, w.LPARAM]
     GWLP_WNDPROC, WM_GETMINMAXINFO, WM_WINDOWPOSCHANGING, WM_WINDOWPOSCHANGED = -4, 0x0024, 0x0046, 0x0047
     WM_ENTERSIZEMOVE, WM_EXITSIZEMOVE = 0x0231, 0x0232
+    WM_QUERYENDSESSION, WM_ENDSESSION = 0x0011, 0x0016
     SWP_NOSIZE, SWP_NOMOVE = 0x0001, 0x0002
     if hwnd in _subclass:
         return
@@ -155,6 +216,16 @@ def limit_maximise_to_work_area(hwnd):
     st = {"zoomed": bool(user32.IsZoomed(hwnd)), "normal": None, "sizemove": False}
 
     def proc(h, msg, wp, lp):
+        if msg == WM_QUERYENDSESSION or msg == WM_ENDSESSION:
+            try:
+                if msg == WM_QUERYENDSESSION and on_query_end:
+                    on_query_end()
+                elif msg == WM_ENDSESSION and on_end:
+                    on_end(bool(wp))
+            except Exception:
+                pass
+            r = user32.CallWindowProcW(original, h, msg, wp, lp)     # WinForms raises FormClosing / FormClosed
+            return 1 if msg == WM_QUERYENDSESSION else r
         if msg == WM_ENTERSIZEMOVE or msg == WM_EXITSIZEMOVE:
             st["sizemove"] = msg == WM_ENTERSIZEMOVE
         elif msg == WM_WINDOWPOSCHANGING and st["zoomed"] and st["normal"]:
