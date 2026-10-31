@@ -24,8 +24,12 @@ AppSupportURL={#AppURL}/issues
 AppUpdatesURL={#AppURL}/releases
 VersionInfoDescription={#AppName} Setup
 VersionInfoProductName={#AppName}
-DefaultDirName={localappdata}\Programs\ZOrbit
-; An upgrade from Radial Menu moves to the new folder; CleanUpLegacy removes the old one.
+; DefDir (see [Code]) offers the folder of the current ZOrbit install, so an update keeps a custom folder, and the
+; default folder otherwise.
+DefaultDirName={code:DefDir}
+; UsePreviousAppDir=yes would also offer the folder of a Radial Menu install (same AppId, 0.7.0 and earlier) and put
+; ZOrbit there. DefDir does the same job but only accepts a folder that holds ZOrbit.exe, so a Radial Menu install
+; moves to the new folder and CleanUpLegacy removes the old one.
 UsePreviousAppDir=no
 DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
@@ -58,8 +62,14 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 [Files]
 Source: "..\dist\ZOrbit\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\bridge\zorbit_bridge.py"; DestDir: "{app}\bridge"; Flags: ignoreversion
+Source: "..\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\THIRD_PARTY_NOTICES.md"; DestDir: "{app}"; Flags: ignoreversion
 
 [InstallDelete]
+; Each build replaces the onedir contents as a whole, so files an older build had must not stay behind. Only in a
+; folder that already holds ZOrbit (or Radial Menu), so a folder picked by hand is never emptied of other programs'
+; files. {app}\bridge is left alone: ZBrush keeps its __pycache__ there and has the folder registered.
+Type: filesandordirs; Name: "{app}\_internal"; Check: HoldsOurApp
 ; Left by Radial Menu when it was installed in this same folder, or its shortcuts.
 Type: files; Name: "{app}\{#LegacyExe}"
 Type: files; Name: "{app}\bridge\radial_menu_bridge.py"
@@ -74,18 +84,31 @@ Name: "{autodesktop}\ZOrbit Studio"; Filename: "{app}\{#AppExe}"; Parameters: "-
 [Run]
 Filename: "{app}\{#AppExe}"; Parameters: "--studio"; Description: "Open ZOrbit Studio"; Flags: nowait postinstall skipifsilent
 
+[UninstallDelete]
+; Files made after install (ZBrush compiles the bridge into __pycache__), so the folders can go.
+Type: filesandordirs; Name: "{app}\_internal"
+Type: filesandordirs; Name: "{app}\bridge\__pycache__"
+Type: dirifempty; Name: "{app}\bridge"
+Type: dirifempty; Name: "{app}"
+
 [Code]
 const
   EnvKey = 'Environment';
   EnvValue = 'ZBRUSH_PLUGIN_PATH';
+  MachineEnvKey = 'SYSTEM\CurrentControlSet\Control\Session Manager\Environment';
   HKCU_HANDLE = $80000001;
+  HKLM_HANDLE = $80000002;
   RRF_RT_ANY = $0000FFFF;
   RRF_NOEXPAND = $10000000;
   REG_EXPAND_SZ_TYPE = 2;
+  { Mutexes that mean a Studio is open (it can hold unsaved edits): ZOrbit's, and Radial Menu's from before the
+    rename. The app itself holds Local\ZOrbit and the browser Local\ZOrbitPopout; neither has anything unsaved. }
+  StudioMutexes = 'Local\ZOrbitStudio,Local\RadialMenuStudio';
   UninstallKey = 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{6F1B7C52-3D4A-4E8B-9A57-2C0E81D4B9A3}_is1';
 
 var
   LegacyDir: String;                        { a Radial Menu install this setup replaces, or '' }
+  PluginLeftovers: String;                  { ZBrush folders whose plugin could not be removed, one per line }
 
 function RegGetValueW(hKey: Cardinal; lpSubKey, lpValue: String; dwFlags: Cardinal;
   var pdwType: Cardinal; pvData: Cardinal; var pcbData: Cardinal): Integer;
@@ -168,14 +191,14 @@ begin
     end;
 end;
 
-{ True if the user-level value exists and is REG_EXPAND_SZ. }
-function EnvValueIsExpandSz: Boolean;
+{ True if ZBRUSH_PLUGIN_PATH exists under Root\Key and is REG_EXPAND_SZ. }
+function ValueIsExpandSz(Root: Cardinal; const Key: String): Boolean;
 var
   ValType, Size: Cardinal;
 begin
   ValType := 0;
   Size := 0;
-  Result := (RegGetValueW(HKCU_HANDLE, EnvKey, EnvValue, RRF_RT_ANY or RRF_NOEXPAND, ValType, 0, Size) = 0)
+  Result := (RegGetValueW(Root, Key, EnvValue, RRF_RT_ANY or RRF_NOEXPAND, ValType, 0, Size) = 0)
     and (ValType = REG_EXPAND_SZ_TYPE);
 end;
 
@@ -187,16 +210,23 @@ begin
     RegWriteStringValue(HKEY_CURRENT_USER, EnvKey, EnvValue, Value);
 end;
 
-{ Adds our bridge folder to the USER variable ZBRUSH_PLUGIN_PATH; every existing entry is kept as it is. }
+{ Adds our bridge folder to the USER variable ZBRUSH_PLUGIN_PATH; every existing entry is kept as it is.
+  Windows uses the user value of this variable and ignores the machine one. So when the user has no value yet, the
+  new one starts from the machine entries (if there are any) followed by ours. The machine value is only read. }
 procedure RegisterBridge;
 var
   Current, Dir, Base: String;
   Expand: Boolean;
 begin
   Dir := AppBridgeDir;
-  if not RegQueryStringValue(HKEY_CURRENT_USER, EnvKey, EnvValue, Current) then
-    Current := '';
-  Expand := EnvValueIsExpandSz;
+  if RegQueryStringValue(HKEY_CURRENT_USER, EnvKey, EnvValue, Current) then
+    Expand := ValueIsExpandSz(HKCU_HANDLE, EnvKey)
+  else
+  begin
+    if not RegQueryStringValue(HKEY_LOCAL_MACHINE, MachineEnvKey, EnvValue, Current) then
+      Current := '';
+    Expand := ValueIsExpandSz(HKLM_HANDLE, MachineEnvKey);
+  end;
   if ListHasEntry(Current, Dir) then
     Exit;                                   { already there (upgrade install) }
   Base := Trim(Current);
@@ -221,7 +251,7 @@ begin
   if NewValue = '' then
     RegDeleteValue(HKEY_CURRENT_USER, EnvKey, EnvValue)
   else
-    WriteEnvValue(NewValue, EnvValueIsExpandSz);
+    WriteEnvValue(NewValue, ValueIsExpandSz(HKCU_HANDLE, EnvKey));
 end;
 
 { JSON string body: escapes backslash and quote; non-ASCII becomes \uXXXX so the file stays plain ASCII. }
@@ -278,12 +308,48 @@ begin
       DeleteFile(LaunchFilePath);
 end;
 
-procedure StopApp;
+{ Used by the _internal entry of [InstallDelete]: true when the install folder already holds ZOrbit or Radial Menu. }
+function HoldsOurApp: Boolean;
+begin
+  Result := FileExists(ExpandConstant('{app}\{#AppExe}')) or FileExists(ExpandConstant('{app}\{#LegacyExe}'));
+end;
+
+{ Waits about a second. Exec keeps the wizard answering messages while it waits; Sleep would not. }
+procedure PauseOneSecond;
 var
   ResultCode: Integer;
 begin
-  Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /IM {#AppExe} /IM {#LegacyExe}', '', SW_HIDE, ewWaitUntilTerminated,
+  Exec(ExpandConstant('{sys}\ping.exe'), '-n 2 127.0.0.1', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+end;
+
+function StudioIsOpen: Boolean;
+begin
+  Result := CheckForMutexes(StudioMutexes);
+end;
+
+{ Closes the running programs the way a user would, so a Studio with unsaved edits shows its own dialog first:
+  taskkill without /F posts WM_CLOSE. Waits up to 15 seconds for Studio to go. If it is still open (the user
+  has not answered, or chose to keep editing) nothing is killed and the result is False. Otherwise whatever is
+  still running (the app, the browser; they hold nothing unsaved) is ended with /F and the result is True. }
+function StopApp: Boolean;
+var
+  ResultCode, Waited: Integer;
+begin
+  Exec(ExpandConstant('{sys}\taskkill.exe'), '/IM {#AppExe} /IM {#LegacyExe}', '', SW_HIDE, ewWaitUntilTerminated,
     ResultCode);
+  Waited := 0;
+  while StudioIsOpen and (Waited < 15) do
+  begin
+    PauseOneSecond;
+    Waited := Waited + 1;
+  end;
+  Result := not StudioIsOpen;
+  if Result then
+  begin
+    Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /IM {#AppExe} /IM {#LegacyExe}', '', SW_HIDE,
+      ewWaitUntilTerminated, ResultCode);
+    PauseOneSecond;                         { lets Windows release the exe and DLLs }
+  end;
 end;
 
 { ---- upgrade from Radial Menu ----------------------------------------------------------------------- }
@@ -297,6 +363,22 @@ begin
   Result := RemoveBackslashUnlessRoot(Result);
   if not FileExists(Result + '\{#LegacyExe}') then
     Result := '';
+end;
+
+{ DefaultDirName: the folder of the ZOrbit install this setup updates (so a custom folder is kept), else the default
+  one. The uninstall entry has the same AppId as Radial Menu's, so its folder is only taken when it holds ZOrbit.exe;
+  a Radial Menu folder holds RadialMenu.exe and falls through to the default. }
+function DefDir(Param: String): String;
+var
+  Prev: String;
+begin
+  Result := ExpandConstant('{localappdata}\Programs\ZOrbit');
+  if RegQueryStringValue(HKEY_CURRENT_USER, UninstallKey, 'Inno Setup: App Path', Prev) then
+  begin
+    Prev := RemoveBackslashUnlessRoot(Prev);
+    if (Prev <> '') and FileExists(Prev + '\{#AppExe}') then
+      Result := Prev;
+  end;
 end;
 
 { Removes what Radial Menu installed in its own folder (only the files it put there) and its ZBrush plugin path
@@ -324,9 +406,12 @@ end;
 
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 begin
-  LegacyDir := FindLegacyDir;               { before the install rewrites the uninstall entry }
-  StopApp;                                  { so an upgrade can replace the running exe and its DLLs }
   Result := '';
+  LegacyDir := FindLegacyDir;               { before the install rewrites the uninstall entry }
+  { Close the running programs so an upgrade can replace the exe and its DLLs, but never kill a Studio that is
+    still open (it may have unsaved edits): stop here instead. }
+  if not StopApp then
+    Result := 'Close ZOrbit Studio first (it may have unsaved changes), then run Setup again.';
 end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
@@ -341,10 +426,72 @@ end;
 
 { ---- uninstall events ------------------------------------------------------------------------------- }
 
+{ Stops here, before anything is asked or removed, if a Studio is open: it may have unsaved edits. }
+function InitializeUninstall: Boolean;
+begin
+  Result := not StudioIsOpen;
+  if not Result then
+    SuppressibleMsgBox('Close ZOrbit Studio first (it may have unsaved changes), then run the uninstaller again.',
+      mbError, MB_OK, IDOK);
+end;
+
+{ Takes ZOrbit's ZScript plugin out of one ZBrush 2022 to 2025 folder (ZPlugs64). It lives under Program Files, so
+  the app's own remover runs elevated (one UAC prompt). The result is judged by whether the file is gone. }
+procedure RemoveZScriptPlugin(const ZPlugs: String);
+var
+  ResultCode: Integer;
+begin
+  ShellExec('runas', ExpandConstant('{app}\{#AppExe}'),
+    '--zscript-remove "' + ExpandConstant('{app}\stage') + '" "' + ZPlugs + '"', '', SW_HIDE, ewWaitUntilTerminated,
+    ResultCode);
+  if FileExists(ZPlugs + '\ZOrbitBridge.zsc') then
+    PluginLeftovers := PluginLeftovers + #13#10 + ZPlugs;
+end;
+
+{ Looks in every folder that matches Pattern (like C:\Program Files\Maxon ZBrush 20??) for our plugin. }
+procedure FindAndRemoveZScriptPlugins(const Pattern: String);
+var
+  FindRec: TFindRec;
+  ZPlugs: String;
+begin
+  if FindFirst(Pattern, FindRec) then
+  begin
+    try
+      repeat
+        if (FindRec.Attributes and FILE_ATTRIBUTE_DIRECTORY) <> 0 then
+        begin
+          ZPlugs := ExtractFilePath(Pattern) + FindRec.Name + '\ZStartup\ZPlugs64';
+          if FileExists(ZPlugs + '\ZOrbitBridge.zsc') then
+            RemoveZScriptPlugin(ZPlugs);
+        end;
+      until not FindNext(FindRec);
+    finally
+      FindClose(FindRec);
+    end;
+  end;
+end;
+
+{ Best effort, never fails the uninstall. Only the usual ZBrush folders are searched; a ZBrush the user added by
+  hand in Studio is not found. Says so for any folder where the plugin is still there. }
+procedure RemoveZScriptPlugins;
+begin
+  PluginLeftovers := '';
+  FindAndRemoveZScriptPlugins(ExpandConstant('{commonpf}\Maxon ZBrush 20??'));
+  FindAndRemoveZScriptPlugins(ExpandConstant('{commonpf}\Pixologic\ZBrush 20??'));
+  FindAndRemoveZScriptPlugins(ExpandConstant('{commonpf}\Maxon\ZBrush 20??'));
+  if PluginLeftovers <> '' then
+    SuppressibleMsgBox('ZOrbit could not remove its plugin from these ZBrush folders:' + #13#10 + PluginLeftovers
+      + #13#10#13#10 + 'To finish, delete ZOrbitBridge.zsc and the ZOrbitData folder from each of them.',
+      mbInformation, MB_OK, IDOK);
+end;
+
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 begin
   if CurUninstallStep = usUninstall then
-    StopApp
+  begin
+    StopApp;
+    RemoveZScriptPlugins;                   { while ZOrbit.exe is still here to do it }
+  end
   else if CurUninstallStep = usPostUninstall then
   begin
     UnregisterBridgeDir(AppBridgeDir);

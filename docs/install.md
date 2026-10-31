@@ -19,6 +19,14 @@ The first time you open **ZOrbit Studio** it starts on its **Setup** screen. Set
 
 The first run puts a starter set of menus in `%APPDATA%\ZOrbit\radial.json`. They use only brushes that come with ZBrush.
 
+The installer also puts `LICENSE` and `THIRD_PARTY_NOTICES.md` in the install folder. If your PC has a machine-wide `ZBRUSH_PLUGIN_PATH`, the installer keeps its entries: Windows ignores the machine value once you have your own, so the new user value starts with the machine entries and adds the ZOrbit folder after them.
+
+### Updating
+
+Run the new installer over the old one. It closes ZOrbit for you. If ZOrbit Studio is open, it asks Studio to close the way you would, and Studio shows its own dialog when it has unsaved changes. Answer the dialog, or close Studio yourself, then run Setup again if it stopped with "Close ZOrbit Studio first". Setup never ends a Studio that is still open.
+
+An update keeps the folder you installed to: if you chose a custom folder the first time, Setup offers the same one. It replaces the program files whole, so nothing from an older version stays behind. Your menus and settings are not touched.
+
 ### Upgrading from Radial Menu for ZBrush
 
 ZOrbit used to be called Radial Menu for ZBrush. Run the new installer over the old install. It moves the program to `%LOCALAPPDATA%\Programs\ZOrbit` and removes the old folder, its Start menu shortcut and its plugin path entry. Your menus and settings are copied to `%APPDATA%\ZOrbit` on the first start, and learned auto slots to `%LOCALAPPDATA%\ZOrbit`. The old `RadialMenu` folders stay where they are; you can delete them.
@@ -33,7 +41,9 @@ These versions load plugins only from their own `ZStartup\ZPlugs64` folder, so S
 2. Click **Install**. A ZBrush under Program Files asks for administrator rights once.
 3. Restart that ZBrush.
 
-The plugin has no listener window, so every pick in these versions goes through the bridge key, F9. The plugin binds F9 to **Zplugin > ZOrbit > Apply** itself, so there is nothing to set up. If you change the bridge key in Studio, bind the new key by hand in each version: Ctrl+Alt+click **Apply**, press the key, then **Preferences > Hotkeys > Store**. When a new version of ZOrbit has a newer plugin, **Settings** shows a badge and the row says **Update available**.
+The plugin has no listener window, so every pick in these versions goes through the bridge key, F9. When ZBrush loads the plugin it binds F9 to **Zplugin > ZOrbit > Apply** if that button has no hotkey yet. That is verified in ZBrush 2022; in the other versions, check **Zplugin > ZOrbit > Apply** and bind F9 by hand if it is empty. If you change the bridge key in Studio, bind the new key by hand in each version: Ctrl+Alt+click **Apply**, press the key, then **Preferences > Hotkeys > Store**. When a new version of ZOrbit has a newer plugin, **Settings** shows a badge and the row says **Update available**.
+
+On a PC where PowerShell is restricted, Studio installs the plugin without its two start shortcuts and says "Installed without the start shortcuts". The plugin still works; it starts ZOrbit the slower way. If the path of the ZOrbit data folder has characters outside the Windows code page and 8.3 short names are off, Studio refuses to install and says what to change. ZBrush 2021 and older are not supported. See [Troubleshooting](troubleshooting.md#zbrush-2022-to-2025-the-ring-opens-but-picks-do-nothing).
 
 ### Windows says "Windows protected your PC"
 
@@ -45,6 +55,10 @@ To continue, click **More info**, then **Run anyway**. If you would rather not r
 
 Open **Windows Settings > Apps > Installed apps**, find **ZOrbit** and choose **Uninstall**. Restart ZBrush afterwards so it lets go of the plugin.
 
-The uninstaller cannot reach the plugin inside a ZBrush 2022 to 2025. Remove it first with **Studio > Settings > Older ZBrush > Remove**, or afterwards by deleting `ZOrbitBridge.zsc` and the `ZOrbitData` folder from that ZBrush's `ZStartup\ZPlugs64`.
+The uninstaller closes ZOrbit first. If Studio is open it stops and asks you to close Studio yourself, so unsaved changes are never lost.
+
+It also removes the plugin from a ZBrush 2022 to 2025 when it can. It looks in the usual folders under `C:\Program Files` (`Maxon ZBrush 20xx`, `Pixologic\ZBrush 20xx` and `Maxon\ZBrush 20xx`) and asks for administrator rights once for each ZBrush it cleans. If it could not clean a folder, it lists it, and you delete `ZOrbitBridge.zsc` and the `ZOrbitData` folder from that ZBrush's `ZStartup\ZPlugs64` yourself. A ZBrush you added by hand in Studio is not searched. For those, remove the plugin first with **Studio > Settings > Older ZBrush > Remove**.
+
+When nothing else is left in the install folder, the uninstaller removes the folder too.
 
 Your menus and logs are not part of the program. They live in `%APPDATA%\ZOrbit` and `%LOCALAPPDATA%\ZOrbit`; delete those folders if you want no trace.

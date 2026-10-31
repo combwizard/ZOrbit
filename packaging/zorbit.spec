@@ -36,7 +36,7 @@ version_info = VSVersionInfo(
             StringStruct("FileDescription", "ZOrbit"),
             StringStruct("FileVersion", VERSION),
             StringStruct("InternalName", "ZOrbit"),
-            StringStruct("LegalCopyright", "GPL-3.0"),
+            StringStruct("LegalCopyright", "Copyright (C) 2026 combwizard. GPL-3.0"),
             StringStruct("OriginalFilename", "ZOrbit.exe"),
             StringStruct("ProductName", "ZOrbit"),
             StringStruct("ProductVersion", VERSION),
