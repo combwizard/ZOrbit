@@ -40,10 +40,11 @@ The palette was renamed, so a hotkey you bound by hand to the old **Apply** does
 
 When the app knows why a pick went nowhere, it shows a short message near the cursor for about two seconds. It sits just below the cursor, ignores the mouse, never takes the focus and never shows for a pick that worked. A new message replaces the old one. If one cannot be drawn, `radiald.log` says "toast failed". The messages are:
 
-- **No connection to ZBrush's plugin. Check Zplugin > ZOrbit > Status.** The bridge mode is `message` and the app found no live listener in that ZBrush. Start ZBrush, or load the plugin.
-- **The plugin did not answer. Check Zplugin > ZOrbit > Status.** The listener was there, but did not pick the request up within half a second, and the app has no bridge key to fall back on (the mode is `message`, or no bridge key is set).
+- **No plugin listener in ZBrush (bridge mode is Message). Check Zplugin > ZOrbit > Status.** The bridge mode is `message` and the app found no live listener in that ZBrush. Start ZBrush, or load the plugin.
+- **The plugin did not answer (bridge mode is Message). Check Zplugin > ZOrbit > Status.** The listener was there, but did not pick the request up within half a second, and in `message` mode the app never presses the bridge key instead.
+- **The plugin did not answer, and no bridge key is set. Choose one in Studio.** The same, in `auto` mode: the listener did not pick the request up and there is no bridge key to fall back on. Set one under **Settings > ZBrush bridge**.
 - **ZBrush was not the front window, nothing sent**. The pick needed the bridge key, and the key is only pressed while ZBrush is in front. Do not click another program right after you pick.
-- **No bridge key is set. Check Settings > ZBrush bridge.** The pick needed the bridge key and none is set.
+- **No bridge key is set. Choose one in Studio under Settings > ZBrush bridge.** The pick needed the bridge key and none is set.
 - **This slot is empty**. You picked an auto slot nothing has filled yet, or a tag slot whose tag has no items.
 - **That menu has nothing usable in it**. You picked a submenu whose items are all empty or unusable.
 - **A name followed by "could not be found in ZBrush"** or **"is not a ZBrush button"**, or **ZBrush could not carry out that pick. See bridge.log.** The plugin picked the request up and reported a problem: the brush, alpha, material or texture is not installed, the `press`, `set` or `toggle` path does not exist, or ZBrush raised an error. `bridge.log` has the details (see [The pick is logged as selected, but nothing changes](#the-pick-is-logged-as-selected-but-nothing-changes)).

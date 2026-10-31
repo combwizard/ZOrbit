@@ -111,10 +111,11 @@ def log(msg: str) -> None:
 
 
 # What the user is told when the app knows why a pick went nowhere (docs/troubleshooting.md lists them).
-MSG_NO_CONNECTION = "No connection to ZBrush's plugin. Check Zplugin > ZOrbit > Status."
-MSG_NO_ANSWER = "The plugin did not answer. Check Zplugin > ZOrbit > Status."
+MSG_NO_CONNECTION = "No plugin listener in ZBrush (bridge mode is Message). Check Zplugin > ZOrbit > Status."
+MSG_NO_ANSWER = "The plugin did not answer (bridge mode is Message). Check Zplugin > ZOrbit > Status."
+MSG_NO_ANSWER_NO_KEY = "The plugin did not answer, and no bridge key is set. Choose one in Studio."
 MSG_NOT_FRONT = "ZBrush was not the front window, nothing sent"
-MSG_NO_KEY = "No bridge key is set. Check Settings > ZBrush bridge."
+MSG_NO_KEY = "No bridge key is set. Choose one in Studio under Settings > ZBrush bridge."
 MSG_EMPTY_SLOT = "This slot is empty"
 MSG_EMPTY_MENU = "That menu has nothing usable in it"
 MSG_PICK_FAILED = "ZBrush could not carry out that pick. See bridge.log."
@@ -1214,7 +1215,8 @@ class App:
                 self._drop_request(seq)
         else:
             log(f"pick #{seq}: listener did not pick it up in 0.5 s")
-            self._toast(MSG_NO_ANSWER)
+            # Here the mode is "message", or "auto" with no bridge key to fall back on: each has its own cause.
+            self._toast(MSG_NO_ANSWER if self.cfg.bridge_mode == "message" else MSG_NO_ANSWER_NO_KEY)
 
     def _result_tick(self):
         """Reads the plugin's outcome for the picked-up request from bridge.log; a toast only for a problem."""

@@ -40,7 +40,7 @@ Schema (all keys optional except menus):
   }
 }
 
-<item> is one action plus an optional "label" and "icon" (path to a .png/.zbp, or a brush name):
+<item> is one action plus an optional "label" and "icon" (full path to a .png/.zbp, or a brush name):
   {"brush": "ClayBuildup"}                       select a brush (loaded from its .zbp if needed)
   {"alpha": "Alpha 58"}                          select an alpha (imported from its file if needed)
   {"material": "SkinShade4"}                     select a material (Material:Load replaces the selected slot)
@@ -176,6 +176,23 @@ def asset_of(action):
     return None
 
 
+def retag(cfg: dict, renamed: dict) -> int:
+    """Points the {"tag": key} and {"browser": key} slots of every menu in a raw config dict at the key
+    renamed gives ({old key: new key}). Changes cfg in place and returns how many items changed."""
+    n = 0
+    if renamed:
+        for m in (cfg.get("menus") or {}).values():
+            for it in (m.get("items") or []) if isinstance(m, dict) else ():
+                if isinstance(it, dict):
+                    hit = False
+                    for k in ("tag", "browser"):
+                        if isinstance(it.get(k), str) and it[k] in renamed:
+                            it[k] = renamed[it[k]]
+                            hit = True
+                    n += hit
+    return n
+
+
 def _did_you_mean(key, known) -> str:
     near = difflib.get_close_matches(str(key), list(known), n=1)
     return f" (did you mean {near[0]}?)" if near else ""
@@ -188,6 +205,23 @@ def _bad_asset_name(name) -> bool:
 
 def _network_path(path) -> bool:
     return isinstance(path, str) and path.strip().startswith(("\\\\", "//"))
+
+
+ICON_EXTS = (".png", ".zbp", ".zmt", ".exr", ".psd", ".bmp", ".jpg", ".jpeg", ".tif", ".tiff")     # files an icon can be
+
+
+def _icon_problem(icon: str) -> str:
+    """What is wrong with an icon, or "". An icon is a brush name or a full path. A text with a \\ or / in it, or
+    that ends in a file extension the app reads, is meant as a path: a relative one is looked up from wherever the
+    app runs, so it is refused, and a full path to a file that is not there is only noticed."""
+    text = icon.strip()
+    if not (any(c in text for c in "\\/") or os.path.splitext(text)[1].lower() in ICON_EXTS):
+        return ""                                       # a brush name
+    if not (os.path.splitdrive(text)[0] and os.path.isabs(text)):
+        return f"icon '{icon}' must be a full path, such as C:\\Art\\clay.png"
+    if not os.path.isfile(text):
+        return f"icon file not found: {icon}"
+    return ""
 
 
 def _check_action(a, errors, where, allow_nested=True) -> bool:
@@ -376,6 +410,10 @@ def load(path: str, tags=None) -> Config:
             if _network_path(icon):
                 errors.append(f"{where}: icon '{icon}' must be a plain file path on this PC, not a network path")
                 icon = ""
+            elif icon:
+                icon_problem = _icon_problem(icon)
+                if icon_problem:
+                    errors.append(f"{where}: {icon_problem}")      # the item and its icon value stay: only a warning
             items.append((i + 1, Item(label=str(it.get("label") or _default_label(it, menus_raw, tags)), kind=kind,
                                       data={k: v for k, v in it.items() if k not in ("label", "icon")},
                                       icon=icon, tag=it["tag"] if kind == "tag" else "")))

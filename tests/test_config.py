@@ -733,10 +733,34 @@ def test_icon_that_is_a_network_path_is_reported_and_dropped_but_the_item_stays(
     assert [(it.data["brush"], it.icon) for it in cfg.menus["main"].items] == [("Evil", ""), ("Standard", "")]
 
 
-def test_icon_that_is_a_local_path_is_kept(load_menus):
-    cfg = load_menus({"main": one_item_menu({"brush": "A", "icon": "C:\\icons\\a.png"})})
+def test_icon_that_is_a_local_path_is_kept(load_menus, tmp_path):
+    png = tmp_path / "a.png"
+    png.write_bytes(b"x")
+    cfg = load_menus({"main": one_item_menu({"brush": "A", "icon": str(png)})})
     assert not problems(cfg, "icon")
-    assert cfg.menus["main"].items[0].icon == "C:\\icons\\a.png"
+    assert cfg.menus["main"].items[0].icon == str(png)
+
+
+@pytest.mark.parametrize("icon", ["Standard", "ClayTubes", "Move Topological", "Clay.v2", "my brush"])
+def test_icon_that_is_a_brush_name_is_not_flagged(load_menus, icon):
+    cfg = load_menus({"main": one_item_menu({"brush": "A", "icon": icon})})
+    assert not problems(cfg, "icon")
+    assert cfg.menus["main"].items[0].icon == icon
+
+
+@pytest.mark.parametrize("icon", ["icons\\a.png", "icons/a.png", ".\\a.png", "a.png", "clay.PNG", "mat.zmt",
+                                  "\\icons\\a.png", "C:a.png", "sub\\Standard"])
+def test_icon_that_is_a_relative_path_is_reported_but_the_item_stays(load_menus, icon):
+    cfg = load_menus({"main": one_item_menu({"brush": "A", "icon": icon}, {"brush": "Standard"})})
+    assert problems(cfg, f"menu main item 1: icon '{icon}' must be a full path, such as C:\\Art\\clay.png")
+    assert [(it.data["brush"], it.icon) for it in cfg.menus["main"].items] == [("A", icon), ("Standard", "")]
+
+
+def test_icon_with_a_full_path_to_a_missing_file_is_a_warning_that_keeps_the_item(load_menus, tmp_path):
+    missing = str(tmp_path / "gone.png")
+    cfg = load_menus({"main": one_item_menu({"brush": "A", "icon": missing})})
+    assert problems(cfg, f"menu main item 1: icon file not found: {missing}")
+    assert cfg.menus["main"].items[0].icon == missing
 
 
 @pytest.mark.parametrize("kind", ["alpha", "material", "texture"])

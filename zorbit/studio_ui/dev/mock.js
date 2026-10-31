@@ -686,7 +686,16 @@
           if (lst.indexOf(dst) >= 0) lst.splice(i, 1); else lst[i] = dst;
         });
         tagDrop(st, src);
-        return { ok: true, key: dst };
+        var res = { ok: true, key: dst };
+        if (window.__ZORBIT_MODE__ === 'popout') {     // the popout (no menus of its own) points the ring items in radial.json at the kept tag
+          var moved = 0;
+          Object.keys(saved.menus || {}).forEach(function (id) { (saved.menus[id].items || []).forEach(function (it) {
+            var hit = false;
+            ['tag', 'browser'].forEach(function (k) { if (it[k] === src) { it[k] = dst; hit = true; } });
+            if (hit) moved++; }); });
+          res.ring_items = moved;
+        }
+        return res;
       });
     },
     set_item_tags: function (itemKey, keys) {

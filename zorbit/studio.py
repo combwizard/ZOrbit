@@ -134,13 +134,7 @@ def _title_path(p: str) -> str:
 def _retag(cfg: dict, renamed: dict) -> dict:
     """Points the {"tag": key} and {"browser": key} slots of every menu at the local key when an imported tag
     joined a local tag of the same name (renamed = {incoming key: local key}). Changes cfg and returns it."""
-    if renamed:
-        for m in (cfg.get("menus") or {}).values():
-            for it in (m.get("items") or []) if isinstance(m, dict) else ():
-                if isinstance(it, dict):
-                    for k in ("tag", "browser"):
-                        if isinstance(it.get(k), str) and it[k] in renamed:
-                            it[k] = renamed[it[k]]
+    C.retag(cfg, renamed)
     return cfg
 
 

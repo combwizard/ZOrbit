@@ -14,6 +14,8 @@ from concurrent.futures import ThreadPoolExecutor
 
 import assets
 import brushes
+import config as C
+import fsutil
 import paths
 import radiald
 import tags
@@ -149,6 +151,39 @@ class LibraryApi:
             return {names[0]: assets.thumb_data_url(kind, names[0], size)}
         urls = _thumb_pool().map(lambda n: assets.thumb_data_url(kind, n, size), names)
         return dict(zip(names, urls))
+
+
+def retarget_ring(renamed: dict) -> tuple:
+    """Rewrites radial.json so the {"tag": key} and {"browser": key} slots named in renamed ({old key: new key})
+    use the new key. For the browser window, which holds no menus: Studio does the same inside its editor, where
+    Undo can take it back. Returns (items changed, problem or None). Nothing is written when the file is missing,
+    cannot be read or is not a JSON object, or holds no matching item. The file as it was is kept as
+    radial.json.bak (as Studio's Save does), and the new one is swapped in atomically. The app and Studio notice
+    the change by the file's time."""
+    path = paths.CONFIG_FILE
+    try:
+        with open(path, "rb") as f:
+            old = f.read()
+    except FileNotFoundError:
+        return 0, None
+    except OSError as e:
+        return 0, f"radial.json could not be read: {e.strerror or e}"
+    try:
+        cfg = json.loads(old.decode("utf-8-sig"))
+    except (ValueError, RecursionError):
+        return 0, "radial.json is not valid JSON, so its ring items were not changed."
+    if not isinstance(cfg, dict):
+        return 0, "radial.json is not a JSON object, so its ring items were not changed."
+    n = C.retag(cfg, renamed)
+    if not n:
+        return 0, None
+    try:
+        data = (json.dumps(cfg, indent=2, ensure_ascii=False) + "\n").encode("utf-8")
+        fsutil.write_atomic(path + ".bak", old)
+        fsutil.write_atomic(path, data)
+    except (OSError, ValueError, RecursionError) as e:
+        return 0, f"radial.json could not be written: {getattr(e, 'strerror', None) or e}"
+    return n, None
 
 
 _STORE = tags.TagStore(radiald.tags_path())

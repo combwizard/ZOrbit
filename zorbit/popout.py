@@ -197,6 +197,22 @@ class PopoutApi(webapi.LibraryApi, webapi.TagApi):
     def __init__(self, pop):
         self._pop = pop          # underscore: pywebview must not expose (and crawl) it to JS
 
+    def merge_tags(self, src, dst):
+        """Merges the tags, then points the ring items that used src at dst in radial.json (this window holds no
+        menus to do it in, as Studio does). The answer adds ring_items (how many changed) and, when radial.json
+        could not be updated, ring_error."""
+        res = super().merge_tags(src, dst)
+        if res.get("ok"):
+            try:
+                n, problem = webapi.retarget_ring({src: dst})
+            except Exception as e:          # the merge is done: never turn it into a failure
+                n, problem = 0, f"radial.json could not be updated: {e}"
+                _log(f"retarget_ring failed: {e!r}")
+            res["ring_items"] = n
+            if problem:
+                res["ring_error"] = problem
+        return res
+
     def popout_get_state(self):
         """What the page needs before it draws: keep on top, the thumbnail size, which side the folders and tags
         column is on and whether it is shown, the tag and the tab (kind) it was started with, else the tab it was

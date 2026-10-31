@@ -4,6 +4,19 @@ All notable changes to this project are listed here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+
+- Browser: merging two tags points the ring's Tag and Browser slots that used the merged tag at the kept one in
+  `radial.json` (the old file is kept as `radial.json.bak`), instead of leaving them empty or unfiltered.
+- An `icon` that looks like a path but is not a full path, or a full path to a file that is not there, is listed as
+  a problem instead of silently showing a letter tile.
+- The message near the cursor when the plugin does not answer says whether the bridge mode is Message or no bridge
+  key is set, and the no-listener and no-key messages say what to do.
+- Studio: the hotkey recorder accepts the quote and backtick keys on US-International layouts instead of saying
+  they are in a different place.
+
 ## [0.12.0] - 2026-10-31
 
 ### Added

@@ -1034,6 +1034,25 @@ const CODE_KEYS = { Backquote: '`', Minus: '-', Equal: '=', BracketLeft: '[', Br
 /* What the same keys type with Shift held, on the layout CODE_KEYS describes (a US one). */
 const CODE_KEYS_SHIFT = { Backquote: '~', Minus: '_', Equal: '+', BracketLeft: '{', BracketRight: '}', Backslash: '|',
   Semicolon: ':', Quote: '"', Comma: '<', Period: '>', Slash: '?' };
+/* Dead keys: on US-International the ' and ` keys are dead keys, so a keydown has key "Dead" while its code (Quote, Backquote) is the
+   place the app means (the same virtual key as a US keyboard). Other layouts also have a dead key at one of those places (a German
+   ^ is on Backquote but is another virtual key), so when the browser can say what the layout types there (getLayoutMap), that decides. */
+const DEAD_KEY_CODES = ['Quote', 'Backquote'];
+let layoutMap = null;
+try {
+  const kb = navigator.keyboard;
+  if (kb && kb.getLayoutMap) {
+    const load = () => kb.getLayoutMap().then(m => { layoutMap = m; }, () => {});
+    load();
+    if (kb.addEventListener) kb.addEventListener('layoutchange', load);
+  }
+} catch (e) { layoutMap = null; }
+function deadKeyIsUs(c) {
+  if (!DEAD_KEY_CODES.includes(c)) return false;
+  let typed = null;
+  try { typed = layoutMap ? layoutMap.get(c) : null; } catch (e) { typed = null; }
+  return typed == null || typed === CODE_KEYS[c];       // unknown: take the dead key at this place as the US one
+}
 /* The key of a keydown as config.py names it: { key } or { error } (a sentence for the user). The app matches the virtual key the
    user's layout gives a letter or digit, so those are read from what was typed (letters) or the physical digit row. A punctuation
    key is named by its place on a US keyboard, which only means the same key on a layout that types that character there. */
@@ -1048,6 +1067,7 @@ function keyFromEvent(e) {
   if (NAMED_KEYS[c]) return { key: NAMED_KEYS[c] };
   if (CODE_KEYS[c]) {
     if (e.key === CODE_KEYS[c] || e.key === CODE_KEYS_SHIFT[c]) return { key: CODE_KEYS[c] };
+    if (e.key === 'Dead' && deadKeyIsUs(c)) return { key: CODE_KEYS[c] };         // US-International: ' and ` wait for the next letter
     return { error: 'This key is in a different place on your keyboard layout. Pick another.' };
   }
   return { key: null };
@@ -2607,16 +2627,22 @@ function openTagManager() {
           h('button', { class: 'link', type: 'button', onclick: async () => {
             await loadTagUses();                              // the browser window reads the ring items from radial.json just now
             const from = tag.label, srcKey = tag.key, uses = tagRingUses(srcKey);
-            const useText = !uses ? '' : POPOUT ? ' ' + plural(uses, 'ring item') + (uses === 1 ? ' uses' : ' use') + ' "' + from + '": Tag slots go empty and Browser slots open unfiltered until you pick another tag in Studio.'
-              : ' ' + plural(uses, 'ring item') + (uses === 1 ? ' uses' : ' use') + ' "' + from + '". ' + (uses === 1 ? 'It then uses' : 'They then use') + ' "' + other.label + '" instead. That change is in the editor until you press Save, and Undo takes it back.';
+            const useText = !uses ? '' : ' ' + plural(uses, 'ring item') + (uses === 1 ? ' uses' : ' use') + ' "' + from + '". ' + (uses === 1 ? 'It then uses' : 'They then use') + ' "' + other.label + '" instead.'
+              + (POPOUT ? ' ZOrbit changes them in radial.json now.' : ' That change is in the editor until you press Save, and Undo takes it back.');
             const ok = await modal({ title: 'Merge "' + from + '" into "' + other.label + '"?',
               body: h('p', null, 'Items tagged "' + from + '" get "' + other.label + '" instead, and "' + from + '" is removed.' + useText),
               actions: [{ text: 'Cancel', value: false, focus: true }, { text: 'Merge', value: true, kind: 'danger' }] });
             if (ok) {
               const m = await tagCall('merge_tags', srcKey, other.key);
               if (m.ok) {
-                const moved = retargetTag(srcKey, other.key);       // the ring items that pointed at the removed tag (none in the browser window)
-                toast('Merged "' + from + '" into "' + other.label + '"' + (moved ? '. ' + plural(moved, 'ring item') + (moved === 1 ? ' now uses' : ' now use') + ' it. Save to keep that.' : ''), { tone: 'ok', ms: moved ? 5000 : 2600 });
+                if (POPOUT) {      // no menus here: the backend has already pointed the ring items in radial.json at the kept tag
+                  const moved = Number(m.ring_items) || 0;
+                  toast('Merged "' + from + '" into "' + other.label + '"' + (m.ring_error ? '. ' + m.ring_error + ' Ring items that used "' + from + '" were not changed.' : moved ? '. ' + plural(moved, 'ring item') + (moved === 1 ? ' now uses' : ' now use') + ' it.' : ''),
+                    { tone: m.ring_error ? 'warn' : 'ok', ms: m.ring_error ? 7000 : moved ? 4000 : 2600 });
+                } else {
+                  const moved = retargetTag(srcKey, other.key);       // the ring items that pointed at the removed tag
+                  toast('Merged "' + from + '" into "' + other.label + '"' + (moved ? '. ' + plural(moved, 'ring item') + (moved === 1 ? ' now uses' : ' now use') + ' it. Save to keep that.' : ''), { tone: 'ok', ms: moved ? 5000 : 2600 });
+                }
               }
             }
             openTagManager();                                 // the confirm replaced this dialog: bring it back
@@ -4627,6 +4653,8 @@ function describeProblem(raw) {
     if ((r = /^: tag (.+) does not exist; the slot stays empty$/s.exec(t))) return `uses the tag ${unq(r[1])}, which does not exist, so the slot stays empty`;
     if ((r = /^: tag (.+) does not exist; the browser opens unfiltered$/s.exec(t))) return `filters by the tag ${unq(r[1])}, which does not exist, so the browser opens unfiltered`;
     if (/^: icon .+ must be a plain file path/s.test(t)) return 'has an icon on a network path. Use a file on this PC';
+    if ((r = /^: icon (.+) must be a full path, such as /s.exec(t))) return `has the icon ${r[1]}, which is not a full path. Use a path such as C:\\Art\\clay.png, or a brush name`;
+    if ((r = /^: icon file not found: (.+)$/s.exec(t))) return `has an icon file that was not found (${r[1]}). Check the path`;
     return null;
   };
   // "menu <id> item <n><rest>": the id is matched against the real menus first, so an id with spaces still resolves
