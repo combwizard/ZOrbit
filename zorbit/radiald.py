@@ -66,6 +66,7 @@ WM_APP_CANCEL = W.WM_APP + 12         # hook -> control window: Esc
 WM_APP_MASK = W.WM_APP + 13           # hook -> control window: inject the Alt menu-mask key
 WM_APP_BROWSER = W.WM_APP + 14        # hook -> control window: the browser hotkey
 WM_APP_BROWSER_PICK = W.WM_APP + 15   # control window -> itself: a brush was picked in the popout
+WM_APP_TYPING = W.WM_APP + 16         # hook -> control window: a key was typed while a tapped ring waited for a click
 ACK_WAIT_S = 0.5                      # a listener pick not picked up in this long falls back to the bridge key
 ACK_HOLD_MAX_S = 30                   # ... but not while the left button is down, for this long at most
 LEGACY_SCAN_S = 60                    # how long the scan for ZBrush 2022-2025 installations is kept
@@ -74,6 +75,8 @@ COPYDATA_PICK, COPYDATA_SHOW, COPYDATA_QUIT = 1, 10, 12   # WM_COPYDATA ids: pop
 POPOUT_CLASS = "ZOrbitPopoutCtl"      # the popout's message-only control window
 POPOUT_START_S = 15                   # a popout asked to show gets this long to appear before we ask again
 THUMB_PX = 128                        # thumbnail cache size, shared with the Studio
+TEXT_CLASSES = frozenset({"Edit", "RichEdit20W", "RICHEDIT50W", "ComboBox"})   # focused windows that take typing
+DIALOG_CLASS = "#32770"               # the class of native Windows dialogs (Save As, message boxes)
 STUCK_KEY_S = 30                      # a swallowed hotkey the hook never saw go up is let go after this long
 
 
@@ -110,12 +113,10 @@ def _trim_log(max_bytes=1_000_000):
 
 
 class App:
-    def __init__(self, cfg_path, target_exe="zbrush.exe", exit_with_target=False, accept_injected=False,
-                 no_tray=False):
+    def __init__(self, cfg_path, target_exe="zbrush.exe", exit_with_target=False, no_tray=False):
         self.cfg_path = cfg_path
         self.target_exe = target_exe.lower()
         self.exit_with_target = exit_with_target
-        self.accept_injected = accept_injected
         self.no_tray = no_tray
         self.tray = None
         self.cfg = None
@@ -351,8 +352,8 @@ class App:
 
     def _on_key(self, wparam, kb) -> bool:
         """Returns True to swallow the key. Must stay fast: Windows drops slow hooks."""
-        if (kb.flags & W.LLKHF_INJECTED) and not self.accept_injected:
-            return False
+        if (kb.flags & W.LLKHF_INJECTED) and kb.dwExtraInfo == W.OWN_INPUT_MARKER:
+            return False                   # ZOrbit's own key; keys from tablet drivers and macro tools count
         vk = kb.vkCode
         down = wparam in (W.WM_KEYDOWN, W.WM_SYSKEYDOWN)
         up = wparam in (W.WM_KEYUP, W.WM_SYSKEYUP)
@@ -375,7 +376,7 @@ class App:
         for slot, m in enumerate(self.slots):
             hk = m.hotkey
             if hk.vk == vk and hk.ctrl == ctrl and hk.alt == alt and hk.shift == shift:
-                if not self.target_in_front():
+                if not self.target_in_front() or self._is_text_target(W.GetForegroundWindow()):
                     return False
                 self.held_vk, self.held_swallow = vk, m.swallow
                 W.PostMessageW(self.ctrl, WM_APP_OPEN, slot, 0)
@@ -384,13 +385,26 @@ class App:
                 return m.swallow
         bk = self.browser_key
         if bk is not None and bk.vk == vk and bk.ctrl == ctrl and bk.alt == alt and bk.shift == shift:
-            if self.target_in_front() or self._popout_in_front():
+            if ((self.target_in_front() and not self._is_text_target(W.GetForegroundWindow()))
+                    or self._popout_in_front()):
                 self._browser_vk = vk          # not held_vk: a ring held open on another key keeps its own
                 if alt:
                     W.PostMessageW(self.ctrl, WM_APP_MASK, 0, 0)
                 W.PostMessageW(self.ctrl, WM_APP_BROWSER, 0, 0)
                 return True
+        if self.ring is not None and self.ring.mode == "click":
+            W.PostMessageW(self.ctrl, WM_APP_TYPING, 0, 0)     # typing closes a ring that was tapped open
         return False
+
+    @staticmethod
+    def _is_text_target(fg) -> bool:
+        """The foreground window is a native Windows dialog, or has a text box in focus. Nothing is cached: the
+        focus moves between key presses. ZBrush draws its own text fields, so those are not seen here."""
+        if not fg:
+            return False
+        if W.class_name(fg) == DIALOG_CLASS:
+            return True
+        return W.class_name(W.focus_window(fg)) in TEXT_CLASSES
 
     def _held_down(self) -> bool:
         return self.held_vk is not None and W.key_down(self.held_vk)
@@ -445,6 +459,10 @@ class App:
             if msg == WM_APP_CANCEL:
                 if self.ring is not None:
                     self.ring.cancel("escape")
+                return 0
+            if msg == WM_APP_TYPING:
+                if self.ring is not None and self.ring.mode == "click":
+                    self.ring.cancel("typing")
                 return 0
             if msg == WM_APP_MASK:
                 W.send_keys([(W.VK_MENU_MASK, False), (W.VK_MENU_MASK, True)])
@@ -1084,7 +1102,6 @@ def main(argv=None) -> int:
     ap.add_argument("--config", default=None, help="menus file (default: %%APPDATA%%\\ZOrbit\\radial.json)")
     ap.add_argument("--exit-with-zbrush", action="store_true", help="quit when ZBrush.exe has exited")
     ap.add_argument("--target-exe", default="ZBrush.exe", help=argparse.SUPPRESS)
-    ap.add_argument("--accept-injected", action="store_true", help=argparse.SUPPRESS)
     ap.add_argument("--no-tray", action="store_true", help="do not show the notification-area icon")
     ap.add_argument("--check", action="store_true", help="validate the config and exit")
     a = ap.parse_args(argv)
@@ -1097,7 +1114,7 @@ def main(argv=None) -> int:
                 return 1
         if a.check:
             return check(a.config)
-        return App(a.config, a.target_exe, a.exit_with_zbrush, a.accept_injected, a.no_tray).run()
+        return App(a.config, a.target_exe, a.exit_with_zbrush, a.no_tray).run()
     except Exception:
         log("fatal:\n" + traceback.format_exc())
         return 1

@@ -65,6 +65,12 @@ def test_default_menus_hotkeys_parse():
     assert cfg.browser_key is not None
 
 
+def test_starter_brushes_menu_lets_its_hotkey_through():
+    with open(paths.DEFAULT_MENUS, encoding="utf-8") as f:
+        assert json.load(f)["menus"]["brushes"]["swallow"] is False
+    assert config.load(paths.DEFAULT_MENUS).menus["brushes"].swallow is False
+
+
 def test_default_menus_bridge_settings():
     cfg = config.load(paths.DEFAULT_MENUS)
     assert cfg.bridge_mode == "auto"

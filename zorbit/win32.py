@@ -42,6 +42,12 @@ class KBDLLHOOKSTRUCT(ctypes.Structure):
                 ("time", w.DWORD), ("dwExtraInfo", ULONG_PTR)]
 
 
+class GUITHREADINFO(ctypes.Structure):
+    _fields_ = [("cbSize", w.DWORD), ("flags", w.DWORD), ("hwndActive", w.HWND), ("hwndFocus", w.HWND),
+                ("hwndCapture", w.HWND), ("hwndMenuOwner", w.HWND), ("hwndMoveSize", w.HWND),
+                ("hwndCaret", w.HWND), ("rcCaret", w.RECT)]
+
+
 class KEYBDINPUT(ctypes.Structure):
     _fields_ = [("wVk", w.WORD), ("wScan", w.WORD), ("dwFlags", w.DWORD),
                 ("time", w.DWORD), ("dwExtraInfo", ULONG_PTR)]
@@ -116,6 +122,8 @@ GetSystemMetrics = _sig(user32, "GetSystemMetrics", ctypes.c_int, ctypes.c_int)
 GetCursorPos = _sig(user32, "GetCursorPos", w.BOOL, ctypes.POINTER(w.POINT))
 GetForegroundWindow = _sig(user32, "GetForegroundWindow", w.HWND)
 GetWindowThreadProcessId = _sig(user32, "GetWindowThreadProcessId", w.DWORD, w.HWND, ctypes.POINTER(w.DWORD))
+GetClassNameW = _sig(user32, "GetClassNameW", ctypes.c_int, w.HWND, w.LPWSTR, ctypes.c_int)
+GetGUIThreadInfo = _sig(user32, "GetGUIThreadInfo", w.BOOL, w.DWORD, ctypes.POINTER(GUITHREADINFO))
 FindWindowExW = _sig(user32, "FindWindowExW", w.HWND, w.HWND, w.HWND, w.LPCWSTR, w.LPCWSTR)
 SendMessageTimeoutW = _sig(user32, "SendMessageTimeoutW", LRESULT, w.HWND, w.UINT, w.WPARAM, w.LPARAM, w.UINT,
                            w.UINT, ctypes.POINTER(ULONG_PTR))
@@ -180,6 +188,7 @@ SMTO_BLOCK, SMTO_ABORTIFHUNG = 0x1, 0x2
 MA_NOACTIVATE = 3
 WH_KEYBOARD_LL = 13
 LLKHF_INJECTED = 0x10
+OWN_INPUT_MARKER = 0x5A4F5242      # "ZORB": dwExtraInfo of every key and mouse event ZOrbit sends itself
 ULW_ALPHA = 0x2
 AC_SRC_OVER, AC_SRC_ALPHA = 0x0, 0x1
 MONITOR_DEFAULTTONEAREST = 2
@@ -230,7 +239,7 @@ def send_keys(events) -> int:
     arr = (INPUT * len(events))()
     for i, (vk, up) in enumerate(events):
         arr[i].type = INPUT_KEYBOARD
-        arr[i].u.ki = KEYBDINPUT(vk, 0, KEYEVENTF_KEYUP if up else 0, 0, 0)
+        arr[i].u.ki = KEYBDINPUT(vk, 0, KEYEVENTF_KEYUP if up else 0, 0, OWN_INPUT_MARKER)
     return SendInput(len(events), arr, ctypes.sizeof(INPUT))
 
 
@@ -239,7 +248,7 @@ def nudge_mouse() -> None:
     (and the Wacom driver's) cursor tracking after an overlay disappears from under the pen."""
     arr = (INPUT * 1)()
     arr[0].type = INPUT_MOUSE
-    arr[0].u.mi = MOUSEINPUT(0, 0, 0, MOUSEEVENTF_MOVE, 0, 0)
+    arr[0].u.mi = MOUSEINPUT(0, 0, 0, MOUSEEVENTF_MOVE, 0, OWN_INPUT_MARKER)
     SendInput(1, arr, ctypes.sizeof(INPUT))
 
 
@@ -281,6 +290,27 @@ def window_pid(hwnd) -> int:
     pid = w.DWORD()
     GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
     return pid.value
+
+
+def class_name(hwnd) -> str:
+    """Window class name of hwnd ('' when it cannot be read)."""
+    if not hwnd:
+        return ""
+    buf = ctypes.create_unicode_buffer(64)
+    return buf.value if GetClassNameW(hwnd, buf, 64) else ""
+
+
+def focus_window(hwnd) -> int:
+    """The window with the keyboard focus inside the thread that owns hwnd, as an int (0 when there is none or
+    it cannot be read). Unlike GetFocus this works across processes."""
+    if not hwnd:
+        return 0
+    info = GUITHREADINFO()
+    info.cbSize = ctypes.sizeof(GUITHREADINFO)
+    tid = GetWindowThreadProcessId(hwnd, None)
+    if not tid or not GetGUIThreadInfo(tid, ctypes.byref(info)):
+        return 0
+    return int(info.hwndFocus or 0)
 
 
 def find_message_window(cls: str) -> int:

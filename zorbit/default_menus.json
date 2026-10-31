@@ -7,7 +7,7 @@
     "brushes": {
       "title": "Brushes",
       "hotkey": "Q",
-      "swallow": true,
+      "swallow": false,
       "items": [
         {"brush": "Standard"},
         {"brush": "ClayBuildup"},

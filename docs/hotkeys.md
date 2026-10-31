@@ -13,11 +13,11 @@ Q          Alt+G          Ctrl+Shift+1          F9          `
 - Modifiers: `Ctrl`, `Alt`, `Shift`, in any combination, joined with `+`. `Control` also works for `Ctrl`.
 - Each hotkey can belong to only one menu. Duplicates are reported as problems and ignored.
 - A hotkey only works while **ZBrush is the front window**. In every other program the key behaves normally. The browser hotkey is the one exception: it also works while the browser is in front, where it hands the keyboard back to ZBrush.
-- Keys sent by other programs (macro tools, for example) are ignored.
+- Keys sent by a tablet driver (Wacom, Huion or XP-Pen key mappings, for example), a macro tool or a key remapper work like the real key. Only ZOrbit's own key presses are ignored.
 - Press the hotkey again while its ring is open to close it. **Esc** also closes the ring.
 - The browser has a hotkey of its own, `browser.hotkey`, written the same way (see [Browser hotkey](appearance.md#browser-hotkey)). It cannot be a key a menu already uses: the menu wins and the browser hotkey is reported as a problem. It is swallowed like a menu hotkey. Press it again while the browser is in front to hand the keyboard back to ZBrush; the browser stays open.
 
-By default a menu **swallows** its hotkey: ZBrush never sees it, so it does not also run its own shortcut for that key. Set `"swallow": false` (or switch it off in the menu settings in Studio) if you want the key to keep working in ZBrush too.
+By default a menu **swallows** its hotkey: ZBrush never sees it, so it does not also run its own shortcut for that key. Set `"swallow": false` (or switch it off in the menu settings in Studio) if you want the key to keep working in ZBrush too. The starter **Brushes** menu has it off, because **Q** is ZBrush's Draw-mode key: ZBrush goes back to Draw mode as the ring opens, and **Q** still types in ZBrush's own text fields.
 
 ## Pick modes
 
@@ -53,4 +53,6 @@ Notes:
 - The ring never takes keyboard focus, so ZBrush keeps working normally behind it.
 - If the cursor is near a screen edge, the ring is moved to stay fully on screen. Until the cursor has moved into the ring, nothing is picked or opened and the hint says so.
 - With **Flick to pick** off, a click outside the ring cancels it, but that click also reaches ZBrush underneath, so it can land a stroke or press a button. **Esc** or a right-click is the safer way to cancel.
-- A menu hotkey is swallowed in ZBrush's own text fields too, so a plain letter such as **Q** cannot be typed there while a menu uses it. Pick a key you do not type in ZBrush (see [Pressing the hotkey does nothing](troubleshooting.md#pressing-the-hotkey-does-nothing)).
+- A menu that swallows its hotkey swallows it in ZBrush's own text fields too, so a plain letter such as **Q** cannot be typed there while such a menu uses it. Pick a key you do not type in ZBrush (see [Pressing the hotkey does nothing](troubleshooting.md#pressing-the-hotkey-does-nothing)).
+- Typing another key closes a ring that was opened by a tap and is waiting for a click. The key reaches ZBrush as normal. A modifier on its own, or another of your hotkeys, does not close it.
+- The hotkey is ignored in Windows dialogs (such as Save As) and Windows text boxes, so you can type it there. ZBrush's own text fields are not Windows text boxes, so there the ring still opens and the next letter you type closes it.

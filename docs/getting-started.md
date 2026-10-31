@@ -15,6 +15,8 @@ With ZBrush in front, press **Q**. The ring opens centred on your cursor. Pick a
 
 Slots are laid out clockwise starting at the top. A slot with a small arrow badge opens another ring. A small fan badge means its items fan out from that slot instead. The menu's title and a short hint sit in the middle.
 
+**What ZOrbit takes over.** **Q** is ZBrush's own key for Draw mode. The starter menu lets it through, so ZBrush switches to Draw mode when the ring opens, and **Q** still types in ZBrush's own text fields. To hide a key from ZBrush instead, switch on **Swallow hotkey** in the menu settings on the **Menus** screen (see [Hotkeys](hotkeys.md)). **Alt+B** opens the [browser](browser.md); change it on the **Settings** screen (see [Browser hotkey](appearance.md#browser-hotkey)). ZBrush 2022 to 2025 also use **F9** for the plugin; change that on the **Settings** screen under **ZBrush bridge** (see [ZBrush 2022 to 2025](bridge.md#zbrush-2022-to-2025)).
+
 ## First steps
 
 1. Open **ZOrbit Studio** from the Start menu (or from ZBrush: **Zplugin > ZOrbit > Studio**).
