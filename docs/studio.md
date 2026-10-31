@@ -16,11 +16,11 @@ Studio is where you edit everything. Open it from the Start menu (**ZOrbit Studi
 
 ## The tray icon
 
-While the app runs, ZOrbit has an icon in the notification area. Left-click it to open Studio. Right-click it for these commands:
+While the app runs, ZOrbit has an icon in the notification area. Left-click it to open Studio. If the app cannot read `radial.json`, it shows a balloon once and puts "menus file cannot be read" in the icon's tooltip until the file loads again. Right-click it for these commands:
 
 - **Browser** opens the [browser](browser.md).
 - **Open Studio** opens this window.
-- **Reload menus** reads `radial.json` again. The result is logged in `radiald.log`: "tray: menus reloaded", or "tray: reload failed" with the reason.
+- **Reload menus** reads `radial.json` again and shows the result as a balloon from the tray icon: **Menus reloaded**, or the reason the file cannot be read. It is also logged in `radiald.log`: "tray: menus reloaded", or "tray: reload failed" with the reason.
 - **Open logs folder** opens `%LOCALAPPDATA%\ZOrbit`.
 - **Quit ZOrbit** stops the app. The ring stays off until ZBrush is restarted or **Start app** is pressed on **Status**.
 

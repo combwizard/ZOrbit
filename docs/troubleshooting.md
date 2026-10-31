@@ -36,6 +36,18 @@ The palette was renamed, so a hotkey you bound by hand to the old **Apply** does
 
 ### The ring opens, but picks do nothing
 
+When the app knows why a pick went nowhere, it shows a short message near the cursor for about two seconds. It never takes the focus and never shows for a pick that worked. The messages are:
+
+- **No connection to ZBrush's plugin. Check Zplugin > ZOrbit > Status.** The bridge mode is `message` and the app found no live plugin in that ZBrush. Start ZBrush, or load the plugin.
+- **The plugin did not answer. Check Zplugin > ZOrbit > Status.** The plugin was there, but did not pick the request up within half a second, and there is no bridge key to fall back on.
+- **ZBrush was not the front window, nothing sent.** The pick needed the bridge key, and the key is only pressed while ZBrush is in front. Do not click another program right after you pick.
+- **No bridge key is set. Check Settings > ZBrush bridge.** The pick needed the bridge key and none is set.
+- **This slot is empty.** You picked an auto slot nothing has filled yet, or a tag slot whose tag has no items.
+- **That menu has nothing usable in it.** You picked a submenu whose items are all empty or unusable.
+- **A name followed by "could not be found in ZBrush"** or **"is not a ZBrush button"**, or **ZBrush could not carry out that pick. See bridge.log.** The plugin picked the request up and reported a problem: the brush, alpha, material or texture is not installed, the `press`, `set` or `toggle` path does not exist, or ZBrush raised an error. `bridge.log` has the details.
+
+If you see no message and nothing happens, work through the steps below.
+
 On Studio's **Status** screen, the listener card should say **Connected**. In ZBrush, **Zplugin > ZOrbit > Status** should say "verified". If it is not, use the fallback: [bind the bridge key](#use-or-test-the-fallback-key) and leave the mode on `auto`. Then read `bridge.log`; it names each action and says whether it worked. Common causes: a `press`, `set` or `toggle` path that does not exist in your ZBrush (logged as "no such interface item"), or a `brush`, `alpha`, `material` or `texture` whose file ZOrbit cannot find (logged as "NOT loaded in ZBrush and no file known"). A brush you saved after ZOrbit started is found anyway: when a name is missing, ZOrbit looks through your brush, alpha, material and texture folders again before it gives up (at most once every five seconds).
 
 ### ZBrush 2022 to 2025: the ring opens, but picks do nothing
@@ -99,7 +111,7 @@ Letters mean ZOrbit could not read a picture for the slot. The item still works 
 
 ### I broke my menus file
 
-Studio keeps the last version as `radial.json.bak`. If you edit the file by hand and the app cannot read it, it keeps using the last good version and logs the error. When Studio cannot read it either, it opens on a recovery screen that shows the error with its line and column, and has these buttons:
+Studio keeps the last version as `radial.json.bak`. If you edit the file by hand and the app cannot read it, it keeps using the last good version and logs the error. It also shows a balloon from the tray icon, **ZOrbit cannot read your menus file**, once for each saved version of the file, and the tray icon's tooltip says the menus file cannot be read until the file loads again. **Reload menus** in the tray menu shows the reason in a balloon. When Studio cannot read it either, it opens on a recovery screen that shows the error with its line and column, and has these buttons:
 
 - **Open folder** opens the folder that holds `radial.json`.
 - **Open logs folder** opens the logs folder.

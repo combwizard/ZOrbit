@@ -8,6 +8,11 @@ All notable changes to this project are listed here. The format follows
 
 ### Added
 
+- A short message near the cursor when ZOrbit knows why a pick did nothing: no connection to the plugin, no answer
+  from it, ZBrush not in front, no bridge key, an empty slot, a submenu with nothing in it, or a brush, alpha,
+  material, texture or button that ZBrush could not find. A working pick shows nothing.
+- A balloon from the tray icon when `radial.json` cannot be read, and after **Reload menus** ("Menus reloaded", or
+  the reason it failed). The tray tooltip says the menus file cannot be read until it loads again.
 - Tooling: GitHub Actions runs the test suite (`pytest`) on every push and pull request, and the build only starts
   when the tests pass. `ZOrbit.exe --selftest` checks that the libraries, app modules and bundled files are all
   present, and CI runs it on the built exe. `requirements-lock.txt` pins the exact package versions, and

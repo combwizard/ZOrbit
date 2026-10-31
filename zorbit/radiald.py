@@ -29,6 +29,7 @@ import argparse
 import ctypes
 import json
 import os
+import re
 import subprocess
 import sys
 import threading
@@ -57,6 +58,7 @@ DATA_DIR = paths.DATA_DIR
 LOG_FILE = os.path.join(DATA_DIR, "radiald.log")
 REQUEST_FILE = os.path.join(DATA_DIR, "request.json")
 LISTENER_FILE = os.path.join(DATA_DIR, "listener.json")
+BRIDGE_LOG = os.path.join(DATA_DIR, "bridge.log")      # written by the plugin inside ZBrush
 MUTEX_NAME = "Local\\ZOrbit"
 
 WM_APP_PICK = W.WM_APP + 1            # to the bridge listener inside ZBrush
@@ -68,6 +70,7 @@ WM_APP_BROWSER = W.WM_APP + 14        # hook -> control window: the browser hotk
 WM_APP_BROWSER_PICK = W.WM_APP + 15   # control window -> itself: a brush was picked in the popout
 WM_APP_TYPING = W.WM_APP + 16         # hook -> control window: a key was typed while a tapped ring waited for a click
 ACK_WAIT_S = 0.5                      # a listener pick not picked up in this long falls back to the bridge key
+RESULT_TRIES = 30                     # ticks (100 ms) to wait for the plugin to log what a picked-up request did
 ACK_HOLD_MAX_S = 30                   # ... but not while the left button is down, for this long at most
 LEGACY_SCAN_S = 60                    # how long the scan for ZBrush 2022-2025 installations is kept
 TIMER_WATCH, TIMER_ACK, TIMER_REHOOK, TIMER_CONFIG, TIMER_BROWSER_PICK, TIMER_PREWARM, TIMER_POPOUT_SHOW = range(1, 8)
@@ -98,6 +101,55 @@ def log(msg: str) -> None:
             print(line, flush=True)
         except Exception:
             pass
+
+
+# What the user is told when the app knows why a pick went nowhere (docs/troubleshooting.md lists them).
+MSG_NO_CONNECTION = "No connection to ZBrush's plugin. Check Zplugin > ZOrbit > Status."
+MSG_NO_ANSWER = "The plugin did not answer. Check Zplugin > ZOrbit > Status."
+MSG_NOT_FRONT = "ZBrush was not the front window, nothing sent"
+MSG_NO_KEY = "No bridge key is set. Check Settings > ZBrush bridge."
+MSG_EMPTY_SLOT = "This slot is empty"
+MSG_EMPTY_MENU = "That menu has nothing usable in it"
+MSG_PICK_FAILED = "ZBrush could not carry out that pick. See bridge.log."
+
+# A line of bridge.log: "2026-10-31 12:00:00 #7 'Clay' via listener: brush Clay: ...; press Tool:X: ..."
+_PLUGIN_LINE = re.compile(r"^([0-9]{4}-[0-9]{2}-[0-9]{2} [0-9:]{8}) #([0-9]+) '(.*)' via ([^:]*): (.*)$")
+_PLUGIN_BAD = re.compile(r"^([a-z]+) (.+): (NOT loaded in ZBrush and no file known|no such interface item)$")
+
+
+def _plugin_result(seq, since=0.0, path=None):
+    """What the plugin did with pick number seq, from the last 4 KB of bridge.log: None while the log has no line
+    for it, else the list of messages for what went wrong (empty when all went well). since is the epoch time of
+    the pick; a line stamped earlier is from an older run of the app that used the same number."""
+    try:
+        with open(path or BRIDGE_LOG, "rb") as f:
+            size = f.seek(0, os.SEEK_END)
+            f.seek(max(0, size - 4096))
+            lines = f.read().decode("utf-8", errors="replace").splitlines()
+    except OSError:
+        return None
+    for line in reversed(lines):
+        m = _PLUGIN_LINE.match(line)
+        if not m or int(m.group(2)) != seq:
+            continue
+        try:
+            at = time.mktime(time.strptime(m.group(1), "%Y-%m-%d %H:%M:%S"))
+        except (ValueError, OverflowError):
+            at = None
+        if at is not None and at < since - 2:          # the log's clock has whole seconds
+            return None
+        problems = []
+        for part in m.group(5).split("; "):
+            if "FAILED" in part:
+                problems.append(MSG_PICK_FAILED)
+                continue
+            bad = _PLUGIN_BAD.match(part)
+            if bad:
+                what = bad.group(2)
+                problems.append(f"{what} could not be found in ZBrush" if bad.group(3).startswith("NOT")
+                                else f"{what} is not a ZBrush button")
+        return problems
+    return None
 
 
 def _trim_log(max_bytes=1_000_000):
@@ -132,6 +184,8 @@ class App:
         self._icons = {}
         self._seq = 0
         self._ack = None                # [seq, deadline, give up at, logged] of a message-mode pick awaiting pickup
+        self._pick_time = 0.0           # when that pick was handed over
+        self._result = None             # [seq, since, ticks left]: a picked-up request whose outcome is not logged yet
         self._config_error = None       # why the last load of radial.json failed, else None
         self._have_cfg = False          # self.cfg came from a radial.json that loaded (not the empty stand-in)
         self._unreadable = set()        # pids of foreground windows whose process could not be read, logged
@@ -160,7 +214,7 @@ class App:
         self._browser_pick_deadline = 0.0
 
     # --- config ----------------------------------------------------------------------------------
-    def load_config(self, force=False) -> None:
+    def load_config(self, force=False, balloon=True) -> None:
         if self.tags.reload_if_changed():          # new tag labels and colours show in the next ring
             if self.tags.error:
                 log(f"tags: {self.tags.error}; keeping the previous tags")
@@ -176,6 +230,7 @@ class App:
         try:
             cfg = C.load(self.cfg_path, self.tags)
         except Exception as e:
+            fresh = mtime != self._bad_mtime
             self._bad_mtime = mtime                # logged once per broken version, not on every poll
             self._config_error = str(e) or repr(e)
             if self._have_cfg:
@@ -186,8 +241,10 @@ class App:
                 self.cfg = C.Config(path=self.cfg_path, mtime=0.0)
                 self.expander = expand.Expander(self.cfg, self.usage, self.tags)
                 self.slots = []
+            self._menus_problem(announce=fresh and balloon)
             return
         self._config_error = None
+        self._menus_problem(clear=True)
         self._have_cfg = True
         self.cfg = cfg
         self.expander = expand.Expander(cfg, self.usage, self.tags)
@@ -201,6 +258,32 @@ class App:
         self._prefetch()
         self._prune_icons()
         self._schedule_prewarm()
+
+    def _menus_problem(self, announce=False, clear=False):
+        """Puts a menus file that cannot be read in the tray tooltip while it lasts (clear=True takes it out), and
+        with announce shows a balloon once."""
+        if self.tray is None:
+            return
+        try:
+            if clear:
+                self.tray.set_tip(None)
+                return
+            self.tray.set_tip(f"ZOrbit {paths.VERSION}: menus file cannot be read")
+            if announce:
+                self.tray.notify("ZOrbit cannot read your menus file",
+                                 "Open Studio to fix it. The previous menus stay in use." if self._have_cfg
+                                 else "Open Studio to fix it. No menus open until then.")
+        except Exception:
+            log("tray notice failed:\n" + traceback.format_exc())
+
+    def _toast(self, text):
+        """A short message near the cursor. Never raises."""
+        try:
+            import toast
+            colours = (self.cfg.ring.get("colors") or {}) if self.cfg else {}
+            toast.show(text, log, colour=colours.get("text") or toast.TEXT)
+        except Exception:
+            log("toast failed:\n" + traceback.format_exc())
 
     def _prune_icons(self):
         """Drops cached icons of items no menu uses any more (best effort: one missed only costs a rebuild)."""
@@ -550,11 +633,15 @@ class App:
                                  stderr=subprocess.DEVNULL)
                 log("tray: opening the Studio")
             elif name == "reload":
-                self.load_config(force=True)
+                self.load_config(force=True, balloon=False)
                 if self._config_error:
                     log(f"tray: reload failed: {self._config_error}")
+                    if self.tray is not None:
+                        self.tray.notify("ZOrbit cannot read your menus file", self._config_error)
                 else:
                     log("tray: menus reloaded")
+                    if self.tray is not None:
+                        self.tray.notify("ZOrbit", "Menus reloaded")
             elif name == "logs":
                 os.makedirs(paths.DATA_DIR, exist_ok=True)
                 os.startfile(paths.DATA_DIR)
@@ -628,9 +715,11 @@ class App:
                 self.open_menu(sub, W.cursor_pos(), held=False)   # re-centred on the pick
             else:
                 log(f"submenu '{item.data['menu']}' has no usable items; nothing opened")
+                self._toast(MSG_EMPTY_MENU)
             return
         if item.kind in ("auto", "tag"):
             log(f"empty {item.kind} slot picked; nothing sent")
+            self._toast(MSG_EMPTY_SLOT)
             return
         if item.kind == "browser":
             self.open_browser(item.data["browser"] or None, kind=item.data.get("kind"))
@@ -926,6 +1015,7 @@ class App:
                 self.activity.note_pick(seq, item, "listener", True, source, self._activity_menu)
                 now = time.time()
                 self._ack = [seq, now + ACK_WAIT_S, now + ACK_HOLD_MAX_S, False]
+                self._pick_time, self._result = now, None
                 W.SetTimer(self.ctrl, TIMER_ACK, 100, None)
                 W.nudge_mouse()
                 return
@@ -934,6 +1024,7 @@ class App:
             self.activity.note_pick(seq, item, "none", False, source, self._activity_menu,
                                     "no live listener in ZBrush and bridge mode is 'message'")
             self._drop_request(seq)
+            self._toast(MSG_NO_CONNECTION)
             return
         sent, reason = self.press_bridge_key(seq)
         self.activity.note_pick(seq, item, "key", sent, source, self._activity_menu, reason)
@@ -943,14 +1034,18 @@ class App:
 
     def _check_ack(self):
         if self._ack is None:
-            W.KillTimer(self.ctrl, TIMER_ACK)
+            if self._result is not None:
+                self._result_tick()
+            else:
+                W.KillTimer(self.ctrl, TIMER_ACK)
             return
         seq, deadline, give_up, logged = self._ack
         pending = os.path.exists(REQUEST_FILE)
         if not pending:
             self._ack = None
-            W.KillTimer(self.ctrl, TIMER_ACK)
             self.activity.note_ack(seq, "picked_up")
+            self._result = [seq, self._pick_time, RESULT_TRIES]    # the plugin logs the outcome a moment after it
+            self._result_tick()                                     # takes the request, so look now and keep looking
             return
         now = time.time()
         if now < deadline:
@@ -974,14 +1069,30 @@ class App:
                 self._drop_request(seq)
         else:
             log(f"pick #{seq}: listener did not pick it up in 0.5 s")
+            self._toast(MSG_NO_ANSWER)
+
+    def _result_tick(self):
+        """Reads the plugin's outcome for the picked-up request from bridge.log; a toast only for a problem."""
+        seq, since, left = self._result
+        problems = _plugin_result(seq, since)
+        if problems is None and left > 1:
+            self._result[2] = left - 1
+            return
+        self._result = None
+        W.KillTimer(self.ctrl, TIMER_ACK)
+        if problems:
+            log(f"pick #{seq}: ZBrush reported: {'; '.join(problems)}")
+            self._toast(problems[0])
 
     def press_bridge_key(self, seq):
         key = self.cfg.bridge_key
         if key is None:
             log(f"pick #{seq}: no bridge key configured; nothing sent")
+            self._toast(MSG_NO_KEY)
             return False, "no bridge key configured"
         if not self.target_in_front():
             log(f"pick #{seq}: ZBrush is not in front; bridge key not sent (it would land in another app)")
+            self._toast(MSG_NOT_FRONT)
             return False, "ZBrush is not in front"
         held = [vk for vk in (0xA0, 0xA1, 0xA2, 0xA3, 0xA4, 0xA5) if W.key_down(vk)]
         events = [(vk, True) for vk in held]                     # release what the user still holds
@@ -1051,6 +1162,8 @@ class App:
         W.SetTimer(self.ctrl, TIMER_REHOOK, 120000, None)
         W.SetTimer(self.ctrl, TIMER_CONFIG, 500, None)
         self._create_tray()
+        if self._config_error:                      # the file was already broken when the app started
+            self._menus_problem(announce=True)
         msg = W.w.MSG()
         try:
             while W.GetMessageW(ctypes.byref(msg), None, 0, 0) > 0:

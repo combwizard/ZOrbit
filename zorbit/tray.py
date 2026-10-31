@@ -82,7 +82,8 @@ _GetModuleHandleW = _sig(_kernel32, "GetModuleHandleW", w.HMODULE, w.LPCWSTR)
 
 # --- constants -----------------------------------------------------------------------------------
 NIM_ADD, NIM_MODIFY, NIM_DELETE, NIM_SETVERSION = 0, 1, 2, 4
-NIF_MESSAGE, NIF_ICON, NIF_TIP, NIF_SHOWTIP = 0x1, 0x2, 0x4, 0x80
+NIF_MESSAGE, NIF_ICON, NIF_TIP, NIF_INFO, NIF_SHOWTIP = 0x1, 0x2, 0x4, 0x10, 0x80
+NIIF_INFO, NIIF_NOSOUND = 0x1, 0x10
 NOTIFYICON_VERSION_4 = 4
 WM_NULL, WM_DESTROY, WM_TIMER, WM_CONTEXTMENU = 0x0, 0x2, 0x113, 0x7B
 WM_LBUTTONUP, WM_LBUTTONDBLCLK, WM_RBUTTONUP = 0x202, 0x203, 0x205
@@ -114,6 +115,7 @@ def _signed16(v: int) -> int:
 class Tray:
     def __init__(self, app_title, icon_path, on_command, log=None):
         self.title = str(app_title)
+        self.tip = self.title               # the tooltip now; set_tip() changes it
         self.icon_path = icon_path
         self.on_command = on_command
         self._log = log or (lambda msg: None)
@@ -210,7 +212,7 @@ class Tray:
         nid = self._data(NIF_MESSAGE | NIF_ICON | NIF_TIP | NIF_SHOWTIP)
         nid.uCallbackMessage = WM_TRAY
         nid.hIcon = self._hicon
-        nid.szTip = self.title[:127]
+        nid.szTip = self.tip[:127]
         self.last_add_ok = self.added = self._notify(NIM_ADD, nid)
         if self.added:
             ver = self._data()
@@ -220,6 +222,33 @@ class Tray:
                 self._log("tray: NOTIFYICON_VERSION_4 not accepted; using legacy callbacks")
             _KillTimer(self.hwnd, TIMER_RETRY)
         return self.added
+
+    def set_tip(self, text=None) -> bool:
+        """Changes the tooltip (None restores the title). Returns whether the shell took it."""
+        tip = self.title if text is None else str(text)
+        if tip == self.tip:
+            return True
+        self.tip = tip                      # also what a re-added icon (Explorer restarted) shows
+        if not (self.hwnd and self.added):
+            return False
+        nid = self._data(NIF_TIP | NIF_SHOWTIP)
+        nid.szTip = tip[:127]
+        return self._notify(NIM_MODIFY, nid)
+
+    def notify(self, title, text) -> bool:
+        """Shows a balloon (a toast on Windows 10 and 11) from the tray icon. Returns whether the shell took it;
+        it is False when the icon is not in the tray, and nothing is raised."""
+        try:
+            if not (self.hwnd and self.added):
+                return False
+            nid = self._data(NIF_INFO)
+            nid.szInfoTitle = str(title)[:63]
+            nid.szInfo = str(text)[:255]
+            nid.dwInfoFlags = NIIF_INFO | NIIF_NOSOUND
+            return self._notify(NIM_MODIFY, nid)
+        except Exception as e:
+            self._log(f"tray: balloon failed: {e!r}")
+            return False
 
     # --- window procedure ------------------------------------------------------------------------
     def _wndproc(self, hwnd, msg, wparam, lparam):
