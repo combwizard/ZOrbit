@@ -123,7 +123,7 @@ Studio keeps the last version as `radial.json.bak`. If you edit the file by hand
 
 - **Open folder** opens the folder that holds `radial.json`.
 - **Open logs folder** opens the logs folder.
-- **Restore backup** replaces the file with `radial.json.bak`. It only appears when that file exists.
+- **Restore backup** replaces the file with `radial.json.bak`. It only appears when that file exists. The file it replaces is kept as `radial.json.broken`, so you can open it in a text editor and recover what you need.
 - **Start from defaults** replaces the file with the built-in menus, after a confirmation. The unreadable file is kept as `radial.json.broken`.
 - **Try again** reloads Studio, for when you have fixed the file by hand.
 

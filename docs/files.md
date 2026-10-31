@@ -22,7 +22,7 @@
 |---|---|
 | `%APPDATA%\ZOrbit\radial.json` | Your menus and settings. Created from the starter menus on first run. |
 | `%APPDATA%\ZOrbit\radial.json.bak` | The version before your last save in Studio (only replaced when the file was readable and changed). |
-| `%APPDATA%\ZOrbit\radial.json.broken` | The file Studio could not read, kept when you chose **Start from defaults** on the recovery screen. |
+| `%APPDATA%\ZOrbit\radial.json.broken` | A copy of the `radial.json` that Studio replaced: **Start from defaults** and **Restore backup** on the recovery screen keep the unreadable file here first, and so does a save over a file that is not valid JSON. Only the last one is kept. |
 | `%APPDATA%\ZOrbit\launch.json` | Tells the plugin how to start the app and Studio. Rewritten on each start. |
 | `%LOCALAPPDATA%\ZOrbit\radiald.log` | The app: config loads, hotkeys, rings, hand-offs. Trimmed automatically. |
 | `%LOCALAPPDATA%\ZOrbit\bridge.log` | The plugin inside ZBrush: what each pick actually did. |

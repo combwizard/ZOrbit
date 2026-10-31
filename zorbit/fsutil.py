@@ -38,7 +38,7 @@ def write_atomic(path, data):
             f.flush()
             os.fsync(f.fileno())
         _replace(tmp, path)
-    except OSError:
+    except BaseException:                        # an OSError, or text that cannot be encoded: leave no .tmp behind
         try:
             os.remove(tmp)
         except OSError:

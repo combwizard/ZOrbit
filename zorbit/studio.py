@@ -33,6 +33,7 @@ import paths                # noqa: E402
 import radiald              # noqa: E402
 import tags                 # noqa: E402
 import webapi               # noqa: E402
+import webview2             # noqa: E402
 import win32 as W           # noqa: E402
 import winframe             # noqa: E402
 import zscript_bridge       # noqa: E402
@@ -46,7 +47,10 @@ TITLE = "ZOrbit Studio"
 VERSION = paths.VERSION
 APP_ID = "ZOrbit.Studio"           # taskbar identity, so the Studio groups under its own icon
 STUDIO_FILE = os.path.join(paths.CONFIG_DIR, "studio.json")   # Studio preferences and window placement
-SAMPLE_SLOTS = 8            # brushes on the tag colours sample ring (preview_tags)
+DEFAULT_SIZE = (1320, 860)  # the first window, in logical pixels, when it fits the screen (see _fit_size)
+MIN_SIZE = (980, 560)       # the smallest the window can be made
+START_WAIT = 10.0          # seconds start_app waits for the app's mutex
+SAMPLE_SLOTS = 8           # brushes on the tag colours sample ring (preview_tags)
 SETTINGS_FORMAT = 1         # the "zorbit_settings" number of an exported settings file
 IMPORT_MAX_BYTES = 5 * 1024 * 1024    # a settings file is a few hundred KB at most; refuse anything bigger
 RELEASES_API = "https://api.github.com/repos/combwizard/zorbit/releases/latest"
@@ -86,6 +90,20 @@ def _tail(path, n=40):
     if size > 65536:
         lines = lines[1:]                        # the first line may be cut in half
     return lines[-n:] if n > 0 else []
+
+
+def _log_since(path, offset, n=8):
+    """The last n lines of a text file that were written after its first offset bytes (its size before a launch).
+    A file that is now smaller than offset was replaced (rotated): all of it is new."""
+    try:
+        with open(path, "rb") as f:
+            size = f.seek(0, os.SEEK_END)
+            start = offset if size >= offset else 0
+            f.seek(max(start, size - 65536))
+            data = f.read()
+    except OSError:
+        return []
+    return data.decode("utf-8", errors="replace").splitlines()[-n:]
 
 
 def _zbrush_running():
@@ -138,6 +156,7 @@ class Api(webapi.LibraryApi, webapi.TagApi):
         self._allow_close = False      # set by close_now(): the next close goes through
         self._ask_sent = 0.0           # when we last asked the page to show the close dialog
         self._ask_acked = True         # whether the page answered that request
+        self._session_ending = False   # Windows is shutting down, restarting or signing out: never veto the close
 
     # --- config ----------------------------------------------------------------------------------
     def _load_dict(self, cfg: dict, store=None):
@@ -197,7 +216,8 @@ class Api(webapi.LibraryApi, webapi.TagApi):
         mtime_ns is the file's time when the page loaded it: if the file has changed since, nothing is written
         (conflict) unless force. allow_unusable saves a config no ring can open from. The two flags are separate
         so confirming one warning never skips the other. The previous version is kept as radial.json.bak, only
-        when it was valid JSON and differs, so a corrupt or unchanged file never replaces a good backup."""
+        when it was valid JSON and differs, so a corrupt or unchanged file never replaces a good backup. A file
+        that is not valid JSON is kept as radial.json.broken instead (kept_broken in the result)."""
         if not isinstance(cfg, dict) or not isinstance(cfg.get("menus"), dict):
             return {"saved": False, "message": "The config is not an object with a menus section."}
         exists = os.path.isfile(CONFIG_FILE)
@@ -220,7 +240,12 @@ class Api(webapi.LibraryApi, webapi.TagApi):
                                    or not any(m.hotkey for m in loaded.menus.values())):
             return {"saved": False, "blocked": True, "problems": problems,
                     "message": "Saving this would leave the app with no ring that can open."}
-        text = json.dumps(cfg, indent=2, ensure_ascii=False) + "\n"
+        try:
+            text = json.dumps(cfg, indent=2, ensure_ascii=False) + "\n"
+            data = text.encode("utf-8")                    # before anything is touched: a bad character stops here
+        except (UnicodeEncodeError, TypeError, ValueError, RecursionError) as e:
+            return {"saved": False, "message": f"Could not save: {e}"}
+        kept_broken = False
         try:
             if exists:
                 with open(CONFIG_FILE, "rb") as f:
@@ -230,17 +255,24 @@ class Api(webapi.LibraryApi, webapi.TagApi):
                     json.loads(old)
                     if old.replace("\r\n", "\n") != text:
                         fsutil.write_atomic(CONFIG_FILE + ".bak", old_bytes)
-                except ValueError:
-                    pass                                   # corrupt: not worth keeping as the backup
-            fsutil.write_atomic(CONFIG_FILE, text)
+                except (ValueError, RecursionError):
+                    # Not valid JSON: it never becomes the backup (that stays the last good version), but it is
+                    # not lost either. Saved over, it is kept as radial.json.broken.
+                    fsutil.write_atomic(CONFIG_FILE + ".broken", old_bytes)
+                    kept_broken = True
+            fsutil.write_atomic(CONFIG_FILE, data)
             st = os.stat(CONFIG_FILE)
         except OSError as e:
             return {"saved": False, "message": f"radial.json could not be written: {e.strerror or e}"}
+        except (UnicodeEncodeError, TypeError, ValueError) as e:
+            return {"saved": False, "message": f"Could not save: {e}"}
         self._extras = (0.0, "auto", False)            # Status reads the new bridge mode at once
-        return {"saved": True, "problems": problems, "time": time.time(), "mtime_ns": st.st_mtime_ns}
+        return {"saved": True, "problems": problems, "time": time.time(), "mtime_ns": st.st_mtime_ns,
+                "kept_broken": kept_broken}
 
     def restore_backup(self):
-        """Puts radial.json.bak back as radial.json, if the backup is readable JSON. The backup stays."""
+        """Puts radial.json.bak back as radial.json, if the backup is readable JSON. The backup stays, and the
+        radial.json it replaces is first kept as radial.json.broken (unless it is missing or the same)."""
         bak = CONFIG_FILE + ".bak"
         try:
             with open(bak, "rb") as f:
@@ -254,12 +286,23 @@ class Api(webapi.LibraryApi, webapi.TagApi):
                 return {"ok": False, "message": "radial.json.bak is not a JSON object, so it was not restored."}
         except ValueError as e:
             return {"ok": False, "message": f"radial.json.bak is not valid JSON ({e}), so it was not restored."}
+        kept = False
         try:
+            try:
+                with open(CONFIG_FILE, "rb") as f:
+                    current = f.read()
+            except FileNotFoundError:
+                current = None
+            if current is not None and current != data:       # what is being replaced is kept, as reset_config does
+                fsutil.write_atomic(CONFIG_FILE + ".broken", current)
+                kept = True
             fsutil.write_atomic(CONFIG_FILE, data)
         except OSError as e:
             return {"ok": False, "message": f"radial.json could not be written: {e.strerror or e}"}
         self._extras = (0.0, "auto", False)
-        return {"ok": True, "message": "Restored radial.json from radial.json.bak."}
+        return {"ok": True, "kept_broken": kept,
+                "message": "Restored radial.json from radial.json.bak."
+                           + (" The file it replaced is kept as radial.json.broken." if kept else "")}
 
     def reset_config(self):
         """Starts again from the shipped default menus. The file being replaced is first kept as
@@ -485,22 +528,31 @@ class Api(webapi.LibraryApi, webapi.TagApi):
         if zb_checked and not zb_running:                  # a failed check is not "not running": let the launch try
             return {"ok": False, "running": False, "reason": "zbrush",
                     "message": "ZBrush is not running. The app starts together with ZBrush."}
+        app_log = os.path.join(DATA_DIR, "radiald.log")
+        try:
+            log_before = os.path.getsize(app_log)
+        except OSError:
+            log_before = 0
         p = subprocess.Popen(paths.launch_commands()["app"], cwd=os.path.dirname(paths.PKG_DIR),
                              env=paths.clean_env(), creationflags=0x00000008 | 0x00000200, close_fds=True,
                              stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        deadline = time.monotonic() + 4.0
+        deadline = time.monotonic() + START_WAIT
         while time.monotonic() < deadline:
             if _mutex_exists(APP_MUTEX):
                 return {"ok": True, "running": True, "message": "Started."}
             if p.poll() is not None:
                 break
             time.sleep(0.2)
-        else:
-            if _mutex_exists(APP_MUTEX):
-                return {"ok": True, "running": True, "message": "Started."}
-        return {"ok": False, "running": False, "reason": "failed",
-                "message": "The app did not start. The last lines of its log:",
-                "log": _tail(os.path.join(DATA_DIR, "radiald.log"), 8)}
+        if _mutex_exists(APP_MUTEX):
+            return {"ok": True, "running": True, "message": "Started."}
+        if p.poll() is None:                    # still alive: slow, not failed (a first start is scanned by Windows)
+            return {"ok": False, "running": False, "starting": True,
+                    "message": "The app is still starting (a first start can take a few seconds while Windows "
+                               "scans it). Status turns green when it is up."}
+        lines = _log_since(app_log, log_before)      # only what this launch wrote, not an earlier run's lines
+        return {"ok": False, "running": False, "reason": "failed", "lines": lines, "log": lines,
+                "message": "The app did not start." + (" The last lines of its log:" if lines else
+                                                       " It wrote nothing to its log.")}
 
     # --- ZScript bridge for ZBrush 2022-2025 -----------------------------------------------------
     _scan = (0.0, [])                          # (when, installs.find_installs()): Setup asks every second or so
@@ -536,7 +588,8 @@ class Api(webapi.LibraryApi, webapi.TagApi):
     # --- Setup screen ----------------------------------------------------------------------------
     def get_setup(self):
         """Everything the Setup screen shows, read fresh each call (the installs scan and the process list are
-        cheap). One failing probe costs only its part of the answer: the rest comes back with an 'error'."""
+        cheap). When the check itself fails the answer is only {now, checked_at, failed: True, error}: no installs
+        list, which the page could take for 'nothing found'. The traceback goes to studio.log."""
         try:
             mode, _ = self._status_extras()
             return onboarding.snapshot(self._all_installs(), self._listener_info(), self._last_pick_info(), mode,
@@ -544,12 +597,12 @@ class Api(webapi.LibraryApi, webapi.TagApi):
         except Exception as e:
             if getattr(self, "_setup_err", None) != repr(e):          # polled every second: log a repeat once
                 self._setup_err = repr(e)
-                _startup(f"get_setup failed: {e!r}")
-            return {"now": time.time(), "checked_at": time.time(), "bridge": None, "env": None, "installs": [],
-                    "unmatched_procs": [], "zbrush": {"running": False, "check_ok": False}, "listener": None,
-                    "app": {"running": False}, "bridge_mode": "auto", "bundled": False, "activity": None,
-                    "last_pick": None, "hard_fail": False, "hard_reasons": [],
-                    "error": f"{type(e).__name__}: {e}"}
+                import traceback
+                _startup("get_setup failed:\n" + traceback.format_exc().rstrip())
+            # Deliberately nothing else: an empty installs list would read as "no ZBrush found". The page shows
+            # the error and keeps whatever it showed before.
+            return {"now": time.time(), "checked_at": time.time(), "failed": True,
+                    "error": f"The setup check failed: {e} (see studio.log)"}
 
     def register_plugin_path(self):
         """Adds this build's bridge folder to the user's ZBRUSH_PLUGIN_PATH. Takes no argument on purpose: the
@@ -561,9 +614,17 @@ class Api(webapi.LibraryApi, webapi.TagApi):
         return dict(onboarding.register_plugin_path(d), restart=True)
 
     def _known_legacy(self, path):
+        """The ZBrush 2022-2025 installation at this folder, or None. The scan and the added folders are looked at
+        first; a folder neither knows (a ZBrush found only by its running process) is checked directly. Anything
+        that is not a ZBrush folder without the Python API, or is older than 2022, is refused."""
+        if not isinstance(path, str) or not path.strip():
+            return None
         for e in self._legacy_installs():
-            if os.path.normcase(e["path"]) == os.path.normcase(str(path)):
+            if os.path.normcase(e["path"]) == os.path.normcase(os.path.normpath(path)):
                 return e
+        e = installs.entry(path)
+        if e and not e["python"] and e["supported"] and (e["year"] is None or e["year"] <= 2025):
+            return e
         return None
 
     def install_zscript_bridge(self, path):
@@ -590,12 +651,9 @@ class Api(webapi.LibraryApi, webapi.TagApi):
                 break
         if not e:
             return {"ok": False, "message": "No ZBrush.exe in that folder."}
-        if e["python"]:
-            return {"ok": False, "message": f"{e['name']} has the Python API, so it uses the regular bridge and "
-                                           "nothing needs adding here. It appears on Setup by itself once it has "
-                                           "been started once with the plugin set up."}
-        if os.path.normcase(e["path"]) in {os.path.normcase(x["path"]) for x in self._legacy_installs()}:
-            return {"ok": True, "message": f"{e['name']} is already listed.", "already": True}
+        if os.path.normcase(e["path"]) in {os.path.normcase(x["path"]) for x in self._all_installs()}:
+            return {"ok": True, "message": f"{e['name']} is already listed.", "already": True,
+                    "python": e["python"]}
         with _studio_lock:                     # read, change and write as one step
             data = _read_studio_file()
             folders = [p for p in data.get("zbrush_folders", []) if isinstance(p, str)]
@@ -603,7 +661,7 @@ class Api(webapi.LibraryApi, webapi.TagApi):
                 folders.append(e["path"])
             data["zbrush_folders"] = folders
             _write_studio_file(data)
-        return {"ok": True, "message": f"Added {e['name']}."}
+        return {"ok": True, "python": e["python"], "message": f"Added {e['name']}."}
 
     def forget_zbrush_folder(self, path):
         """Drops a folder added by hand from studio.json (never an automatically found one)."""
@@ -700,8 +758,11 @@ class Api(webapi.LibraryApi, webapi.TagApi):
                                 or not cfg["menus"]):
             return refuse(f"The menus in {name} are missing or not valid.")
         tags_raw = tags_raw if isinstance(tags_raw, dict) else None
+        # The tags the file really holds. TagStore.from_raw always adds Favourites, which would make every tags
+        # object "have tags"; a file whose tags section is empty or malformed has none, while one holding only the
+        # Favourites tag counts (it carries the starred items).
         info = tags.TagStore.from_raw(tags_raw) if tags_raw is not None else None
-        has_tags = bool(info and info.tags())
+        has_tags = bool(tags_raw is not None and tags._parse(tags_raw)[0])
         if not has_tags:
             tags_raw = None
         if cfg is None and not has_tags:
@@ -714,10 +775,24 @@ class Api(webapi.LibraryApi, webapi.TagApi):
         out = {"ok": True, "path": path, "kind": kind, "has_config": cfg is not None,
                "menus": len(cfg["menus"]) if cfg is not None else 0, "has_tags": has_tags,
                "tags": 0, "new_tags": 0, "items": 0, "problems": problems, "version": version}
+        store = tags.TagStore(radiald.tags_path()).load()
         if has_tags:
-            out.update(tags.TagStore(radiald.tags_path()).load().import_preview(tags_raw))
+            out.update(store.import_preview(tags_raw))
+        # What a replace would throw away, so the page can say "The file's 4 menus replace your 7".
+        out["current_menus"] = self._current_menu_count()
+        out["current_tags"] = 0 if store.error else len(store.tags())
         self._pending_import = {"path": path, "kind": kind, "config": cfg, "tags": tags_raw}
         return out
+
+    @staticmethod
+    def _current_menu_count() -> int:
+        """How many menus radial.json holds now (0 when it is missing or unreadable)."""
+        try:
+            with open(CONFIG_FILE, encoding="utf-8-sig") as f:
+                menus = json.load(f).get("menus")
+            return len(menus) if isinstance(menus, dict) else 0
+        except (OSError, ValueError, AttributeError, RecursionError):
+            return 0
 
     def apply_import(self, tag_mode="merge"):
         """Does what pick_import read. tag_mode: 'merge' or 'replace' the tags, or 'none' to leave them.
@@ -904,6 +979,23 @@ class Api(webapi.LibraryApi, webapi.TagApi):
         self._allow_close = True
         return self.win_close()
 
+    def _on_query_end(self):
+        """WM_QUERYENDSESSION (UI thread, answered yes by winframe): the FormClosing that follows must not be
+        cancelled to ask the page about unsaved changes, or the user's shutdown would be blocked by Studio."""
+        if not self._session_ending:
+            _startup("Windows is ending the session; the window will close without asking")
+        self._session_ending = True
+
+    def _on_end_session(self, ending):
+        """WM_ENDSESSION (UI thread). ending: the session really ends, else something cancelled it. Saves the
+        window placement and goes: Windows stops the process soon after this returns."""
+        if not ending:
+            _startup("the session end was cancelled")
+            self._session_ending = False
+            return
+        self._session_ending = True
+        _remember_window(getattr(self, "_hwnd_cache", None) or 0)
+
     def win_close(self):
         h = self._hwnd()
         if h:
@@ -961,6 +1053,9 @@ def _on_closing(api):
     page is always asked, whatever set_dirty last said: the page closes at once when it has nothing unsaved,
     and shows its dialog when it has. That request must run on another thread: calling into the page from
     inside this handler would deadlock the UI thread."""
+    if api._session_ending:               # Windows is shutting down: a cancelled close would block it
+        _remember_window(api._hwnd())
+        return True
     if api._allow_close:
         _remember_window(api._hwnd())
         return None
@@ -1001,6 +1096,26 @@ def _remember_window(hwnd):
         pass
 
 
+def _fit_size(work_w, work_h, scale):
+    """The first window's size in logical pixels: DEFAULT_SIZE, shrunk to fit a work area of work_w x work_h
+    physical pixels (a 1080p laptop at 150 percent has about 1280 x 690 logical), never below MIN_SIZE."""
+    margin = 16
+    wd = min(DEFAULT_SIZE[0], int(work_w / scale) - margin)
+    ht = min(DEFAULT_SIZE[1], int(work_h / scale) - margin)
+    return {"width": max(MIN_SIZE[0], wd), "height": max(MIN_SIZE[1], ht)}
+
+
+def _default_geometry(scale):
+    """The window size used when no placement was saved (or it could not be used)."""
+    try:
+        wa = winframe._primary_work_area()
+        if wa.right > wa.left and wa.bottom > wa.top:
+            return _fit_size(wa.right - wa.left, wa.bottom - wa.top, scale)
+    except Exception:
+        pass
+    return {"width": DEFAULT_SIZE[0], "height": DEFAULT_SIZE[1]}
+
+
 def main():
     _startup(f"Studio {VERSION} main()")
     mutex = CreateMutexW(None, False, STUDIO_MUTEX)       # before the slow import: a second launch exits fast
@@ -1014,6 +1129,9 @@ def main():
                 user32.ShowWindow(hwnd, 5)                 # SW_SHOW: keeps a maximised window maximised
             user32.SetForegroundWindow(hwnd)
         return 0
+    if not webview2.require(_startup):          # says so in a message box; without the runtime pywebview would fall back to IE
+        CloseHandle(mutex)
+        return 1
     import webview
     _startup("pywebview imported")
     try:                                                    # own taskbar identity and icon, not Python's
@@ -1024,7 +1142,7 @@ def main():
     # first means the saved window pixels and the monitor checks use the same coordinates as the window.
     user32.SetProcessDPIAware()
     scale = user32.GetDpiForSystem() / 96
-    min_size = (980, 640)
+    min_size = MIN_SIZE
     placement = winframe.saved_window(_read_studio_file().get("window"),
                                       round(min_size[0] * scale), round(min_size[1] * scale))
     if placement:
@@ -1032,7 +1150,7 @@ def main():
         geometry = {"x": round(x / scale), "y": round(y / scale), "width": round(wd / scale),
                     "height": round(ht / scale)}
     else:
-        geometry = {"width": 1320, "height": 860}
+        geometry = _default_geometry(scale)
     api = Api()
     window = webview.create_window(TITLE, url=UI_INDEX, js_api=api, **geometry, hidden=True,
                                    min_size=min_size, background_color="#1a1b1e", text_select=False)
@@ -1041,18 +1159,25 @@ def main():
     window.events.loaded += lambda: _startup("page loaded")
     winframe.enable_drag_regions()
     icon = paths.ICON if os.path.isfile(paths.ICON) else None
-    webview.start(_frame_and_show, (window, placement),
+    webview.start(_frame_and_show, (window, placement, api),
                   debug="--debug" in sys.argv, icon=icon)                     # worker thread
     CloseHandle(mutex)
     return 0
 
 
-def _frame_and_show(window, placement):
+def _frame_and_show(window, placement, api=None):
     """On pywebview's worker thread. The window was created hidden: every size change of a visible WebView2
     window flashes black, so the title bar, saved placement and maximise are all applied before it is first
-    shown, and it is shown once the page has drawn (or after 3 s, so a slow page never leaves it invisible)."""
-    hwnd = winframe.custom_frame(TITLE, placement, pid=os.getpid(), include_hidden=True,
-                                 on_hwnd=winframe.limit_maximise_to_work_area)
+    shown, and it is shown once the page has drawn (or after 3 s, so a slow page never leaves it invisible).
+    api: when given, Windows shutting down or signing out is let through (see _on_closing)."""
+    def on_hwnd(hwnd):
+        if api is None:
+            winframe.limit_maximise_to_work_area(hwnd)
+            return
+        api._hwnd_cache = hwnd
+        winframe.limit_maximise_to_work_area(hwnd, on_query_end=api._on_query_end,
+                                             on_end=api._on_end_session)
+    hwnd = winframe.custom_frame(TITLE, placement, pid=os.getpid(), include_hidden=True, on_hwnd=on_hwnd)
     window.events.loaded.wait(3)
     if hwnd:
         winframe.show_placed(hwnd, bool(placement and placement[4]))

@@ -21,6 +21,11 @@ All notable changes to this project are listed here. The format follows
 
 ### Changed
 
+- Studio: the first window fits a laptop screen (smaller than 1320 x 860 when the work area is), and the
+  minimum height is 560 instead of 640. **Add a ZBrush folder** accepts a ZBrush 2026 or later that has not
+  run yet, so Setup can show and fix it, and the ZScript plugin can be installed into a ZBrush 2022 to 2025
+  that Studio only knows from its running process. Import reports how many menus and tags the file has and
+  how many you have now.
 - Studio: **Setup** is Alt+5 (it was Alt+6). Alt+1 to Alt+4 are unchanged. **Settings > Studio** shows the version
   with a link to the GPL-3.0 licence.
 - The installer's last page says what to do next for ZBrush 2026 and newer (restart it) and for ZBrush 2022 to
@@ -67,6 +72,15 @@ All notable changes to this project are listed here. The format follows
 
 ### Fixed
 
+- Studio: **Restore backup** keeps the `radial.json` it replaces as `radial.json.broken`, as **Start from defaults**
+  already did, and so does a save over a `radial.json` that is not valid JSON. A menus file that cannot be
+  written as text says "Could not save" and leaves no stray `.tmp` file.
+- Studio no longer blocks Windows from shutting down, restarting or signing out: it saves its window position
+  and closes.
+- Studio: **Start app** waits up to 10 seconds, says when the app is still starting, and after a failure shows
+  only the log lines from that launch. When the Setup check itself fails, Setup shows the error instead of an
+  empty list and writes the details to `studio.log`. Studio checks for the WebView2 runtime before it opens
+  and says what is missing. Importing a file whose tags section is empty no longer offers to import tags.
 - Ring: names, menu titles and placeholder letters in Chinese, Japanese and Korean are drawn with a font that has
   the characters (Microsoft YaHei, Yu Gothic, Malgun Gothic) instead of empty boxes. A long menu title is shortened
   with an ellipsis instead of running across the slots.
