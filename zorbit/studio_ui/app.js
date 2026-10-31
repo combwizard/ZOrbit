@@ -131,10 +131,10 @@ const KIND = {
 };
 /* The kinds of asset the library holds (brushes, alphas, materials, textures) and their wording; every "brush/brushes" string reads from here. */
 const KINDS = {
-  brush:    { one: 'brush',    many: 'brushes',   tab: 'Brushes',   ext: '.zbp', files: 'a .zbp file', eg: 'ClayBuildup' },
-  alpha:    { one: 'alpha',    many: 'alphas',    tab: 'Alphas',    ext: '.psd', files: 'a .psd, .bmp, .jpg, .png or .tif file', eg: 'Alpha 058' },
-  material: { one: 'material', many: 'materials', tab: 'Materials', ext: '.zmt', files: 'a .zmt file', eg: 'SkinShade4' },
-  texture:  { one: 'texture',  many: 'textures',  tab: 'Textures',  ext: '.psd', files: 'a .psd, .jpg, .png, .bmp, .tif or .exr file', eg: 'Txtr01' },
+  brush:    { one: 'brush',    many: 'brushes',   tab: 'Brushes',   ext: '.zbp', exts: '.zbp', files: 'a .zbp file', eg: 'ClayBuildup' },
+  alpha:    { one: 'alpha',    many: 'alphas',    tab: 'Alphas',    ext: '.psd', exts: '.psd, .bmp, .jpg, .jpeg, .png, .tif or .tiff', files: 'a .psd, .bmp, .jpg, .png or .tif file', eg: 'Alpha 058' },
+  material: { one: 'material', many: 'materials', tab: 'Materials', ext: '.zmt', exts: '.zmt', files: 'a .zmt file', eg: 'SkinShade4' },
+  texture:  { one: 'texture',  many: 'textures',  tab: 'Textures',  ext: '.psd', exts: '.psd, .jpg, .jpeg, .png, .bmp, .tif, .tiff or .exr', files: 'a .psd, .jpg, .png, .bmp, .tif or .exr file', eg: 'Txtr01' },
 };
 const LIB_KINDS = Object.keys(KINDS);
 const isLib = k => typeof k === 'string' && Object.prototype.hasOwnProperty.call(KINDS, k);
@@ -163,8 +163,8 @@ const COLOR_INFO = {
   lines: ['Lines', 'Spokes and guides'],
 };
 const BRIDGE_INFO = {
-  auto: ['Auto', 'Recommended. Uses the listener inside ZBrush when it is alive and falls back to the bridge key otherwise (or if a message is not picked up within half a second).'],
-  message: ['Message', 'Posts a message to a small listener window inside ZBrush. No keystroke is sent, so nothing can collide with your own shortcuts. Needs the ZOrbit plugin loaded in ZBrush. If no listener is live, the pick is dropped and logged.'],
+  auto: ['Auto', 'Recommended. Uses the plugin’s listener inside ZBrush when it is running and falls back to the bridge key otherwise (or if a message is not picked up within half a second).'],
+  message: ['Message', 'Posts a message to a small window the plugin keeps inside ZBrush (its listener). No keystroke is sent, so nothing can collide with your own shortcuts. Needs the ZOrbit plugin loaded in ZBrush. If the plugin is not listening, the pick is dropped and logged.'],
   key: ['Key', 'Presses the bridge key. Bind that key in ZBrush to Zplugin > ZOrbit > Apply (Ctrl+Alt+click the button, press the key, then Preferences > Hotkeys > Store).'],
 };
 const FALLBACK_DEFAULTS = { radius: 145, slot: 72, dead_zone: 38, tap_ms: 250, timeout_s: 20, animation: 'smooth', labels: 'name', tag_colors: 'tint', flick: true, hover_submenus: true,
@@ -2008,7 +2008,7 @@ function buildItemInspector() {
         if (L.state === 'loading' || L.state === 'idle') hintEl.append('Reading your ' + W.one + ' library...');
         else if (L.state === 'error') { hintEl.classList.add('warn'); hintEl.append(`Your ${W.one} library could not be read: `, linkBtn('see Library', () => { S.lib.kind = k; showScreen('library'); }), '.'); }
         else if (!L.zbrushFound) { hintEl.classList.add('warn'); hintEl.append('ZBrush was not found: ', linkBtn('see Setup', () => showScreen('setup')), '.'); }
-        else if (v && L.items.length && !L.byName.has(nameKey(v))) { hintEl.classList.add('warn'); hintEl.append(`Not found in your ${W.one} library. ZBrush needs ${W.files} with this name.`); }
+        else if (v && L.items.length && !L.byName.has(nameKey(v))) { hintEl.classList.add('warn'); hintEl.append(`Not found in your ${W.one} folders. ZBrush can still select it if it is loaded there; a picture needs ${W.files} with this name.`); }
         else if (!v) hintEl.append('Type to search your library.');
       } else if (k === 'menu') {
         const t = S.cfg.menus[v];
@@ -2025,7 +2025,7 @@ function buildItemInspector() {
       } else {
         const s = S.suggestions.find(x => x.path.replace(/\s/g, '').toLowerCase() === v.replace(/\s/g, '').toLowerCase());
         if (s) hintEl.append('Known item: ' + s.source);
-        else if (!v) hintEl.append('Type to see suggestions from your hotkeys and plugins, or paste any ZBrush item path.');
+        else if (!v) hintEl.append('Type to see suggestions from your ZBrush hotkeys and a built-in list, or paste any ZBrush item path.');
         else hintEl.append('Custom path. ZBrush item paths ignore case.');
       }
     }
@@ -2274,7 +2274,8 @@ function tagTargetField(it, k, updateHead) {
       hint.append('Pick a tag. ');
     } else if (isTag) {
       if (t && !n) { hint.classList.add('warn'); hint.append('No item has this tag yet; the slot stays empty until one does. '); }
-      else hint.append('Opens a submenu of ', h('b', null, plural(n, 'item')), ': brushes first (most used first), then alphas, materials and textures. ');
+      else if (n > 12) hint.append('Opens a fan of the first 11 of ', h('b', null, plural(n, 'item')), ': brushes first (most used first), then alphas, materials and textures. A fan holds 12 slots, so the last one, More..., opens the browser on this tag. ');
+      else hint.append('Opens a fan of ', h('b', null, plural(n, 'item')), ': brushes first (most used first), then alphas, materials and textures. A fan holds at most 12 slots. ');
     } else hint.append(t ? `Opens the browser on ${K(it.kind).tab}, filtered to this tag. ` : `Opens the browser on ${K(it.kind).tab} with every ${K(it.kind).one}. Pick a tag to filter it. `);
     hint.append(h('button', { class: 'link', type: 'button', onmousedown: e => e.preventDefault(), onclick: () => openTagManager() }, 'Manage tags...'));
   };
@@ -2529,16 +2530,17 @@ function openTagManager() {
     const setColor = async c => { if (c.toLowerCase() === tag.color.toLowerCase()) return; await tagCall('recolor_tag', tag.key, c.toUpperCase()); };
     hex.addEventListener('change', () => {
       const c = normHex(hex.value);
-      if (!c) { hex.classList.add('bad'); return; }
-      hex.classList.remove('bad'); setColor(c);
+      if (!c) { hex.classList.add('bad'); msg.dataset.for = 'colour'; msg.classList.add('bad'); msg.textContent = 'Use a colour like #A8DF23.'; msg.hidden = false; return; }
+      hex.classList.remove('bad'); clearColourMsg(); setColor(c);
     });
-    hex.addEventListener('input', () => hex.classList.remove('bad'));
+    const clearColourMsg = () => { if (msg.dataset.for === 'colour') { delete msg.dataset.for; msg.classList.remove('bad'); msg.hidden = true; msg.textContent = ''; } };
+    hex.addEventListener('input', () => { hex.classList.remove('bad'); clearColourMsg(); });
     const swatches = () => (S.palette || TAG_PALETTE_FALLBACK).map(c => h('button', { class: 'tm-pc', type: 'button', style: { '--tag': c }, title: c, 'aria-label': 'Colour ' + c, 'aria-pressed': c.toLowerCase() === tag.color.toLowerCase() ? 'true' : 'false', onclick: () => setColor(c) }));
     sw.addEventListener('click', () => { const open = pal.hidden; pal.hidden = !open; sw.setAttribute('aria-expanded', open ? 'true' : 'false'); });
     pal.append(h('div', { class: 'tm-pcs' }), hex);
     inp.addEventListener('change', async () => {
       const v = inp.value.trim();
-      msg.hidden = true;
+      msg.hidden = true; clearColourMsg();
       if (v === tag.label) { inp.value = tag.label; return; }
       const r = await tagCall('rename_tag', tag.key, v);
       if (r.ok) return;
@@ -2818,11 +2820,11 @@ function libEmptyState(kind) {
   if (L.state === 'error') el = emptyState('alert', 'Could not read the ' + w.one + ' library', L.error || 'The backend could not list your ZBrush ' + w.one + ' folders.');
   else if (!L.zbrushFound) {
     // The Setup screen lists the ZBrush installs ZOrbit knows. The browser window has no way to open Studio, so it only says where to look.
-    el = emptyState('library', 'No ' + w.many + ' to show', 'ZBrush was not found. ZOrbit Studio reads the ' + w.one + ' folders of a ZBrush that has run at least once.',
+    el = emptyState('library', 'No ' + w.many + ' to show', 'ZBrush was not found. ZOrbit Studio reads the ' + w.one + ' folders of a ZBrush that has run at least once. Start ZBrush once, then press Rescan' + (POPOUT ? '. If it is still not found, open Studio from the tray icon and add its folder in Setup.' : '.'),
       POPOUT ? null : { text: 'Find ZBrush in Studio', fn: () => showScreen('setup') });
   }
   else {
-    el = emptyState('library', 'No ' + w.many + ' found', 'No ' + w.ext + ' files in these folders:');
+    el = emptyState('library', 'No ' + w.many + ' found', 'No ' + w.exts + ' files in these folders:');
     if (L.sources.length) el.append(h('ul', { class: 'src-list mono' }, L.sources.map(s => h('li', { class: s.exists ? '' : 'miss' },
       h('span', { class: 'src-path' }, s.path), h('span', { class: 'src-n' }, ' ' + s.count + (s.count === 1 ? ' file' : ' files')), s.exists ? null : h('em', null, ' (missing)')))));
   }
@@ -3517,7 +3519,7 @@ function legacyRows(box, { refresh, extra } = {}) {
   };
   const paint = r => {
     const rows = r.installs.map(z => {
-      const [stext, scls] = !z.installed ? ['Not installed', 'tag dim'] : (z.current ? ['Installed', 'tag cyan'] : ['Update available', 'tag amber']);
+      const [stext, scls] = !z.installed ? ['Plugin not installed', 'tag dim'] : (z.current ? ['Plugin installed', 'tag cyan'] : ['Plugin update available', 'tag amber']);
       const main = h('button', { class: 'btn small' + (z.installed && z.current ? '' : ' primary'), type: 'button', disabled: !r.bundled }, z.installed ? (z.current ? 'Reinstall' : 'Update') : 'Install');
       const rm = z.installed ? h('button', { class: 'btn small danger-ghost', type: 'button' }, icon('trash', 12), 'Remove') : null;
       const forget = z.added ? iconBtn('x', 'Forget this folder', async () => {
@@ -3530,9 +3532,10 @@ function legacyRows(box, { refresh, extra } = {}) {
       main.onclick = act('install_zscript_bridge', z.path, main, rowBtns, 'Installing...', 4000, 'Installing... approve the prompt if Windows asks');
       if (rm) rm.onclick = async () => {
         const ok = await modal({ title: `Remove the plugin from ${z.name}?`,
-          body: [h('p', null, 'This deletes the ZOrbit plugin files from this ZBrush install:'), h('p', { class: 'modal-path mono' }, z.path)],
+          body: [h('p', null, 'This deletes the ZOrbit plugin files from this ZBrush install:'), h('p', { class: 'modal-path mono' }, z.path),
+            /program files/i.test(z.path) ? h('p', null, 'This folder is under Program Files, so Windows asks you to approve the removal.') : null],
           actions: [{ text: 'Cancel', value: false, focus: true }, { text: 'Remove', value: true, kind: 'danger' }] });
-        if (ok) act('remove_zscript_bridge', z.path, rm, rowBtns, 'Removing...')();
+        if (ok) act('remove_zscript_bridge', z.path, rm, rowBtns, 'Removing...', 4000, 'Removing... approve the prompt if Windows asks')();
       };
       const ex = extra ? extra(z) : null;
       return h('div', { class: 'zrow' }, h('div', { class: 'grow' }, h('div', { class: 'zname' }, z.name, h('span', { class: scls }, stext), ex), h('div', { class: 'zpath mono', title: z.zplugs }, z.path)),
@@ -3772,7 +3775,7 @@ function buildSettingsScreen(root) {
       const paintKey = () => {
         const mode = (S.cfg.bridge && S.cfg.bridge.mode) || 'auto';
         keyWrap.classList.toggle('dim', mode === 'message');
-        keyWrap.replaceChildren(field('Bridge key', hotkeyField({ what: 'Bridge key', value: (S.cfg.bridge && S.cfg.bridge.key) || '', mods: { ctrl: false, alt: true, shift: false }, placeholder: 'Not set (F9 is the usual choice)',
+        keyWrap.replaceChildren(field('Bridge key', hotkeyField({ what: 'Bridge key', value: (S.cfg.bridge && S.cfg.bridge.key) || '', mods: { ctrl: false, alt: true, shift: false }, placeholder: 'F9 (the default)',
           onChange: v => { if (v) bridge().key = v; else { delete bridge().key; dropIfEmpty('bridge'); } commit(); paintZNote(); } }),
           mode === 'message' ? 'Not used in Message mode, but kept in case you switch back.' : 'Must be bound in ZBrush to Zplugin > ZOrbit > Apply. Ctrl and Shift are rejected because ZBrush reads them as mask and smooth. A bare F-key is best.'));
       };
@@ -3791,9 +3794,9 @@ function buildSettingsScreen(root) {
         const zkey = ((S.cfg.bridge && S.cfg.bridge.key) || 'F9').trim();
         const bind = zkey.toLowerCase() === 'f9'
           ? ['After installing, restart ZBrush. Apply comes with ', h('b', null, 'F9'), ' as its hotkey, so there is nothing to bind.']
-          : ['After installing, restart ZBrush, Ctrl+Alt+click Zplugin > ZOrbit > Apply, press', h('b', null, zkey), ' and choose Preferences > Hotkeys > Store. (Only F9 works without this step.)'];
+          : ['After installing, restart ZBrush, Ctrl+Alt+click Zplugin > ZOrbit > Apply, press ', h('b', null, zkey), ' and choose Preferences > Hotkeys > Store. (Only F9 works without this step.)'];
         znote.hidden = !zCount;
-        znote.replaceChildren('These versions have no Python API, so they get a ZScript plugin with the same Zplugin > ZOrbit palette. It has no listener, so every pick there uses the bridge key, whatever the mode above. ', ...bind, ' A ZBrush under Program Files asks for administrator rights to install.');
+        znote.replaceChildren('ZBrush 2022 to 2025 cannot run the plugin that ZBrush 2026 loads, so they get a ZScript plugin with the same Zplugin > ZOrbit palette. It cannot receive messages, so every pick there uses the bridge key, whatever the mode above. ', ...bind, ' A ZBrush under Program Files asks for administrator rights to install.');
       };
       let zgen = 0;                                              // a slower earlier listing must not replace a newer one
       const zpaint = async () => {
@@ -4023,7 +4026,7 @@ function buildStatusScreen(root) {
       h('div', { class: 'btn-row between' }, h('div', { class: 'btn-row' },
         h('button', { class: 'btn', type: 'button', onclick: copyLog }, icon('copy', 13), 'Copy log'),
         h('button', { class: 'btn', type: 'button', title: 'Where the app log is kept', onclick: folder('data') }, icon('folder', 13), 'Open logs folder'),
-        h('button', { class: 'btn', type: 'button', title: 'Where radial.json lives', onclick: folder('config') }, icon('external', 13), 'Open config folder')),
+        h('button', { class: 'btn', type: 'button', title: 'Where radial.json, your menus file, lives', onclick: folder('config') }, icon('external', 13), 'Open menus folder')),
         h('span', { class: 'live' }, h('i', { class: 'livedot' }), 'Auto-refresh every 3 s ', stamp))));
   root.append(h('div', { class: 'settings-scroll' }, page));
 
@@ -4038,11 +4041,15 @@ function buildStatusScreen(root) {
     if (!st) return;
     const l = st.listener;
     const keyOnly = st.bridge_mode === 'key' || !!st.legacy_only;      // a listener is not part of the picture
-    const ltone = keyOnly ? 'neutral' : (!l ? 'off' : (l.alive && l.verified ? 'ok' : 'warn'));
-    const ltext = keyOnly ? 'Not needed (key bridge)' : (!l ? 'Not found' : (!l.alive ? 'Stale' : (l.verified ? 'Connected' : 'Found, unverified')));
-    const lsub = keyOnly ? 'Picks arrive through the bridge key'
-      : (!l ? 'The ZBrush plugin has not announced a listener window. Load the ZOrbit plugin in ZBrush.' : (!l.alive ? 'The listener window no longer exists. Restart ZBrush or reload the plugin.' : (l.verified ? 'Picks are delivered by message.' : 'The window exists, but no message has been confirmed yet.')));
     const unsure = st.zbrush_check_ok === false;                       // the process look-up itself failed: do not claim ZBrush is off
+    const closed = !unsure && st.zbrush_running === false;             // no ZBrush: the plugin's listener cannot be there, so a leftover record is no problem
+    const ltone = keyOnly || closed ? 'neutral' : (!l ? 'off' : (l.alive && l.verified ? 'ok' : 'warn'));
+    const ltext = keyOnly ? 'Not needed (key bridge)' : (closed ? 'ZBrush closed' : (!l ? 'Not found' : (!l.alive ? 'Stale' : (l.verified ? 'Connected' : 'Found, unverified'))));
+    const lsub = keyOnly ? 'Picks arrive through the bridge key'
+      : (closed ? 'The plugin’s listener only exists while ZBrush runs.'
+        : (!l ? 'The plugin in ZBrush has not set up its listener window. Restart ZBrush so the plugin loads.'
+          : (!l.alive ? 'The plugin’s listener window is gone. Restart ZBrush.'
+            : (l.verified ? 'Picks are delivered by message.' : 'The plugin’s listener is there, but it has not answered a pick yet.'))));
     const hadFocus = document.activeElement === startBtn;
     paintStart(st);
     grid.replaceChildren(
@@ -4114,7 +4121,22 @@ function noteSetupStatus(d) {
 const PROC_PRIORITY = ['loaded', 'restart', 'starting', 'unknown', 'not_loaded'];
 const PROC_TAG = { loaded: ['Plugin loaded', 'tag cyan'], restart: ['Restart ZBrush', 'tag amber'], starting: ['Starting', 'tag dim'], unknown: ['Not sure yet', 'tag dim'], not_loaded: ['No plugin loaded', 'tag dim'] };
 const procTag = state => (PROC_TAG[state] ? h('span', { class: PROC_TAG[state][1] }, PROC_TAG[state][0]) : null);
-const PICK_VIA = { listener: 'the listener', key: 'the bridge key', zscript: 'ZScript' };
+const PICK_VIA = { listener: 'the plugin', key: 'the bridge key', zscript: 'ZScript' };
+const ADMIN_ZBRUSH = 'ZBrush is running as administrator, so ZOrbit cannot see its window and the ring will not open. Close ZBrush and start it without Run as administrator.';
+
+/* The bridge key as the user would say it: what Settings holds, else the default. */
+const bridgeKeyName = () => String((S.cfg && S.cfg.bridge && S.cfg.bridge.key) || 'F9').trim() || 'F9';
+
+/* What to tell the user when the app did not send a pick. reason is the text radiald.py writes to activity.json
+   (see Daemon.send and press_bridge_key); an unknown one gets a general sentence that points at the log. */
+function unsentHint(reason, key) {
+  const r = String(reason || '');
+  if (/^no live listener/.test(r)) return { text: 'The plugin is not answering in ZBrush, and the bridge mode is Message, so nothing was sent. Restart ZBrush so the plugin loads, or set the bridge mode to Auto.', settings: true };
+  if (/^no bridge key/.test(r)) return { text: 'No bridge key is set, so nothing was sent. Choose one in Settings > ZBrush bridge (F9 is the default).', settings: true };
+  if (/not in front/.test(r)) return { text: 'ZBrush was not the front window when you picked, so nothing was sent. Click ZBrush once, press ' + key + ' over the canvas and pick again.' };
+  if (/request file/.test(r)) return { text: 'ZOrbit could not save the pick to its data folder, so nothing was sent. Check that the folder can be written to; Status can open it.', status: true };
+  return { text: 'ZOrbit could not send that pick to ZBrush. The app log on Status says why.', status: true };
+}
 
 /* The menu the Setup screen talks about: the one on Q, else the first with a hotkey, else the first. */
 function setupMenu() {
@@ -4140,7 +4162,7 @@ function deriveSteps(d, tryFrom, ctx) {
     modern: installs.filter(i => i.kind === 'modern').map(i => {
       const st = plugin(i).state;
       return { name: i.name, path: i.path, added: !!i.added, proc: topProc(i),
-        tag: st === 'ok' ? 'Registered' : (st === 'no_bridge' ? 'Plugin folder missing' : 'Not registered'),
+        tag: st === 'ok' ? 'Plugin registered' : (st === 'no_bridge' ? 'Plugin folder missing' : 'Plugin not registered'),
         tone: st === 'ok' ? 'cyan' : (st === 'no_bridge' ? 'dim' : 'amber'),
         fix: !!env.can_fix && st !== 'ok' && st !== 'no_bridge' };
     }),
@@ -4155,7 +4177,10 @@ function deriveSteps(d, tryFrom, ctx) {
   /* 2. Plugin loaded in ZBrush */
   const procs = [];
   for (const i of installs) for (const p of (i.procs || [])) procs.push({ name: i.name, ready: !!i.ready, state: p.state, why: p.why || '' });
-  const elevated = unmatched.some(u => u.elevated !== false);
+  const adminProcs = unmatched.filter(u => u.elevated !== false);
+  const elevated = adminProcs.length > 0;
+  // A ZBrush running as administrator cannot be read, but a verified listener window it owns shows the plugin did load.
+  for (const u of adminProcs) if (u.loaded) procs.push({ name: 'ZBrush', ready: true, state: 'loaded', why: '' });
   const worst = PROC_PRIORITY.slice(1).map(s => procs.find(p => p.state === s)).find(Boolean);
   const loaded = procs.filter(p => p.state === 'loaded');
   const s2 = { id: 'loaded', title: 'Plugin loaded in ZBrush', locked: false,
@@ -4166,7 +4191,7 @@ function deriveSteps(d, tryFrom, ctx) {
   if (loaded.length) {
     const names = [...new Set(loaded.map(p => p.name))];
     s2.state = 'ok'; s2.detail = list(names) + (names.length === 1 ? ' has the plugin.' : ' have the plugin.');
-  } else if (!procs.length && !unmatched.length) {
+  } else if (!procs.length && !adminProcs.length) {
     s2.state = 'pending'; s2.detail = zb.check_ok === false ? 'Studio could not tell whether ZBrush is running.' : 'Start ZBrush. The plugin loads with it and starts the app.';
   } else if (worst && worst.state === 'restart') {
     s2.state = 'warn'; s2.detail = worst.name + ' was started before the plugin was set up. Restart it.';
@@ -4178,7 +4203,7 @@ function deriveSteps(d, tryFrom, ctx) {
     const p = procs.find(x => x.state === 'not_loaded');
     s2.state = 'off'; s2.detail = (p && p.why) || (p ? p.name + ' is running without the plugin.' : 'The plugin did not load.');
   } else {
-    s2.state = 'warn'; s2.detail = 'A ZBrush is running as administrator, so Studio cannot see which version it is.';
+    s2.state = 'warn'; s2.detail = ADMIN_ZBRUSH;
   }
 
   /* 3. Try the ring */
@@ -4187,18 +4212,20 @@ function deriveSteps(d, tryFrom, ctx) {
   const pk = a && a.pick && a.pick.at > tryFrom && a.pick.source === 'ring' ? a.pick : null;
   const sent = !!(pk && pk.sent);
   const did = !!(sent && lp && lp.ok && lp.at >= pk.at - 2 && (lp.seq == null || pk.seq == null || lp.seq === pk.seq));
+  const key = (ctx.menu && ctx.menu.hotkey) || 'Q';
+  const bridgeKey = bridgeKeyName();
   let hint = null;
-  if (pk && !sent) hint = { text: pk.reason || 'The app could not send that pick to ZBrush.' };
+  if (pk && !sent) hint = unsentHint(pk.reason, key);
   else if (sent && !did && now - pk.at > 4) {
     // ZBrush did answer, with a failure: the bridge log line says what (the same seq, so it is this pick)
     const failed = !!(lp && lp.ok === false && pk.seq != null && lp.seq === pk.seq && lp.at >= pk.at - 2);
-    hint = failed ? { text: lp.text } : ({ key: { text: 'ZBrush did not react to the bridge key. Bind it to Zplugin > ZOrbit > Apply (Settings > ZBrush bridge, in Full mode).', settings: true },
+    hint = failed ? { text: lp.text } : ({ key: { text: 'ZBrush did not react to the bridge key (' + bridgeKey + '). Bind it to Zplugin > ZOrbit > Apply (Settings > ZBrush bridge, in Full mode).', settings: true },
       listener: { text: 'The plugin did not act on the pick. Open the logs folder from Status and read bridge.log.', status: true },
-      zscript: { text: 'ZBrush did not react to F9. Check Zplugin > ZOrbit > Apply has the hotkey.' } }[pk.route]
-      || { text: pk.reason || 'ZBrush did not confirm the pick.' });
+      zscript: { text: 'ZBrush did not react to ' + bridgeKey + '. Check that Zplugin > ZOrbit > Apply has that hotkey.' } }[pk.route]
+      || { text: 'ZBrush did not confirm the pick. Open the logs folder from Status and read bridge.log.', status: true });
   }
+  if (!hint && elevated && !opened) hint = { text: ADMIN_ZBRUSH };            // the ring never opens, so there is no pick to explain
   const locked3 = s2.state !== 'ok';
-  const key = (ctx.menu && ctx.menu.hotkey) || 'Q';
   const s3 = { id: 'try', title: 'Try the ring', locked: locked3, key,
     checks: [
       { label: 'Ring opened', ok: opened, sub: '' },
@@ -4291,14 +4318,16 @@ function buildSetupScreen(root) {
       const lz = legacyRows(box, { refresh: () => ask(true), extra: z => procTag(z.proc) });
       if (s.legacy.installs.length) { lz.paint(s.legacy); out.push(box); }
       if (s.bridgeMissing) out.push(note('The plugin folder is missing from this install. Reinstall ZOrbit.', true));
-      for (const o of s.others) out.push(note('Also registered: ' + o.path + (o.exists ? '' : ' (missing)')));
+      for (const o of s.others) out.push(note('Also registered: ' + o.path + (o.exists
+        ? ' (another ZOrbit folder in ZBRUSH_PLUGIN_PATH; ZBrush loads both, so remove the old one in Windows’ environment variables)'
+        : ' (missing; an old entry in ZBRUSH_PLUGIN_PATH that you can remove in Windows’ environment variables)')));
       out.push(h('div', { class: 'btn-row' }, h('button', { class: 'btn small' + (s.state === 'off' ? ' primary' : ''), type: 'button', onclick: () => lz.addFolder() }, icon('folder', 12), 'Add a ZBrush folder...')));
       return out;
     },
     loaded(s) {
       const tone = { loaded: 'ok', restart: 'warn', starting: 'warn', unknown: 'warn', not_loaded: 'off' };
-      const rows = s.rows.map(p => subCheck(tone[p.state] || 'warn', [p.name, ' ', procTag(p.state)], p.why && p.state !== 'loaded' ? p.why : ''));
-      if (s.elevated) rows.push(subCheck('warn', 'A ZBrush is running as administrator', 'Studio cannot see which version it is, or whether it has the plugin.'));
+      const rows = s.rows.map(p => subCheck(tone[p.state] || 'warn', [p.name, ' ', procTag(p.state)], p.why && !['loaded', 'restart', 'starting'].includes(p.state) && p.why !== s.detail ? p.why : ''));      // the step's own line already says it for a restart or a start, and for the worst of the rest
+      if (s.elevated) rows.push(subCheck('warn', 'ZBrush is running as administrator', s.state === 'ok' ? 'ZOrbit cannot see its window, so the ring will not open. Close ZBrush and start it without Run as administrator.' : ''));
       rows.push(subCheck(s.app.running ? 'ok' : (s.app.zbrush ? 'warn' : 'pending'), ['App ', h('span', { class: 'tag ' + (s.app.running ? 'cyan' : 'dim') }, s.app.running ? 'Running' : 'Not running')],
         s.app.running ? 'Listening for your hotkeys.' : (s.app.zbrush || !s.app.checkOk ? 'Press Start app to launch it.' : 'It starts together with ZBrush.'), startBtn));
       const out = [h('div', { class: 'sub-checks' }, ...rows)];
@@ -4720,7 +4749,7 @@ async function importSettings() {
       hasTags ? h('p', null, h('b', null, 'Tags. '), 'They are saved straight away, and Undo does not bring them back. ',
         `Merge tags adds the file’s tags to your ${yourTags}. Replace tags swaps your ${yourTags} for the file’s and keeps a copy of the old tags file. Neither button touches the menus.`) : null,
       probs.length ? h('div', { class: 'changes-list' }, h('div', { class: 'chg-group' }, h('div', { class: 'micro' }, n(probs.length, 'problem', 'problems') + ' in the menus'),
-        h('ul', null, shown.map(p => h('li', null, p)), probs.length > shown.length ? h('li', null, `and ${probs.length - shown.length} more`) : null))) : null),
+        h('ul', null, shown.map(p => h('li', null, describeProblem(p).text)), probs.length > shown.length ? h('li', null, `and ${probs.length - shown.length} more`) : null))) : null),
     actions: hasTags ? [{ text: 'Cancel', value: null }, merge, replace] : [{ text: 'Cancel', value: null, focus: !hasCfg }, { text: 'Import', value: 'none', kind: 'primary', focus: hasCfg }] });
   if (!mode) return;
   let res;
@@ -4799,23 +4828,23 @@ async function doSave({ force = false, allowUnusable = false } = {}) {
       const probs = r.problems || [];
       const v = await modal({ title: 'Save anyway?',
         body: h('div', { class: 'changes' }, h('p', null, r.message || 'Saving this would leave no ring that can open.'),
-          probs.length ? h('div', { class: 'changes-list' }, h('div', { class: 'chg-group' }, h('ul', null, probs.map(p => h('li', null, p))))) : null),
+          probs.length ? h('div', { class: 'changes-list' }, h('div', { class: 'chg-group' }, h('ul', null, probs.map(p => h('li', null, describeProblem(String(p)).text))))) : null),
         actions: [{ text: 'Keep editing', value: 'keep', kind: 'primary', focus: true }, { text: 'Save anyway', value: 'force', kind: 'danger-ghost' }] });
       return v === 'force' ? doSave({ allowUnusable: true }) : 'cancelled';   // never carries force: a new disk change still warns
     }
-    toast((r && r.message) || 'The config could not be saved.', { tone: 'err' });
+    toast((r && r.message) || 'The menus file could not be saved.', { tone: 'err' });
     return 'failed';
   } catch (e) { toast('Save failed: ' + (e.message || e), { tone: 'err' }); return 'failed'; }
 }
 async function revert() {
   if (!dirtyNow()) return;
-  const ok = await modal({ title: 'Revert changes', body: h('p', null, 'Discard all unsaved changes and go back to the last saved config?'), actions: [{ text: 'Keep editing', value: false, focus: true }, { text: 'Revert', kind: 'danger', value: true }] });
+  const ok = await modal({ title: 'Revert changes', body: h('p', null, 'Discard all unsaved changes and go back to the last saved version?'), actions: [{ text: 'Keep editing', value: false, focus: true }, { text: 'Revert', kind: 'danger', value: true }] });
   if (!ok) return;
   S.cfg = JSON.parse(S.savedStr);
   if (!S.cfg.menus[S.menuId]) S.menuId = Object.keys(S.cfg.menus)[0] || null;
   S.itemIdx = null; S.version++; updateDirty(); validateSoon(); previewSoon(); pushSnap();
   renderAllMenus(); if (R.settings) R.settings(); if (R.libTarget) R.libTarget();
-  toast('Reverted to the saved config.', { ms: 2200 });
+  toast('Reverted to the last saved version.', { ms: 2200 });
 }
 
 /* ================================================================== close guard */
@@ -4878,7 +4907,7 @@ function describeChanges() {
   const bb = before.bridge || {}, ab = after.bridge || {};
   const bridgeLines = [];
   if ((bb.mode || 'auto') !== (ab.mode || 'auto')) bridgeLines.push('Mode: ' + (bb.mode || 'auto') + ' \u2192 ' + (ab.mode || 'auto'));
-  if ((bb.key || '') !== (ab.key || '')) bridgeLines.push('Bridge key: ' + (bb.key || 'none') + ' \u2192 ' + (ab.key || 'none'));
+  if ((bb.key || '') !== (ab.key || '')) bridgeLines.push('Bridge key: ' + (bb.key || 'F9 (default)') + ' \u2192 ' + (ab.key || 'F9 (default)'));
   if (bridgeLines.length) groups.push({ area: 'ZBrush bridge', lines: bridgeLines });
   const bwb = before.browser || {}, bwa = after.browser || {};
   if ((bwb.hotkey || '') !== (bwa.hotkey || '')) groups.push({ area: 'Browser', lines: ['Hotkey: ' + (bwb.hotkey || 'none') + ' → ' + (bwa.hotkey || 'none')] });
@@ -5066,7 +5095,7 @@ async function boot() {
   const [cfgR, optR, prefR] = await Promise.allSettled([call('get_config'), call('get_options'), call('get_prefs')]);
   if (cfgR.status === 'rejected') { recovery(cfgR.reason instanceof Error ? cfgR.reason : new Error(String(cfgR.reason))); return; }
   const cfgRes = cfgR.value;
-  if (!cfgRes || !cfgRes.config || typeof cfgRes.config !== 'object' || Array.isArray(cfgRes.config)) { recovery(cfgRes || new Error('The backend returned no config.')); return; }
+  if (!cfgRes || !cfgRes.config || typeof cfgRes.config !== 'object' || Array.isArray(cfgRes.config)) { recovery(cfgRes || new Error('Studio got no menus file from the app.')); return; }
   const opts = optR.status === 'fulfilled' ? optR.value : null;     // a failed get_options just means the FALLBACK_* lists are used
   if (prefR.status === 'fulfilled' && prefR.value) S.prefs = Object.assign(S.prefs, prefR.value);
   const badMenus = adoptConfig(cfgRes);
@@ -5217,7 +5246,7 @@ const POP_HOST = {
     popPicking = false;
     // ok means the app took the pick and passed it on; whether ZBrush then selected it is in its log, so the toast says "sent"
     if (r && r.ok) toast('Sent ' + name + ' to ZBrush', { tone: 'ok', ms: 1400 });
-    else toast((r && r.error) || 'ZOrbit is not running. It starts and stops with ZBrush.', { tone: 'warn', ms: 3800 });
+    else toast((r && r.error) || 'ZOrbit is not running. It starts and stops with ZBrush. Start ZBrush, or press Start app on Studio’s Status screen.', { tone: 'warn', ms: 3800 });
   },
   primaryMany(names, kind) { const w = K(kind).one; toast(`ZBrush takes one ${w} at a time. Select a single ${w}.`, { tone: 'warn', ms: 2600 }); },
   cardTitle: () => 'Select in ZBrush',

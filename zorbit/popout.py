@@ -689,7 +689,8 @@ class Popout:
         if r == 1:
             return {"ok": True}
         if not app:                         # the app owns the pick window and runs only while ZBrush does
-            return {"ok": False, "error": "ZOrbit is not running. It starts and stops with ZBrush."}
+            return {"ok": False, "error": "ZOrbit is not running. It starts and stops with ZBrush. "
+                                          "Start ZBrush, or press Start app on Studio's Status screen."}
         if r is None:                       # the window is there but did not answer within the timeout
             return {"ok": False, "error": "ZOrbit did not answer. Try again in a moment."}
         return {"ok": False, "error": f"ZOrbit did not take that {kind}. Is it up to date?"}

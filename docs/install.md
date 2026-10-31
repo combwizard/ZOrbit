@@ -30,7 +30,7 @@ An update keeps the folder you installed to: if you chose a custom folder the fi
 After an update:
 
 - **ZBrush 2026 and newer:** restart ZBrush so it loads the new plugin.
-- **ZBrush 2022 to 2025:** the plugin inside ZBrush is not replaced by the installer. When the new version has a newer plugin, press **Update** next to your ZBrush in **Settings > Older ZBrush** ([Full mode](studio.md#simple-and-full-mode)) or on **Setup**, wherever it says **Update available**. Then restart that ZBrush.
+- **ZBrush 2022 to 2025:** the plugin inside ZBrush is not replaced by the installer. When the new version has a newer plugin, press **Update** next to your ZBrush in **Settings > Older ZBrush** ([Full mode](studio.md#simple-and-full-mode)) or on **Setup**, wherever it says **Plugin update available**. Then restart that ZBrush.
 
 ### Upgrading from Radial Menu for ZBrush
 
@@ -60,7 +60,7 @@ The portable zip is for a PC where you do not want to run an installer. It holds
 4. Press **Fix** next to your ZBrush. That adds the `bridge` folder to your `ZBRUSH_PLUGIN_PATH` user environment variable. The app also writes `%APPDATA%\ZOrbit\launch.json` each time it starts, so the plugin knows where to find it.
 5. Restart ZBrush. For ZBrush 2022 to 2025, press **Install** on **Setup** instead (see [ZBrush 2022 to 2025](#zbrush-2022-to-2025)).
 
-If you move the folder, start `ZOrbit.exe` from its new place and press **Fix** again. Setup then lists the old entry as **Also registered:** followed by its path, with "(missing)" after it when that folder is gone. Setup only reports it. To remove the old entry, edit `ZBRUSH_PLUGIN_PATH` in Windows' environment variables (search the Start menu for "Edit environment variables for your account").
+If you move the folder, start `ZOrbit.exe` from its new place and press **Fix** again. Setup then lists the old entry as **Also registered:** followed by its path, with "(missing)" after it when that folder is gone, and says why it matters: ZBrush loads every folder in the variable, so an old copy of the plugin is loaded beside the new one. Setup only reports it. To remove the old entry, edit `ZBRUSH_PLUGIN_PATH` in Windows' environment variables (search the Start menu for "Edit environment variables for your account").
 
 The portable zip makes no Start menu shortcuts, and it has no uninstaller. To remove it, first delete the plugin entry from `ZBRUSH_PLUGIN_PATH` as above (and use **Remove** on **Setup** for any ZBrush 2022 to 2025 you installed the plugin into), then delete the folder. Your menus, tags and logs are in `%APPDATA%\ZOrbit` and `%LOCALAPPDATA%\ZOrbit`, as with the installer.
 

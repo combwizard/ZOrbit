@@ -21,6 +21,17 @@ All notable changes to this project are listed here. The format follows
 
 ### Changed
 
+- Studio: Setup says what to do when ZBrush has not loaded the plugin (press **Fix** and restart, or close ZBrush
+  and start it from the Start menu, then read `bridge.log` or `zscript_launch.log` if it exists), notices a
+  ZBrush started from a program that was already open before the plugin was registered, and explains a ZBrush
+  running as administrator (the ring will not open; if its plugin listener is up it counts as loaded). Step 3
+  says why a pick was not sent and what to do, naming your real bridge key. Badges read **Plugin registered**,
+  **Plugin not installed**, **Plugin update available** and so on; Status shows the listener as **ZBrush closed**
+  instead of **Stale** when ZBrush is not running; **Open config folder** is **Open menus folder**; the bridge
+  key field says **F9 (the default)**; the Save anyway and Import dialogs show problems in plain words; the
+  empty library message lists every file type it looks for; the browser's "ZBrush was not found" and "ZOrbit
+  is not running" messages say what to do next; **Remove** shows the approve-the-prompt hint; **Also registered**
+  says why it matters; an invalid tag colour says what to type; and "pressAlt+F9" has its space back.
 - Studio: the import dialog says how many of the file's menus replace how many of yours, that nothing is written
   until Save, and that **Merge tags** and **Replace tags** touch tags only (hidden when the file has none).
   Problems from the menus file are described in plain words, the note about crowded menus says the ring grows,

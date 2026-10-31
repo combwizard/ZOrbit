@@ -20,7 +20,7 @@ The palette was renamed, so a hotkey you bound by hand to the old **Apply** does
 
 ### Pressing the hotkey does nothing
 
-1. Open Studio's **Setup** screen (Alt+5). It checks ZBrush, the plugin and the app, and says which step is missing. An amber dot on its button in the rail means no ZBrush that Studio found has the plugin set up, or a running ZBrush does not. It does not appear when Studio finds no ZBrush at all.
+1. Open Studio's **Setup** screen (Alt+5). It checks ZBrush, the plugin and the app, and says which step is missing. An amber dot on its button in the rail means no ZBrush that Studio found has the plugin set up, or a running ZBrush does not. It does not appear when Studio finds no ZBrush at all. When step 2 says ZBrush has not loaded the plugin, close ZBrush completely and start it from the Start menu: a ZBrush started from a program that was already open before the plugin was registered does not know where the plugin is. If that does not help, read `bridge.log` (ZBrush 2026 and newer) or `zscript_launch.log` (ZBrush 2022 to 2025) in `%LOCALAPPDATA%\ZOrbit`; `bridge.log` does not exist if the plugin never ran.
 
     ![The Setup screen with ZBrush found ticked, and the Plugin loaded in ZBrush step waiting: ZBrush 2026 shows Restart ZBrush because it was started before the plugin was set up](images/setup-restart.png)
 
@@ -31,7 +31,7 @@ The palette was renamed, so a hotkey you bound by hand to the old **Apply** does
 4. If the status says the app is not running, press **Start App**, then read `app_stderr.log` and `radiald.log`.
 5. In Studio, check for the **problems** pill. A menu with no usable items, a duplicate hotkey or a hotkey the app cannot read all stop a ring from opening.
 6. Another program may grab the same key before it reaches the app. Try a different hotkey.
-7. Is ZBrush running as administrator? The app cannot read an elevated program's process, so it cannot tell that ZBrush is the front window, and it ignores the hotkey. `radiald.log` then says "zbrush.exe (pid 1234) could not be read, so it is probably running as administrator; hotkeys ignored in it", or, when the front window is the one it cannot read, "foreground window's process could not be read (is ZBrush running as administrator?); hotkeys ignored". Start ZBrush without "Run as administrator".
+7. Is ZBrush running as administrator? The app cannot read an elevated program's process, so it cannot tell that ZBrush is the front window, and it ignores the hotkey. `radiald.log` then says "zbrush.exe (pid 1234) could not be read, so it is probably running as administrator; hotkeys ignored in it", or, when the front window is the one it cannot read, "foreground window's process could not be read (is ZBrush running as administrator?); hotkeys ignored". Start ZBrush without "Run as administrator". Studio's **Setup** step 2 says the same: "ZBrush is running as administrator, so ZOrbit cannot see its window and the ring will not open."
 8. Typing is affected too. A menu hotkey is swallowed in ZBrush's text fields (a rename box, a file name), so a plain letter such as **Q** cannot be typed there while a menu uses it. Use a key you do not type, add a modifier, or turn off **Swallow hotkey** for that menu.
 
 ## Picks do nothing
@@ -99,7 +99,7 @@ In ZBrush 2026 and newer that is intended. A pick waits until you release the mo
 
 ### The browser is empty
 
-The browser and the Library read the folders of a ZBrush that has run at least once. When either says **ZBrush was not found**, the list stays empty until ZOrbit finds one. In Studio, the Library's message has a **Find ZBrush in Studio** button that opens Setup. In the browser window, open Studio from the tray icon or the Start menu and go to **Setup**.
+The browser and the Library read the folders of a ZBrush that has run at least once. When either says **ZBrush was not found**, the list stays empty until ZOrbit finds one. Start ZBrush once, then press **Rescan**. In Studio, the Library's message has a **Find ZBrush in Studio** button that opens Setup. In the browser window, open Studio from the tray icon or the Start menu and go to **Setup**, where **Add a ZBrush folder** adds one that is not found.
 
 ### The browser opens but does not take the keyboard
 
@@ -107,7 +107,7 @@ Click the search box once. If you have to do that every time, send `popout.log` 
 
 ### A pick in the browser does nothing
 
-After a pick, read the toast. A toast that says **Sent X to ZBrush** (X is the item's name) means the app took the pick, and `bridge.log` says what ZBrush did with it. **ZOrbit is not running. It starts and stops with ZBrush.** means the browser found no app window: start ZBrush, and the app starts with it. **ZOrbit did not answer. Try again in a moment.** means the app's window exists but did not answer within half a second. `popout.log` has a line `pick ... app window ..., result ...` for each pick.
+After a pick, read the toast. A toast that says **Sent X to ZBrush** (X is the item's name) means the app took the pick, and `bridge.log` says what ZBrush did with it. **ZOrbit is not running. It starts and stops with ZBrush.** (followed by "Start ZBrush, or press Start app on Studio's Status screen.") means the browser found no app window: start ZBrush, and the app starts with it, or press **Start app** on Studio's **Status** screen. **ZOrbit did not answer. Try again in a moment.** means the app's window exists but did not answer within half a second. `popout.log` has a line `pick ... app window ..., result ...` for each pick.
 
 In `radiald.log`, look for `pick from browser`. If it says the pick was dropped because ZBrush did not get the focus back in 2 s, you are in ZBrush 2022 to 2025, which can only take a pick through the bridge key while ZBrush is the front window: do not click another program right after you pick. Check that the app is running on the Status screen if the toast says it is not.
 

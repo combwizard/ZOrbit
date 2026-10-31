@@ -53,7 +53,7 @@ Failures the plugin reports (a brush that is not installed, a button path that d
 
 These versions have no Python API, so they get a ZScript plugin with the same palette. Studio installs it (the steps are in [Install and uninstall](install.md#zbrush-2022-to-2025)): **Setup** step 1 (and **Settings > Older ZBrush** in Full mode) lists the 2022 to 2025 versions it found, with **Install**, **Update** and **Remove** for each, and **Add a ZBrush folder** for one it missed (a folder you added can be forgotten again with the x next to it). The plugin goes into that ZBrush's `ZStartup\ZPlugs64` (the only place these versions load plugins from), together with a `ZOrbitData` folder. A ZBrush under Program Files asks for administrator rights: the row says "approve the prompt" while Windows waits for you, for up to five minutes. The elevated step checks that the destination is a ZBrush plugin folder. It ignores the staging folder and builds the plugin files itself, but it is ZOrbit's own program running from your user folder, so approve the prompt only on a PC you trust.
 
-![Settings > Older ZBrush (Full mode): a row for ZBrush 2022 marked Not installed with an Install button, a row for ZBrush 2024 marked Update available with Update and Remove buttons, and Add a ZBrush folder](images/settings-older-zbrush.png)
+![Settings > Older ZBrush (Full mode): a row for ZBrush 2022 marked Plugin not installed with an Install button, a row for ZBrush 2024 marked Plugin update available with Update and Remove buttons, and Add a ZBrush folder](images/settings-older-zbrush.png)
 
 Differences from ZBrush 2026 and newer:
 
@@ -65,7 +65,7 @@ Differences from ZBrush 2026 and newer:
 - The paths have to fit the plugin. ZScript reads `bridge.cfg` in the Windows code page, with one value per line and a string of at most 255 characters. If the path of `%LOCALAPPDATA%\ZOrbit` has characters outside that code page (for example a user name in another script) and 8.3 short names are off, or is longer than 255 characters, Studio refuses to install and says so. Move the data folder somewhere shorter, or turn on 8.3 names with `fsutil 8dot3name set 0` as administrator, then install again. The commands that start the app and Studio have the same limits, so install ZOrbit in a plain, short path. The same limits apply to each line of a pick: a name, label or file path with characters outside the code page, or over 255 bytes, reaches the plugin changed or cut, and `radiald.log` notes it as a problem with `request.txt`.
 - ZBrush 2021 and older are not supported. Studio lists them but refuses to install the plugin.
 
-When this version of ZOrbit has a newer plugin than one you installed, **Settings** shows a badge and that row says **Update available**. After **Update**, restart that ZBrush.
+When this version of ZOrbit has a newer plugin than one you installed, **Settings** shows a badge and that row says **Plugin update available**. After **Update**, restart that ZBrush.
 
 ### The Zplugin > ZOrbit palette
 

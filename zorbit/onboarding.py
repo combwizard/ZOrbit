@@ -154,46 +154,87 @@ def _listener_view(listener: dict | None) -> dict | None:
     return {"verified": verified, "alive": alive, "pid": pid, "stale": stale}
 
 
+UNKNOWN_WHY = "ZOrbit could not read when this ZBrush started, so it cannot tell yet whether the plugin loaded."
+STARTING_WHY = "This ZBrush started a moment ago. The plugin loads with it."
+NOT_REGISTERED_WHY = "ZBrush does not know where the plugin is. Press Fix in step 1, then restart ZBrush."
+OLD_LAUNCHER_WHY = ("ZBrush was started from a program that was already open before the plugin was set up, so it "
+                    "does not know where the plugin is. Close ZBrush completely and start it from the Start menu.")
+NOT_LOADED_WHY = ("ZBrush has not loaded the plugin. Close it completely and start it from the Start menu, not from "
+                  "a program that was already open. If that does not help, read {log} in the logs folder, if it exists.")
+MODERN_NOT_LOADED_WHY = NOT_LOADED_WHY.format(log="bridge.log")
+LEGACY_NOT_LOADED_WHY = NOT_LOADED_WHY.format(log="zscript_launch.log")
+
+
+def _old_launcher(pid: int, started: float, key_mtime: float | None) -> bool:
+    """Whether this ZBrush was started by a program (not Explorer) that was already running when the plugin folder
+    was registered: such a program hands ZBrush the environment it had, without ZBRUSH_PLUGIN_PATH. Needs the parent
+    to be older than the registration and no younger than ZBrush itself (else its id was reused)."""
+    if not key_mtime:
+        return False
+    parent = W.parent_pid(pid)
+    if not parent:
+        return False
+    made = W.process_created(parent)
+    image = os.path.basename(W.process_image(parent) or "").lower()
+    if made is None or not image or image == "explorer.exe":
+        return False
+    return made < key_mtime and made <= started
+
+
+def _listener_owned_by(listener: dict | None, pid: int) -> bool:
+    """Whether the verified, live listener window belongs to this process. For a ZBrush running as administrator,
+    whose image and start time cannot be read, this is the only sign the plugin loaded: the window must still exist
+    and be owned by that very process."""
+    if not listener or not listener.get("alive") or not listener.get("verified") or listener.get("pid") != pid:
+        return False
+    hwnd = listener.get("hwnd")
+    try:
+        return bool(hwnd) and W.window_pid(hwnd) == pid
+    except Exception:                       # a bad handle in a hand-edited listener.json
+        return False
+
+
 def _modern_proc(proc: dict, listener: dict | None, registered: bool, key_mtime: float | None) -> None:
     pid, started, age = proc["pid"], proc["started"], proc["age"]
     if listener and listener["pid"] == pid and listener["alive"] and not listener["stale"]:
-        proc.update(state="loaded", evidence="listener", why="the bridge is listening in this ZBrush")
+        proc.update(state="loaded", evidence="listener", why="The plugin is listening in this ZBrush.")
     elif started is None:
-        proc.update(state="unknown", evidence=None, why="could not read when this ZBrush started")
+        proc.update(state="unknown", evidence=None, why=UNKNOWN_WHY)
     elif not registered:
-        proc.update(state="not_loaded", evidence=None, why="ZBRUSH_PLUGIN_PATH does not point at the plugin")
+        proc.update(state="not_loaded", evidence=None, why=NOT_REGISTERED_WHY)
     elif key_mtime and key_mtime > started:
-        proc.update(state="restart", evidence="env_mtime", why="started before the plugin was set up")
+        proc.update(state="restart", evidence="env_mtime", why="This ZBrush started before the plugin was set up. Restart it.")
     elif age < START_GRACE:
-        proc.update(state="starting", evidence=None, why="started a moment ago")
+        proc.update(state="starting", evidence=None, why=STARTING_WHY)
+    elif _old_launcher(pid, started, key_mtime):
+        proc.update(state="not_loaded", evidence="launcher", why=OLD_LAUNCHER_WHY)
     else:
-        proc.update(state="not_loaded", evidence=None,
-                    why="registered, but the plugin did not start; see bridge.log")
+        proc.update(state="not_loaded", evidence=None, why=MODERN_NOT_LOADED_WHY)
 
 
 def _legacy_proc(proc: dict, install: dict) -> None:
     started, age = proc["started"], proc["age"]
     plugin = install["plugin"]
     if started is None:
-        proc.update(state="unknown", evidence=None, why="could not read when this ZBrush started")
+        proc.update(state="unknown", evidence=None, why=UNKNOWN_WHY)
         return
     zsc = [m for m in (_mtime(os.path.join(plugin.get("zplugs") or "", n))
                        for n in (zscript_bridge.PLUGIN, zscript_bridge.LEGACY_PLUGIN)) if m]
     hotkey = _mtime(os.path.join(paths.DATA_DIR, "zscript_hotkey.log"))
     launch = _mtime(os.path.join(paths.DATA_DIR, "zscript_launch.log"))
     if zsc and max(zsc) > started:
-        proc.update(state="restart", evidence="zsc_mtime", why="started before the plugin was installed")
+        proc.update(state="restart", evidence="zsc_mtime", why="This ZBrush started before the plugin was installed. Restart it.")
     elif hotkey and hotkey >= started:
-        proc.update(state="loaded", evidence="hotkey_log", why="the plugin wrote its log after this start")
+        proc.update(state="loaded", evidence="hotkey_log", why="The plugin wrote its log after this start.")
     elif launch and launch >= started:
-        proc.update(state="loaded", evidence="launch_log", why="the plugin wrote its log after this start")
+        proc.update(state="loaded", evidence="launch_log", why="The plugin wrote its log after this start.")
     elif not plugin.get("installed"):
-        proc.update(state="not_loaded", evidence=None, why="the ZScript plugin is not installed in this ZBrush")
-    elif age < START_GRACE:
-        proc.update(state="starting", evidence=None, why="started a moment ago")
-    else:
         proc.update(state="not_loaded", evidence=None,
-                    why="installed, but the plugin left no log after this start")
+                    why="The ZOrbit plugin is not installed in this ZBrush. Press Install in step 1, then restart ZBrush.")
+    elif age < START_GRACE:
+        proc.update(state="starting", evidence=None, why=STARTING_WHY)
+    else:
+        proc.update(state="not_loaded", evidence=None, why=LEGACY_NOT_LOADED_WHY)
 
 
 def snapshot(all_installs: list[dict], listener: dict | None, last_pick: dict | None, bridge_mode: str,
@@ -241,7 +282,8 @@ def snapshot(all_installs: list[dict], listener: dict | None, last_pick: dict | 
         started = W.process_created(pid)
         image = W.process_image(pid)
         if not image:
-            unmatched.append({"pid": pid, "started": started, "elevated": True})
+            unmatched.append({"pid": pid, "started": started, "elevated": True,
+                              "loaded": _listener_owned_by(listener, pid)})
             continue
         e = installs_mod.install_of(image)
         if e is None:
@@ -260,7 +302,8 @@ def snapshot(all_installs: list[dict], listener: dict | None, last_pick: dict | 
             else:
                 _legacy_proc(proc, r)
                 if legacy_running > 1 and proc["state"] == "loaded":
-                    proc["why"] = "shared log; cannot tell which"
+                    proc["why"] = ("More than one ZBrush 2022 to 2025 is running and they share one log, "
+                                   "so ZOrbit cannot tell which has the plugin.")
 
     reasons = []
     if rows and not any(r["ready"] for r in rows):

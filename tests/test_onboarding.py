@@ -115,3 +115,85 @@ def test_user_value_of_another_type_is_replaced_by_ours(reg):
     values[(USER, "ZBRUSH_PLUGIN_PATH")] = (b"\x00\x01", 3)         # REG_BINARY
     onboarding.register_plugin_path(BRIDGE)
     assert writes == [("ZBRUSH_PLUGIN_PATH", REG_SZ, BRIDGE)]
+
+
+# --- the why texts of a running ZBrush: they are shown to the user, so each says what to do ----------
+def _proc(pid=4000, started=1000.0, age=600.0):
+    return {"pid": pid, "started": started, "age": age, "state": "unknown", "evidence": None, "why": ""}
+
+
+def test_modern_not_registered_says_press_fix(monkeypatch):
+    p = _proc()
+    onboarding._modern_proc(p, None, False, None)
+    assert p["state"] == "not_loaded"
+    assert p["why"] == "ZBrush does not know where the plugin is. Press Fix in step 1, then restart ZBrush."
+
+
+def test_modern_registered_but_not_loaded_says_what_to_try(monkeypatch):
+    monkeypatch.setattr(onboarding, "_old_launcher", lambda *a: False)
+    p = _proc()
+    onboarding._modern_proc(p, None, True, 500.0)
+    assert p["state"] == "not_loaded"
+    assert p["why"].startswith("ZBrush has not loaded the plugin. Close it completely and start it from the Start menu")
+    assert "bridge.log" in p["why"] and "if it exists" in p["why"]
+    assert "ZBRUSH_PLUGIN_PATH" not in p["why"]
+
+
+def test_modern_started_from_an_old_launcher_says_so(monkeypatch):
+    monkeypatch.setattr(onboarding, "_old_launcher", lambda *a: True)
+    p = _proc()
+    onboarding._modern_proc(p, None, True, 500.0)
+    assert p["state"] == "not_loaded" and p["evidence"] == "launcher"
+    assert "already open" in p["why"] and "Start menu" in p["why"]
+
+
+def test_modern_started_before_registering_is_a_restart():
+    p = _proc(started=1000.0)
+    onboarding._modern_proc(p, None, True, 2000.0)
+    assert p["state"] == "restart"
+
+
+def test_modern_live_listener_is_loaded():
+    p = _proc(pid=4000)
+    onboarding._modern_proc(p, {"pid": 4000, "alive": True, "stale": False}, False, None)
+    assert p["state"] == "loaded" and p["evidence"] == "listener"
+
+
+def test_legacy_not_loaded_names_the_launch_log(tmp_path, monkeypatch):
+    monkeypatch.setattr(onboarding.paths, "DATA_DIR", str(tmp_path))
+    p = _proc()
+    onboarding._legacy_proc(p, {"plugin": {"installed": True, "zplugs": str(tmp_path)}})
+    assert p["state"] == "not_loaded"
+    assert "zscript_launch.log" in p["why"] and "Start menu" in p["why"]
+
+
+def test_legacy_plugin_missing_says_press_install(tmp_path, monkeypatch):
+    monkeypatch.setattr(onboarding.paths, "DATA_DIR", str(tmp_path))
+    p = _proc()
+    onboarding._legacy_proc(p, {"plugin": {"installed": False, "zplugs": str(tmp_path)}})
+    assert p["state"] == "not_loaded" and "Press Install in step 1" in p["why"]
+
+
+def test_old_launcher_needs_an_older_parent_that_is_not_explorer(monkeypatch):
+    times = {10: 400.0, 11: 400.0, 12: 1200.0}
+    images = {10: r"C:\Tools\launcher.exe", 11: r"C:\Windows\explorer.exe", 12: r"C:\Tools\later.exe"}
+    parents = {4000: 10, 4001: 11, 4002: 12}
+    monkeypatch.setattr(onboarding.W, "parent_pid", lambda pid: parents.get(pid))
+    monkeypatch.setattr(onboarding.W, "process_created", lambda pid: times.get(pid))
+    monkeypatch.setattr(onboarding.W, "process_image", lambda pid: images.get(pid, ""))
+    assert onboarding._old_launcher(4000, 1000.0, 500.0) is True
+    assert onboarding._old_launcher(4001, 1000.0, 500.0) is False       # Explorer got the new environment
+    assert onboarding._old_launcher(4002, 1000.0, 500.0) is False       # the parent is newer than the registration
+    assert onboarding._old_launcher(4000, 1000.0, None) is False
+
+
+def test_elevated_zbrush_counts_as_loaded_only_with_its_own_live_listener(monkeypatch):
+    live = {"pid": 4000, "alive": True, "verified": 900.0, "hwnd": 77}
+    monkeypatch.setattr(onboarding.W, "window_pid", lambda hwnd: 4000)
+    assert onboarding._listener_owned_by(live, 4000) is True
+    assert onboarding._listener_owned_by(live, 4001) is False                       # another process
+    assert onboarding._listener_owned_by(dict(live, verified=None), 4000) is False
+    assert onboarding._listener_owned_by(dict(live, alive=False), 4000) is False
+    assert onboarding._listener_owned_by(None, 4000) is False
+    monkeypatch.setattr(onboarding.W, "window_pid", lambda hwnd: 999)              # the window belongs to someone else
+    assert onboarding._listener_owned_by(live, 4000) is False

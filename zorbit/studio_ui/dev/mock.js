@@ -37,7 +37,7 @@
    ?addmodern (Add a ZBrush folder picks a ZBrush 2027: ok, python: true, listed in Setup with Fix and Forget),
    ?noenv (ZBRUSH_PLUGIN_PATH not set until Fix), ?fixfail (Fix is refused), ?nobridge (the plugin folder is missing: no Fix),
    ?zbrun=off (no ZBrush process), ?zbstale (it started before the plugin: restart), ?zbstart (it is still starting), ?noloaded (it never loaded the plugin),
-   ?elevated (the ZBrush is running as administrator and cannot be matched to an install), ?appoff (the app is not running), ?otherbridge (another ZOrbit
+   ?elevated (the ZBrush is running as administrator and cannot be matched to an install; ?elevated=loaded: its listener answers, so the plugin counts as loaded), ?appoff (the app is not running), ?otherbridge (another ZOrbit
    folder is registered too, one of them missing), ?bridgemode=key (picks go through the bridge key), ?ringtried=open|sent|done (step 3 starts part
    way, measured from when Setup is first shown), ?ringauto (once step 3 opens, the ring opens after 2 s, a pick follows after 4 s and ZBrush answers
    after 6 s; with ?bridgemode=key ZBrush never answers, so the hint shows). In the console, __mock.ring('open'), ('pick') and ('ack') do the same by hand. */
@@ -401,17 +401,17 @@
     installs.forEach(function (inst) {
       if (ids.indexOf(inst.path) < 0) return;
       var pid = 4000 + installs.indexOf(inst) * 100, state, why = '', evidence = '';
-      if (q.has('elevated') && !unmatched.length) { unmatched.push({ pid: pid, started: started, elevated: true }); return; }
-      if (q.has('zbstart')) { state = 'starting'; why = 'Started a few seconds ago.'; }
-      else if (q.has('zbstale')) { state = 'restart'; why = 'Started before the plugin was set up.'; }
-      else if (q.has('noloaded')) { state = 'not_loaded'; why = inst.name + ' is running, but the plugin did not load. See bridge.log.'; }
+      if (q.has('elevated') && !unmatched.length) { unmatched.push({ pid: pid, started: started, elevated: true, loaded: q.get('elevated') === 'loaded' }); return; }
+      if (q.has('zbstart')) { state = 'starting'; why = 'This ZBrush started a moment ago. The plugin loads with it.'; }
+      else if (q.has('zbstale')) { state = 'restart'; why = 'This ZBrush started before the plugin was set up. Restart it.'; }
+      else if (q.has('noloaded')) { state = 'not_loaded'; why = 'ZBrush has not loaded the plugin. Close it completely and start it from the Start menu, not from a program that was already open. If that does not help, read bridge.log in the logs folder, if it exists.'; }
       else if (inst.kind === 'modern') {
         if (!ok) { state = 'not_loaded'; why = 'The plugin folder is missing.'; }
-        else if (!reg) { state = 'not_loaded'; why = inst.name + ' does not know where the plugin is.'; }
-        else if (keyMtime > started) { state = 'restart'; why = 'Registered after this ZBrush started.'; }
+        else if (!reg) { state = 'not_loaded'; why = 'ZBrush does not know where the plugin is. Press Fix in step 1, then restart ZBrush.'; }
+        else if (keyMtime > started) { state = 'restart'; why = 'This ZBrush started before the plugin was set up. Restart it.'; }
         else { state = 'loaded'; loadedPid = pid; evidence = 'listener.json'; }
-      } else if (!inst.ready) { state = 'not_loaded'; why = 'The ZOrbit plugin is not installed for this ZBrush.'; }
-      else if (zInstalledNow && inst.path === 'C:\\Programs\\ZBrush 2022') { state = 'restart'; why = 'Installed after this ZBrush started.'; }
+      } else if (!inst.ready) { state = 'not_loaded'; why = 'The ZOrbit plugin is not installed in this ZBrush. Press Install in step 1, then restart ZBrush.'; }
+      else if (zInstalledNow && inst.path === 'C:\\Programs\\ZBrush 2022') { state = 'restart'; why = 'This ZBrush started before the plugin was installed. Restart it.'; }
       else { state = 'loaded'; evidence = 'zscript_hotkey.log'; }
       inst.procs.push({ pid: pid, started: started, age: now - started, state: state, evidence: evidence, why: why });
     });
@@ -812,7 +812,7 @@
     popout_pick: function (name, kind) {
       console.log('[mock] popout_pick', name, kind);
       return sleep(60).then(function () {
-        if (q.has('nopick')) return { ok: false, error: 'ZOrbit is not running' };
+        if (q.has('nopick')) return { ok: false, error: 'ZOrbit is not running. It starts and stops with ZBrush. Start ZBrush, or press Start app on Studio’s Status screen.' };
         if (name && ASSET_KIND[kind] && !usageOff()) usagePick(kind, String(name));          // ZBrush selected it: it is now the newest Recent
         return { ok: true };
       });
