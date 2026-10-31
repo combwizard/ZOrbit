@@ -88,6 +88,10 @@ The build bundles both files, and Studio copies the `.zsc` plus a `ZOrbitData\br
 `<ZBrush>\ZStartup\ZPlugs64`. The file formats are described at the top of the source and in
 `zorbit\zscript_bridge.py`.
 
+After a change to installing or removing the plugin, run `python tools\test_uac_install.py` from a normal
+terminal. It tests the install into a ZBrush under Program Files, where ZOrbit needs administrator rights; see
+[Build from source](docs/building.md#test-the-plugin-install-under-program-files).
+
 ### Working on Studio's interface in a browser
 
 Run `python tools\make_mock.py`, then open `zorbit\studio_ui\index.html?mock` in a browser. This
