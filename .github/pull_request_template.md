@@ -6,5 +6,4 @@
 
 - [ ] Tried in ZBrush (say which version), or explained why not
 - [ ] Docs page in `docs/` updated for anything a user can see or do (the table in `CLAUDE.md` says which)
-- [ ] Line added to `CHANGELOG.md` under `## [Unreleased]` (create the section if the top one is a released version)
 - [ ] `mkdocs build --strict` passes, if docs changed

@@ -29,7 +29,8 @@ follow the [code of conduct](CODE_OF_CONDUCT.md).
 2. Keep the change focused: one fix or feature per pull request, with a short description of what and why.
 3. Match the style of the surrounding code. Keep the ring code fast: a frame should cost a few milliseconds.
 4. Try it in ZBrush if you can. When behaviour changes, update the page in `docs\` that describes it (the table in
-   [CLAUDE.md](CLAUDE.md) says which) and `CHANGELOG.md`, in the same pull request. The docs are published at
+   [CLAUDE.md](CLAUDE.md) says which) in the same pull request. Leave `CHANGELOG.md` alone: the maintainer adds
+   the line when merging. The docs are published at
    <https://zorbit.lol/docs/>; preview them with `pip install -r requirements-docs.txt` and `mkdocs serve`.
    The pre-commit hook stops a commit that changes `zorbit\` or `bridge\` without touching `docs\`. Install it once
    with `sh tools/hooks/install.sh` in Git Bash. When there is nothing to document, commit with
