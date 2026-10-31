@@ -24,6 +24,7 @@ one brush. Keys written with spaces by an earlier version are merged when the fi
 """
 import json
 import os
+import shutil
 import time
 
 import fsutil
@@ -38,6 +39,12 @@ PICKS_KEPT = 200                       # recent picks across all kinds; the olde
 def norm(name) -> str:
     """The key of a name: lower case, no spaces (the same rule as tags.item_key)."""
     return "".join(str(name).split()).lower()
+
+
+def _entries(raw: dict, section: str) -> list:
+    """The (key, entry) pairs of a section of the file; a section of the wrong type has none."""
+    part = raw.get(section)
+    return list(part.items()) if isinstance(part, dict) else []
 
 
 def auto_count(menu) -> int:
@@ -59,43 +66,73 @@ class Usage:
 
     # --- file ------------------------------------------------------------------------------------
     def load(self) -> "Usage":
-        """Reads the file if it changed since the last load (or save). A missing or broken file is empty."""
+        """Reads the file if it changed since the last load (or save). A missing file is empty. A file that cannot
+        be opened (a scanner holds it) keeps what is in memory and is tried again at the next load. A file that
+        cannot be parsed is copied to usage.json.bad, keeps what is in memory and is not parsed again until it
+        changes. A bad entry in a good file is skipped, not the entries after it."""
         try:
             mtime = os.stat(self.path).st_mtime
         except OSError:
             mtime = None
         if mtime == self.mtime:
             return self
-        self.mtime, self.brushes, self.menus, self.picks = mtime, {}, {}, {}
-        self.version += 1
+        if mtime is None:
+            self.mtime, self.brushes, self.menus, self.picks = None, {}, {}, {}
+            self.version += 1
+            return self
         try:
             with open(self.path, encoding="utf-8") as f:
                 raw = json.load(f)
-            now = time.time()
-            for k, e in (raw.get("brushes") or {}).items():
+            if not isinstance(raw, dict):
+                raise ValueError("the top level must be an object")
+        except OSError:
+            return self                                # mtime stays as it was: the next load tries again
+        except ValueError:
+            self._keep_bad()
+            self.mtime = mtime
+            return self
+        now = time.time()
+        brushes, menus, picks = {}, {}, {}
+        for k, e in _entries(raw, "brushes"):
+            try:
                 if isinstance(e, dict) and isinstance(e.get("name"), str):
                     new = {"name": e["name"], "score": float(e["score"]), "t": float(e["t"])}
                     k = norm(k)
-                    old = self.brushes.get(k)
+                    old = brushes.get(k)
                     if old is None or self._faded(new, now) > self._faded(old, now):   # two spellings: higher score
-                        self.brushes[k] = new
-            for mid, st in (raw.get("menus") or {}).items():
+                        brushes[k] = new
+            except (ValueError, TypeError, KeyError, AttributeError, OverflowError):
+                continue
+        for mid, st in _entries(raw, "menus"):
+            try:
                 if isinstance(st, dict):
-                    self.menus[mid] = {"slots": [s if isinstance(s, str) else None for s in st.get("slots") or []],
-                                       "pending": [s for s in st.get("pending") or [] if isinstance(s, str)]}
-            for k, e in (raw.get("picks") or {}).items():
+                    menus[mid] = {"slots": [s if isinstance(s, str) else None for s in st.get("slots") or []],
+                                  "pending": [s for s in st.get("pending") or [] if isinstance(s, str)]}
+            except (ValueError, TypeError, KeyError, AttributeError):
+                continue
+        for k, e in _entries(raw, "picks"):
+            try:
                 if isinstance(e, dict) and isinstance(e.get("name"), str):
                     new = {"name": e["name"], "count": int(e["count"]), "t": float(e["t"])}
                     kind, _, name = k.partition(":")
                     k = f"{kind}:{norm(name)}"
-                    old = self.picks.get(k)
+                    old = picks.get(k)
                     if old is not None:                    # two spellings: the newer pick, with both counts
                         count = old["count"] + new["count"]
                         new = dict(new if new["t"] >= old["t"] else old, count=count)
-                    self.picks[k] = new
-        except (OSError, ValueError, TypeError, KeyError, AttributeError):
-            pass
+                    picks[k] = new
+            except (ValueError, TypeError, KeyError, AttributeError, OverflowError):
+                continue
+        self.mtime, self.brushes, self.menus, self.picks = mtime, brushes, menus, picks
+        self.version += 1
         return self
+
+    def _keep_bad(self) -> None:
+        """Copies a file that could not be parsed to <path>.bad, so a later save does not lose it (best effort)."""
+        try:
+            shutil.copyfile(self.path, self.path + ".bad")
+        except OSError:
+            pass
 
     def save(self) -> None:
         now = time.time()

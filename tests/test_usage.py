@@ -285,40 +285,8 @@ def test_load_skips_entries_that_are_not_objects_or_have_no_name(usage_file):
 
 
 def test_a_file_that_is_not_json_loads_empty_without_raising(usage_file):
-    # current behaviour; issue 4 changes this
     a = Usage(usage_file("{not json")).load()
     assert (a.brushes, a.menus, a.picks) == ({}, {}, {})
-
-
-def test_a_bad_brush_entry_loses_the_rest_of_the_file(usage_file):
-    # current behaviour; issue 4 changes this
-    now = time.time()
-    raw = {"brushes": {"good1": {"name": "Good1", "score": 1, "t": now},
-                       "bad": {"name": "Bad", "score": "x", "t": now},
-                       "good2": {"name": "Good2", "score": 1, "t": now}},
-           "menus": {"main": {"slots": ["Good1"], "pending": []}},
-           "picks": {"brush:good1": {"name": "Good1", "count": 1, "t": now}}}
-    a = Usage(usage_file(raw)).load()
-    assert list(a.brushes) == ["good1"]
-    assert a.menus == {}
-    assert a.picks == {}
-
-
-def test_a_file_that_cannot_be_read_empties_the_state_and_remembers_its_time(usage_file, monkeypatch):
-    # current behaviour; issue 4 changes this
-    path = usage_file({"brushes": {"a": {"name": "A", "score": 1, "t": time.time()}}})
-    a = Usage(path).load()
-    assert a.brushes
-    now = time.time()
-    os.utime(path, (now + 10, now + 10))
-    make_unreadable(monkeypatch, path)
-    a.load()
-    monkeypatch.undo()
-    assert a.brushes == {}
-    assert a.mtime == os.stat(path).st_mtime
-
-
-# --- auto slots ---------------------------------------------------------------------------------
 
 
 def test_auto_count_counts_auto_items_only():
@@ -498,7 +466,7 @@ def test_slots_survive_a_save_and_load(tmp_path):
     assert b.slots(menu, now) == a.slots(menu, now)
 
 
-# --- intended behaviour, not there yet (issue 4) ------------------------------------------------
+# --- files that cannot be read ------------------------------------------------------------------
 
 
 def make_unreadable(monkeypatch, path):
@@ -513,7 +481,6 @@ def make_unreadable(monkeypatch, path):
     monkeypatch.setattr(builtins, "open", flaky)
 
 
-@pytest.mark.xfail(strict=True, reason="issue 4")
 def test_a_file_that_cannot_be_read_keeps_the_state_and_the_time_so_the_next_load_retries(usage_file, monkeypatch):
     path = usage_file({})
     a = Usage(path).load()
@@ -528,7 +495,6 @@ def test_a_file_that_cannot_be_read_keeps_the_state_and_the_time_so_the_next_loa
     assert a.mtime == before
 
 
-@pytest.mark.xfail(strict=True, reason="issue 4")
 def test_save_after_a_failed_load_does_not_write_an_empty_file(usage_file, monkeypatch):
     now = time.time()
     path = usage_file({"brushes": {"claybuildup": {"name": "ClayBuildup", "score": 2.0, "t": now}}})
@@ -542,7 +508,6 @@ def test_save_after_a_failed_load_does_not_write_an_empty_file(usage_file, monke
         assert json.load(f)["brushes"]
 
 
-@pytest.mark.xfail(strict=True, reason="issue 4")
 def test_one_bad_brush_entry_keeps_the_other_brushes_the_menus_and_the_picks(usage_file):
     now = time.time()
     raw = {"brushes": {"good1": {"name": "Good1", "score": 1, "t": now},
@@ -554,3 +519,92 @@ def test_one_bad_brush_entry_keeps_the_other_brushes_the_menus_and_the_picks(usa
     assert sorted(a.brushes) == ["good1", "good2"]
     assert a.menus["main"]["slots"] == ["Good1"]
     assert list(a.picks) == ["brush:good1"]
+
+
+def test_a_file_that_is_not_json_is_copied_to_bad_and_the_state_is_kept(usage_file):
+    path = usage_file({"brushes": {"a": {"name": "A", "score": 1, "t": time.time()}}})
+    a = Usage(path).load()
+    now = time.time()
+    with open(path, "w", encoding="utf-8") as f:
+        f.write("{not json")
+    os.utime(path, (now + 10, now + 10))
+    a.load()
+    assert list(a.brushes) == ["a"]
+    assert a.mtime == os.stat(path).st_mtime
+    with open(path + ".bad", encoding="utf-8") as f:
+        assert f.read() == "{not json"
+
+
+def test_a_bad_file_is_not_parsed_again_until_it_changes(usage_file, monkeypatch):
+    path = usage_file("{not json")
+    a = Usage(path).load()
+    version = a.version
+    monkeypatch.setattr(json, "load", lambda f: pytest.fail("parsed again"))
+    assert a.load().version == version
+
+
+def test_a_top_level_list_is_a_bad_file(usage_file):
+    path = usage_file([1, 2])
+    a = Usage(path).load()
+    assert (a.brushes, a.menus, a.picks) == ({}, {}, {})
+    assert os.path.exists(path + ".bad")
+
+
+def test_a_bad_menu_entry_does_not_lose_the_picks(usage_file):
+    now = time.time()
+    raw = {"menus": {"bad": {"slots": 5}, "main": {"slots": ["A"], "pending": []}},
+           "picks": {"brush:a": {"name": "A", "count": 1, "t": now}, "brush:b": {"name": "B", "count": "x", "t": now}}}
+    a = Usage(usage_file(raw)).load()
+    assert list(a.menus) == ["main"]
+    assert list(a.picks) == ["brush:a"]
+
+
+# --- fsutil.write_atomic ------------------------------------------------------------------------
+
+
+def test_write_atomic_tries_again_when_the_file_is_held_open(tmp_path, monkeypatch):
+    import fsutil
+    target = str(tmp_path / "x.json")
+    real_replace, calls = os.replace, []
+
+    def flaky(src, dst):
+        calls.append(src)
+        if len(calls) < 3:
+            raise PermissionError(13, "held")
+        return real_replace(src, dst)
+
+    monkeypatch.setattr(os, "replace", flaky)
+    monkeypatch.setattr(fsutil.time, "sleep", lambda s: None)
+    fsutil.write_atomic(target, "hello")
+    assert len(calls) == 3
+    assert open(target, encoding="utf-8").read() == "hello"
+
+
+def test_write_atomic_gives_up_after_the_last_try_and_removes_its_temp_file(tmp_path, monkeypatch):
+    import fsutil
+    target = str(tmp_path / "x.json")
+    pauses = []
+
+    def held(src, dst):
+        raise PermissionError(13, "held")
+
+    monkeypatch.setattr(os, "replace", held)
+    monkeypatch.setattr(fsutil.time, "sleep", pauses.append)
+    with pytest.raises(PermissionError):
+        fsutil.write_atomic(target, "hello")
+    assert pauses == [0.05, 0.1, 0.2, 0.4, 0.8]
+    assert os.listdir(tmp_path) == []
+
+
+def test_write_atomic_does_not_retry_other_errors(tmp_path, monkeypatch):
+    import fsutil
+    calls = []
+
+    def broken(src, dst):
+        calls.append(1)
+        raise OSError(28, "disk full")
+
+    monkeypatch.setattr(os, "replace", broken)
+    with pytest.raises(OSError):
+        fsutil.write_atomic(str(tmp_path / "x.json"), "hello")
+    assert len(calls) == 1

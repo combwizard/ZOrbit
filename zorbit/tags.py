@@ -142,7 +142,8 @@ class TagStore:
         return (st.st_mtime_ns, st.st_size)
 
     def load(self) -> "TagStore":
-        """Reads the file. Missing: the starter tags, in memory only. Unreadable: the previous state stays."""
+        """Reads the file. Missing: the starter tags, in memory only. Unreadable: the previous state stays (on a first load, the starter tags);
+        .error is set and the changing methods refuse until the file is fixed."""
         with self._lock:
             sig = self._stat()
             self._sig = sig
@@ -159,15 +160,23 @@ class TagStore:
             except OSError as e:                      # locked or held by a scanner: try again next poll
                 self.error = f"tags.json could not be read: {e}"
                 self._sig = "unread"
+                self._starters_if_empty()
                 return self
             except ValueError as e:                   # a typo from a hand edit: wait for the file to change
                 self.error = f"tags.json could not be read: {e}"
                 self.mtime = sig[0]
+                self._starters_if_empty()
                 return self
             self._tags, self._items, self._extra = _parse(raw)
             self._tags = _with_favourite(self._tags)
             self.error, self.mtime = "", sig[0]
             return self
+
+    def _starters_if_empty(self) -> None:
+        """A first load that failed: the starter tags are there in memory (nothing is written while .error is set)."""
+        if not self._tags:
+            self._tags = {k: {"label": lb, "color": c} for k, lb, c in STARTERS}
+            self._items = {}
 
     def reload_if_changed(self) -> bool:
         """Loads the file if it changed (or appeared, or went away) since the last load. True if it did."""

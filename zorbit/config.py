@@ -95,6 +95,9 @@ _NAMED_VK = {
     "'": 0xDE, ",": 0xBC, ".": 0xBE, "/": 0xBF,
 }
 MENU_KEYS = ("title", "hotkey", "swallow", "animation", "fan", "items")
+BRIDGE_KEYS = ("mode", "key")
+BROWSER_KEYS = ("hotkey",)
+ITEM_KEYS = ACTION_KEYS + ("label", "icon", "value", "kind")
 DEFAULT_BRIDGE_KEY = "F9"          # used when radial.json has no usable bridge.key
 _MODS = {"ctrl": "ctrl", "control": "ctrl", "alt": "alt", "shift": "shift"}
 
@@ -178,6 +181,15 @@ def _did_you_mean(key, known) -> str:
     return f" (did you mean {near[0]}?)" if near else ""
 
 
+def _bad_asset_name(name) -> bool:
+    """A brush, alpha, material or texture name is a plain name, never a path (it is looked up by file name)."""
+    return isinstance(name, str) and (any(c in name for c in "\\/:") or ".." in name)
+
+
+def _network_path(path) -> bool:
+    return isinstance(path, str) and path.strip().startswith(("\\\\", "//"))
+
+
 def _check_action(a, errors, where, allow_nested=True) -> bool:
     if not isinstance(a, dict):
         errors.append(f"{where}: not an object")
@@ -218,6 +230,9 @@ def _check_action(a, errors, where, allow_nested=True) -> bool:
     elif not isinstance(a[k], str) or not a[k].strip():
         errors.append(f"{where}: '{k}' must be a non-empty string")
         return False
+    elif k in ASSET_KINDS and _bad_asset_name(a[k]):
+        errors.append(f"{where}: {k} name '{a[k]}' must not contain \\ / : or ..")
+        return False
     return True
 
 
@@ -247,9 +262,19 @@ def load(path: str, tags=None) -> Config:
     st = os.stat(path)
     with open(path, encoding="utf-8-sig") as f:         # -sig: an editor's byte-order mark is accepted
         raw = json.load(f)
+    if not isinstance(raw, dict):
+        raise ValueError("radial.json must be a JSON object")
     cfg = Config(path=path, mtime=st.st_mtime)
     errors = cfg.errors
-    bridge = raw.get("bridge") or {}
+    bridge = raw.get("bridge")
+    if bridge is None:
+        bridge = {}
+    elif not isinstance(bridge, dict):
+        errors.append('bridge: must be an object like {"mode": "auto", "key": "F9"}')
+        bridge = {}
+    for k in bridge:
+        if k not in BRIDGE_KEYS:
+            errors.append(f"bridge.{k}: unknown setting" + _did_you_mean(k, BRIDGE_KEYS))
     cfg.bridge_mode = bridge.get("mode", "auto")
     if cfg.bridge_mode not in ("auto", "message", "key"):
         errors.append(f"bridge.mode {cfg.bridge_mode!r} unknown; using auto")
@@ -263,7 +288,12 @@ def load(path: str, tags=None) -> Config:
                           f"use a bare F-key; using {DEFAULT_BRIDGE_KEY}")
         else:
             cfg.bridge_key = key
-    ring = raw.get("ring") or {}
+    ring = raw.get("ring")
+    if ring is None:
+        ring = {}
+    elif not isinstance(ring, dict):
+        errors.append('ring: must be an object like {"radius": 145, "animation": "smooth"}')
+        ring = {}
     for k, v in ring.items():
         if k == "colors" and isinstance(v, dict):
             for ck, cv in v.items():
@@ -272,9 +302,11 @@ def load(path: str, tags=None) -> Config:
                         cfg.ring["colors"][ck] = cv
                     else:
                         errors.append(f"ring.colors.{ck}: {cv!r} is not a #rrggbb colour")
+                else:
+                    errors.append(f"ring.colors.{ck}: unknown colour" + _did_you_mean(ck, DEFAULT_RING["colors"]))
         elif k in _RING_RANGES:
             lo, hi = _RING_RANGES[k]
-            if isinstance(v, (int, float)) and lo <= v <= hi:
+            if not isinstance(v, bool) and isinstance(v, (int, float)) and lo <= v <= hi:
                 cfg.ring[k] = v
             else:
                 errors.append(f"ring.{k}: {v!r} must be a number from {lo} to {hi}")
@@ -304,6 +336,8 @@ def load(path: str, tags=None) -> Config:
     if not isinstance(menus_raw, dict) or not menus_raw:
         errors.append("menus: must be a non-empty object of id -> menu")
         menus_raw = {}
+    tag_error = str(getattr(tags, "error", "") or "")    # tags.json could not be read: said once, not per slot
+    tag_error_said = False
     built = {}                  # id -> (raw menu, [(item number, Item)]) of the menus with something in them
     for mid, m in menus_raw.items():
         if not isinstance(m, dict):
@@ -324,13 +358,27 @@ def load(path: str, tags=None) -> Config:
             if kind == "menu" and it["menu"] not in menus_raw:
                 errors.append(f"{where}: submenu {it['menu']!r} does not exist")
                 continue
+            for k in it:
+                if k not in ITEM_KEYS:
+                    errors.append(f"{where}: unknown setting {k!r}" + _did_you_mean(k, ITEM_KEYS))
             if tags is not None and kind == "tag" and not tags.has(it["tag"]):
-                errors.append(f"{where}: tag {it['tag']!r} does not exist; the slot stays empty")
+                if tag_error:
+                    if not tag_error_said:
+                        errors.append(f"tags.json could not be read: {tag_error}; tag slots stay empty until it "
+                                      f"is fixed")
+                        tag_error_said = True
+                else:
+                    errors.append(f"{where}: tag {it['tag']!r} does not exist; the slot stays empty")
             elif tags is not None and kind == "browser" and it["browser"] and not tags.has(it["browser"]):
-                errors.append(f"{where}: tag {it['browser']!r} does not exist; the browser opens unfiltered")
+                if not tag_error:
+                    errors.append(f"{where}: tag {it['browser']!r} does not exist; the browser opens unfiltered")
+            icon = str(it.get("icon") or "")
+            if _network_path(icon):
+                errors.append(f"{where}: icon '{icon}' must be a plain file path on this PC, not a network path")
+                icon = ""
             items.append((i + 1, Item(label=str(it.get("label") or _default_label(it, menus_raw, tags)), kind=kind,
                                       data={k: v for k, v in it.items() if k not in ("label", "icon")},
-                                      icon=str(it.get("icon") or ""), tag=it["tag"] if kind == "tag" else "")))
+                                      icon=icon, tag=it["tag"] if kind == "tag" else "")))
         if not items:
             errors.append(f"menu {mid}: no usable items")
             continue
@@ -373,10 +421,22 @@ def load(path: str, tags=None) -> Config:
         if not isinstance(swallow, bool):
             errors.append(f"menu {mid}: swallow {swallow!r} must be true or false; using true")
             swallow = True
+        fan = m.get("fan", False)
+        if not isinstance(fan, bool):
+            errors.append(f"menu {mid}: fan {fan!r} must be true or false; using false")
+            fan = False
         cfg.menus[mid] = Menu(id=mid, title=str(m.get("title") or mid), items=[it for _, it in items], hotkey=hk,
-                              swallow=swallow, animation=anim, fan=bool(m.get("fan", False)))
-    browser = raw.get("browser") or {}
-    if isinstance(browser, dict) and browser.get("hotkey"):
+                              swallow=swallow, animation=anim, fan=fan)
+    browser = raw.get("browser")
+    if browser is None:
+        browser = {}
+    elif not isinstance(browser, dict):
+        errors.append('browser: must be an object like {"hotkey": "Alt+B"}')
+        browser = {}
+    for k in browser:
+        if k not in BROWSER_KEYS:
+            errors.append(f"browser.{k}: unknown setting" + _did_you_mean(k, BROWSER_KEYS))
+    if browser.get("hotkey"):
         hk = parse_hotkey(browser["hotkey"])
         if hk is None:
             errors.append(f"browser.hotkey {browser['hotkey']!r} not understood")
@@ -385,8 +445,6 @@ def load(path: str, tags=None) -> Config:
                           f"{used_keys[(hk.vk, hk.ctrl, hk.alt, hk.shift)]}")
         else:
             cfg.browser_key = hk
-    elif browser and not isinstance(browser, dict):
-        errors.append("browser: must be an object like {\"hotkey\": \"Alt+B\"}")
     if not any(m.hotkey for m in cfg.menus.values()):
         errors.append("no menu has a hotkey, so nothing can open the ring")
     return cfg

@@ -48,7 +48,7 @@ Tags save as you make them. They are not part of **Save**, **Revert**, **Undo** 
 
 ## Where tags live
 
-Tags are in `%APPDATA%\ZOrbit\tags.json`, apart from your menus. The file does not exist until you change a tag; before that, the two starter tags are only held in memory. It looks like this:
+Tags are in `%APPDATA%\ZOrbit\tags.json`, apart from your menus. The file does not exist until you change a tag; before that, the starter set (Favourites, Blocking and Detailing) is only held in memory. It looks like this:
 
 ```json
 {"version": 1,
@@ -59,4 +59,4 @@ Tags are in `%APPDATA%\ZOrbit\tags.json`, apart from your menus. The file does n
            "alpha:alpha058": ["blocking"]}}
 ```
 
-An item's key is its kind, `brush:`, `alpha:`, `material:` or `texture:`, plus its name in lower case without spaces (`alpha:alpha058`). The first tag in an item's list is its colour cue. Items that are not installed keep their tags. You can edit the file by hand and the ring follows. If the file cannot be read (a stray comma, say), the app and Studio keep the last good tags, Studio shows the error in the Library, and nothing is changed or written until you fix it.
+An item's key is its kind, `brush:`, `alpha:`, `material:` or `texture:`, plus its name in lower case without spaces (`alpha:alpha058`). The first tag in an item's list is its colour cue. Items that are not installed keep their tags. You can edit the file by hand and the ring follows. If the file cannot be read (a stray comma, say), the app and Studio keep the last good tags, Studio shows the error in the Library, and nothing is changed or written until you fix it. If the file cannot be read when the app or Studio starts, the three starter tags are available in memory, and nothing is written until the file is fixed.

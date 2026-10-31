@@ -40,6 +40,7 @@
 | `%LOCALAPPDATA%\ZOrbit\popout.log` | The browser: how it started, what it showed, the picks it sent to the app. |
 | `%LOCALAPPDATA%\ZOrbit\studio.log` | How Studio started: which program launched it and how long each step took. A failed update check is noted here. |
 | `%LOCALAPPDATA%\ZOrbit\usage.json` | Brush usage, which fills the auto slots, and your recent picks under `"picks"` (see [Favourites and Recent](browser.md#favourites-and-recent)). Names are kept in lower case without spaces, so `Clay Buildup` and `ClayBuildup` count as one brush. |
+| `%LOCALAPPDATA%\ZOrbit\usage.json.bad` | A copy of `usage.json` made when the file could not be read (a stray character, say). The app goes on with what it had in memory. Safe to delete. |
 | `%LOCALAPPDATA%\ZOrbit\thumbs\` | Cached thumbnails of brushes, alphas, materials and textures. Safe to delete. |
 | `<ZBrush>\ZStartup\ZPlugs64\ZOrbitBridge.zsc` | ZBrush 2022 to 2025: the plugin. Its `ZOrbitData` folder says where picks arrive and how to start the app. |
 

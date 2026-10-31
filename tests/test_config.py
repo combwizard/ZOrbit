@@ -670,10 +670,9 @@ def test_step_that_is_not_an_object_is_reported(load_menus):
     assert problems(cfg, "menu main item 1 step 1: not an object")
 
 
-# --- intended behaviour, not there yet (issue 4) ------------------------------------------------
+# --- sections of the wrong type, fan, names and icons ------------------------------------------
 
 
-@pytest.mark.xfail(strict=True, reason="issue 4")
 def test_bridge_section_that_is_not_an_object_is_reported_and_defaults_are_used(load):
     cfg = load({"bridge": "F9", "menus": GOOD_MENUS})
     assert problems(cfg, "bridge:")
@@ -682,7 +681,6 @@ def test_bridge_section_that_is_not_an_object_is_reported_and_defaults_are_used(
     assert "main" in cfg.menus
 
 
-@pytest.mark.xfail(strict=True, reason="issue 4")
 def test_ring_section_that_is_not_an_object_is_reported_and_defaults_are_used(load):
     cfg = load({"ring": "big", "menus": GOOD_MENUS})
     assert problems(cfg, "ring:")
@@ -690,23 +688,17 @@ def test_ring_section_that_is_not_an_object_is_reported_and_defaults_are_used(lo
     assert "main" in cfg.menus
 
 
-@pytest.mark.xfail(strict=True, reason="issue 4")
-def test_top_level_list_is_reported_and_defaults_are_used(load):
-    cfg = load([{"menus": GOOD_MENUS}])
-    assert cfg.errors
-    assert cfg.menus == {}
-    assert cfg.ring == config.DEFAULT_RING
-    assert cfg.bridge_mode == "auto"
+def test_top_level_list_is_refused_with_a_plain_message(load):
+    with pytest.raises(ValueError, match="radial.json must be a JSON object"):
+        load([{"menus": GOOD_MENUS}])
 
 
-@pytest.mark.xfail(strict=True, reason="issue 4")
 def test_fan_that_is_not_a_boolean_is_reported_and_treated_as_false(load_menus):
     cfg = load_menus({"main": one_item_menu({"brush": "A"}, fan="false")})
     assert problems(cfg, "menu main: fan")
     assert cfg.menus["main"].fan is False
 
 
-@pytest.mark.xfail(strict=True, reason="issue 4")
 @pytest.mark.parametrize("name", ["a\\b", "a/b", "C:Standard", "..", "a..b", "..\\evil"])
 def test_brush_name_with_a_path_in_it_is_reported_and_the_item_skipped(load_menus, name):
     cfg = load_menus({"main": one_item_menu({"brush": name}, {"brush": "Standard"})})
@@ -714,9 +706,82 @@ def test_brush_name_with_a_path_in_it_is_reported_and_the_item_skipped(load_menu
     assert [it.data["brush"] for it in cfg.menus["main"].items] == ["Standard"]
 
 
-@pytest.mark.xfail(strict=True, reason="issue 4")
-def test_icon_that_is_a_network_path_is_reported_and_the_item_skipped(load_menus):
-    cfg = load_menus({"main": one_item_menu({"brush": "Evil", "icon": "\\\\server\\share\\x.png"},
-                                            {"brush": "Standard"})})
-    assert problems(cfg, "menu main item 1:")
-    assert [it.data["brush"] for it in cfg.menus["main"].items] == ["Standard"]
+@pytest.mark.parametrize("icon", ["\\\\server\\share\\x.png", "//server/share/x.png"])
+def test_icon_that_is_a_network_path_is_reported_and_dropped_but_the_item_stays(load_menus, icon):
+    cfg = load_menus({"main": one_item_menu({"brush": "Evil", "icon": icon}, {"brush": "Standard"})})
+    assert problems(cfg, "menu main item 1: icon")
+    assert problems(cfg, "not a network path")
+    assert [(it.data["brush"], it.icon) for it in cfg.menus["main"].items] == [("Evil", ""), ("Standard", "")]
+
+
+def test_icon_that_is_a_local_path_is_kept(load_menus):
+    cfg = load_menus({"main": one_item_menu({"brush": "A", "icon": "C:\\icons\\a.png"})})
+    assert not problems(cfg, "icon")
+    assert cfg.menus["main"].items[0].icon == "C:\\icons\\a.png"
+
+
+@pytest.mark.parametrize("kind", ["alpha", "material", "texture"])
+def test_other_asset_names_with_a_path_in_them_are_reported_too(load_menus, kind):
+    cfg = load_menus({"main": one_item_menu({kind: "a\\b"}, {"brush": "Standard"})})
+    assert problems(cfg, f"menu main item 1: {kind} name 'a\\b' must not contain \\ / : or ..")
+    assert [it.kind for it in cfg.menus["main"].items] == ["brush"]
+
+
+def test_a_step_with_a_path_in_its_name_skips_the_item(load_menus):
+    cfg = load_menus({"main": one_item_menu({"steps": [{"brush": "A"}, {"alpha": "../x"}]}, {"brush": "B"})})
+    assert problems(cfg, "menu main item 1 step 2: alpha name")
+    assert [it.kind for it in cfg.menus["main"].items] == ["brush"]
+
+
+def test_browser_section_that_is_not_an_object_is_reported(load):
+    cfg = load({"browser": "Alt+B", "menus": GOOD_MENUS})
+    assert problems(cfg, "browser:")
+    assert cfg.browser_key is None
+
+
+@pytest.mark.parametrize("value", [True, False])
+def test_a_ring_number_must_not_be_a_boolean(load, value):
+    cfg = load({"ring": {"radius": value, "tag_band_opacity": value}, "menus": GOOD_MENUS})
+    assert problems(cfg, "ring.radius")
+    assert problems(cfg, "ring.tag_band_opacity")
+    assert cfg.ring["radius"] == config.DEFAULT_RING["radius"]
+
+
+@pytest.mark.parametrize("raw, text", [
+    ({"ring": {"colors": {"hilight": "#000000"}}}, "ring.colors.hilight: unknown colour (did you mean highlight?)"),
+    ({"bridge": {"mod": "key"}}, "bridge.mod: unknown setting (did you mean mode?)"),
+    ({"browser": {"hotkeys": "Alt+B"}}, "browser.hotkeys: unknown setting (did you mean hotkey?)")])
+def test_unknown_keys_in_small_sections_get_a_suggestion(load, raw, text):
+    cfg = load({**raw, "menus": GOOD_MENUS})
+    assert problems(cfg, text)
+
+
+def test_unknown_key_in_an_item_gets_a_suggestion(load_menus):
+    cfg = load_menus({"main": one_item_menu({"brush": "A", "lable": "Hi"})})
+    assert problems(cfg, "menu main item 1: unknown setting 'lable' (did you mean label?)")
+    assert "main" in cfg.menus
+
+
+def test_known_item_keys_are_not_reported(load_menus):
+    cfg = load_menus({"main": one_item_menu({"set": "Draw:Draw Size", "value": 5, "label": "S", "icon": "x"},
+                                            {"browser": "", "kind": "alpha"})})
+    assert not problems(cfg, "unknown setting")
+
+
+class BrokenTags:
+    error = "Expecting value: line 1 column 2 (char 1)"
+
+    def has(self, key):
+        return False
+
+    def label(self, key):
+        return ""
+
+
+def test_tags_that_could_not_be_read_are_reported_once_not_per_slot(load_menus):
+    cfg = load_menus({"main": one_item_menu({"tag": "a"}, {"tag": "b"}, {"tag": "c"}, {"browser": "d"})},
+                     BrokenTags())
+    assert problems(cfg, "tags.json could not be read: Expecting value")
+    assert len([e for e in cfg.errors if "tags.json" in e]) == 1
+    assert not problems(cfg, "does not exist")
+    assert "tag slots stay empty until it is fixed" in problems(cfg, "tags.json")[0]

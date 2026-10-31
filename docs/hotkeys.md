@@ -9,7 +9,8 @@ Q          Alt+G          Ctrl+Shift+1          F9          `
 ```
 
 - Keys: letters, digits, F1 to F24, and `space tab enter backspace insert delete home end pageup pagedown` and the punctuation keys `` ` - = [ ] \ ; ' , . / ``.
-- Modifiers: `Ctrl`, `Alt`, `Shift`, in any combination, joined with `+`.
+- `~` is accepted for the backtick key.
+- Modifiers: `Ctrl`, `Alt`, `Shift`, in any combination, joined with `+`. `Control` also works for `Ctrl`.
 - Each hotkey can belong to only one menu. Duplicates are reported as problems and ignored.
 - A hotkey only works while **ZBrush is the front window**. In every other program the key behaves normally. The browser hotkey is the one exception: it also works while the browser is in front, where it hands the keyboard back to ZBrush.
 - Keys sent by other programs (macro tools, for example) are ignored.

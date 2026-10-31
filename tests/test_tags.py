@@ -621,13 +621,11 @@ def test_import_with_an_unknown_mode_is_refused(good):
 # --- a file that cannot be read -----------------------------------------------------------------
 
 
-def test_a_malformed_file_sets_the_error_and_a_fresh_store_has_no_tags(tags_file):
-    # current behaviour; issue 4 changes this
+def test_a_malformed_file_sets_the_error_and_a_fresh_store_has_the_starter_tags(tags_file):
     store = TagStore(tags_file("{ not json")).load()
     assert store.error.startswith("tags.json could not be read")
-    assert store.tags() == []
-    assert not store.has("blocking")
-    assert not store.has(FAVOURITE)
+    assert keys(store) == ["favourite", "blocking", "detailing"]
+    assert store.items() == {}
 
 
 def test_a_top_level_list_is_a_malformed_file(tags_file):
@@ -695,13 +693,19 @@ def test_a_file_that_cannot_be_opened_keeps_the_state_and_is_tried_again(good, m
     assert good.error == ""
 
 
-# --- intended behaviour, not there yet (issue 4) ------------------------------------------------
+# --- a first load of a file that cannot be read ----------------------------------------------
 
 
-@pytest.mark.xfail(strict=True, reason="issue 4")
 def test_a_malformed_file_on_a_fresh_store_still_has_the_starter_tags(tags_file):
     store = TagStore(tags_file("{ not json")).load()
     assert store.error
     assert store.has("blocking")
     assert store.has("detailing")
     assert store.has(FAVOURITE)
+
+
+def test_the_starter_tags_of_a_malformed_file_are_not_written(tags_file):
+    path = tags_file("{ not json")
+    store = TagStore(path).load()
+    assert store.create_tag("X")["ok"] is False
+    assert open(path, encoding="utf-8").read() == "{ not json"
