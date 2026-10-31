@@ -6,9 +6,11 @@ LibraryApi: the brush, alpha, material and texture libraries and their thumbnail
 so the page needs one call per change and never has to ask again. The recent picks and use counts (usage.py) are
 read through LibraryApi.get_usage().
 """
-import base64
+import hashlib
 import json
 import os
+import threading
+from concurrent.futures import ThreadPoolExecutor
 
 import assets
 import brushes
@@ -18,6 +20,10 @@ import tags
 import usage
 
 _USAGE = usage.Usage()                # usage.json is written by the app; load() is cached on its mtime
+THUMB_WORKERS = 4                     # Pillow and zlib let go of the GIL while they decode: 4 images at a time
+_pool = None                          # made on the first batch of more than one name, then kept for the session
+_pool_lock = threading.Lock()
+_lib_cache: dict = {}                 # kind -> (signature, items, categories): the payload of the last walk
 
 
 def _usage_payload(kind: str) -> dict:
@@ -31,13 +37,40 @@ def _usage_payload(kind: str) -> dict:
             "mtime_ns": mtime_ns}
 
 
+def _thumb_pool() -> ThreadPoolExecutor:
+    global _pool
+    with _pool_lock:
+        if _pool is None:
+            _pool = ThreadPoolExecutor(max_workers=THUMB_WORKERS, thread_name_prefix="thumb")
+        return _pool
+
+
+def library_signature(walk) -> str:
+    """A short hash of what a walk found: every item's name and path, and each folder's report. Equal
+    signatures mean the browser's list is already right."""
+    h = hashlib.blake2b(digest_size=12)
+    for it in walk.items:
+        h.update(it["name"].encode("utf-8", "surrogatepass"))
+        h.update(b"\0")
+        h.update(str(it["path"]).encode("utf-8", "surrogatepass"))
+        h.update(b"\n")
+    for rep in walk.sources:
+        h.update(repr((rep["label"], str(rep["path"]), rep["exists"], rep["count"], rep["error"])).encode("utf-8", "surrogatepass"))
+    return h.hexdigest()
+
+
 class LibraryApi:
     # --- asset libraries -------------------------------------------------------------------------
-    def get_library(self, refresh=False, kind="brush"):
+    def get_library(self, refresh=False, kind="brush", since=None):
         """All brushes, alphas, materials or textures ZBrush can load (kind), first location wins (same rule
         the app uses), with categories. Also every folder searched (found or not), so the page can say where
-        it looked. A brush library is also returned as "brushes" (the old key)."""
-        out = {"kind": kind, "items": [], "categories": [], "sources": [], "zbrush_found": False, "error": None}
+        it looked. A brush library is also returned as "brushes" (the old key).
+
+        "signature" is a hash of what was found. Pass the one the page holds as since: when the folders still
+        give the same list, the answer is {"unchanged": True, "signature", "kind", "sources", "zbrush_found",
+        "error"} with no items or categories (and no "brushes"), so nothing big crosses the bridge."""
+        out = {"kind": kind, "items": [], "categories": [], "sources": [], "zbrush_found": False, "error": None,
+               "signature": ""}
         if kind not in assets.ALL_KINDS:
             out["error"] = "unknown kind"
             return out
@@ -45,20 +78,36 @@ class LibraryApi:
             walk = assets.library(kind)                 # the list and the lookup find() uses come from one walk
             dirs = brushes.zbrush_dirs()
             labels = assets.source_labels(kind)
-            items, cats, sources = [], {}, []
-            for it in walk.items:
-                src = labels.get(it["label"], it["label"])
-                cat = f"{src}/{it['rel']}" if it["rel"] else src
-                cats[cat] = cats.get(cat, 0) + 1
-                items.append({"name": it["name"], "source": src, "category": cat, "path": it["path"]})
+            sig = library_signature(walk)
+            same = bool(since) and since == sig
+            cached = _lib_cache.get(kind)
+            if cached and cached[0] == sig:
+                items, categories = cached[1], cached[2]
+            elif same:
+                items, categories = [], []
+            else:
+                items, cats = [], {}
+                for it in walk.items:
+                    src = labels.get(it["label"], it["label"])
+                    cat = f"{src}/{it['rel']}" if it["rel"] else src
+                    cats[cat] = cats.get(cat, 0) + 1
+                    items.append({"name": it["name"], "source": src, "category": cat, "path": it["path"]})
+                categories = [{"id": k, "count": v} for k, v in cats.items()]
+                _lib_cache[kind] = (sig, items, categories)
+            sources = []
             for rep in walk.sources:
                 sources.append({"label": labels.get(rep["label"], rep["label"]), "path": rep["path"],
                                 "exists": rep["exists"], "count": rep["count"], "error": rep["error"]})
             if refresh:
                 brushes.cache_prune(8000)
-            out.update(items=items, categories=[{"id": k, "count": v} for k, v in cats.items()], sources=sources,
+            out.update(items=items, categories=categories, sources=sources, signature=sig,
                        zbrush_found=bool(dirs.get("install") or dirs.get("user_assets")),
                        error=brushes.walk_error(walk))   # the browser keeps the list it had when a rescan reports one
+            if same:
+                for k in ("items", "categories"):
+                    del out[k]
+                out["unchanged"] = True
+                return out
         except Exception as e:
             out.update(items=[], categories=[], sources=[], zbrush_found=False,
                        error=str(e) or e.__class__.__name__)
@@ -85,16 +134,21 @@ class LibraryApi:
         return out
 
     def get_thumbs(self, names, size=128, kind="brush"):
-        """{name: data URL or None} for a batch of names of one kind (cached on disk after the first decode)."""
+        """{name: data URL or None} for a batch of names of one kind. The pictures come from a bounded
+        in-memory cache, then the disk cache, and are decoded on a small pool of threads when they are in
+        neither, so a batch costs about the slowest quarter of its images, not the sum. A name that cannot be
+        decoded gives None and is tried again next time. A batch of a few names is as cheap as a few names."""
         try:
             size = max(32, min(256, int(size)))
         except (TypeError, ValueError):
             size = 128
-        out = {}
-        for n in names or []:
-            data = assets.thumbnail_png(kind, n, size) if kind in assets.ALL_KINDS else None
-            out[n] = "data:image/png;base64," + base64.b64encode(data).decode("ascii") if data else None
-        return out
+        names = list(dict.fromkeys(n for n in (names or []) if isinstance(n, str)))
+        if kind not in assets.ALL_KINDS or not names:
+            return {n: None for n in names}
+        if len(names) == 1:
+            return {names[0]: assets.thumb_data_url(kind, names[0], size)}
+        urls = _thumb_pool().map(lambda n: assets.thumb_data_url(kind, n, size), names)
+        return dict(zip(names, urls))
 
 
 _STORE = tags.TagStore(radiald.tags_path())

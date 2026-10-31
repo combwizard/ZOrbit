@@ -11,11 +11,13 @@ Pillow. EXR textures are listed without a thumbnail.
 """
 from __future__ import annotations
 
+import base64
 import io
 import os
 import struct
 import threading
 import time
+from collections import OrderedDict
 from pathlib import Path
 
 try:
@@ -41,7 +43,13 @@ RESCAN_GAP_S = 5.0                  # a missing asset rebuilds its index at most
 generation = 0                      # counts index builds; expand.py drops its cached tag fans when it changes
 _built_at: dict[tuple, float] = {}  # (kind, installation or "") -> when its index was last built
 _PNG_SIG = bytes.fromhex("89504e470d0a1a0a")
+_PNG_END = bytes.fromhex("49454e44ae426082")   # the IEND chunk: a PNG that lacks it was cut short
 _MAX_SIDE = 32768
+
+
+def _png_ok(data: bytes) -> bool:
+    """A whole PNG file: the signature at the start and the IEND chunk at the end."""
+    return data.startswith(_PNG_SIG) and data.endswith(_PNG_END)
 
 
 def sources(kind: str) -> list[tuple[str, Path, bool]]:
@@ -233,13 +241,20 @@ def _fit_square(im, size: int):
 
 
 def _pillow(p, size: int):
-    """Pillow image reduced to at most size x size."""
+    """Pillow image reduced to at most size x size, without decoding more than it has to: a JPEG is decoded at
+    1/2, 1/4 or 1/8 scale (draft), and any other big image is box-reduced before the colour work and the resize."""
     from PIL import Image
 
-    im = Image.open(p)
+    im = Image.open(p)                              # load() below closes the file; no `with`, it would close the result
     if im.format == "JPEG":
-        im.draft("RGB", (2 * size, 2 * size))   # the decoder skips most of the pixels
+        im.draft("RGB", (2 * size, 2 * size))       # the decoder skips most of the pixels
     im.load()
+    factor = max(im.size) // (2 * size)             # keeps at least 2x of headroom for the final resize
+    if factor > 1:
+        try:
+            im = im.reduce(factor)                  # not every mode can (palette, 16-bit): then the resize does it
+        except (ValueError, OSError):
+            pass
     if im.mode.startswith("I") or im.mode == "F":   # 16 and 32-bit greyscale: scale into 8 bit
         im = im.convert("I").point(lambda v: v * (1 / 256)).convert("L")
     im.thumbnail((size, size), Image.LANCZOS)
@@ -265,6 +280,16 @@ def _decode(kind: str, p: Path, size: int):
     if kind == "texture" and p.suffix.lower() != ".exr":
         return _fit_square(_pillow(p, size), size)
     return None
+
+
+def resolve(kind: str, name_or_path) -> Path | None:
+    """The file behind an asset name (or a path to one) of any kind, None when there is none."""
+    if kind == "brush":
+        p = Path(str(name_or_path))
+        return p if p.suffix.lower() == ".zbp" and p.is_file() else _brushes.find_brush(name_or_path)
+    if kind not in FOLDER:
+        return None
+    return _resolve(kind, name_or_path)
 
 
 def _resolve(kind: str, name_or_path) -> Path | None:
@@ -302,9 +327,9 @@ def thumbnail(kind: str, name_or_path, size: int = 96):
         try:
             with _write_lock:
                 cfile.parent.mkdir(parents=True, exist_ok=True)
-                tmp = cfile.parent / f"{cfile.name}.{os.getpid()}.{threading.get_ident()}.tmp"
-                im.save(tmp, format="PNG")
-                os.replace(tmp, cfile)
+            tmp = cfile.parent / f"{cfile.name}.{os.getpid()}.{threading.get_ident()}.tmp"
+            im.save(tmp, format="PNG")                  # outside the lock: the encodes of a batch run side by side
+            os.replace(tmp, cfile)
         except Exception:
             pass
         return im
@@ -325,7 +350,7 @@ def thumbnail_png(kind: str, name_or_path, size: int = 96) -> bytes | None:
         cfile = _cache_file(kind, p, size)
         try:
             data = cfile.read_bytes()
-            if data.startswith(_PNG_SIG):
+            if _png_ok(data):
                 return data
         except OSError:
             pass
@@ -334,7 +359,7 @@ def thumbnail_png(kind: str, name_or_path, size: int = 96) -> bytes | None:
             return None
         try:
             data = cfile.read_bytes()
-            if data.startswith(_PNG_SIG):
+            if _png_ok(data):
                 return data
         except OSError:
             pass
@@ -352,3 +377,68 @@ def prefetch(pairs, size: int = 96) -> None:
             thumbnail(kind, name, size)
         except Exception:
             pass
+
+
+# --- the browser's in-memory thumbnails ------------------------------------------------------------
+
+class ThumbCache:
+    """Data URLs of recent thumbnails, least recently used out first. Bounded by a count and by bytes, because
+    the browser process lives as long as the session. Only successes go in: a decode that failed is tried
+    again at the next request (the file may have been mid-copy)."""
+
+    def __init__(self, max_entries: int = 400, max_bytes: int = 24 * 1024 * 1024):
+        self.max_entries, self.max_bytes = max_entries, max_bytes
+        self._d: OrderedDict = OrderedDict()
+        self._bytes = 0
+        self._lock = threading.Lock()
+
+    def __len__(self) -> int:
+        return len(self._d)
+
+    def get(self, key):
+        with self._lock:
+            val = self._d.get(key)
+            if val is not None:
+                self._d.move_to_end(key)
+            return val
+
+    def put(self, key, val: str) -> None:
+        with self._lock:
+            old = self._d.pop(key, None)
+            if old is not None:
+                self._bytes -= len(old)
+            self._d[key] = val
+            self._bytes += len(val)
+            while self._d and (len(self._d) > self.max_entries or self._bytes > self.max_bytes):
+                _, gone = self._d.popitem(last=False)
+                self._bytes -= len(gone)
+
+    def clear(self) -> None:
+        with self._lock:
+            self._d.clear()
+            self._bytes = 0
+
+
+THUMBS = ThumbCache()
+
+
+def thumb_data_url(kind: str, name_or_path, size: int = 96, cache: ThumbCache | None = None) -> str | None:
+    """"data:image/png;base64,..." for an asset's thumbnail, None when it has none. Repeat requests come from
+    the in-memory cache; its key holds the file's path and mtime, so a replaced file is read again."""
+    cache = THUMBS if cache is None else cache
+    try:
+        p = resolve(kind, name_or_path)
+        if p is None:
+            return None
+        key = (kind, os.path.normcase(str(p)), p.stat().st_mtime_ns, size)
+        url = cache.get(key)
+        if url is not None:
+            return url
+        data = thumbnail_png(kind, p, size)
+        if not data:
+            return None
+        url = "data:image/png;base64," + base64.b64encode(data).decode("ascii")
+        cache.put(key, url)
+        return url
+    except Exception:
+        return None

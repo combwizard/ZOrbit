@@ -286,9 +286,9 @@ def thumbnail(name_or_path, size: int = 96):
         try:
             with _write_lock:
                 cdir.mkdir(parents=True, exist_ok=True)
-                tmp = cdir / f"{cfile.name}.{os.getpid()}.{threading.get_ident()}.tmp"
-                im.save(tmp, format="PNG")
-                os.replace(tmp, cfile)
+            tmp = cdir / f"{cfile.name}.{os.getpid()}.{threading.get_ident()}.tmp"
+            im.save(tmp, format="PNG")                  # outside the lock: the encodes of a batch run side by side
+            os.replace(tmp, cfile)
         except Exception:
             pass
         return im
@@ -297,6 +297,7 @@ def thumbnail(name_or_path, size: int = 96):
 
 
 _PNG_SIG = bytes.fromhex("89504e470d0a1a0a")
+_PNG_END = bytes.fromhex("49454e44ae426082")   # the IEND chunk: a PNG that lacks it was cut short
 
 
 def thumbnail_png(name_or_path, size: int = 96) -> bytes | None:
@@ -310,7 +311,7 @@ def thumbnail_png(name_or_path, size: int = 96) -> bytes | None:
         cfile = _cache_dir() / f"{p.stem}_{p.stat().st_mtime_ns}_{size}.png"
         try:
             data = cfile.read_bytes()
-            if data.startswith(_PNG_SIG):
+            if data.startswith(_PNG_SIG) and data.endswith(_PNG_END):
                 return data
         except OSError:
             pass
@@ -319,7 +320,7 @@ def thumbnail_png(name_or_path, size: int = 96) -> bytes | None:
             return None
         try:
             data = cfile.read_bytes()
-            if data.startswith(_PNG_SIG):
+            if data.startswith(_PNG_SIG) and data.endswith(_PNG_END):
                 return data
         except OSError:
             pass

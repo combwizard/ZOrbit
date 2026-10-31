@@ -21,6 +21,9 @@ All notable changes to this project are listed here. The format follows
 
 ### Changed
 
+- Browser and Library: thumbnails are decoded four at a time and big JPEGs are read at a reduced scale, so a
+  page of large textures fills in about three times faster; at most a few hundred thumbnails are kept in
+  memory; a library refresh that finds nothing new no longer resends the whole list.
 - Studio: the first window fits a laptop screen (smaller than 1320 x 860 when the work area is), and the
   minimum height is 560 instead of 640. **Add a ZBrush folder** accepts a ZBrush 2026 or later that has not
   run yet, so Setup can show and fix it, and the ZScript plugin can be installed into a ZBrush 2022 to 2025
@@ -72,6 +75,8 @@ All notable changes to this project are listed here. The format follows
 
 ### Fixed
 
+- A thumbnail cache file that was cut short is decoded again instead of being shown broken, and a picture that
+  failed to decode is tried again next time instead of staying blank.
 - Studio: **Restore backup** keeps the `radial.json` it replaces as `radial.json.broken`, as **Start from defaults**
   already did, and so does a save over a `radial.json` that is not valid JSON. A menus file that cannot be
   written as text says "Could not save" and leaves no stray `.tmp` file.
