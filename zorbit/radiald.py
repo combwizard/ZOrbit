@@ -2,7 +2,8 @@
 
 How it works:
   * The menu hotkey never goes through ZBrush. A low-level keyboard hook sees it, checks that ZBrush is the
-    foreground app, opens the ring and swallows the key so ZBrush never acts on it.
+    foreground app, opens the ring and swallows the key so ZBrush never acts on it. The hook runs on its own
+    thread (HookThread), so nothing the main thread is busy with can make Windows drop it for being slow.
   * The ring is a non-activating layered window, destroyed after every pick.
   * A pick is written atomically to %LOCALAPPDATA%\\ZOrbit\\request.json and handed to the bridge
     inside ZBrush, either by a window message to the bridge's listener (no keystroke) or by a bare bridge
@@ -35,6 +36,7 @@ import sys
 import threading
 import time
 import traceback
+from dataclasses import dataclass
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
@@ -69,6 +71,11 @@ WM_APP_MASK = W.WM_APP + 13           # hook -> control window: inject the Alt m
 WM_APP_BROWSER = W.WM_APP + 14        # hook -> control window: the browser hotkey
 WM_APP_BROWSER_PICK = W.WM_APP + 15   # control window -> itself: a brush was picked in the popout
 WM_APP_TYPING = W.WM_APP + 16         # hook -> control window: a key was typed while a tapped ring waited for a click
+WM_HOOK_REHOOK = W.WM_APP + 20        # main thread -> hook thread: install the hook again
+WM_HOOK_RELEASE_HELD = W.WM_APP + 21  # main thread -> hook thread: let go of the held hotkey (wparam = its vk)
+WM_HOOK_RELEASE_BROWSER = W.WM_APP + 22   # ... and of the browser hotkey
+HOOK_START_S = 5                      # how long run() waits for the hook thread to install the hook
+HOOK_STOP_S = 2                       # ... and to end it
 ACK_WAIT_S = 0.5                      # a listener pick not picked up in this long falls back to the bridge key
 RESULT_TRIES = 30                     # ticks (100 ms) to wait for the plugin to log what a picked-up request did
 ACK_HOLD_MAX_S = 30                   # ... but not while the left button is down, for this long at most
@@ -164,6 +171,118 @@ def _trim_log(max_bytes=1_000_000):
         pass
 
 
+@dataclass(frozen=True)
+class HookState:
+    """What the keyboard hook needs to know about the config, as one immutable value. load_config builds a new one
+    and swaps it into App._hook_state in a single assignment; the hook thread reads that attribute once per key
+    and never sees a half-updated config.
+
+    slots: one (vk, ctrl, alt, shift, swallow, slot) tuple per menu with a hotkey; slot is the index
+    WM_APP_OPEN carries (App.slots[slot] is the menu).
+    browser: (vk, ctrl, alt, shift) of the browser hotkey, or None."""
+    slots: tuple = ()
+    browser: tuple | None = None
+
+    @staticmethod
+    def build(menus, browser_key):
+        """menus: the menus with a hotkey, in App.slots order. browser_key: a config.Hotkey or None."""
+        slots = tuple((m.hotkey.vk, m.hotkey.ctrl, m.hotkey.alt, m.hotkey.shift, bool(m.swallow), i)
+                      for i, m in enumerate(menus))
+        bk = None if browser_key is None else (browser_key.vk, browser_key.ctrl, browser_key.alt, browser_key.shift)
+        return HookState(slots, bk)
+
+
+class HookThread(threading.Thread):
+    """Owns the WH_KEYBOARD_LL hook. A low-level hook is called on the thread that installed it, from inside that
+    thread's message loop, and Windows silently removes a hook whose callback is too slow to return. So the hook
+    lives on a thread that does nothing else: the main thread's file polling, sprite building and process starts
+    cannot delay it.
+
+    on_key(wparam, kb) -> bool runs on this thread and returns True to swallow the key. on_command(msg, wparam,
+    lparam) also runs on this thread, for the thread messages posted with post(). The thread ends when stop()
+    posts WM_QUIT to it.
+
+    start_and_wait() returns once the hook is installed, and raises the error if it could not be."""
+
+    def __init__(self, on_key, on_command, log_fn):
+        super().__init__(name="ZOrbitHook", daemon=True)
+        self._on_key = on_key
+        self._on_command = on_command
+        self._log = log_fn
+        self.handle = None                  # the HHOOK; only this thread changes it
+        self.thread_id = 0
+        self.error = None                   # why the hook could not be installed, else None
+        self.ready = threading.Event()      # set once the first install has succeeded or failed
+        self._proc = W.HOOKPROC(self._callback)     # the ctypes callback must live as long as the hook
+
+    def start_and_wait(self, timeout=HOOK_START_S):
+        self.start()
+        if not self.ready.wait(timeout):
+            raise TimeoutError(f"the keyboard hook thread did not start within {timeout} s")
+        if self.error is not None:
+            raise self.error
+
+    def post(self, msg, wparam=0, lparam=0) -> bool:
+        """Posts a thread message to the hook thread's loop. False when it is gone or not running yet."""
+        return bool(self.thread_id) and bool(W.PostThreadMessageW(self.thread_id, msg, wparam, lparam))
+
+    def stop(self, timeout=HOOK_STOP_S) -> None:
+        if not self.is_alive():
+            return
+        self.post(W.WM_QUIT)
+        self.join(timeout)
+        if self.is_alive():                 # stuck inside a callback: the process is ending, so just say so
+            self._log(f"hook thread did not stop within {timeout} s")
+
+    def _callback(self, ncode, wparam, lparam):
+        try:
+            if ncode == 0 and self._on_key(wparam, W.KBDLLHOOKSTRUCT.from_address(lparam)):
+                return 1
+        except Exception:
+            self._log("hook error:\n" + traceback.format_exc())
+        return W.CallNextHookEx(self.handle, ncode, wparam, lparam)
+
+    def _install(self):
+        """Installs the hook (this thread only), then removes the one it replaces, so there is no gap."""
+        new = W.SetWindowsHookExW(W.WH_KEYBOARD_LL, self._proc, W.GetModuleHandleW(None), 0)
+        if not new:
+            raise ctypes.WinError(ctypes.get_last_error())
+        old, self.handle = self.handle, new
+        if old:
+            W.UnhookWindowsHookEx(old)
+
+    def run(self):
+        msg = W.w.MSG()
+        try:
+            self.thread_id = W.GetCurrentThreadId()
+            # The thread has no message queue until it first calls a message function, and PostThreadMessage
+            # fails until it has one. Peek once before anyone is told the thread is ready.
+            W.PeekMessageW(ctypes.byref(msg), None, W.WM_USER, W.WM_USER, W.PM_NOREMOVE)
+            self._install()
+        except Exception as e:
+            self.error = e
+            self.thread_id = 0              # a stale id could one day be another thread's: post() must refuse it
+            self.ready.set()
+            return
+        self.ready.set()
+        try:
+            # The hook callbacks are delivered from inside GetMessageW, so this loop is what keeps the hook alive.
+            while W.GetMessageW(ctypes.byref(msg), None, 0, 0) > 0:
+                try:
+                    if msg.message == WM_HOOK_REHOOK:
+                        self._install()
+                        self._log("hook re-installed")
+                    else:
+                        self._on_command(msg.message, msg.wParam, msg.lParam)
+                except Exception:
+                    self._log("hook thread error:\n" + traceback.format_exc())
+        finally:
+            if self.handle:
+                W.UnhookWindowsHookEx(self.handle)
+                self.handle = None
+            self.thread_id = 0
+
+
 class App:
     def __init__(self, cfg_path, target_exe="zbrush.exe", exit_with_target=False, no_tray=False):
         self.cfg_path = cfg_path
@@ -175,11 +294,22 @@ class App:
         self._bad_mtime = None          # mtime of a radial.json that failed to load
         self.slots = []                 # menus with hotkeys, indexed for WM_APP_OPEN
         self.ring = None
-        self.held_vk = None             # hotkey vk currently held (between our keydown and keyup)
+        # Threads. The keyboard hook runs on its own thread (HookThread). Rules that keep the two safe:
+        #  * The hook thread reads the config only through self._hook_state, one immutable HookState that
+        #    load_config replaces whole.
+        #  * held_vk, held_swallow and _browser_vk are written by the hook thread only (the main thread asks it to
+        #    let go with WM_HOOK_RELEASE_*). The main thread reads them as hints: an attribute read is atomic, and
+        #    a value that is a moment stale only delays what the next timer tick would do anyway.
+        #  * self.ring is read once into a local by the hook; a cancel posted to a ring that has just closed is
+        #    harmless because _ctrl_proc looks at self.ring again.
+        #  * _hook_exe and _popout_pid belong to the hook thread; the main thread has its own _pid_exe.
+        self.held_vk = None             # hotkey vk currently held (between our keydown and keyup); hook thread writes
         self.held_swallow = False
-        self.hook = None
+        self._hook = None               # the HookThread
+        self._hook_state = HookState()  # what the hook thread reads; swapped by load_config
         self.ctrl = None
-        self._pid_exe = {}
+        self._pid_exe = {}              # pid -> exe name, for the main thread
+        self._hook_exe = {}             # the same for the hook thread, so neither ever writes the other's dict
         self._pid_install = {}          # pid -> installs.install_of() of the ZBrush.exe behind it
         self._icons = {}
         self._seq = 0
@@ -200,15 +330,14 @@ class App:
         self._activity_menu = None      # id of the root ring last opened, so a pick can say which ring it came from
         self.tags = tags.TagStore(tags_path())
         self.expander = None            # expand.Expander of the current config, tags and usage
-        self._refs = []                 # ctypes callbacks that must outlive their registration
-        self._browser_vk = None         # the browser hotkey while it is down (its repeats and key-up are ours)
+        self._browser_vk = None         # the browser hotkey while it is down (its repeats and key-up are ours); hook thread writes
         self._popout_proc = None        # subprocess.Popen of the popout we last started
         self._popout_spawning = False   # a thread is starting it right now
         self._popout_pending = None     # (tag, toggle, kind) to SHOW once a popout started hidden has its window
         self._popout_started = 0.0      # when we last spawned the popout process
         self._popout_show = False       # ... and whether that spawn asked it to show itself
         self._prewarmed = False         # a pre-warm spawn is scheduled or done for this popout
-        self._popout_pid = (0.0, 0)     # (valid until, pid of the popout's control window), for the hook
+        self._popout_pid = (0.0, 0)     # (valid until, pid of the popout's control window); hook thread only
         self._popout_zb = None          # (ZBrush hwnd, its install) from when the browser was last opened
         self._browser_pick = None       # brush Item picked in the popout, waiting for ZBrush to have focus
         self._browser_pick_deadline = 0.0
@@ -240,7 +369,7 @@ class App:
                     f"(the file is re-read as soon as it changes)")
                 self.cfg = C.Config(path=self.cfg_path, mtime=0.0)
                 self.expander = expand.Expander(self.cfg, self.usage, self.tags)
-                self.slots = []
+                self._set_slots([], None)
             self._menus_problem(announce=fresh and balloon)
             return
         self._config_error = None
@@ -248,7 +377,7 @@ class App:
         self._have_cfg = True
         self.cfg = cfg
         self.expander = expand.Expander(cfg, self.usage, self.tags)
-        self.slots = [m for m in cfg.menus.values() if m.hotkey]
+        self._set_slots([m for m in cfg.menus.values() if m.hotkey], cfg.browser_key)
         for err in cfg.errors:
             log(f"config: {err}")
         log(f"config loaded: {len(cfg.menus)} menus, hotkeys: "
@@ -258,6 +387,11 @@ class App:
         self._prefetch()
         self._prune_icons()
         self._schedule_prewarm()
+
+    def _set_slots(self, menus, browser_key):
+        """Sets the menus that have hotkeys and hands the hook thread the matching snapshot in one assignment."""
+        self.slots = menus
+        self._hook_state = HookState.build(menus, browser_key)
 
     def _menus_problem(self, announce=False, clear=False):
         """Puts a menus file that cannot be read in the tray tooltip while it lasts (clear=True takes it out), and
@@ -371,22 +505,27 @@ class App:
         return im
 
     # --- target detection ------------------------------------------------------------------------
-    def _exe_of(self, pid):
-        """Lowercased exe name of a process ('' when it cannot be read), cached."""
-        exe = self._pid_exe.get(pid)
+    def _exe_of(self, pid, cache=None):
+        """Lowercased exe name of a process ('' when it cannot be read), cached. The hook thread passes its own
+        cache (self._hook_exe) so that each dict has one thread writing and clearing it."""
+        if cache is None:
+            cache = self._pid_exe
+        exe = cache.get(pid)
         if exe is None:
             exe = os.path.basename(W.process_image(pid)).lower()
-            if len(self._pid_exe) > 256:
-                self._pid_exe.clear()
-            self._pid_exe[pid] = exe
+            if len(cache) > 256:
+                cache.clear()
+            cache[pid] = exe
         return exe
 
-    def target_in_front(self) -> bool:
+    def target_in_front(self, on_hook=False) -> bool:
+        """ZBrush is the foreground app. on_hook is True when the keyboard hook thread asks. (_unreadable is shared:
+        a set add is atomic, and at worst a pid is logged twice.)"""
         fg = W.GetForegroundWindow()
         if not fg:
             return False
         pid = W.window_pid(fg)
-        exe = self._exe_of(pid)
+        exe = self._exe_of(pid, self._hook_exe if on_hook else None)
         if not exe and pid not in self._unreadable and len(self._unreadable) < 20:
             self._unreadable.add(pid)
             log(f"foreground window's process could not be read (is ZBrush running as administrator?); "
@@ -410,7 +549,8 @@ class App:
 
     def _popout_in_front(self) -> bool:
         """The popout is the foreground app, so its hotkey must reach us to hand the keyboard back to ZBrush. The
-        pid of its control window is cached for a second: this runs inside the keyboard hook."""
+        pid of its control window is cached for a second. Only the hook thread calls this, and so only it writes
+        self._popout_pid."""
         fg = W.GetForegroundWindow()
         if not fg:
             return False
@@ -423,20 +563,13 @@ class App:
         return bool(pid) and W.window_pid(fg) == pid
 
     # --- keyboard hook ---------------------------------------------------------------------------
-    def _hook_proc(self, ncode, wparam, lparam):
-        try:
-            if ncode == 0:
-                r = self._on_key(wparam, W.KBDLLHOOKSTRUCT.from_address(lparam))
-                if r:
-                    return 1
-        except Exception:
-            log("hook error:\n" + traceback.format_exc())
-        return W.CallNextHookEx(self.hook, ncode, wparam, lparam)
-
     def _on_key(self, wparam, kb) -> bool:
-        """Returns True to swallow the key. Must stay fast: Windows drops slow hooks."""
+        """Returns True to swallow the key. Runs on the hook thread, so it only reads the immutable HookState and
+        must stay fast: Windows drops slow hooks."""
         if (kb.flags & W.LLKHF_INJECTED) and kb.dwExtraInfo == W.OWN_INPUT_MARKER:
             return False                   # ZOrbit's own key; keys from tablet drivers and macro tools count
+        state = self._hook_state            # read once: a config reload swaps the whole object
+        ring = self.ring                    # read once; may close a moment later (see __init__)
         vk = kb.vkCode
         down = wparam in (W.WM_KEYDOWN, W.WM_SYSKEYDOWN)
         up = wparam in (W.WM_KEYUP, W.WM_SYSKEYUP)
@@ -449,35 +582,43 @@ class App:
             if up:
                 self._browser_vk = None
             return True                    # the browser key's repeats and key-up: never a ring's key-up
-        if down and vk == W.VK_ESCAPE and self.ring is not None:
+        if down and vk == W.VK_ESCAPE and ring is not None:
             W.PostMessageW(self.ctrl, WM_APP_CANCEL, 0, 0)
             return True
         if not down or vk in W.MODIFIER_VKS:
             return False
-        ctrl, alt, shift = (W.modifier_down(W.VK_CONTROL), W.modifier_down(W.VK_MENU),
-                            W.modifier_down(W.VK_SHIFT))
-        for slot, m in enumerate(self.slots):
-            hk = m.hotkey
-            if hk.vk == vk and hk.ctrl == ctrl and hk.alt == alt and hk.shift == shift:
-                if not self.target_in_front() or self._is_text_target(W.GetForegroundWindow()):
+        mods = (W.modifier_down(W.VK_CONTROL), W.modifier_down(W.VK_MENU), W.modifier_down(W.VK_SHIFT))
+        ctrl, alt, shift = mods
+        for hvk, hctrl, halt, hshift, swallow, slot in state.slots:
+            if hvk == vk and (hctrl, halt, hshift) == mods:
+                if not self.target_in_front(on_hook=True) or self._is_text_target(W.GetForegroundWindow()):
                     return False
-                self.held_vk, self.held_swallow = vk, m.swallow
-                W.PostMessageW(self.ctrl, WM_APP_OPEN, slot, 0)
-                if m.swallow and alt:
+                self.held_vk, self.held_swallow = vk, swallow
+                W.PostMessageW(self.ctrl, WM_APP_OPEN, slot, 1)     # lparam 1: opened by a held key
+                if swallow and alt:
                     W.PostMessageW(self.ctrl, WM_APP_MASK, 0, 0)
-                return m.swallow
-        bk = self.browser_key
-        if bk is not None and bk.vk == vk and bk.ctrl == ctrl and bk.alt == alt and bk.shift == shift:
-            if ((self.target_in_front() and not self._is_text_target(W.GetForegroundWindow()))
+                return swallow
+        if state.browser is not None and state.browser == (vk, ctrl, alt, shift):
+            if ((self.target_in_front(on_hook=True) and not self._is_text_target(W.GetForegroundWindow()))
                     or self._popout_in_front()):
                 self._browser_vk = vk          # not held_vk: a ring held open on another key keeps its own
                 if alt:
                     W.PostMessageW(self.ctrl, WM_APP_MASK, 0, 0)
                 W.PostMessageW(self.ctrl, WM_APP_BROWSER, 0, 0)
                 return True
-        if self.ring is not None and self.ring.mode == "click":
+        if ring is not None and ring.mode == "click":
             W.PostMessageW(self.ctrl, WM_APP_TYPING, 0, 0)     # typing closes a ring that was tapped open
         return False
+
+    def _on_hook_command(self, msg, wparam, lparam):
+        """A thread message to the hook thread. This is how the main thread changes held_vk and _browser_vk, so
+        that only the hook thread ever writes them. A key is let go only if it is still the one that was seen
+        stuck: it may have come up, or another one gone down, since."""
+        if msg == WM_HOOK_RELEASE_HELD and self.held_vk == wparam:
+            self.held_vk = None
+            W.PostMessageW(self.ctrl, WM_APP_KEYUP, wparam, 0)
+        elif msg == WM_HOOK_RELEASE_BROWSER and self._browser_vk == wparam:
+            self._browser_vk = None
 
     @staticmethod
     def _is_text_target(fg) -> bool:
@@ -495,14 +636,14 @@ class App:
     def _check_stuck_keys(self):
         """The hook is what clears held_vk and _browser_vk. If it missed a key-up (Windows dropped it, or another
         program ate the key) the hotkey would stay dead, so this tick covers for it. A key the hook swallows never
-        shows in GetAsyncKeyState, so those can only be let go after STUCK_KEY_S with no ring open."""
+        shows in GetAsyncKeyState, so those can only be let go after STUCK_KEY_S with no ring open. This only reads
+        the two keys; letting go is a message to the hook thread, which owns them."""
         vk = self.held_vk
         if vk is not None and not self.held_swallow and not W.key_down(vk):
             self._stuck["up"] = self._stuck.get("up", 0) + 1     # twice in a row: the key state may lag the hook
             if self._stuck["up"] >= 2:
-                self.held_vk = None
                 log(f"hotkey (vk {vk:#x}) is up but the hook never saw it; released")
-                W.PostMessageW(self.ctrl, WM_APP_KEYUP, vk, 0)
+                self._hook_post(WM_HOOK_RELEASE_HELD, vk)
         else:
             self._stuck.pop("up", None)
         now = time.monotonic()
@@ -514,26 +655,29 @@ class App:
                 del self._stuck[name]
                 log(f"{name} hotkey still down after {STUCK_KEY_S} s and the hook never saw it go up; released")
                 if name == "held":
-                    vk, self.held_vk = self.held_vk, None
-                    W.PostMessageW(self.ctrl, WM_APP_KEYUP, vk, 0)
+                    self._hook_post(WM_HOOK_RELEASE_HELD, self.held_vk or 0)
                 else:
-                    self._browser_vk = None
+                    self._hook_post(WM_HOOK_RELEASE_BROWSER, self._browser_vk or 0)
 
-    def install_hook(self):
-        if self.hook:
-            W.UnhookWindowsHookEx(self.hook)
-        proc = W.HOOKPROC(self._hook_proc)
-        self._refs.append(proc)
-        self._refs = self._refs[-4:]            # old procs kept a little while for in-flight calls
-        self.hook = W.SetWindowsHookExW(W.WH_KEYBOARD_LL, proc, W.GetModuleHandleW(None), 0)
-        if not self.hook:
-            raise ctypes.WinError(ctypes.get_last_error())
+    def start_hook(self):
+        """Starts the hook thread and waits for it to install the hook. Raises if it cannot."""
+        self._hook = HookThread(self._on_key, self._on_hook_command, log)
+        self._hook.start_and_wait()
+
+    def stop_hook(self):
+        hook, self._hook = self._hook, None
+        if hook is not None:
+            hook.stop()
+
+    def _hook_post(self, msg, wparam=0):
+        if self._hook is None or not self._hook.post(msg, wparam):
+            log(f"could not reach the hook thread (message {msg:#x})")
 
     # --- control window --------------------------------------------------------------------------
     def _ctrl_proc(self, hwnd, msg, wparam, lparam):
         try:
             if msg == WM_APP_OPEN:
-                self.open_slot(wparam)
+                self.open_slot(wparam, held=bool(lparam))
                 return 0
             if msg == WM_APP_KEYUP:
                 if self.ring is not None:
@@ -566,8 +710,7 @@ class App:
                 elif wparam == TIMER_ACK:
                     self._check_ack()
                 elif wparam == TIMER_REHOOK and self.ring is None and not self._held_down():
-                    log("hook re-installed")
-                    self.install_hook()         # Windows silently drops hooks that ever timed out
+                    self._hook_post(WM_HOOK_REHOOK)     # Windows silently drops hooks that ever timed out
                 elif wparam == TIMER_CONFIG:
                     self._check_stuck_keys()
                     self.load_config()          # a new or changed hotkey must work before any ring opens
@@ -652,7 +795,9 @@ class App:
             log(f"tray command {name!r} failed:\n" + traceback.format_exc())
 
     # --- menus -----------------------------------------------------------------------------------
-    def open_slot(self, slot):
+    def open_slot(self, slot, held=True):
+        """held: the hotkey was down when the hook saw it (the hook says so in the message, because by the time
+        this runs the key may be up already)."""
         self.load_config()                         # picks up edits to radial.json on every open
         if slot >= len(self.slots):
             return
@@ -662,7 +807,7 @@ class App:
             self.ring.cancel("reopened")
             if same:
                 return                             # pressing the hotkey again closes the ring
-        self.open_menu(menu, W.cursor_pos(), held=self.held_vk is not None)
+        self.open_menu(menu, W.cursor_pos(), held=held)
 
     def _record_pick(self, item):
         """Notes a brush, alpha, material or texture pick in the recent list; a brush pick is also counted for the
@@ -736,8 +881,8 @@ class App:
         return self.cfg.browser_key if self.cfg else None
 
     def _spawn_popout(self, show, tag=None, zb_hwnd=0, kind=None):
-        """Starts the popout process on a worker thread: this runs on the keyboard hook's thread, and a process
-        start that outlasts Windows' low-level hook timeout gets the hook dropped."""
+        """Starts the popout process on a worker thread, so a slow process start never holds up the control
+        window."""
         cmd = paths.launch_commands()["popout"] + ["--managed"]
         if show:
             cmd.append("--show")
@@ -1157,7 +1302,7 @@ class App:
             return 1
         self._create_ctrl()
         self._schedule_prewarm()
-        self.install_hook()
+        self.start_hook()
         W.SetTimer(self.ctrl, TIMER_WATCH, 3000, None)
         W.SetTimer(self.ctrl, TIMER_REHOOK, 120000, None)
         W.SetTimer(self.ctrl, TIMER_CONFIG, 500, None)
@@ -1171,11 +1316,10 @@ class App:
                 W.DispatchMessageW(ctypes.byref(msg))
         finally:
             self._destroy_tray()
+            self.stop_hook()                        # ends the hook thread, which removes the hook
         popout = W.find_message_window(POPOUT_CLASS)
         if popout:
             W.send_copydata(popout, COPYDATA_QUIT, b"{}")
-        if self.hook:
-            W.UnhookWindowsHookEx(self.hook)
         W.CloseHandle(mutex)
         log("ZOrbit stopped")
         return 0

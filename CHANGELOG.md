@@ -24,6 +24,9 @@ All notable changes to this project are listed here. The format follows
 - The starter Brushes menu no longer swallows **Q** (new installs only): ZBrush switches to Draw mode when the ring
   opens, and **Q** still types in ZBrush's own fields. Switch **Swallow hotkey** on in the menu settings to hide the
   key again.
+- The keyboard hook runs on its own thread, so file polling, thumbnail work, library rescans and process starts in
+  the app can no longer make Windows drop it and stop the hotkeys from working. A hotkey tapped while the app is
+  busy still opens the ring in hold mode.
 - Typing another key closes a ring that was opened by a tap and is waiting for a click. Hotkeys are ignored in
   Windows dialogs (such as Save As) and Windows text boxes.
 - Keys sent by a tablet driver, a macro tool or a key remapper open the ring like the real key. Only ZOrbit's own
