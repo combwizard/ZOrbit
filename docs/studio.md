@@ -100,7 +100,7 @@ On the Menus screen you can:
 The right-hand side has three tabs:
 
 - **Item** edits the selected item: its type, target, label and icon.
-- **Menu** edits the selected menu: its title, hotkey, **Duplicate** and **Delete** and, in Full mode, its id, **Swallow hotkey** switch (off and greyed out until the menu has a hotkey), open animation and **Fan out when opened from another menu**. Changing the **Id** updates every item that opens the menu. If the menu has auto slots, they forget what they learned, because they are kept under the id. **Used by** lists the items in other menus that open this one; click one to go to it.
+- **Menu** edits the selected menu: its title, hotkey, **Duplicate** and **Delete** and, in Full mode, its id, **Swallow hotkey** switch (off and greyed out until the menu has a hotkey), open animation and **Fan out when opened from another menu**. A new menu takes its id from its title: a menu you call **Sculpting** gets the id `sculpting`, or `sculpting_2` if that is taken. Until you save, renaming it changes the id too. After the first save, or once you type an id yourself, the id stays as it is. Changing the **Id** updates every item that opens the menu. If the menu has auto slots, they forget what they learned, because they are kept under the id. **Used by** lists the items in other menus that open this one; click one to go to it.
 - **Library** is the [browser](browser.md) in a narrow form, to drag items into the ring or the list.
 
 Menu rows show the menu's title, id, hotkey (or a small submenu icon when it has none) and item count. When the window is narrow, hover a row for its full title and hotkey. A menu with more than 12 items gets a note above its list, because the slots start to overlap.

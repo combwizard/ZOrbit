@@ -21,6 +21,9 @@ All notable changes to this project are listed here. The format follows
 
 ### Changed
 
+- Studio: a new menu's id comes from its title (**Sculpting** becomes `sculpting`) instead of `menu`, `menu_2` and
+  so on, and follows the title until the menu is saved or you type an id yourself. Accented letters are kept
+  without the accent.
 - The starter Brushes menu no longer swallows **Q** (new installs only): ZBrush switches to Draw mode when the ring
   opens, and **Q** still types in ZBrush's own fields. Switch **Swallow hotkey** on in the menu settings to hide the
   key again.

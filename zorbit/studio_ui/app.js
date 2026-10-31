@@ -401,12 +401,35 @@ function hkChips(str, cls = '') {
   String(str).split(/\+(?=.)/).forEach(p => w.append(h('kbd', null, p)));
   return w;
 }
-function uniqueId(base) {
-  let id = (base || 'menu').toLowerCase().replace(/[^a-z0-9_-]+/g, '_').replace(/^_+|_+$/g, '') || 'menu';
+// A title as an id: accents dropped ("Détails" -> "details"), anything but letters, digits, - and _ becomes _.
+function menuSlug(s) {
+  let id = String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9_-]+/g, '_').replace(/^_+|_+$/g, '') || 'menu';
   if (/^\d+$/.test(id)) id = 'm_' + id;
+  return id;
+}
+// self: the menu being renamed, which may keep its own id
+function uniqueId(base, self) {
+  const id = menuSlug(base);
   let n = 2, out = id;
-  while (S.cfg.menus[out]) out = id + '_' + n++;
+  while (S.cfg.menus[out] && out !== self) out = id + '_' + n++;
   return out;
+}
+// A menu that has never been saved, whose id is still the one made from its title, takes a new id when the title
+// changes: nothing outside Studio (the ring, learned auto slots) knows the id yet. A saved menu, or an id typed by
+// hand, stays as it is.
+function idFollowsTitle(id, oldTitle) {
+  let saved = {};
+  try { saved = JSON.parse(S.savedStr).menus || {}; } catch (e) { /* nothing saved yet */ }
+  if (Object.prototype.hasOwnProperty.call(saved, id)) return false;
+  const s = menuSlug(oldTitle);
+  return id === s || new RegExp('^' + s + '_\\d+$').test(id);
+}
+// The id the menu should have after its title went from oldTitle to its current one, or null to keep it.
+function idForTitle(id, oldTitle) {
+  const m = S.cfg.menus[id];
+  if (!m || !idFollowsTitle(id, oldTitle)) return null;
+  const nid = uniqueId(m.title, id);
+  return nid !== id ? nid : null;
 }
 function referrers(menuId) {
   const out = [];
@@ -1137,7 +1160,7 @@ function selectItem(i, { focusTarget = false, keepTab = false } = {}) {
   if (focusTarget) { const t = $('[data-focus="target"]'); if (t) t.focus(); }
 }
 function addMenu() {
-  const id = uniqueId('menu');
+  const id = uniqueId('New menu');
   S.cfg.menus[id] = { title: 'New menu', items: [] };
   S.menuId = id; S.itemIdx = null; S.tab = 'menu';
   commit({ inspector: true }); if (R.head) R.head();
@@ -1191,16 +1214,20 @@ function menuIdProblem(oldId, newId) {
   if (S.cfg.menus[newId]) return 'Another menu already uses that id.';
   return null;
 }
-function renameMenuId(oldId, newId) {
-  newId = newId.trim();
-  if (newId === oldId) return null;
-  const bad = menuIdProblem(oldId, newId);
-  if (bad) return bad;
+// Moves a menu to a new id in place (same position in the file) and points every item that opened it at the new id.
+function moveMenuId(oldId, newId) {
   const out = {};
   for (const [k, v] of Object.entries(S.cfg.menus)) out[k === oldId ? newId : k] = v;
   S.cfg.menus = out;
   for (const m of Object.values(out)) (m.items || []).forEach(it => { if (it && it.menu === oldId) it.menu = newId; });
   if (S.menuId === oldId) S.menuId = newId;
+}
+function renameMenuId(oldId, newId) {
+  newId = newId.trim();
+  if (newId === oldId) return null;
+  const bad = menuIdProblem(oldId, newId);
+  if (bad) return bad;
+  moveMenuId(oldId, newId);
   commit({ inspector: true }); if (R.head) R.head();
   return null;
 }
@@ -1440,7 +1467,14 @@ function buildMenusScreen(root) {
     let done = false;
     const finish = ok => {
       if (done) return; done = true;
-      if (ok) { const v = inp.value.trim(); if (v && v !== m.title) { m.title = v; commit({ inspector: true }); if (R.head) R.head(); return; } }
+      if (ok) {
+        const v = inp.value.trim();
+        if (v && v !== m.title) {
+          const old = m.title || ''; m.title = v;
+          const nid = idForTitle(id, old); if (nid) moveMenuId(id, nid);       // one undo step for title and id
+          commit({ inspector: true }); if (R.head) R.head(); return;
+        }
+      }
       listEl._sig = null;                                       // the row holds the input: force a rebuild
       R.menuList();
     };
@@ -2063,7 +2097,10 @@ function buildMenuProps() {
   const box = h('div', { class: 'insp' });
   if (!m) return emptyState('menus', 'No menu selected', '');
   const full = isFull();
-  const titleInp = textInput(m.title || '', v => { m.title = v; commit(); if (R.head) R.head(); }, { placeholder: id, label: 'Menu title' });
+  // The id follows the title when the field is left, not on every key: the panel is rebuilt around the new id.
+  const title0 = m.title || '';
+  const titleInp = textInput(m.title || '', v => { m.title = v; commit(); if (R.head) R.head(); }, { placeholder: id, label: 'Menu title',
+    onChange: () => { const nid = idForTitle(id, title0); if (nid) { moveMenuId(id, nid); commit({ inspector: true }); if (R.head) R.head(); } } });
   box.append(sectionTitle('Menu', 'Shown in the list and at the ring centre'), field('Title', titleInp));
   const idErr = h('div', { class: 'fhint bad id-err', role: 'alert', hidden: true });
   const idInp = textInput(id, () => {}, { mono: true, label: 'Menu id' });
