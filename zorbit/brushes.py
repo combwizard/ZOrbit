@@ -7,12 +7,15 @@ import os
 import re
 import threading
 from pathlib import Path
+from typing import NamedTuple
 
 try:
     from . import installs as _installs
+    from . import tags as _tags
     from . import zbp as _zbp
 except ImportError:  # run as a plain module / script
     import installs as _installs
+    import tags as _tags
     import zbp as _zbp
 
 _DIR_RE = re.compile(r"^(?:Maxon )?ZBrush (\d{4})_", re.I)
@@ -23,10 +26,19 @@ _write_lock = threading.Lock()
 
 
 def _read_path(p: Path) -> Path | None:
+    """The folder a ZBrush text file names. ZBrush may write it in the ANSI code page rather than UTF-8."""
     try:
-        s = p.read_text(encoding="utf-8-sig", errors="replace").strip().strip("\"'").strip()
+        raw = p.read_bytes()
     except OSError:
         return None
+    try:
+        text = raw.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        try:
+            text = raw.decode("mbcs")
+        except (LookupError, UnicodeDecodeError):
+            text = raw.decode("utf-8-sig", errors="replace")
+    s = text.strip().strip("\"'").strip()
     return Path(s) if s else None
 
 
@@ -48,8 +60,15 @@ def zbrush_dirs() -> dict:
         for key, fn in (("install", "installpath.txt"), ("user_assets", "userassets_path.txt")):
             if res[key] is None:
                 p = _read_path(d / fn)
-                if p is not None:
-                    res[key] = p
+                if p is None:
+                    continue
+                if key == "install":
+                    try:
+                        if not (p / "ZBrush.exe").is_file():
+                            continue                    # a ZBrush that was uninstalled or moved: look at the next one
+                    except OSError:
+                        continue
+                res[key] = p
     if res["install"] is None:                  # ZBrush 2022-2025 write no installpath.txt
         try:
             found = _installs.find_installs()
@@ -60,27 +79,110 @@ def zbrush_dirs() -> dict:
     return res
 
 
-def _scan(folder: Path, recursive: bool, out: dict[str, Path], exts: tuple = (".zbp",)) -> None:
-    if not folder.is_dir():
-        return
-    stack = [folder]
-    while stack:
-        cur = stack.pop()
+class Walk(NamedTuple):
+    items: list           # [{"label", "rel", "name", "path"}] in list order; a name seen before is left out
+    index: dict           # {tags._norm(name): Path}; the first folder that has the name wins
+    sources: list         # [{"label", "path", "exists", "count", "error", "skipped"}], one per folder searched
+
+
+_seen_lock = threading.Lock()
+_seen_folders: set[str] = set()    # folders that were there on an earlier walk
+
+
+def _real(p) -> str:
+    try:
+        return os.path.normcase(os.path.realpath(p))
+    except (OSError, ValueError):
+        return os.path.normcase(os.path.abspath(p))
+
+
+def walk_sources(sources, exts: tuple = (".zbp",)) -> Walk:
+    """Walks the folders once, in priority order, and returns the list and the lookup index together, so the
+    browser's list and the app's find() cannot disagree.
+
+    One rule for both: the files of a folder before its subfolders, each sorted by name without regard to case;
+    subfolders that start with "_" are skipped; links and junctions are followed, but a folder is entered once
+    per source (by its real path), so a loop ends; the first folder that has a name (case and spaces ignored)
+    wins. A source that cannot be read is reported in its "error", not raised: one that was there on an earlier
+    walk and is not now, one on a drive that cannot be reached, or one whose top folder cannot be listed."""
+    items: list = []
+    index: dict = {}
+    reports: list = []
+    for label, folder, recursive in sources:
+        folder = Path(folder)
+        rep = {"label": label, "path": str(folder), "exists": False, "count": 0, "error": None, "skipped": 0}
+        reports.append(rep)
         try:
-            entries = sorted(os.scandir(cur), key=lambda e: e.name.lower())
+            rep["exists"] = folder.is_dir()
         except OSError:
-            continue
-        subdirs = []
-        for e in entries:
+            rep["exists"] = False
+        key = os.path.normcase(str(folder))
+        if not rep["exists"]:
+            with _seen_lock:
+                was = key in _seen_folders
             try:
-                if e.is_dir():
-                    if recursive and not e.name.startswith("_"):
-                        subdirs.append(Path(e.path))
-                elif e.name.lower().endswith(exts):
-                    out.setdefault(Path(e.name).stem.lower(), Path(e.path))
+                drive_gone = bool(folder.anchor) and not os.path.exists(folder.anchor)
             except OSError:
-                pass
-        stack.extend(reversed(subdirs))
+                drive_gone = True
+            if was:
+                rep["error"] = f"{folder} was there before and cannot be read now"
+            elif drive_gone:
+                rep["error"] = f"The drive of {folder} cannot be reached"
+            continue
+        with _seen_lock:
+            _seen_folders.add(key)
+        top = os.path.normcase(os.path.abspath(folder))
+
+        def onerror(e, rep=rep, folder=folder, top=top):
+            if os.path.normcase(os.path.abspath(str(e.filename or ""))) == top:
+                rep["error"] = f"{folder} cannot be read: {e.strerror or e}"
+            else:
+                rep["skipped"] += 1
+
+        visited = {_real(folder)}
+        for root, subs, files in os.walk(folder, onerror=onerror, followlinks=True):
+            if recursive:
+                keep = []
+                for d in sorted(subs, key=lambda n: (n.lower(), n)):
+                    if d.startswith("_"):
+                        continue
+                    r = _real(os.path.join(root, d))
+                    if r not in visited:
+                        visited.add(r)
+                        keep.append(d)
+                subs[:] = keep
+            else:
+                subs[:] = []
+            rel = os.path.relpath(root, folder)
+            rel = "" if rel == "." else rel.replace(os.sep, "/")
+            for fn in sorted(files, key=lambda n: (n.lower(), n)):
+                if not fn.lower().endswith(exts):
+                    continue
+                rep["count"] += 1
+                name = os.path.splitext(fn)[0]
+                nk = _tags._norm(name)
+                if nk in index:
+                    continue
+                path = os.path.join(root, fn)
+                index[nk] = Path(path)
+                items.append({"label": label, "rel": rel, "name": name, "path": path})
+    return Walk(items, index, reports)
+
+
+def walk_error(walk: Walk) -> str | None:
+    """The first source error of a walk, or None when every folder was read."""
+    for s in walk.sources:
+        if s["error"]:
+            return s["error"]
+    return None
+
+
+def keep_index(old: dict | None, walk: Walk) -> tuple:
+    """(index to keep, changed). A walk that could not read a source does not replace an index that was built:
+    a drive that is away for a minute must not make every brush lose its picture."""
+    if old is not None and (walk_error(walk) or old == walk.index):
+        return old, False
+    return walk.index, True
 
 
 def brush_sources() -> list[tuple[str, Path, bool]]:
@@ -103,14 +205,21 @@ def install_brush_sources(ins) -> list[tuple[str, Path, bool]]:
             ("install ZBrushes", ins / "ZBrushes", True)]
 
 
+def library() -> tuple:
+    """Walks the brush folders once and stores the lookup index. (Walk, whether the stored index changed)."""
+    global _index
+    with _index_lock:
+        walk = walk_sources(brush_sources(), (".zbp",))
+        _index, changed = keep_index(_index, walk)
+        return walk, changed
+
+
 def brush_index(refresh: bool = False) -> dict[str, Path]:
     global _index
     with _index_lock:
         if _index is None or refresh:
-            idx: dict[str, Path] = {}
-            for _, folder, rec in brush_sources():
-                _scan(folder, rec, idx)
-            _index = idx
+            walk = walk_sources(brush_sources(), (".zbp",))
+            _index, _ = keep_index(_index, walk)
         return _index
 
 
@@ -132,27 +241,17 @@ def install_index(ins) -> dict[str, Path]:
     key = os.path.normcase(str(ins))
     with _index_lock:
         if key not in _install_index:
-            idx: dict[str, Path] = {}
-            for _, folder, rec in install_brush_sources(ins):
-                _scan(folder, rec, idx)
-            _install_index[key] = idx
+            _install_index[key] = walk_sources(install_brush_sources(ins), (".zbp",)).index
         return _install_index[key]
 
 
 def find_brush(name, install=None) -> Path | None:
-    """The .zbp for a brush name. install: search only that ZBrush installation's folders."""
+    """The .zbp for a brush name (case and spaces ignored). install: search only that installation's folders."""
     try:
-        key = str(name).replace(" ", "").lower()
         idx = install_index(install) if install else brush_index()
-        p = idx.get(key)
-        if p is not None:
-            return p
-        for k, v in idx.items():
-            if k.replace(" ", "") == key:
-                return v
+        return idx.get(_tags._norm(name))
     except Exception:
-        pass
-    return None
+        return None
 
 
 def _cache_dir() -> Path:

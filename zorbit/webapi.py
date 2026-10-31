@@ -42,38 +42,23 @@ class LibraryApi:
             out["error"] = "unknown kind"
             return out
         try:
-            if refresh:
-                assets.index(kind, refresh=True)        # find, thumbnails and ring previews see new files
+            walk = assets.library(kind)                 # the list and the lookup find() uses come from one walk
             dirs = brushes.zbrush_dirs()
-            exts, labels = assets.exts(kind), assets.source_labels(kind)
-            seen, items, sources = set(), [], []
-            for label, folder, _rec in assets.sources(kind):
-                src = labels.get(label, label)
-                exists, count = folder.is_dir(), 0
-                if exists:
-                    for root, subs, files in os.walk(folder):
-                        subs[:] = sorted(d for d in subs if not d.startswith("_"))
-                        rel = os.path.relpath(root, folder)
-                        for fn in sorted(files, key=str.lower):
-                            if not fn.lower().endswith(exts):
-                                continue
-                            count += 1
-                            name = os.path.splitext(fn)[0]
-                            nk = tags._norm(name)           # as the page's nameKey: names that differ only by spaces are one item
-                            if nk in seen:
-                                continue
-                            seen.add(nk)
-                            cat = src if rel == "." else f"{src}/{rel.replace(os.sep, '/')}"
-                            items.append({"name": name, "source": src, "category": cat,
-                                          "path": os.path.join(root, fn)})
-                sources.append({"label": src, "path": str(folder), "exists": exists, "count": count})
-            cats = {}
-            for it in items:
-                cats[it["category"]] = cats.get(it["category"], 0) + 1
+            labels = assets.source_labels(kind)
+            items, cats, sources = [], {}, []
+            for it in walk.items:
+                src = labels.get(it["label"], it["label"])
+                cat = f"{src}/{it['rel']}" if it["rel"] else src
+                cats[cat] = cats.get(cat, 0) + 1
+                items.append({"name": it["name"], "source": src, "category": cat, "path": it["path"]})
+            for rep in walk.sources:
+                sources.append({"label": labels.get(rep["label"], rep["label"]), "path": rep["path"],
+                                "exists": rep["exists"], "count": rep["count"], "error": rep["error"]})
             if refresh:
                 brushes.cache_prune(8000)
             out.update(items=items, categories=[{"id": k, "count": v} for k, v in cats.items()], sources=sources,
-                       zbrush_found=bool(dirs.get("install") or dirs.get("user_assets")))
+                       zbrush_found=bool(dirs.get("install") or dirs.get("user_assets")),
+                       error=brushes.walk_error(walk))   # the browser keeps the list it had when a rescan reports one
         except Exception as e:
             out.update(items=[], categories=[], sources=[], zbrush_found=False,
                        error=str(e) or e.__class__.__name__)

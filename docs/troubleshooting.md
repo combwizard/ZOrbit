@@ -25,7 +25,7 @@ The palette was renamed, so a hotkey you bound by hand to the old **Apply** does
     ![The Setup screen with ZBrush found ticked, and the Plugin loaded in ZBrush step waiting: ZBrush 2026 shows Restart ZBrush because it was started before the plugin was set up](images/setup-restart.png)
 
 2. Is ZBrush the front window? The hotkey is ignored everywhere else.
-3. In ZBrush, open **Zplugin > ZOrbit > Status**. It should say the listener is verified and the app is running. If the palette is missing, ZBrush did not load the plugin. Restart ZBrush and check that your user environment variable `ZBRUSH_PLUGIN_PATH` (in Windows' environment variables, user section) contains the plugin folder. As a one-off you can also load `zorbit_bridge.py` with **ZScript > Python Scripting > Load**.
+3. In ZBrush, open **Zplugin > ZOrbit > Status**. It should say the listener is verified and the app is running. If the palette is missing, ZBrush did not load the plugin. Restart ZBrush and check that your user environment variable `ZBRUSH_PLUGIN_PATH` (in Windows' environment variables, user section) contains the plugin folder. As a one-off you can also load `zorbit_bridge.py` with **ZScript > Python Scripting > Load**. If the plugin failed while starting, `bridge.log` (in `%LOCALAPPDATA%\ZOrbit`) holds the error, after a line that says "the plugin could not start".
 4. If the status says the app is not running, press **Start App**, then read `app_stderr.log` and `radiald.log`.
 5. In Studio, check for the **problems** pill. A menu with no usable items, a duplicate hotkey or a hotkey the app cannot read all stop a ring from opening.
 6. Another program may grab the same key before it reaches the app. Try a different hotkey.
@@ -58,8 +58,8 @@ In ZBrush 2026 and newer that is intended. A pick waits until you release the mo
 
 1. Is ZBrush (or the browser itself) the front window? The browser hotkey is ignored everywhere else. The tray menu, Studio's **Browser** button and the Start menu shortcut work from anywhere.
 2. Does your `radial.json` have a `browser` hotkey (new installs have Alt+B)? Check **Settings > Browser**. If a menu uses the same key, the menu wins and the problems pill says so. A **Browser** slot on a ring opens it too.
-3. After the app starts, the browser needs a few seconds to be ready. The first press can take a moment when it was not started in advance. If it is open but you cannot see it, it may be behind other windows (Keep on top is off) or on a screen you have unplugged: press the hotkey, or open it from the tray menu.
-4. Read `radiald.log` (lines that start with `browser`) and `popout.log`. A missing WebView2 runtime stops it, as it stops Studio.
+3. After the app starts, the browser needs a few seconds to be ready. The first press can take a moment when it was not started in advance. If it is open but you cannot see it, it may be behind other windows (Keep on top is off): press the hotkey, or open it from the tray menu. A browser left on a screen you have since unplugged is brought back onto a screen the next time it opens.
+4. Read `radiald.log` (lines that start with `browser`, and `popout exited with code N` when the browser stopped) and `popout.log`. Without the Microsoft Edge WebView2 runtime the browser cannot open: it shows **ZOrbit needs the Microsoft Edge WebView2 runtime for this window** with the download link, and `popout.log` says so. Install the runtime and press the hotkey again. Any other failure while it starts is written to `popout.log` as a traceback; send that with your report.
 
 ### The browser is empty
 
@@ -87,7 +87,7 @@ Check **Settings > Tag colours**: the **Icon tint**, **Glow** and **Band** switc
 
 ### A slot shows letters instead of a picture
 
-There is no thumbnail for it. For a brush, that means no `.zbp` was found. A material with no icon in its `.zmt` file (some old MatCap files) and an EXR texture show it too. For other items it is the normal placeholder; set an `icon` to change it.
+Letters mean ZOrbit could not read a picture for the slot. The item still works when you pick it. For a brush, either no `.zbp` was found for the name, or its icon is in a format ZOrbit does not know. A material with no icon in its `.zmt` file (some old MatCap files) and an EXR texture show letters too. For other items it is the normal placeholder; set an `icon` to change it.
 
 ## Your menus file
 
@@ -103,7 +103,7 @@ Studio keeps the last version as `radial.json.bak`. If you edit the file by hand
 
 The rail and the **Alt+1** to **Alt+6** keys do nothing, and the rail is dimmed, until the file loads. Nothing is changed or saved until you choose a button.
 
-A byte-order mark left by an editor is accepted. Deleting `radial.json` makes the app create a fresh one from the starter menus.
+A section of the wrong type, for example `"ring": "big"`, is reported with the section name, and the defaults are used for it. A brush, alpha, material or texture name may not contain `\ / :` or `..`, and an `icon` may not point at a network path; the problem names the item, and a bad name skips the item. A byte-order mark left by an editor is accepted. Deleting `radial.json` makes the app create a fresh one from the starter menus.
 
 If the file cannot be read when the app starts, the app still starts: the tray icon appears, no ring opens, and `radiald.log` says "cannot load radial.json" with the reason. Fix the file in Studio or by hand; the app reads it again as soon as it changes. **Reload menus** in the tray menu logs "tray: reload failed" with the reason when the file is still unreadable.
 

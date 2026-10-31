@@ -1,7 +1,7 @@
 """Locate ZBrush alphas, materials and textures (and brushes, through brushes.py) and make cached thumbnails.
 
 An asset is identified by its file stem, matched without case or spaces; the first folder that has it wins
-(same rule as brushes). Every public function takes a kind first: "brush" is handled by brushes.py, so callers
+(same rule as brushes, and one walker for all: brushes.walk_sources). Every public function takes a kind first: "brush" is handled by brushes.py, so callers
 need one code path for all four. Thumbnails of the three new kinds are cached beside the brush ones as
 {kind}_{stem}_{mtime_ns}_{size}.png; images that are not square are fitted, centred, on a transparent square.
 
@@ -93,28 +93,42 @@ def exts(kind: str) -> tuple:
     return (".zbp",) if kind == "brush" else EXTS.get(kind, ())
 
 
-def _built(kind: str, ins: str = "") -> None:
+def _built(kind: str, ins: str = "", changed: bool = True) -> None:
+    """Dates a build (the rescan limit counts from it). generation moves only when the index is not the same."""
     global generation
-    generation += 1
+    if changed:
+        generation += 1
     _built_at[(kind, ins)] = time.monotonic()
 
 
-def index(kind: str, refresh: bool = False) -> dict[str, Path]:
-    """{lower-case stem: file} of everything ZBrush can load of this kind."""
+def library(kind: str):
+    """The folders of this kind walked once: a brushes.Walk with the list the browser shows and the lookup index.
+    The index is stored too, so the list and find() come from the same walk. A walk that could not read a source
+    (an unplugged drive) leaves the index that was there alone; see brushes.walk_error."""
     if kind == "brush":
-        fresh = refresh or not _brushes.has_index()
-        idx = _brushes.brush_index(refresh)
-        if fresh:
-            _built(kind)
-        return idx
+        before = _brushes.has_index()
+        walk, changed = _brushes.library()
+        _built(kind, changed=changed or not before)
+        return walk
     with _index_lock:
-        if kind not in _index or refresh:
-            idx: dict[str, Path] = {}
-            for _, folder, rec in sources(kind):
-                _brushes._scan(folder, rec, idx, exts(kind))
-            _index[kind] = idx
-            _built(kind)
-        return _index[kind]
+        walk = _brushes.walk_sources(sources(kind), exts(kind))
+        before = _index.get(kind)
+        _index[kind], changed = _brushes.keep_index(before, walk)
+        _built(kind, changed=changed or before is None)
+        return walk
+
+
+def index(kind: str, refresh: bool = False) -> dict[str, Path]:
+    """{tags._norm(stem): file} of everything ZBrush can load of this kind; the first folder that has a name wins."""
+    if kind == "brush":
+        if refresh or not _brushes.has_index():
+            library(kind)
+        return _brushes.brush_index()
+    with _index_lock:
+        have = kind in _index
+    if refresh or not have:
+        library(kind)
+    return _index[kind]
 
 
 def install_index(ins, kind: str) -> dict[str, Path]:
@@ -128,10 +142,7 @@ def install_index(ins, kind: str) -> dict[str, Path]:
     key = (kind, os.path.normcase(str(ins)))
     with _index_lock:
         if key not in _install_index:
-            idx: dict[str, Path] = {}
-            for _, folder, rec in install_sources(ins, kind):
-                _brushes._scan(folder, rec, idx, exts(kind))
-            _install_index[key] = idx
+            _install_index[key] = _brushes.walk_sources(install_sources(ins, kind), exts(kind)).index
             _built(kind, key[1])
         return _install_index[key]
 
@@ -166,21 +177,13 @@ def find_or_rescan(kind: str, name, install=None) -> Path | None:
 
 
 def find(kind: str, name, install=None) -> Path | None:
-    """The file for an asset name. install: search only that ZBrush installation's folders."""
+    """The file for an asset name (case and spaces ignored). install: search only that installation's folders."""
     if kind == "brush":
         return _brushes.find_brush(name, install)
     try:
-        key = str(name).replace(" ", "").lower()
-        idx = install_index(install, kind) if install else index(kind)
-        p = idx.get(key)
-        if p is not None:
-            return p
-        for k, v in idx.items():
-            if k.replace(" ", "") == key:
-                return v
+        return (install_index(install, kind) if install else index(kind)).get(_brushes._tags._norm(name))
     except Exception:
-        pass
-    return None
+        return None
 
 
 # --- thumbnails ----------------------------------------------------------------------------------

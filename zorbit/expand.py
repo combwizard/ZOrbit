@@ -15,6 +15,7 @@ The tag menus are cached until a pick, a usage.json change, a tags.json change o
 app builds a new Expander whenever it reloads radial.json or tags.json.
 """
 import dataclasses
+import threading
 
 import config as C
 import usage as U
@@ -34,6 +35,7 @@ class Expander:
         self.usage = usage
         self.tags = tags
         self._cache = {}               # tag key -> ((usage.version, tags.mtime, assets.generation), Menu or None)
+        self._rescanning = set()       # kinds whose index a worker thread is building again
 
     def menu(self, menu):
         """The menu as the ring draws it now. Nothing is saved."""
@@ -58,15 +60,19 @@ class Expander:
         """The fan of a tag's installed items; None if the tag does not exist or has none installed."""
         if assets is None or not self.tags.has(key):
             return None
+        for kind in C.ASSET_KINDS:
+            assets.index(kind)                           # a first build moves generation: let it happen before the stamp
         stamp = (self.usage.load().version, self.tags.mtime, assets.generation)   # an index rebuilt: new files
         hit = self._cache.get(key)
         if hit is not None and hit[0] == stamp:
             return hit[1]
         found = []                                       # (kind, name): brushes by use, then the rest by name
         for kind in C.ASSET_KINDS:
-            index = {k.replace(" ", ""): p for k, p in assets.index(kind).items()}   # keys as item_key() makes them
-            stems = [index[ik.split(":", 1)[1]].stem for ik in self.tags.items_with(key, kind)
-                     if ik.split(":", 1)[1] in index]
+            index = assets.index(kind)                   # keyed as item_key() makes them
+            tagged = [ik.split(":", 1)[1] for ik in self.tags.items_with(key, kind)]
+            if any(k not in index for k in tagged):
+                self._rescan_later(kind)                 # saved since the scan? the next build sees the new generation
+            stems = [index[k].stem for k in tagged if k in index]
             stems = self.usage.rank(stems) if kind == "brush" else sorted(stems, key=str.lower)
             found += [(kind, n) for n in stems]
         menu = None
@@ -80,8 +86,27 @@ class Expander:
                 items.append(C.Item(label="More…", kind="browser", data={"browser": key, "kind": found[0][0]},
                                     color=color))
             menu = C.Menu(id="tag:" + key, title=self.tags.label(key), items=items, fan=True)
-        self._cache[key] = (stamp[:2] + (assets.generation,), menu)    # the scans above may have built an index
+        self._cache[key] = (stamp, menu)                 # not newer than what was read: a rescan meanwhile rebuilds it
         return menu
+
+    def _rescan_later(self, kind):
+        """Builds the index of a kind again on a worker thread (assets.rescan allows it once in a few seconds), so a
+        fan never waits for a folder walk. A changed index moves assets.generation, and the next build of the fan
+        starts from it."""
+        if kind in self._rescanning:
+            return
+        self._rescanning.add(kind)
+
+        def run():
+            try:
+                if not assets.rescan(kind):              # too soon after the last build: ask again at the next build
+                    self._cache.clear()
+            except Exception:
+                pass
+            finally:
+                self._rescanning.discard(kind)
+
+        threading.Thread(target=run, daemon=True).start()
 
     # --- colours and tag slots -------------------------------------------------------------------
     def _colours_on(self):

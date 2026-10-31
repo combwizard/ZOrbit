@@ -30,6 +30,45 @@ All notable changes to this project are listed here. The format follows
   failing quietly.
 - Ring: slot pictures refresh when the picture file is replaced or the library is rescanned, and a slot whose
   picture was missing is looked up again instead of showing the placeholder until ZBrush restarts.
+- A `usage.json` that is locked or cannot be read no longer empties your brush scores, auto slots and recent
+  picks: ZOrbit keeps what it had and tries again, and a file with a syntax error is copied to `usage.json.bad`
+  before anything can overwrite it. One bad entry no longer drops the rest of the file.
+- A `tags.json` that cannot be read when ZOrbit starts leaves the starter tags (Favourites, Blocking, Detailing)
+  available, and nothing is written until the file is fixed. Tag slots then give one clear message instead of one
+  per slot.
+- A section of `radial.json` of the wrong type (such as `"ring": "big"`), or a file that is not an object, is
+  reported by name instead of failing with an obscure error. A `fan` that is not true or false is reported. Typos
+  in `ring.colors`, `bridge`, `browser` and item settings get "did you mean" hints.
+- Brush, alpha, material and texture names that contain `\`, `/`, `:` or `..`, and icons that point at a network
+  path, are reported as problems and not used.
+- Saving a file no longer fails when a virus scanner or sync tool holds it open for a moment: ZOrbit retries for
+  about 1.5 seconds first.
+- If the `%APPDATA%\ZOrbit` folder cannot be created, the app logs a plain "cannot create the menus file in ..."
+  line instead of a traceback.
+- Browser: it no longer blocks shutting Windows down, restarting or signing out; it saves its place and closes
+  with the session.
+- Browser: a window left on a monitor you have since unplugged is brought back onto a screen every time it is
+  shown, not only the first.
+- Browser: when the Microsoft Edge WebView2 runtime is missing it says so, with the download link, and any other
+  failure while it starts is written to `popout.log` as a traceback. `radiald.log` records when the browser
+  process ends.
+- Plugin (ZBrush 2026 and newer): an error while the plugin starts is written to `bridge.log` (it used to show only
+  in ZBrush's console), and a button or the listener that fails no longer takes the rest of the palette down.
+- Plugin: a pick with several brushes, alphas, materials or textures that ZBrush has to load first selects each one
+  in turn. Before, a second one replaced the first, and a loaded later item cancelled it.
+- Plugin: a brush, alpha, material or texture is found by its file name as well as its menu name, so
+  `{"brush": "Clay Buildup"}` presses the button ZBrush names `ClayBuildup`.
+- Thumbnails: the curve brushes (CurveSlash, DisplaceCurve, Grid1, GridDots, MoveCurve2, SnakeCurve) and the IMM
+  inserts InsertEar2 and InsertRing showed letters. Their icons are stored Huffman coded, and ZOrbit reads that now.
+  Every stock brush icon of ZBrush 2022 to 2027 reads.
+- Library: the browser's list and the ring's lookup of brushes, alphas, materials and textures come from one folder
+  walk, so they agree on sort order, on duplicates (case and spaces ignored, first folder wins) and on subfolders
+  and links. A folder link that loops no longer runs away.
+- Library: when a search folder has gone or its drive cannot be reached, the browser keeps the list it had and says
+  why. An uninstalled or moved ZBrush no longer hides a working one, and ZBrush's path files are read as UTF-8 or
+  in the ANSI code page.
+- Tag fans look again for a brush, alpha, material or texture saved after the app first scanned, without waiting.
+- Docs: `~` for the backtick key and `Control` for `Ctrl` are accepted in hotkeys and now documented.
 
 ## [0.11.0] - 2026-10-30
 

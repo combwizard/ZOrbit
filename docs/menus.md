@@ -50,7 +50,7 @@ The name is the brush's name in ZBrush (the file name without `.zbp`). Spaces an
 ```
 
 The name is the file's name without its extension. Spaces and capitals do not matter when ZOrbit looks the file up. If
-two folders hold a file with the same name (capitals and spaces in the name are ignored), the first folder searched wins. ZOrbit searches these folders, in order:
+two folders hold a file with the same name (capitals and spaces in the name are ignored), the first folder searched wins, in the browser's list and on the ring alike. Subfolders are searched too, except folders whose name starts with `_`. ZOrbit searches these folders, in order:
 
 - **ZBrush 2026 and newer:** `ZStartup\Alphas`, `ZStartup\Materials` and `ZStartup\Textures` in your user folder (shown
   as **My Alphas**, **My Materials** and **My Textures**), then the installation's `ZData\Alphas`, `ZData\Materials` and
@@ -108,6 +108,8 @@ An interface path is the chain of palette and button names, joined with colons, 
 ```
 
 Steps run in order. Each step is a `brush`, `alpha`, `material`, `texture`, `press`, `set` or `toggle`. Steps cannot open menus, cannot contain more steps, and cannot hold `tag` or `browser` items. Without an `icon`, a `steps` item uses the thumbnail of its first brush, alpha, material or texture step, or a placeholder if it has none.
+
+The steps run one straight after another. A brush, alpha, material or texture that ZBrush has to load from its file first is selected a moment after the other steps have run, so a step that follows it does not see it selected. This needs the plugin's listener; with the bridge key alone, an item ZBrush has only just loaded may stay unselected. The log line for the pick says which items were selected afterwards.
 
 ![The Menus screen with the Fresh Start item of the Tools menu open in the item editor: the grid of action types with Steps chosen, and two steps, Press Tool:Masking:Clear and Brush Standard](images/studio-item.png)
 
