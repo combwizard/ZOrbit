@@ -10,6 +10,21 @@ pip install -r requirements-dev.txt
 
 The script's header lists what else it needs and where the installer ends up.
 
+`packaging\build.ps1` installs from `requirements-lock.txt` when that file exists. It holds the exact versions of every package the build needs, so a release is built from the same packages each time. `requirements-dev.txt` keeps the loose version ranges. The header of the lock file says how to regenerate it in a clean virtual environment.
+
+## Tests and checks
+
+```powershell
+python -m pytest -q                   # the test suite (Windows only)
+python zorbit\main.py --check         # validate the menus file
+python zorbit\main.py --selftest      # check the libraries, modules and bundled files
+dist\ZOrbit\ZOrbit.exe --selftest     # the same checks on the built app
+```
+
+The tests import the Windows modules, so they run on Windows only. `--selftest` imports pywebview, pythonnet and every app module, and looks for the Studio interface files, the icons, the default menus, the ZScript bridge and the WebView2 loader DLL. It prints one line per check and exits with 1 if any fails. Run it on the built exe to catch a file that PyInstaller left out.
+
+GitHub Actions runs the tests on every push and pull request. A build only starts when they pass. After the build, the workflow runs `--check` and `--selftest` on the built exe. When you push a tag that starts with `v`, it also creates the release, and the release notes list the SHA256 hash of the installer and the portable zip.
+
 To run straight from a checkout while you work on the code, use `tools\dev-install.ps1`. It registers the checkout's `bridge` folder in `ZBRUSH_PLUGIN_PATH` and adds the Start menu shortcut, and `-Uninstall` takes both away again. Add `-WhatIf` to see what it would do first.
 
 ## Test the plugin install under Program Files

@@ -55,6 +55,7 @@ Useful commands:
 
 ```powershell
 python zorbit\main.py --check     # validate your menus file and print it
+python zorbit\main.py --selftest  # check that the libraries, modules and bundled files are all there
 python zorbit\main.py --studio    # open Studio
 python zorbit\main.py             # run the app by hand (it keeps running until you stop it)
 pytest                            # run the tests

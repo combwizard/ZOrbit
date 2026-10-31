@@ -3,8 +3,8 @@
   Builds ZOrbit: PyInstaller onedir app, portable zip and (if Inno Setup is present) the installer.
 
 .DESCRIPTION
-  Creates/uses .venv (Python 3.12), installs requirements-dev.txt, makes assets\icon.ico if missing, runs
-  PyInstaller with packaging\zorbit.spec, zips the result and compiles packaging\installer.iss with ISCC.
+  Creates/uses .venv (Python 3.12), installs requirements-lock.txt (requirements-dev.txt if there is no lock
+  file), makes assets\icon.ico if missing, runs PyInstaller with packaging\zorbit.spec, zips the result and compiles packaging\installer.iss with ISCC.
 
   Output:
     dist\ZOrbit\ZOrbit.exe
@@ -58,7 +58,13 @@ if (-not (Test-Path $VenvPy)) {
 }
 Write-Host 'Installing requirements...'
 Invoke-Native $VenvPy @('-m', 'pip', 'install', '--disable-pip-version-check', '-q', '--upgrade', 'pip')
-Invoke-Native $VenvPy @('-m', 'pip', 'install', '--disable-pip-version-check', '-q', '-r', (Join-Path $Root 'requirements-dev.txt'))
+$Lock = Join-Path $Root 'requirements-lock.txt'
+if (Test-Path $Lock) {
+    Write-Host 'Using the exact versions in requirements-lock.txt.'
+    Invoke-Native $VenvPy @('-m', 'pip', 'install', '--disable-pip-version-check', '-q', '-r', $Lock)
+} else {
+    Invoke-Native $VenvPy @('-m', 'pip', 'install', '--disable-pip-version-check', '-q', '-r', (Join-Path $Root 'requirements-dev.txt'))
+}
 
 # --- icon -----------------------------------------------------------------------------------------------------
 if (-not (Test-Path (Join-Path $Root 'assets\icon.ico'))) {
@@ -84,6 +90,7 @@ Copy-Item $AppDir (Join-Path $Stage 'ZOrbit') -Recurse
 New-Item -ItemType Directory -Path (Join-Path $Stage 'bridge') | Out-Null
 Copy-Item (Join-Path $Root 'bridge\zorbit_bridge.py') (Join-Path $Stage 'bridge')
 Copy-Item (Join-Path $Root 'LICENSE') $Stage
+Copy-Item (Join-Path $Root 'THIRD_PARTY_NOTICES.md') $Stage
 $Zip = Join-Path $Root "dist\ZOrbit-$Version-portable.zip"
 if (Test-Path $Zip) { Remove-Item $Zip -Force }
 Compress-Archive -Path (Join-Path $Stage '*') -DestinationPath $Zip -CompressionLevel Optimal

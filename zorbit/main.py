@@ -8,6 +8,8 @@
                                      window is up, --show: open at once, --tag: filtered to a tag, --kind: on
                                      the brush, alpha, material or texture tab)
   ZOrbit.exe --check             validate the menus file and print it
+  ZOrbit.exe --selftest          check that this build has its libraries, modules and bundled files; exit code 1
+                                     if anything is missing (CI runs it on the built exe)
   ZOrbit.exe --zscript-copy|--zscript-remove <stage> <dest>
                                      internal: the Studio runs this as administrator to put the ZScript
                                      bridge into (or take it out of) a ZBrush 2022-2025 under Program Files
@@ -43,6 +45,9 @@ def main() -> int:
         import zscript_bridge             # elevated helper: touches nothing but those files
         return zscript_bridge.elevated_main(args)
     unblock_bundle()
+    if "--selftest" in args:
+        import selftest                   # imports the app on purpose; the other paths load only what they use
+        return selftest.run()
     paths.write_launch_file()
     if "--studio" in args:
         import studio
