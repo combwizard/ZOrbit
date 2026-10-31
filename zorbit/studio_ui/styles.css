@@ -813,7 +813,7 @@ body.dragging .irow:hover { background: transparent; }
   .choices.bridge-cards { grid-template-columns: 1fr; }
 }
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+  *, *::before, *::after { animation: none !important; transition-duration: .01ms !important; }
 }
 
 /* Licence screen (a joke: free software, licensed forever) */
