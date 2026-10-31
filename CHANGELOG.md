@@ -16,6 +16,8 @@ All notable changes to this project are listed here. The format follows
 - Studio: **Alt+Up/Down** moves a menu in the Menus list, and **Move to menu...** (a button on the Item tab, or
   **M** on an item row) moves an item to another menu without dragging. The Setup checks show their state as an
   icon and a word (OK, Needs attention, Not working, Not checked yet), not only as a colour.
+- Uninstalling removes the plugin from every ZBrush 2022 to 2025 that Setup lists, wherever it is installed (one
+  UAC prompt for each one under Program Files), and lists any folder it could not clean.
 - A short message near the cursor when ZOrbit knows why a pick did nothing: no connection to the plugin, no answer
   from it, ZBrush not in front, no bridge key, an empty slot, a submenu with nothing in it, or a brush, alpha,
   material, texture or button that ZBrush could not find. A working pick shows nothing.
@@ -55,10 +57,8 @@ All notable changes to this project are listed here. The format follows
 - Studio: the first window fits a laptop screen (smaller than 1320 x 860 when the work area is), and the
   minimum height is 560 instead of 640. **Add a ZBrush folder** accepts a ZBrush 2026 or later that has not
   run yet, so Setup can show and fix it, and the ZScript plugin can be installed into a ZBrush 2022 to 2025
-  that Studio only knows from its running process. Import reports how many menus and tags the file has and
-  how many you have now.
-- Studio: **Setup** is Alt+5 (it was Alt+6). Alt+1 to Alt+4 are unchanged. **Settings > Studio** shows the version
-  with a link to the GPL-3.0 licence.
+  that Studio only knows from its running process.
+- Studio: **Setup** is Alt+5 (it was Alt+6). Alt+1 to Alt+4 are unchanged.
 - The installer's last page says what to do next for ZBrush 2026 and newer (restart it) and for ZBrush 2022 to
   2025 (install the plugin from Studio's Setup screen). The plugin's "app was not found" dialog covers the
   installer, the portable zip and running from source.
@@ -104,10 +104,6 @@ All notable changes to this project are listed here. The format follows
 ### Fixed
 
 - Studio: the focus was lost after deleting a menu from the Menu tab or renaming its id.
-- Studio: **Restore backup** asks first and says the old file is kept; **Start from defaults** no longer claims the
-  current file is lost. **Start app** shows a busy label for the whole wait, treats a slow start as progress and
-  shows a failed start's log lines on Setup with an **Open Status** button; a failed Setup check shows its error
-  and keeps the last good answer, and the rail dot no longer clears on it.
 - Studio: **Rescan** rescans the tab you are on, not the one the Library opened on. Enter and **Add** no longer
   act on an item a filter has hidden. Merging a tag re-points the ring slots that used it (one Undo step) and
   the problems list refreshes after any tag is added, removed or merged. The ring preview no longer draws a
@@ -121,23 +117,24 @@ All notable changes to this project are listed here. The format follows
   accepted, and **Reset all colours** and clearing the bridge key leave no empty sections in the file.
 - A thumbnail cache file that was cut short is decoded again instead of being shown broken, and a picture that
   failed to decode is tried again next time instead of staying blank.
-- Studio: **Restore backup** keeps the `radial.json` it replaces as `radial.json.broken`, as **Start from defaults**
-  already did, and so does a save over a `radial.json` that is not valid JSON. A menus file that cannot be
-  written as text says "Could not save" and leaves no stray `.tmp` file.
+- Studio: **Restore backup** asks first and keeps the `radial.json` it replaces as `radial.json.broken`, as
+  **Start from defaults** already did, and so does a save over a `radial.json` that is not valid JSON. **Start from
+  defaults** no longer claims the current file is lost. A menus file that cannot be written as text says "Could not
+  save" and leaves no stray `.tmp` file.
 - Studio no longer blocks Windows from shutting down, restarting or signing out: it saves its window position
   and closes.
-- Studio: **Start app** waits up to 10 seconds, says when the app is still starting, and after a failure shows
-  only the log lines from that launch. When the Setup check itself fails, Setup shows the error instead of an
-  empty list and writes the details to `studio.log`. Studio checks for the WebView2 runtime before it opens
-  and says what is missing. Importing a file whose tags section is empty no longer offers to import tags.
+- Studio: **Start app** waits up to 10 seconds with a busy label, treats a slow start as progress, and after a
+  failure shows only the log lines from that launch, on Setup too with an **Open Status** button. When the Setup
+  check itself fails, Setup shows the error and keeps the last good answer instead of an empty list, the rail dot
+  stays as it was, and the details go to `studio.log`.
+- Studio checks for the Microsoft Edge WebView2 runtime before it opens and says what is missing. Importing a file
+  whose tags section is empty no longer offers to import tags.
 - Ring: names, menu titles and placeholder letters in Chinese, Japanese and Korean are drawn with a font that has
   the characters (Microsoft YaHei, Yu Gothic, Malgun Gothic) instead of empty boxes. A long menu title is shortened
   with an ellipsis instead of running across the slots.
-- Installer: updating no longer leaves files of older versions behind in the install folder. Uninstalling removes
-  the plugin from every ZBrush 2022 to 2025 that Setup lists, wherever it is installed (one UAC prompt for each
-  one under Program Files), lists any folder it could not clean, and removes the install folder. A machine-wide `ZBRUSH_PLUGIN_PATH` is no longer
-  shadowed: when you have no user value, the new one starts from the machine entries (installer and Setup's
-  **Fix**).
+- Installer: updating no longer leaves files of older versions behind in the install folder, and uninstalling
+  removes the install folder. A machine-wide `ZBRUSH_PLUGIN_PATH` is no longer shadowed: when you have no user
+  value, the new one starts from the machine entries (installer and Setup's **Fix**).
 - ZBrush 2022 to 2025: the plugin installs without its start shortcuts when PowerShell is restricted (Constrained
   Language Mode, AppLocker, an antivirus) instead of failing; the plugin then starts ZOrbit the slower way, and
   Studio no longer reports it as outdated. Installing is refused with a clear message when the data folder path
