@@ -23,9 +23,9 @@ nav:
       - hotkeys.md
       - appearance.md
       - files.md
+      - troubleshooting.md
   - Under the hood:
       - bridge.md
-      - troubleshooting.md
       - building.md
 
 theme:

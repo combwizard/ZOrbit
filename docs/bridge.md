@@ -4,10 +4,10 @@
 
 ZOrbit has two halves.
 
-- **The app** (`zorbit\`) runs outside ZBrush. A keyboard hook, which runs on its own thread so the app's other work never delays it, watches for your menu hotkeys, but only while ZBrush is the front window. When one is pressed it draws the ring in a window that never takes focus, so ZBrush keeps working underneath.
+- **The app** (`zorbit\`) runs outside ZBrush. ZOrbit installs a Windows keyboard hook. It compares each key press with your hotkeys and acts only when ZBrush is the front window. It does not record, store or send what you type. The hook runs on its own thread, so the app's other work never delays it. When a hotkey is pressed, the app draws the ring in a window that never takes focus, so ZBrush keeps working underneath.
 - **The bridge** (`bridge\zorbit_bridge.py`) runs inside ZBrush as a Python plugin. It adds the **Zplugin > ZOrbit** palette, starts the app, and carries out picks by calling ZBrush's own commands.
 
-When you pick a slot, the app writes the request to a small file and posts a Windows message to a hidden listener window the bridge keeps inside ZBrush. The bridge reads the file and does the work on ZBrush's main thread. If the listener is not available, the app can press a fallback key (F9) that you bind to **Zplugin > ZOrbit > Apply**. With more than one ZBrush running, the app uses a listener only when it belongs to the ZBrush you are picking in, and presses the bridge key otherwise.
+When you pick a slot, the app writes the request to a small file and posts a Windows message to a hidden listener window the bridge keeps inside ZBrush. The bridge reads the file and does the work on ZBrush's main thread. If the listener is not available, the app can press the bridge key (F9 unless you change it), which you bind to **Zplugin > ZOrbit > Apply**. With more than one ZBrush running, the app uses a listener only when it belongs to the ZBrush you are picking in, and presses the bridge key otherwise.
 
 A pick that could not be handed over (message mode with no listener, or a bridge key that could not be sent) is dropped and its request file is deleted, so it cannot be applied later by accident. The plugin also ignores a request that is more than 10 seconds old.
 
@@ -35,7 +35,7 @@ When you pick a slot, the app has to tell ZBrush. It writes the request to a fil
 
 The **message** route needs nothing from you. It works once the plugin has loaded and its listener is verified (see **Zplugin > ZOrbit > Status**).
 
-The **bridge key** is the fallback. To set it up:
+The **bridge key** is the fallback for the message route, and the only route in ZBrush 2022 to 2025. To set it up:
 
 1. In ZBrush, Ctrl+Alt+click **Zplugin > ZOrbit > Apply**.
 2. Press the key you want, such as **F9**.
@@ -45,7 +45,7 @@ Rules for the bridge key: use a bare F-key if you can (`Alt` combinations are al
 
 If `radial.json` has no `bridge.key`, or an empty one, the key is **F9**. A key ZOrbit cannot use (one with `Ctrl` or `Shift`, or one it does not understand) is listed as a problem and F9 is used instead.
 
-In ZBrush 2026 and newer, a pick that arrives while you are in the middle of a stroke (mouse button down) waits until you lift. The button is your primary one, so this also works when you have swapped the mouse buttons in Windows. That holds for both routes: the plugin holds a message back until the button is up, the app does not fall back to the bridge key while the button is down, and **Apply** waits the same way if it is run mid-stroke. The fallback key is pressed half a second after you lift, if the message still has not been picked up. ZBrush 2022 to 2025 cannot wait: the ZScript plugin applies a pick the moment the key arrives, even in the middle of a stroke. Right after a pick the app also makes a zero-distance mouse move, which wakes ZBrush's cursor and pen tracking.
+In ZBrush 2026 and newer, a pick that arrives while you are in the middle of a stroke (mouse button down) waits until you lift. The button is your primary one, so this also works when you have swapped the mouse buttons in Windows. That holds for both routes: the plugin holds a message back until the button is up, the app does not fall back to the bridge key while the button is down, and **Apply** waits the same way if it is run mid-stroke. The bridge key is pressed half a second after you lift, if the message still has not been picked up. ZBrush 2022 to 2025 cannot wait: the ZScript plugin applies a pick the moment the key arrives, even in the middle of a stroke. Right after a pick the app also makes a zero-distance mouse move, which wakes ZBrush's cursor and pen tracking.
 
 Failures the plugin reports (a brush that is not installed, a button path that does not exist) are shown as a short message near the cursor, as are the cases where the app finds no plugin to hand the pick to. [Troubleshooting](troubleshooting.md#the-ring-opens-but-picks-do-nothing) lists the messages.
 
@@ -62,7 +62,7 @@ Differences from ZBrush 2026 and newer:
 - Brushes load from that version's own `.zbp` files, because an older ZBrush cannot always read a newer version's brushes.
 - Status shows where picks arrive, whether one is waiting, and the last pick. The plugin also writes that last pick to `zscript_bridge.log`, which Studio's Status screen shows. Pressing **Apply** when no pick is waiting changes nothing, so it does not replace that last pick.
 - The start shortcuts may be left out. The plugin starts the app and Studio through two shortcuts (`app.lnk` and `studio.lnk` in `ZOrbitData`), which Studio makes with PowerShell. On a PC where PowerShell is restricted (Constrained Language Mode, AppLocker or an antivirus), Studio installs without them and says so. The plugin then starts ZOrbit the slower way, with the command lines in `bridge.cfg`, which can take a few seconds on Windows 11. `ZOrbitData\install.txt` records the reason.
-- The data folder path has to fit the plugin. ZScript reads `bridge.cfg` in the Windows code page, one line of at most 255 characters. If the path of `%LOCALAPPDATA%\ZOrbit` has characters outside that code page (for example a user name in another script) and 8.3 short names are off, Studio refuses to install and says so. Move the data folder, or turn on 8.3 names with `fsutil 8dot3name set 0` as administrator, then install again.
+- The paths have to fit the plugin. ZScript reads `bridge.cfg` in the Windows code page, with one value per line and a string of at most 255 characters. If the path of `%LOCALAPPDATA%\ZOrbit` has characters outside that code page (for example a user name in another script) and 8.3 short names are off, or is longer than 255 characters, Studio refuses to install and says so. Move the data folder somewhere shorter, or turn on 8.3 names with `fsutil 8dot3name set 0` as administrator, then install again. The commands that start the app and Studio have the same limits, so install ZOrbit in a plain, short path. The same limits apply to each line of a pick: a name, label or file path with characters outside the code page, or over 255 bytes, reaches the plugin changed or cut, and `radiald.log` notes it as a problem with `request.txt`.
 - ZBrush 2021 and older are not supported. Studio lists them but refuses to install the plugin.
 
 When this version of ZOrbit has a newer plugin than one you installed, **Settings** shows a badge and that row says **Update available**. After **Update**, restart that ZBrush.

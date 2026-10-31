@@ -6,24 +6,24 @@ These are on the Settings screen in Studio, and under `"ring"` in `radial.json`.
 
 ![The Settings screen in Studio: a list of sections on the left, and Ring geometry with sliders for ring radius, slot size and dead zone beside a ring preview, above the Open animation choices](images/studio-settings.png)
 
-| Setting (`ring.`) | Default | Range | Meaning |
+| Setting (`ring.`) and its label in Studio | Default | Range | Meaning |
 |---|---|---|---|
-| `radius` | 145 | 60 to 400 | Distance from the centre to the slots, in pixels. This is the smallest the ring gets: a menu with many items spreads wider. |
-| `slot` | 72 | 32 to 160 | Diameter of each icon disc. |
-| `dead_zone` | 38 | 10 to 120 | Radius around the centre where no slot is picked. |
-| `tap_ms` | 250 | 0 to 1000 | A hotkey press shorter than this is a tap. |
-| `timeout_s` | 20 | 2 to 120 | An open ring closes itself after this many seconds. |
-| `animation` | `smooth` | see [Open animations](#open-animations) | The open animation. |
-| `labels` | `name` | `name`, `none` | Show names under the slots, or icons only. A name sits on a soft dark pill, so it stays readable when a neighbouring slot is close. |
-| `flick` | `true` | `true`, `false` | Moving out past a slot picks it without releasing or clicking. |
-| `hover_submenus` | `true` | `true`, `false` | Reaching a submenu slot opens the submenu, centred on that slot. |
-| `tag_colors` | `tint` | `none`, `tint`, `glow`, `both` | Whether an item's first tag tints its icon, glows, or both. See [Tag colours](#tag-colours). |
-| `tag_band` | `medium` | `none`, `hairline`, `narrow`, `medium`, `wide` | Thickness of the band through the slot centres. `none` turns it off. |
-| `tag_band_opacity` | 0.45 | 0 to 1 | How solid the band is. |
-| `tag_glow_opacity` | 0.4 | 0 to 1 | Strength of the halo. |
-| `tag_tint_opacity` | 0.3 | 0 to 1 | Strength of the tag colour laid over the icon. |
-| `tag_tint_style` | `gradient` | `flat`, `gradient` | `gradient` is stronger towards the rim. |
-| `tag_tint_blend` | `multiply` | `multiply`, `overlay` | `multiply` darkens the icon. `overlay` keeps its light and shade. |
+| `radius` (**Ring radius**; **Ring size** in Simple mode) | 145 | 60 to 400 | Distance from the centre to the slots, in pixels. This is the smallest the ring gets: a menu with many items spreads wider. |
+| `slot` (**Slot size**) | 72 | 32 to 160 | Diameter of each icon disc. |
+| `dead_zone` (**Dead zone**) | 38 | 10 to 120 | Radius around the centre where no slot is picked. |
+| `tap_ms` (**Tap time**) | 250 | 0 to 1000 | A hotkey press shorter than this is a tap. |
+| `timeout_s` (**Auto-close**) | 20 | 2 to 120 | An open ring closes itself after this many seconds. |
+| `animation` (**Open animation**) | `smooth` | see [Open animations](#open-animations) | The open animation. |
+| `labels` (**Labels**: **Icon and name**, **Icon only**) | `name` | `name`, `none` | Show names under the slots, or icons only. A name sits on a soft dark pill, so it stays readable when a neighbouring slot is close. |
+| `flick` (**Flick to pick**) | `true` | `true`, `false` | Moving out past a slot picks it without releasing or clicking. |
+| `hover_submenus` (**Open submenus on hover**) | `true` | `true`, `false` | Reaching a submenu slot opens the submenu, centred on that slot. |
+| `tag_colors` (**Tag colours**: the **Icon tint** and **Glow** switches) | `tint` | `none`, `tint`, `glow`, `both` | Whether an item's first tag tints its icon, glows, or both. See [Tag colours](#tag-colours). |
+| `tag_band` (**Tag colours > Band**: the switch and **Thickness**) | `medium` | `none`, `hairline`, `narrow`, `medium`, `wide` | Thickness of the band through the slot centres. `none` turns it off. |
+| `tag_band_opacity` (**Band > Opacity**) | 0.45 | 0 to 1 | How solid the band is. |
+| `tag_glow_opacity` (**Glow > Opacity**) | 0.4 | 0 to 1 | Strength of the halo. |
+| `tag_tint_opacity` (**Icon tint > Opacity**) | 0.3 | 0 to 1 | Strength of the tag colour laid over the icon. |
+| `tag_tint_style` (**Icon tint > Style**) | `gradient` | `flat`, `gradient` | `gradient` is stronger towards the rim. |
+| `tag_tint_blend` (**Icon tint > Blend**) | `multiply` | `multiply`, `overlay` | `multiply` darkens the icon. `overlay` keeps its light and shade. |
 
 Sizes are scaled for high-DPI screens automatically.
 
@@ -73,7 +73,7 @@ The tint and glow switches together set `ring.tag_colors`. The band switch sets 
 | `glow` | The glow. |
 | `both` | The tint and the glow together. |
 
-The band does not depend on `tag_colors`. Slot colours are dropped entirely, hover border, spoke, label and band included, only when `tag_colors` is `none` and `tag_band` is `none`. The fan of a `tag` slot is always drawn in that tag's colour, and so is the slot itself. Items without a tag look as before. The colours are drawn when the ring opens, so they cost no speed.
+The band does not depend on `tag_colors`. Slot colours are dropped entirely, hover border, spoke, label and band included, only when `tag_colors` is `none` and `tag_band` is `none`. A `tag` slot is always drawn in its tag's colour, and so are the dashed lines to its fan, whatever these settings say. The items inside the fan follow the settings like any other slot, so they stay plain when tint, glow and band are all off. Items without a tag look as before. The colours are drawn when the ring opens, so they cost no speed.
 
 In Studio, opacities show as percentages (45%) but are 0 to 1 in the file. Controls under a switch that is off are dimmed.
 
@@ -92,7 +92,7 @@ In Studio, opacities show as percentages (45%) but are 0 to 1 in the file. Contr
 "browser": {"hotkey": "Alt+B"}
 ```
 
-The hotkey that opens the [browser window](browser.md) and, pressed over it, hands the keyboard back to ZBrush. On Settings it is the **Browser** card, where you record it like a menu hotkey and Studio warns if a menu already uses it. New installs get **Alt+B**. An existing `radial.json` has no `browser` section until you add one, so the hotkey does nothing there. Leave it out for no hotkey; the browser then opens from **Browser** slots only.
+The hotkey that opens the [browser window](browser.md) and, pressed over it, hands the keyboard back to ZBrush. On Settings it is the **Browser** card, where you record it like a menu hotkey and Studio warns if a menu already uses it. New installs get **Alt+B**. An existing `radial.json` has no `browser` section until you add one, so the hotkey does nothing there. Leave it out for no hotkey. The browser then opens from a **Browser** slot, **More...** in a tag's fan, the tray menu, Studio's **Browser** buttons and the Start menu shortcut (see [Opening it](browser.md#opening-it)).
 
 ## Open animations
 

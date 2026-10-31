@@ -38,7 +38,7 @@ still counts as untagged.
 **Manage tags...** (under the chips in the Library, or on **Settings > Tags**; both need [Full mode](studio.md#simple-and-full-mode)) opens the tag manager. Each row has:
 
 - a swatch: click it for the eight preset colours, or type any `#rrggbb` value;
-- the name: edit it and press Enter, or leave the field, to rename the tag. If another tag already has that name, you are asked to **Merge into** it or keep them apart. Merging asks you to confirm first (**Cancel** is the default), then puts the items of this tag on the other one (in the same place in each item's list, so the colour cue stays) and removes this tag;
+- the name: edit it and press Enter, or leave the field, to rename the tag. If another tag already has that name, the rename is refused and the name goes back, because no two tags can share a name. The row then offers **Merge into** that tag, or **keep them separate**, which only dismisses the message so you can type another name. Merging asks you to confirm first (**Cancel** is the default), then puts the items of this tag on the other one (in the same place in each item's list, so the colour cue stays) and removes this tag;
 - the number of items it is on. Hover it to see what is counted: every item the tag is on, across brushes, alphas, materials and textures. The tag chips in the Library and the browser count only the tab you are on, so their numbers can be smaller;
 - a delete button. The confirmation says how many items it is on and how many ring items use it. The browser's tag manager reads the ring items from the saved `radial.json` for this, so it gives the same count as long as you have saved your menus. **Items keep working**; they only lose the tag. Ring items that point at the deleted tag stay in `radial.json`: a `tag` slot becomes a faint empty slot, a `browser` slot opens unfiltered, and the problems pill lists both so you can point them elsewhere.
 
@@ -52,11 +52,12 @@ Tags are in `%APPDATA%\ZOrbit\tags.json`, apart from your menus. The file does n
 
 ```json
 {"version": 1,
- "tags":  {"blocking":  {"label": "Blocking",  "color": "#A8DF23"},
-           "detailing": {"label": "Detailing", "color": "#C77DFF"}},
- "items": {"brush:claybuildup": ["blocking"],
+ "tags":  {"favourite": {"label": "Favourites", "color": "#FFD166"},
+           "blocking":  {"label": "Blocking",   "color": "#A8DF23"},
+           "detailing": {"label": "Detailing",  "color": "#C77DFF"}},
+ "items": {"brush:claybuildup": ["favourite", "blocking"],
            "brush:dam_standard": ["detailing", "blocking"],
            "alpha:alpha058": ["blocking"]}}
 ```
 
-An item's key is its kind, `brush:`, `alpha:`, `material:` or `texture:`, plus its name in lower case without spaces (`alpha:alpha058`). The first tag in an item's list is its colour cue. Items that are not installed keep their tags. You can edit the file by hand and the ring follows. If the file cannot be read (a stray comma, say), the app and Studio keep the last good tags, Studio shows the error in the Library, and nothing is changed or written until you fix it. If the file cannot be read when the app or Studio starts, the three starter tags are available in memory, and nothing is written until the file is fixed.
+The `favourite` tag is built in. A file without it gets it back when ZOrbit reads it, and the next write puts it in the file. An item's key is its kind, `brush:`, `alpha:`, `material:` or `texture:`, plus its name in lower case without spaces (`alpha:alpha058`). The first tag in an item's list, other than `favourite`, is its colour cue. Items that are not installed keep their tags. You can edit the file by hand and the ring follows. If the file cannot be read (a stray comma, say), the app and Studio keep the last good tags, Studio shows the error in the Library, and nothing is changed or written until you fix it. If the file cannot be read when the app or Studio starts, the three starter tags are available in memory, and nothing is written until the file is fixed.

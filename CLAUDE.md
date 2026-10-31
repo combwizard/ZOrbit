@@ -40,6 +40,14 @@ Where each part is documented:
 | `bridge/`, `zscript_bridge.py` (bridge modes, bridge key, the Zplugin palette) | `bridge.md` |
 | `paths.py`, `fsutil.py`, import and export, logs | `files.md` |
 | `installs.py`, `onboarding.py`, `activity.py`, `packaging/` (install, Setup screen) | `install.md`, `getting-started.md` |
+| `webview2.py` (the WebView2 runtime check and its message) | `install.md` (requirements), `troubleshooting.md` |
+| `toast.py`, the `MSG_` texts in `radiald.py` (the message near the cursor) | `troubleshooting.md`, `bridge.md` |
+| `tray.py` (the notification-area icon and its menu) | `studio.md`, `getting-started.md` |
+| `winframe.py` (window frame, placement and drag regions of Studio and the browser) | `studio.md`, `browser.md` |
+| `zbp.py` (brush pictures read from `.zbp` files) | `browser.md`, `troubleshooting.md` (slots that show letters) |
+| `selftest.py` (`--selftest`) | `building.md` |
+| `tests/` | `building.md`, `CONTRIBUTING.md` |
+| `tools/ring_shots.py` (the ring pictures and GIFs) | `appearance.md`, `menus.md`, and the picture rules above |
 | A new way for something to fail, or a new log line worth reading | `troubleshooting.md` |
 | `packaging/build.ps1`, `tools/` | `building.md`, `CONTRIBUTING.md` |
 

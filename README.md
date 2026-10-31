@@ -87,8 +87,8 @@ To continue, click **More info**, then **Run anyway**. If you would rather not r
 
 ## First steps
 
-1. Open **ZOrbit Studio** from the Start menu (or from ZBrush: **Zplugin > ZOrbit > Studio**).
-2. On the **Menus** screen, pick a menu on the left. The ring preview in the middle is drawn by the same code that draws it inside ZBrush.
+1. Open **ZOrbit Studio** from the Start menu (or from ZBrush: **Zplugin > ZOrbit > Studio**). On a fresh install it opens on the **Setup** screen: work down its steps, then press **Finish**.
+2. On the **Menus** screen (Alt+1), pick a menu on the left. The ring preview in the middle is drawn by the same code that draws it inside ZBrush.
 3. Drag brushes from the **Library** onto the ring, or use **Add item** to add a brush, alpha, material, texture or submenu. Studio starts in **Simple** mode, which shows the everyday controls. Press **Full** in the top bar for buttons, sliders, switches and the rest.
 4. Click **Save** (Ctrl+S). The next time you open the ring in ZBrush it uses your changes. There is no need to restart anything.
 
@@ -105,7 +105,7 @@ The [documentation](https://zorbit.lol/docs/) covers every setting and item type
 - **Portable zip:** unzip it somewhere permanent and press **Fix** on Studio's **Setup** screen. See [Portable zip](https://zorbit.lol/docs/install/#portable-zip).
 - **ZBrush 2022 to 2025:** these versions get a ZScript plugin that you install from Studio. See [ZBrush 2022 to 2025](https://zorbit.lol/docs/install/#zbrush-2022-to-2025).
 - **Uninstall:** remove ZOrbit in **Windows Settings > Apps > Installed apps**. The uninstaller also removes the plugin from the ZBrush 2022 to 2025 that Setup lists. See [Uninstall](https://zorbit.lol/docs/install/#uninstall).
-- **How it works:** a small app draws the ring outside ZBrush, and a plugin inside ZBrush carries out the pick. See [How ZOrbit talks to ZBrush](https://zorbit.lol/docs/bridge/).
+- **How it works:** a small app draws the ring outside ZBrush, and a plugin inside ZBrush carries out the pick. The app installs a Windows keyboard hook that compares each key press with your hotkeys and acts only when ZBrush is the front window; it does not record, store or send what you type. See [How ZOrbit talks to ZBrush](https://zorbit.lol/docs/bridge/).
 - **Something not working?** See [Troubleshooting](https://zorbit.lol/docs/troubleshooting/).
 
 ## Build from source

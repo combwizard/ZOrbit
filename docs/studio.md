@@ -8,8 +8,8 @@ Studio is where you edit everything. Open it from the Start menu (**ZOrbit Studi
 | Menus | Alt+1 | Create and edit menus and their items, with a live ring preview. |
 | Library | Alt+2 | Browse the brushes, alphas, materials and textures ZBrush can load, on four tabs, with search, folders and thumbnails. Click an item and press **Add to <menu>**, or drag it onto a menu, the ring or the item list. **Rescan** picks up items saved since Studio opened. Tag items and filter by tag (see [Tags](tags.md)). Star favourites; Recent lists what you have picked in ZBrush (see [Favourites and Recent](browser.md#favourites-and-recent)). |
 | Settings | Alt+3 | Ring size, animation, labels, flick, the browser hotkey, Studio's own preferences, and Import and export (see [Import and export](files.md#import-and-export)). [Full mode](#simple-and-full-mode) adds separate radius, slot and dead zone sliders, tag colours, colours, hover submenus, tap time, auto-close, tags, the bridge and Older ZBrush. |
-| Status | Alt+4 | Is ZBrush running, is the app running, is the bridge connected; the app log with a Copy button. **Start app** on the app card starts the app when ZBrush is running. A dot on this button in the rail means the app is not running while ZBrush is. |
-| Setup | Alt+5 | A checklist of five steps: ZBrush found (with the plugin set up for it), plugin loaded in ZBrush, try the ring, your brushes, and what's where. It shows live state and offers one action per step. An amber dot on this button in the rail means a check is failing: no ZBrush that Studio found has the plugin set up, or a running ZBrush does not. Finding no ZBrush at all does not count. |
+| Status | Alt+4 | Four cards: **ZBrush** (running or not), **ZOrbit app** (running or not, with **Start app** when ZBrush is running), **Bridge listener** (**Connected**, **Found, unverified**, **Stale** or **Not found**, and **Not needed (key bridge)** when the bridge mode is `key` or only a ZBrush 2022 to 2025 is installed) and **Last pick** (the most recent item sent to ZBrush). Below them the last 40 lines of the app log, with **Copy log**, **Open logs folder** and **Open config folder** (the folder of `radial.json`). The screen refreshes every 3 seconds. A dot on this button in the rail means the app is not running while ZBrush is. |
+| Setup | Alt+5 | A checklist of five steps: ZBrush found (with the plugin set up for it), plugin loaded in ZBrush, try the ring, your brushes, and what's where. It shows live state and offers one action per step. An amber dot on this button in the rail means no ZBrush that Studio found has the plugin set up, or a running ZBrush does not. Finding no ZBrush at all does not count. |
 
 ![The Library screen on the Brushes tab: folders and tags on the left, a grid of brush thumbnails, and the Add to Brushes panel on the right](images/studio-library.png)
 
@@ -55,6 +55,8 @@ While the app runs, ZOrbit has an icon in the notification area. Left-click it t
 - **Open logs folder** opens `%LOCALAPPDATA%\ZOrbit`.
 - **Quit ZOrbit** stops the app. The ring stays off until ZBrush is restarted or **Start app** is pressed on **Status**.
 
+## Setup
+
 The first time Studio runs (a fresh install, with no Studio preferences yet), it opens on **Setup**. Work down the steps, then press **Finish**, or **Skip for now**; either one marks Setup as done and takes you to Menus. If you close Studio without pressing either, Setup comes back the next time. People who upgrade from an earlier version are not sent to it. Once Setup is done, the bottom of the screen has a **Show Setup on next start** switch that brings it back.
 
 The steps:
@@ -65,9 +67,15 @@ The steps:
 4. **Your brushes.** A preview of the Q ring, and **Change these brushes**, which opens it on the Menus screen.
 5. **What's where.** A line on each of Menus, Library, Settings, Status and the user guide, which links to these pages. It also says that Studio starts in Simple mode and that the switch at the top turns on Full mode (see [Simple and Full mode](#simple-and-full-mode)).
 
-Other shortcuts: **Ctrl+S** saves, **Ctrl+Z** undoes, **Ctrl+Y** (or Ctrl+Shift+Z) redoes. Undo and redo work wherever the focus is, even on a slider or a switch; inside a text box, Ctrl+Z undoes your typing there instead. Closing Studio with unsaved changes shows what would be lost, grouped by menu and setting, with **Save and close**, **Close without saving** and **Keep editing**; Escape keeps editing. The Undo and Redo buttons next to Revert do the same, and undoing puts the selection back on what you were editing. Each list (the menus, the items) is one stop for the Tab key. Inside it, **Up** and **Down** move through the rows, **Home** and **End** jump to the first and last, **Delete** removes the selected menu or item, **F2** renames a menu and **Alt+Up/Down** moves an item.
+## Keyboard shortcuts
+
+Alt+1 to Alt+5 open the screens (see the table at the top). **Ctrl+S** saves, **Ctrl+Z** undoes, **Ctrl+Y** (or Ctrl+Shift+Z) redoes. Undo and redo work wherever the focus is, even on a slider or a switch; inside a text box, Ctrl+Z undoes your typing there instead. Closing Studio with unsaved changes shows what would be lost, grouped by menu and setting, with **Save and close**, **Close without saving** and **Keep editing**; Escape keeps editing. The Undo and Redo buttons next to Revert do the same, and undoing puts the selection back on what you were editing. Each list (the menus, the items) is one stop for the Tab key. Inside it, **Up** and **Down** move through the rows, **Home** and **End** jump to the first and last, **Delete** removes the selected menu or item, **F2** renames a menu and **Alt+Up/Down** moves an item.
+
+## Version and update check
 
 The version at the top links to its release notes. When Studio opens, it asks GitHub whether there is a newer release. If there is, the top shows your version, an orange dot and the new version in orange. Clicking it opens the new release's page, where you can download it. The check only asks GitHub for the latest release and sends nothing about you or your menus. Turn it off in **Settings > Studio > Check for updates**. It is never made while that is off. **Settings > Studio** also shows the version, with a link to the GPL-3.0 licence ZOrbit is released under.
+
+## Saving
 
 How saving works:
 
@@ -82,6 +90,8 @@ How saving works:
 - The app re-reads the file as soon as it changes, so saved changes apply immediately, new hotkeys included. You do not need to restart ZBrush or the app.
 - If something in the file is wrong, a **problems** pill appears at the top. Click it for the list: each entry says what is wrong in plain words and jumps to the menu, item or setting to fix, and the menu and item rows concerned carry an amber marker. Studio saves anyway, and the app skips the bad items and logs what it skipped. The list opens by itself after a save or an import only when there is a problem that was not there before; the toast and the pill give the count either way.
 
+## The Menus screen
+
 On the Menus screen you can:
 
 - add, duplicate and delete menus (a duplicate has no hotkey, so it starts out as a submenu);
@@ -94,10 +104,12 @@ On the Menus screen you can:
 - record a hotkey by clicking the hotkey field (or focusing it and pressing **Enter**) and pressing the keys. Letters, digits, F1 to F24, the punctuation keys and `space`, `tab`, `enter`, `backspace`, `insert`, `delete`, `home`, `end`, `pageup` and `pagedown` can be recorded; **Esc** cancels. If another menu already uses the key, the field says which one comes first and wins;
 - press the play button to preview the open animation.
 
+### The tabs on the right
+
 The right-hand side has three tabs:
 
 - **Item** edits the selected item: its type, target, label and icon.
-- **Menu** edits the selected menu: its title, hotkey, **Duplicate** and **Delete** and, in Full mode, its id, **Swallow hotkey** switch (off and greyed out until the menu has a hotkey), open animation and **Fan out when opened from another menu**. A new menu takes its id from its title: a menu you call **Sculpting** gets the id `sculpting`, or `sculpting_2` if that is taken. Until you save, renaming it changes the id too. After the first save, or once you type an id yourself, the id stays as it is. Changing the **Id** updates every item that opens the menu. If the menu has auto slots, they forget what they learned, because they are kept under the id. **Used by** lists the items in other menus that open this one; click one to go to it.
+- **Menu** edits the selected menu: its title, hotkey, **Duplicate** and **Delete** and, in Full mode, its id, **Swallow hotkey** switch (greyed out until the menu has a hotkey, and showing on unless you switched it off), open animation and **Fan out when opened from another menu**. A new menu takes its id from its title: a menu you call **Sculpting** gets the id `sculpting`, or `sculpting_2` if that is taken. Until you save, renaming it changes the id too. After the first save, or once you type an id yourself, the id stays as it is. Changing the **Id** updates every item that opens the menu. If the menu has auto slots, they forget what they learned, because they are kept under the id. **Used by** lists the items in other menus that open this one; click one to go to it.
 - **Library** is the [browser](browser.md) in a narrow form, to drag items into the ring or the list.
 
 Menu rows show the menu's title, id, hotkey (or a small submenu icon when it has none) and item count. When the window is narrow, hover a row for its full title and hotkey. A menu with more than 12 items gets a note above its list, because the slots start to overlap.

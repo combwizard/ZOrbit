@@ -11,7 +11,21 @@ A menu is a named list of items shown as one ring. Menus live in one file, `%APP
 - A menu can have its own open animation (`"animation": "spiral"`, or pick one in the menu settings in Studio's Full mode). Without one it uses `ring.animation`. See [Open animations](appearance.md#open-animations).
 - A menu can **fan out** when it is opened as a submenu (`"fan": true`, or switch on **Fan out when opened from another menu** in the menu settings in Studio's Full mode). See [Submenu](#submenu).
 
-Starter menus ship with ZOrbit: **Brushes** (Q), with submenus **More Brushes** (its slot shows the ClayTubes picture), **Tools** (masking, symmetry, PolyFrame, LazyMouse and other switches, a **Browser** slot that opens the [browser](browser.md), and a **Favourites** slot) and **SubDivide** (a row of stroke subdivide sizes). They use only brushes that come with ZBrush. **Swallow hotkey** is off for the starter **Brushes** menu, so ZBrush still sees **Q** and goes to Draw mode as the ring opens. New installs get the **Favourites** slot in **Tools**; existing menus are not changed.
+A menu has these fields, and no others (a name ZOrbit does not know is reported as a problem and ignored):
+
+| Field | What it is |
+|---|---|
+| id | The menu's key in the `menus` object. Any text works in the file except one that starts with `tag:`, which is kept for the fans that tag slots open. Studio takes letters, digits, `-` and `_`, not only digits, and each id once. |
+| `title` | The name in the middle of the ring and in Studio's lists. Without one, the id is shown. |
+| `hotkey` | Optional. See [Hotkeys](hotkeys.md#hotkeys). |
+| `swallow` | `true` (the default) or `false`: whether the hotkey is hidden from ZBrush. |
+| `animation` | Optional. This menu's open animation. |
+| `fan` | `true` or `false` (the default): whether the menu fans out as a submenu. |
+| `items` | The slots, clockwise from the top. |
+
+A new menu's id comes from its title in Studio. **Sculpting** becomes `sculpting`, or `sculpting_2` if that is taken. Accents are dropped (`Détails` becomes `details`), any other run of characters becomes `_`, and a title of digits only gets `m_` in front. Until you save the menu, renaming it changes the id too; after the first save, or once you type an id yourself, the id stays. Auto slots learn under the id, so changing it resets them.
+
+Starter menus ship with ZOrbit: **Brushes** (Q), with submenus **More Brushes** (its slot shows the ClayTubes picture) and **Tools** (masking, symmetry, PolyFrame, LazyMouse and other switches, a **Browser** slot that opens the [browser](browser.md), a **Favourites** slot, and a **SubDivide** submenu with a row of stroke subdivide sizes). **SubDivide** opens from **Tools**, not from **Brushes**. They use only brushes that come with ZBrush. **Swallow hotkey** is off for the starter **Brushes** menu, so ZBrush still sees **Q** and goes to Draw mode as the ring opens. New installs get the **Favourites** slot in **Tools**; existing menus are not changed.
 
 ## Item types
 
@@ -42,6 +56,13 @@ Studio's [Simple mode](studio.md#simple-and-full-mode) offers `brush`, `alpha`, 
 ```
 
 The name is the brush's name in ZBrush (the file name without `.zbp`). Spaces and capitals do not matter when ZOrbit looks the file up. The slot's icon is the brush's own thumbnail. If ZBrush already has the brush loaded, it is simply selected. If not, ZOrbit looks for a `.zbp` in your ZBrush brush folders and loads it. If it finds none, the pick is logged as "NOT loaded in ZBrush and no file known".
+
+ZOrbit searches these folders, in order. The first folder that has the name wins, in the browser's list and on the ring alike:
+
+1. `ZStartup\BrushPresets` in your user assets folder, the one ZBrush 2026 and newer record in `userassets_path.txt` under `%APPDATA%\Maxon` (shown as **My Brushes**).
+2. In the ZBrush installation: `ZStartup\BrushPresets` (**My Brushes**), `ZData\BrushPresets` (**ZBrush**), then `Lightbox\Brushes` and `ZBrushes` (**Lightbox**).
+
+For a pick in ZBrush 2022 to 2025, only the four folders of that ZBrush's own installation are searched, because an older ZBrush cannot always read a newer version's brushes. Subfolders are searched too, except folders whose name starts with `_`. Two files whose names differ only by capitals or spaces count as one brush.
 
 ### Alpha, material and texture
 
@@ -84,7 +105,7 @@ ZBrush 2022 to 2025 get these through the [ZScript plugin](install.md#zbrush-202
 {"press": "Tool:Masking:Clear", "label": "Clear Mask"}
 ```
 
-An interface path is the chain of palette and button names, joined with colons, as ZBrush shows them. Capitals do not matter. Studio suggests common paths as you type.
+An interface path is the chain of palette and button names, joined with colons, as ZBrush shows them. Capitals do not matter. Studio suggests common paths as you type. See [Finding a button's path](#finding-a-buttons-path).
 
 ### Set
 
@@ -93,7 +114,7 @@ An interface path is the chain of palette and button names, joined with colons, 
 {"set": "Stroke:SubDivide Size", "value": 1.25, "label": "1.25"}
 ```
 
-`value` is a number.
+`value` is a number: what the slider shows in ZBrush, in the slider's own range (`64` for **Draw Size**, `0.25` for **SubDivide Size**).
 
 ### Toggle
 
@@ -102,6 +123,20 @@ An interface path is the chain of palette and button names, joined with colons, 
 {"toggle": "Stroke:LazyMouse"}
 ```
 
+### Finding a button's path
+
+A path names the palette, then the sub palette if the button sits in one, then the button or slider, joined with colons. The starter menus have three kinds:
+
+| Path | Where it is |
+|---|---|
+| `Tool:Masking:Clear` | the **Tool** palette, the **Masking** sub palette, the **Clear** button (a `press`) |
+| `Transform:Activate Symmetry` | the **Transform** palette, the **Activate Symmetry** switch, with no sub palette (a `toggle`) |
+| `Stroke:SubDivide Size` | the **Stroke** palette, the **SubDivide Size** slider (a `set`, with a `value` such as `0.5`) |
+
+Spell the names the way ZBrush spells them, spaces included. In Studio, the target field suggests paths as you type: a short list of common ones, and the buttons you already gave a hotkey in ZBrush, which Studio reads from `ZStartup\HotKeys\StartupHotkeys.txt` in your user assets folder. Any other path can be pasted in.
+
+A path that does not exist in your ZBrush does nothing in ZBrush. `bridge.log` has a line such as `press Tool:Masking:Cler: no such interface item`, and the app shows a short message near the cursor (see [Troubleshooting](troubleshooting.md#the-ring-opens-but-picks-do-nothing)).
+
 ### Steps
 
 ```json
@@ -109,7 +144,9 @@ An interface path is the chain of palette and button names, joined with colons, 
  "label": "Fresh Start", "icon": "Standard"}
 ```
 
-Steps run in order. Each step is a `brush`, `alpha`, `material`, `texture`, `press`, `set` or `toggle`. Steps cannot open menus, cannot contain more steps, and cannot hold `tag` or `browser` items. Without an `icon`, a `steps` item uses the thumbnail of its first brush, alpha, material or texture step, or a placeholder if it has none.
+Steps run in order. Each step is a `brush`, `alpha`, `material`, `texture`, `press`, `set` or `toggle`. Steps cannot open menus, cannot contain more steps, and cannot hold `auto`, `tag` or `browser` items. Without an `icon`, a `steps` item uses the thumbnail of its first brush, alpha, material or texture step, or a placeholder if it has none.
+
+A pick of a `steps` item does not count for auto slots or for **Recent**, even when a step is a brush. Only a brush, alpha, material or texture item picked on its own does (from a ring, a fan or the [browser](browser.md)).
 
 The steps run one straight after another. A brush, alpha, material or texture that ZBrush has to load from its file first is selected a moment after the other steps have run, so a step that follows it does not see it selected. This needs the plugin's listener; with the bridge key alone, an item ZBrush has only just loaded may stay unselected. The log line for the pick says which items were selected afterwards.
 
@@ -122,6 +159,8 @@ The steps run one straight after another. A brush, alpha, material or texture th
 ```
 
 `"more"` is the id of another menu in the file. Moving the cursor onto the submenu's slot (or flicking past it) opens the new ring centred on that slot. If you are still holding the hotkey, it stays in hold-and-release mode. Releasing or clicking on the submenu's direction before you reach the slot opens it centred on your cursor, in tap-and-click mode. See [Pick modes](hotkeys.md#pick-modes).
+
+A submenu slot has a small badge at its lower right, in the ring's highlight colour: an arrow when it opens a ring, a fan symbol when its menu is set to fan out (see below).
 
 A submenu can open another way. Give its menu `"fan": true` (or switch on **Fan out when opened from another menu** in the menu settings in Studio) and its items spread out in an arc beyond its slot, joined to it by dashed lines, instead of a new ring opening on the slot. The ring you came from stays visible. An item of a fan can itself be a submenu of a fan, and it fans out further (up to three deep). The option only matters when the menu is opened as a submenu. A menu with a hotkey still opens as a normal ring when you press it. See [Pick modes](hotkeys.md#pick-modes) for how to pick from a fan.
 
@@ -174,4 +213,4 @@ Opens the [browser window](browser.md). `kind` chooses the tab it opens on: `bru
 ### Labels and icons
 
 - `label`: text shown under the slot. Long labels are shortened with an ellipsis.
-- `icon`: a brush name, the path to a `.zbp`, or the path to a `.png` file. Without one, brush, alpha, material and texture items use the item's own thumbnail, and a `steps` item uses the thumbnail of its first asset step. Other items show a round placeholder with a short text.
+- `icon`: a brush name, the path to a `.zbp`, or the path to a `.png` file (an alpha image or a `.zmt` also works, and shows its thumbnail). Give the full path, such as `C:\Art\clay.png`. A relative path is looked up from the app's working directory, not from `radial.json`, so it is usually not found, and a text that is not an existing file is taken as a brush name. A network path (`\\server\share\...`) is refused and listed as a problem. Without one, brush, alpha, material and texture items use the item's own thumbnail, and a `steps` item uses the thumbnail of its first asset step. Other items show a round placeholder with a short text.

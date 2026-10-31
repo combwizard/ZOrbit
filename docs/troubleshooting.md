@@ -20,7 +20,7 @@ The palette was renamed, so a hotkey you bound by hand to the old **Apply** does
 
 ### Pressing the hotkey does nothing
 
-1. Open Studio's **Setup** screen (Alt+5). It checks ZBrush, the plugin and the app, and says which step is missing. An amber dot on its button in the rail means a check is failing.
+1. Open Studio's **Setup** screen (Alt+5). It checks ZBrush, the plugin and the app, and says which step is missing. An amber dot on its button in the rail means no ZBrush that Studio found has the plugin set up, or a running ZBrush does not. It does not appear when Studio finds no ZBrush at all.
 
     ![The Setup screen with ZBrush found ticked, and the Plugin loaded in ZBrush step waiting: ZBrush 2026 shows Restart ZBrush because it was started before the plugin was set up](images/setup-restart.png)
 
@@ -38,19 +38,19 @@ The palette was renamed, so a hotkey you bound by hand to the old **Apply** does
 
 ### The ring opens, but picks do nothing
 
-When the app knows why a pick went nowhere, it shows a short message near the cursor for about two seconds. It never takes the focus and never shows for a pick that worked. The messages are:
+When the app knows why a pick went nowhere, it shows a short message near the cursor for about two seconds. It sits just below the cursor, ignores the mouse, never takes the focus and never shows for a pick that worked. A new message replaces the old one. If one cannot be drawn, `radiald.log` says "toast failed". The messages are:
 
-- **No connection to ZBrush's plugin. Check Zplugin > ZOrbit > Status.** The bridge mode is `message` and the app found no live plugin in that ZBrush. Start ZBrush, or load the plugin.
-- **The plugin did not answer. Check Zplugin > ZOrbit > Status.** The plugin was there, but did not pick the request up within half a second, and there is no bridge key to fall back on.
-- **ZBrush was not the front window, nothing sent.** The pick needed the bridge key, and the key is only pressed while ZBrush is in front. Do not click another program right after you pick.
+- **No connection to ZBrush's plugin. Check Zplugin > ZOrbit > Status.** The bridge mode is `message` and the app found no live listener in that ZBrush. Start ZBrush, or load the plugin.
+- **The plugin did not answer. Check Zplugin > ZOrbit > Status.** The listener was there, but did not pick the request up within half a second, and the app has no bridge key to fall back on (the mode is `message`, or no bridge key is set).
+- **ZBrush was not the front window, nothing sent**. The pick needed the bridge key, and the key is only pressed while ZBrush is in front. Do not click another program right after you pick.
 - **No bridge key is set. Check Settings > ZBrush bridge.** The pick needed the bridge key and none is set.
-- **This slot is empty.** You picked an auto slot nothing has filled yet, or a tag slot whose tag has no items.
-- **That menu has nothing usable in it.** You picked a submenu whose items are all empty or unusable.
-- **A name followed by "could not be found in ZBrush"** or **"is not a ZBrush button"**, or **ZBrush could not carry out that pick. See bridge.log.** The plugin picked the request up and reported a problem: the brush, alpha, material or texture is not installed, the `press`, `set` or `toggle` path does not exist, or ZBrush raised an error. `bridge.log` has the details.
+- **This slot is empty**. You picked an auto slot nothing has filled yet, or a tag slot whose tag has no items.
+- **That menu has nothing usable in it**. You picked a submenu whose items are all empty or unusable.
+- **A name followed by "could not be found in ZBrush"** or **"is not a ZBrush button"**, or **ZBrush could not carry out that pick. See bridge.log.** The plugin picked the request up and reported a problem: the brush, alpha, material or texture is not installed, the `press`, `set` or `toggle` path does not exist, or ZBrush raised an error. `bridge.log` has the details (see [The pick is logged as selected, but nothing changes](#the-pick-is-logged-as-selected-but-nothing-changes)).
 
 If you see no message and nothing happens, work through the steps below.
 
-On Studio's **Status** screen, the listener card should say **Connected**. In ZBrush, **Zplugin > ZOrbit > Status** should say "verified". If it is not, use the fallback: [bind the bridge key](#use-or-test-the-fallback-key) and leave the mode on `auto`. Then read `bridge.log`; it names each action and says whether it worked. Common causes: a `press`, `set` or `toggle` path that does not exist in your ZBrush (logged as "no such interface item"), or a `brush`, `alpha`, `material` or `texture` whose file ZOrbit cannot find (logged as "NOT loaded in ZBrush and no file known"). A brush you saved after ZOrbit started is found anyway: when a name is missing, ZOrbit looks through your brush, alpha, material and texture folders again before it gives up (at most once every five seconds).
+On Studio's **Status** screen, the **Bridge listener** card should say **Connected**. In ZBrush, **Zplugin > ZOrbit > Status** should say the listener is "verified". If it is not, use the bridge key: [bind it](#use-or-test-the-bridge-key) and leave the mode on `auto`. Then read `bridge.log`; it names each action and says whether it worked. Common causes: a `press`, `set` or `toggle` path that does not exist in your ZBrush (logged as "no such interface item"), or a `brush`, `alpha`, `material` or `texture` whose file ZOrbit cannot find (logged as "NOT loaded in ZBrush and no file known"). A brush you saved after ZOrbit started is found anyway: when a name is missing, ZOrbit looks through your brush, alpha, material and texture folders again before it gives up (at most once every five seconds).
 
 ### ZBrush 2022 to 2025: the ring opens, but picks do nothing
 
@@ -62,15 +62,31 @@ Messages Studio can give when you install the plugin:
 - **The ZBrush 2022 to 2025 plugin cannot find ZOrbit's data folder from this account.** The path of `%LOCALAPPDATA%\ZOrbit` has characters outside the Windows code page and 8.3 short names are off, so ZScript cannot read it. Move the data folder, or turn on 8.3 names (`fsutil 8dot3name set 0` as administrator), then install again.
 - **ZBrush 2021 is not supported (2022 or newer).** Older versions cannot use the plugin.
 
-### Use or test the fallback key
+### Use or test the bridge key
 
-In ZBrush, Ctrl+Alt+click **Zplugin > ZOrbit > Apply**, press **F9**, then store it in **Preferences > Hotkeys > Store**. With the bridge mode on `auto` (the default), ZOrbit presses F9 when the listener does not answer. The rules for the key and the other modes are in [How picks reach ZBrush](bridge.md#how-picks-reach-zbrush-bridge-modes).
+In ZBrush, Ctrl+Alt+click **Zplugin > ZOrbit > Apply**, press **F9**, then store it in **Preferences > Hotkeys > Store**. With the bridge mode on `auto` (the default), ZOrbit presses the bridge key (F9 unless you changed it) when the listener does not answer. The rules for the key and the other modes are in [How picks reach ZBrush](bridge.md#how-picks-reach-zbrush-bridge-modes).
 
 To test it, set `"mode": "key"` temporarily, pick something, and check `bridge.log` for the result. Switch back to `auto` afterwards.
 
+### The pick is logged as selected, but nothing changes
+
+`bridge.log` has a line for every pick the plugin carries out, such as `#7 'Clay' via listener: brush Clay: selected`. If a brush line ends in `(Edit mode is off)`, the brush was selected, but no 3D tool is in Edit mode, so ZBrush has nothing to draw with it. Put a model on the canvas and press **Edit**, then pick again. The note only appears on brush picks.
+
+`via listener` means the pick came by message, and `via button` means it came by the bridge key (the **Apply** button). The other results you may read in `bridge.log`:
+
+- **`selecting it once ZBrush has added it`**, with `(button there now: False)`. ZBrush did not have the item, so ZOrbit loaded it from its file. ZBrush finishes adding an item only after the pick returns, so the plugin presses its button a moment later. A following line, `... selected after loading`, says it worked. This needs the listener; with the bridge key alone the item may stay unselected, and picking it again selects it.
+- **`loaded, but its button did not appear within a second; not selected`**. The file loaded, but ZBrush showed no button for it in time. Pick the item again. If the same line comes back, load the file by hand in ZBrush to see whether it opens.
+- **`request #N is S s old; ignored`**. The plugin got a pick more than 10 seconds after the app wrote it, and dropped it on purpose, so an old pick never lands later by accident. ZBrush was probably busy or showing a dialog. Pick again.
+- **`the left mouse button is down; waiting for the stroke to end`**. The pick arrived in the middle of a stroke. It waits until you lift the pen or the button, then runs. This is not an error. If no result line follows, a mouse button is held down or stuck.
+- **`no pending request`**. **Apply** ran with no pick waiting, for example when you pressed the bridge key yourself. It does nothing.
+- **`unreadable request`**. The pick file was damaged. Pick again.
+- **`no such interface item`** or **`NOT loaded in ZBrush and no file known`**. See above.
+- **`FAILED`** followed by an error name. ZBrush raised an error while carrying out one action; the rest of the line is its message. The app shows **ZBrush could not carry out that pick. See bridge.log.**
+- **`app not found: launch.json missing or stale`**. The plugin does not know where ZOrbit is. Open **ZOrbit Studio** from the Start menu once, so it records where it lives.
+
 ### Picks feel late during a stroke
 
-In ZBrush 2026 and newer that is intended. A pick waits until you release the mouse button or lift the pen, so a tool change never lands in the middle of a stroke. The bridge key fallback waits too: it is pressed half a second after you lift. ZBrush 2022 to 2025 cannot wait. Their plugin applies a pick as soon as the bridge key arrives, even in the middle of a stroke.
+In ZBrush 2026 and newer that is intended. A pick waits until you release the mouse button or lift the pen, so a tool change never lands in the middle of a stroke. The bridge key waits too when it is the fallback: it is pressed half a second after you lift. ZBrush 2022 to 2025 cannot wait. Their plugin applies a pick as soon as the bridge key arrives, even in the middle of a stroke.
 
 ## The browser
 
@@ -107,9 +123,15 @@ Check **Settings > Tag colours** (Full mode): the **Icon tint**, **Glow** and **
 
 ### A slot shows letters instead of a picture
 
-Letters mean ZOrbit could not read a picture for the slot. The item still works when you pick it. For a brush, either no `.zbp` was found for the name, or its icon is in a format ZOrbit does not know. A material with no icon in its `.zmt` file (some old MatCap files) and an EXR texture show letters too. For other items it is the normal placeholder; set an `icon` to change it.
+Letters mean ZOrbit could not read a picture for the slot: the file was not found, or its picture is in a format ZOrbit does not know. The pick still works when ZBrush already has the item loaded, such as a brush that comes with ZBrush. When it does not, and ZOrbit has no file for it, `bridge.log` says "NOT loaded in ZBrush and no file known". A brush with no `.zbp` found for its name shows letters. So do a material with no icon in its `.zmt` file (some old MatCap files) and an EXR texture, and those still pick fine. For other items the letters are the normal placeholder; set an `icon` to change it.
 
 ## Studio
+
+### Studio does not open, opens blank, or does nothing on a second click
+
+1. Studio draws its window with the Microsoft Edge WebView2 runtime. Without it (or with a version older than 86), Studio shows a message box, **ZOrbit needs the Microsoft Edge WebView2 runtime for this window. Install it from https://developer.microsoft.com/microsoft-edge/webview2/ and try again.**, and stops. `studio.log` then says "the Microsoft Edge WebView2 runtime is not installed; the window cannot open". Install the runtime and open Studio again. The browser window needs the same runtime.
+2. A window that opens blank may only be slow. Studio shows its window once the page has drawn, or after 3 seconds. `studio.log` (in `%LOCALAPPDATA%\ZOrbit`) has one line per step with the time since the process started: "pywebview imported", "page loaded" and "window shown", and says which program started Studio. If "page loaded" never appears, the web view did not start; send the log with your report.
+3. Studio is single-instance. A second start finds the first (the `Local\ZOrbitStudio` mutex), brings its window to the front and exits, and `studio.log` says "already open: bringing it forward". If the first Studio is stuck or its window is out of reach, the second click seems to do nothing. In Task Manager, end the process listed as **ZOrbit Studio**, then open Studio again. If you cannot tell which it is, sign out of Windows and back in.
 
 ### I cannot find a setting in Studio
 
@@ -141,4 +163,6 @@ A setting name ZOrbit does not know, such as `raduis` for `radius` in `ring` or 
 
 ## Logs
 
-`%LOCALAPPDATA%\ZOrbit` holds `radiald.log` (the app), `bridge.log` (ZBrush side), `zscript_bridge.log` (ZBrush 2022 to 2025: the last pick), `studio.log` (how Studio started), `popout.log` (the browser) and `app_stderr.log` (crashes at startup). Studio's **Status** screen shows the tail of the app log and has a button that opens the folder. [Files, backups and logs](files.md#files-and-logs) lists every file ZOrbit keeps.
+`%LOCALAPPDATA%\ZOrbit` holds `radiald.log` (the app), `bridge.log` (ZBrush side), `zscript_bridge.log` (ZBrush 2022 to 2025: the last pick), `studio.log` (how Studio started), `popout.log` (the browser) and `app_stderr.log` (crashes at startup). Studio's **Status** screen shows the tail of the app log and has buttons that open the logs folder and the config folder. [Files, backups and logs](files.md#files-and-logs) lists every file ZOrbit keeps.
+
+Read a log before you post it. Besides brush names and menu ids, the logs hold your Windows user name and folder paths: the plugin logs where it loaded from and the command it used to start the app, the app logs the command line of the browser, and `studio.log` and `popout.log` log the working directory. Black out or remove those parts first.

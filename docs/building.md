@@ -8,7 +8,15 @@ pip install -r requirements-dev.txt
 .\packaging\build.ps1
 ```
 
-The script's header lists what else it needs and where the installer ends up.
+The script builds the app, the portable zip (`dist\ZOrbit-<version>-portable.zip`) and, if Inno Setup 6 is installed, the installer (`packaging\Output\ZOrbitSetup-<version>.exe`). Without Inno Setup it warns and stops after the zip. Install it with `winget install JRSoftware.InnoSetup`, or pass `-SkipInstaller` to build only the app and the zip. The script's header lists the rest.
+
+Windows may refuse to run the PowerShell scripts in `packaging\` and `tools\` ("running scripts is disabled on this system"). Allow scripts you wrote or built yourself with `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`, or run one script without changing the policy:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\packaging\build.ps1
+```
+
+Use `powershell` instead of `pwsh` if you only have Windows PowerShell 5.
 
 `packaging\build.ps1` installs from `requirements-lock.txt` when that file exists. It holds the exact versions of every package the build needs, so a release is built from the same packages each time. `requirements-dev.txt` keeps the loose version ranges. The header of the lock file says how to regenerate it in a clean virtual environment.
 
