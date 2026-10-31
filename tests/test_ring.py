@@ -340,6 +340,17 @@ def test_preview_renders_a_ring_and_a_hovered_ring():
     assert plain.info["centre"] == (plain.size[0] // 2, plain.size[1] // 2)
 
 
+def test_preview_says_where_the_hovered_slot_is_and_can_draw_the_hold_hint():
+    menu, cfg = make_menu(8), make_cfg()
+    hot = ring.Ring.preview(menu, cfg, lambda it: None, hover=0)
+    (cx, cy), (hx, hy) = hot.info["centre"], hot.info["hover_at"]
+    assert hx == cx and hy < cy                              # slot 0 is straight above the centre
+    assert "hover_at" not in ring.Ring.preview(menu, cfg, lambda it: None).info
+    assert ring.Ring.preview(menu, cfg, lambda it: None, hover=(0,)).tobytes() == hot.tobytes()
+    held = ring.Ring.preview(menu, cfg, lambda it: None, hover=0, held=True)
+    assert held.size == hot.size and held.tobytes() != hot.tobytes()   # the hint under the title differs
+
+
 def test_preview_window_grows_with_the_item_count():
     cfg = make_cfg()
     small = ring.Ring.preview(make_menu(6), cfg, lambda it: None)

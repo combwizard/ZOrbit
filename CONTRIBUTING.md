@@ -112,3 +112,11 @@ pre-commit hook refuses a commit that contains a `C:\Users\<name>` path other th
 
 When you make documentation images, use the project's own renderer with the shipped starter menus, so that
 only brushes included with ZBrush appear.
+
+### Taking the pictures for the docs
+
+`python tools\docs_shots.py` takes the Studio and browser screenshots from the mock UI. `python tools\ring_shots.py`
+draws the ring pictures and GIFs (`ring.png`, `fan.png`, `tag-colours.png`, `animations.png`, `open-animation.gif`,
+`fan-out.gif`) with the real ring renderer. Both work on a throw-away copy of the starter menus, so your own menus
+and tags never appear in a picture. Name pictures after the script to retake only those, and add `--out DIR` to look
+at them before they replace the ones in `docs\images`.

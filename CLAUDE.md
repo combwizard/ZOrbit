@@ -16,8 +16,10 @@ The user docs are the Markdown pages in `docs/`. Every push to `main` that touch
 - **Pictures:** the Studio and browser screenshots are made by `python tools/docs_shots.py` (headless Edge on the
   mock UI, recorded from a fresh install; `--record` re-records after a UI or API change, and the `SHOTS` table says
   what each picture shows). When a change alters a screen that has a picture, retake it and look it over before
-  committing. The ring pictures and GIFs (`ring.png`, `fan.png`, `tag-colours.png`, `animations.png`, the GIFs) are
-  made by hand: when a change makes one of them out of date, say so in the reply rather than leaving it wrong.
+  committing. The ring pictures and GIFs (`ring.png`, `fan.png`, `tag-colours.png`, `animations.png`,
+  `open-animation.gif`, `fan-out.gif`) are made by `python tools/ring_shots.py` from the real renderer in the
+  starter menus (its `SHOTS` table says what each shows). When a change alters how the ring looks, run it and look
+  the pictures over before committing.
 - **Build the docs** after editing them: `mkdocs build --strict` (`pip install -r requirements-docs.txt` first). It
   fails on a broken link or anchor. Link between pages with relative `.md` links so they work on GitHub too.
 - **The pre-commit hook** (`tools/hooks/pre-commit`) stops a commit that changes `zorbit/` or `bridge/` without

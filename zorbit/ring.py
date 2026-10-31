@@ -411,11 +411,14 @@ class Ring:
     # --- public ----------------------------------------------------------------------------------
     @classmethod
     def preview(cls, menu, ring_cfg: dict, icon_for, hover=None, scale=1.0, t=None, submenus=None,
-                open_path=None):
+                open_path=None, held=False, open_age=None):
         """Renders the ring to a PIL RGBA image without a window (Studio). t: seconds since open, or None
         for the settled look. open_path: indices of the fans to show open (needs submenus). The ring centre
-        is in im.info["centre"]: with a fan open the image is no longer square around it."""
-        r = cls(menu, ring_cfg, icon_for, lambda *a: None, lambda m: None, held=False, submenus=submenus)
+        is in im.info["centre"] (and the hovered slot in im.info["hover_at"]): with a fan open the image is no
+        longer square around it. hover: an item index, or a path (a tuple) for a slot inside an open fan.
+        held: draw the hold-mode hint instead of the click-mode one. open_age: seconds since the fans opened,
+        a number for all of them or {path: seconds}; None for settled."""
+        r = cls(menu, ring_cfg, icon_for, lambda *a: None, lambda m: None, held=held, submenus=submenus)
         r._geometry(scale)
         r._relayout()
         r._prepare()
@@ -425,11 +428,20 @@ class Ring:
         for k in range(1, len(path) + 1):
             if not r._fannable(path[:k]):
                 break
-            r._set_open(path[:k], now - 10.0)
-        r.hover = None if hover is None else (hover,)
+            age = open_age.get(path[:k]) if isinstance(open_age, dict) else open_age
+            if age is None:
+                age = 10.0
+            r._set_open(path[:k], now - age)
+        r.hover = None if hover is None else tuple(hover) if isinstance(hover, (tuple, list)) else (hover,)
         r._apply_hover(now, instant=True)
         im = r._compose(now)
         im.info["centre"] = r.centre
+        if r.hover is not None:                    # where the hovered slot is, for a picture that draws a cursor
+            try:
+                x, y = r._node_pos(r.hover)
+                im.info["hover_at"] = (r.centre[0] + x, r.centre[1] + y)
+            except (KeyError, IndexError):
+                pass
         return im
 
     @classmethod
