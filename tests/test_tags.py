@@ -689,7 +689,9 @@ def test_a_file_that_cannot_be_opened_keeps_the_state_and_is_tried_again(good, m
     monkeypatch.undo()
     assert good.error.startswith("tags.json could not be read")
     assert keys(good) == ["favourite", "blocking", "detailing"]
-    assert good.reload_if_changed() is True            # tried again at the next poll
+    assert good.reload_if_changed() is False           # not at the very next poll (that reloaded every ring)...
+    good._retry_at = 1.0                                # ...but once RETRY_S has passed
+    assert good.reload_if_changed() is True
     assert good.error == ""
 
 
@@ -709,3 +711,14 @@ def test_the_starter_tags_of_a_malformed_file_are_not_written(tags_file):
     store = TagStore(path).load()
     assert store.create_tag("X")["ok"] is False
     assert open(path, encoding="utf-8").read() == "{ not json"
+
+
+def test_an_unreadable_tags_file_is_not_reported_as_changed_on_every_poll(tmp_path, monkeypatch):
+    path = tmp_path / "tags.json"
+    path.mkdir()                                          # a folder in its place: open() fails with an OSError
+    store = TagStore(str(path)).load()
+    assert store.error and store.has("blocking")          # the starter tags in memory
+    assert store.reload_if_changed() is False             # same file, retry not due: no reload, no ring rebuild
+    monkeypatch.setattr(store, "_retry_at", 1.0)          # due: it reads again, but nothing changed
+    assert store.reload_if_changed() is False
+    assert store.error

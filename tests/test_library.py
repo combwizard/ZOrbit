@@ -300,7 +300,26 @@ def test_missing_tagged_item_triggers_a_rescan_and_the_next_build_has_it(monkeyp
     assert [i.label for i in menu.items] == ["NewBrush"]
 
 
+def test_a_fan_with_a_missing_item_is_not_cached_and_asks_at_most_every_few_seconds(monkeypatch):
+    fake = FakeAssets()
+    fake.refuse = True
+    fake.gate.set()
+    fake.idx["brush"]["other"] = Path("C:/x/Other.zbp")
+    tags = FakeTags()
+    tags.items_with = lambda key, kind=None: ["brush:other", "brush:newbrush"] if kind == "brush" else []
+    monkeypatch.setattr(expand, "assets", fake)
+    ex = expand.Expander(SimpleNamespace(ring={}), FakeUsage(), tags)
+    first = ex.tag_menu("fresh")
+    assert [i.label for i in first.items] == ["Other"]
+    wait_idle(ex, fake)
+    assert "fresh" not in ex._cache                     # a menu missing an item is never served from the cache
+    fake.idx["brush"]["newbrush"] = Path("C:/x/NewBrush.zbp")   # found later, same generation (the old race)
+    assert sorted(i.label for i in ex.tag_menu("fresh").items) == ["NewBrush", "Other"]
+    assert fake.rescans == ["brush"]                    # the second build came too soon to ask again
+
+
 def test_a_refused_rescan_is_asked_again_at_the_next_build(monkeypatch):
+    monkeypatch.setattr(expand, "RESCAN_ASK_S", 0)       # the few-seconds limit is the test above
     fake = FakeAssets()
     fake.refuse = True
     ex = expander(monkeypatch, fake)

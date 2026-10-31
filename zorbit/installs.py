@@ -16,7 +16,7 @@ import os
 import re
 import winreg
 
-_YEAR_RE = re.compile(r"\b(20\d\d)\b")
+_YEAR_RE = re.compile(r"(?<!\d)(20\d\d)(?!\d)")   # also in "ZBrush 2026_1" (%APPDATA%\Maxon), where \b would not match
 MIN_YEAR = 2022                  # older versions have neither the Python API nor a ZScript plugin we support
 _UNINSTALL = r"Software\Microsoft\Windows\CurrentVersion\Uninstall"
 

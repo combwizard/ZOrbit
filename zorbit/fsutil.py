@@ -1,4 +1,5 @@
 """Small file helpers shared by the app, the Studio and the tag store."""
+import json
 import os
 import time
 
@@ -44,3 +45,24 @@ def write_atomic(path, data):
         except OSError:
             pass
         raise
+
+def read_json_for_update(path):
+    """A JSON object file read in order to change it and write it back: the dict, {} when the file does not exist,
+    or None when it exists but cannot be read just now (held open, a hand-edit typo, not an object). A caller that
+    gets None must not write: writing back what it has would wipe every key the file holds. A file held open is
+    tried again once, a moment later."""
+    for attempt in (0, 1):
+        try:
+            with open(path, encoding="utf-8-sig") as f:
+                data = json.load(f)
+            return data if isinstance(data, dict) else None
+        except FileNotFoundError:
+            return {}
+        except OSError as e:
+            if attempt == 0 and _held(e):
+                time.sleep(REPLACE_PAUSES[1])
+                continue
+            return None
+        except (ValueError, RecursionError):
+            return None
+    return None

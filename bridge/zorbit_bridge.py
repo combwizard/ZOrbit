@@ -218,7 +218,9 @@ def apply_request(sender: str = "") -> None:
         age = time.time() - float(req.get("time"))
     except (TypeError, ValueError):
         age = 0.0                                         # no time in it: carry it out
-    if age > REQUEST_MAX_AGE_S:
+    # A pick held back for a stroke was fresh when it arrived; the stroke can last longer than the limit (the app
+    # waits up to 30 s), so the age only counts for a request applied as it comes in.
+    if age > REQUEST_MAX_AGE_S and not str(sender or "").endswith("after stroke"):
         log(f"apply ({sender or 'button'}): request #{req.get('id')} is {age:.0f} s old; ignored")
         return
     S.select_pending = []                                 # a newer pick wins over items still waiting to be selected

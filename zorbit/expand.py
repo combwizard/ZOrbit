@@ -16,6 +16,7 @@ app builds a new Expander whenever it reloads radial.json or tags.json.
 """
 import dataclasses
 import threading
+import time
 
 import config as C
 import usage as U
@@ -27,6 +28,7 @@ except Exception:                  # thumbnails and the asset index are optional
     assets = None
 
 TAG_SLOTS = 12
+RESCAN_ASK_S = 5.0                 # a tag fan asks for a library rescan of a kind at most this often
 
 
 class Expander:
@@ -36,6 +38,7 @@ class Expander:
         self.tags = tags
         self._cache = {}               # tag key -> ((usage.version, tags.mtime, assets.generation), Menu or None)
         self._rescanning = set()       # kinds whose index a worker thread is building again
+        self._asked = {}               # kind -> when a rescan was last asked for (time.monotonic)
 
     def menu(self, menu):
         """The menu as the ring draws it now. Nothing is saved."""
@@ -67,10 +70,12 @@ class Expander:
         if hit is not None and hit[0] == stamp:
             return hit[1]
         found = []                                       # (kind, name): brushes by use, then the rest by name
+        missing = False
         for kind in C.ASSET_KINDS:
             index = assets.index(kind)                   # keyed as item_key() makes them
             tagged = [ik.split(":", 1)[1] for ik in self.tags.items_with(key, kind)]
             if any(k not in index for k in tagged):
+                missing = True
                 self._rescan_later(kind)                 # saved since the scan? the next build sees the new generation
             stems = [index[k].stem for k in tagged if k in index]
             stems = self.usage.rank(stems) if kind == "brush" else sorted(stems, key=str.lower)
@@ -86,21 +91,25 @@ class Expander:
                 items.append(C.Item(label="More…", kind="browser", data={"browser": key, "kind": found[0][0]},
                                     color=color))
             menu = C.Menu(id="tag:" + key, title=self.tags.label(key), items=items, fan=True)
-        self._cache[key] = (stamp, menu)                 # not newer than what was read: a rescan meanwhile rebuilds it
+        if missing:
+            self._cache.pop(key, None)                   # built again next time: a rescan may find the missing items
+        else:
+            self._cache[key] = (stamp, menu)             # not newer than what was read: a rescan meanwhile rebuilds it
         return menu
 
     def _rescan_later(self, kind):
         """Builds the index of a kind again on a worker thread (assets.rescan allows it once in a few seconds), so a
         fan never waits for a folder walk. A changed index moves assets.generation, and the next build of the fan
         starts from it."""
-        if kind in self._rescanning:
-            return
+        now = time.monotonic()
+        if kind in self._rescanning or now - self._asked.get(kind, -1e9) < RESCAN_ASK_S:
+            return                                       # a fan with an uninstalled item asks at most every few seconds
+        self._asked[kind] = now
         self._rescanning.add(kind)
 
         def run():
             try:
-                if not assets.rescan(kind):              # too soon after the last build: ask again at the next build
-                    self._cache.clear()
+                assets.rescan(kind)                      # too soon after the last build: the next fan build asks again
             except Exception:
                 pass
             finally:

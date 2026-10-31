@@ -94,3 +94,14 @@ def test_install_of_takes_the_year_from_the_scan_when_the_folder_has_none(tmp_pa
     no_sources(monkeypatch, registry=[(d, "ZBrush 2022")])
     e = installs.install_of(os.path.join(d, "ZBrush.exe"))
     assert e["year"] == 2022 and e["supported"] is True
+
+
+def test_year_from_a_maxon_folder_hint_with_a_suffix(tmp_path):
+    d = zbrush(tmp_path, "ZBrush")                         # no year in the folder name
+    e = installs.entry(d, "ZBrush 2026_0C9212BE")          # %APPDATA%\Maxon\<this>\installpath.txt
+    assert e["year"] == 2026 and e["name"] == "ZBrush 2026"
+
+
+@pytest.mark.parametrize("hint", ["ZBrush 20260", "ZBrush 12026"])
+def test_year_is_not_taken_from_a_longer_number(tmp_path, hint):
+    assert installs.entry(zbrush(tmp_path, "ZB"), hint)["year"] is None

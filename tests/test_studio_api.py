@@ -272,3 +272,32 @@ def test_closing_during_a_session_end_is_let_through(api, monkeypatch):
     assert studio._on_closing(api) is True
     api._on_end_session(False)                           # cancelled: closes are asked about again
     assert api._session_ending is False
+
+
+def test_a_preference_is_not_saved_over_an_unreadable_studio_file(api, tmp_path):
+    f = tmp_path / "studio.json"
+    f.write_text('{"window": {"x": 1}, "zbrush_folders": ["D:/ZB"], "check_updates": false,', encoding="utf-8")
+    before = f.read_bytes()
+    api.set_pref("last_screen", "library")
+    assert f.read_bytes() == before                       # a {} written back would lose all of it
+
+
+def test_a_preference_is_saved_when_studio_json_is_missing_or_fine(api, tmp_path):
+    api.set_pref("last_screen", "library")
+    assert json.loads((tmp_path / "studio.json").read_text(encoding="utf-8"))["last_screen"] == "library"
+    api.set_pref("check_updates", False)
+    data = json.loads((tmp_path / "studio.json").read_text(encoding="utf-8"))
+    assert data["last_screen"] == "library" and data["check_updates"] is False
+
+
+def test_the_browser_state_is_not_saved_over_an_unreadable_file(tmp_path, monkeypatch):
+    import popout
+    f = tmp_path / "popout.json"
+    f.write_text('{"window": [1, 2, 3, 4], "side": "right",', encoding="utf-8")
+    monkeypatch.setattr(popout, "STATE_FILE", str(f))
+    before = f.read_bytes()
+    popout._update_state(kind="alpha")
+    assert f.read_bytes() == before
+    f.write_text('{"side": "right"}', encoding="utf-8")
+    popout._update_state(kind="alpha")
+    assert json.loads(f.read_text(encoding="utf-8")) == {"side": "right", "kind": "alpha"}

@@ -276,3 +276,13 @@ def test_a_failed_import_is_written_to_the_log(tmp_path, monkeypatch):
     text = (tmp_path / "ZOrbit" / "bridge.log").read_text(encoding="utf-8")
     assert "the plugin could not start" in text
     assert "ImportError" in text or "ModuleNotFoundError" in text
+
+
+def test_a_request_held_back_for_a_long_stroke_is_still_carried_out(bridge):
+    # The app waits up to 30 s for a stroke to end; the plugin's age limit must not drop that pick.
+    bridge.stub.items.add("Brush:Standard")
+    with open(bridge.REQUEST_FILE, "w", encoding="utf-8") as f:
+        json.dump({"id": 1, "time": time.time() - 25, "label": "test", "actions": [{"brush": "Standard"}]}, f)
+    bridge.apply_request("listener, after stroke")
+    assert bridge.stub.presses() == ["Brush:Standard"]
+    assert "ignored" not in log_text(bridge)

@@ -649,7 +649,9 @@ class Api(webapi.LibraryApi, webapi.TagApi):
             return {"ok": True, "message": f"{e['name']} is already listed.", "already": True,
                     "python": e["python"]}
         with _studio_lock:                     # read, change and write as one step
-            data = _read_studio_file()
+            data = _studio_for_update()
+            if data is None:
+                return {"ok": False, "message": STUDIO_UNREADABLE}
             folders = [p for p in data.get("zbrush_folders", []) if isinstance(p, str)]
             if os.path.normcase(e["path"]) not in {os.path.normcase(p) for p in folders}:
                 folders.append(e["path"])
@@ -661,7 +663,9 @@ class Api(webapi.LibraryApi, webapi.TagApi):
         """Drops a folder added by hand from studio.json (never an automatically found one)."""
         key = os.path.normcase(os.path.normpath(str(path)))
         with _studio_lock:                     # read, change and write as one step
-            data = _read_studio_file()
+            data = _studio_for_update()
+            if data is None:
+                return {"ok": False, "message": STUDIO_UNREADABLE}
             folders = [p for p in data.get("zbrush_folders", []) if isinstance(p, str)]
             kept = [p for p in folders if os.path.normcase(os.path.normpath(p)) != key]
             if len(kept) == len(folders):
@@ -859,7 +863,9 @@ class Api(webapi.LibraryApi, webapi.TagApi):
         if key == "mode" and value not in ("", "simple", "full"):
             return self.get_prefs()
         with _studio_lock:                     # read, change and write as one step
-            data = _read_studio_file()             # keeps the other keys (window placement)
+            data = _studio_for_update()            # keeps the other keys (window placement)
+            if data is None:
+                return self.get_prefs()            # not saved: the page still shows what the file says
             for old in self._RETIRED_KEYS:
                 data.pop(old, None)
             data[key] = value
@@ -1035,6 +1041,20 @@ def _read_studio_file() -> dict:
             return {}
 
 
+STUDIO_UNREADABLE = ("studio.json could not be read just now, so nothing was changed. If it keeps happening, "
+                     "fix or delete it (it is in %APPDATA%\\ZOrbit).")
+
+
+def _studio_for_update() -> dict | None:
+    """studio.json to change and write back, or None when it is there but cannot be read now: writing back {} then
+    would lose the window placement, the added ZBrush folders and every preference."""
+    with _studio_lock:
+        data = fsutil.read_json_for_update(STUDIO_FILE)
+        if data is None:
+            _startup("studio.json could not be read; a change was not saved")
+        return data
+
+
 def _write_studio_file(data: dict):
     with _studio_lock:
         os.makedirs(paths.CONFIG_DIR, exist_ok=True)
@@ -1083,7 +1103,9 @@ def _remember_window(hwnd):
         if not rec:
             return
         with _studio_lock:                     # read, change and write as one step
-            data = _read_studio_file()
+            data = _studio_for_update()
+            if data is None:
+                return
             data["window"] = rec
             _write_studio_file(data)
     except Exception:

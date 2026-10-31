@@ -63,7 +63,9 @@ def ensure_config() -> str:
         _migrate_legacy()
     if not os.path.exists(CONFIG_FILE):
         os.makedirs(CONFIG_DIR, exist_ok=True)
-        shutil.copyfile(DEFAULT_MENUS, CONFIG_FILE)
+        import fsutil                     # here, not at the top: paths is imported before anything else
+        with open(DEFAULT_MENUS, "rb") as f:
+            fsutil.write_atomic(CONFIG_FILE, f.read())   # the app and Studio starting together never read half a file
     return CONFIG_FILE
 
 

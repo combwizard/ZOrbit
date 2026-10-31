@@ -30,6 +30,7 @@ import json
 import os
 import re
 import threading
+import time
 
 import fsutil
 import paths
@@ -42,6 +43,7 @@ STARTERS = ((FAVOURITE, FAVOURITE_LABEL, FAVOURITE_COLOR),
             ("blocking", "Blocking", "#A8DF23"), ("detailing", "Detailing", "#C77DFF"))
 MUTEX_NAME = "Local\\ZOrbitTags"
 MUTEX_WAIT_MS = 2000
+RETRY_S = 5.0                          # how soon an unreadable tags.json (held open, no access) is read again
 LABEL_MAX = 40
 _KEY_RE = re.compile(r"[a-z][a-z0-9_-]{0,31}")
 _COLOR_RE = re.compile(r"#[0-9a-fA-F]{6}")
@@ -129,6 +131,7 @@ class TagStore:
         self.mtime = 0                    # st_mtime_ns of the file as loaded; 0 when it does not exist
         self._lock = threading.RLock()
         self._sig = "unread"              # (st_mtime_ns, st_size) of the file as loaded; None: missing
+        self._retry_at = 0.0              # when a read that failed with an OSError is tried again (0: not due)
         self._tags = {}                   # key -> {"label", "color"}, in display order
         self._items = {}                  # item key -> [tag key], first = colour cue
         self._extra = {}                  # top-level keys we do not know, written back as they were
@@ -147,6 +150,7 @@ class TagStore:
         with self._lock:
             sig = self._stat()
             self._sig = sig
+            self._retry_at = 0.0
             if sig is None:
                 self.error, self.mtime, self._extra = "", 0, {}
                 self._tags = {k: {"label": lb, "color": c} for k, lb, c in STARTERS}
@@ -157,9 +161,9 @@ class TagStore:
                     raw = json.load(f)
                 if not isinstance(raw, dict):
                     raise ValueError("the top level must be an object")
-            except OSError as e:                      # locked or held by a scanner: try again next poll
+            except OSError as e:                      # locked or held by a scanner: try again a little later
                 self.error = f"tags.json could not be read: {e}"
-                self._sig = "unread"
+                self._retry_at = time.monotonic() + RETRY_S   # not every poll: each reload rebuilds every ring
                 self._starters_if_empty()
                 return self
             except ValueError as e:                   # a typo from a hand edit: wait for the file to change
@@ -179,12 +183,16 @@ class TagStore:
             self._items = {}
 
     def reload_if_changed(self) -> bool:
-        """Loads the file if it changed (or appeared, or went away) since the last load. True if it did."""
+        """Loads the file if it changed (or appeared, or went away) since the last load, or when a read that failed
+        is due again. True if what the store holds changed, so a file that stays unreadable is not reported (and
+        every ring rebuilt) on each poll."""
         with self._lock:
-            if self._stat() == self._sig:
+            same = self._stat() == self._sig
+            if same and not (self._retry_at and time.monotonic() >= self._retry_at):
                 return False
+            before = (self.error, self.mtime, self._tags, self._items)
             self.load()
-            return True
+            return not same or (self.error, self.mtime, self._tags, self._items) != before
 
     def _write(self) -> None:
         data = {"version": 1, "tags": self._tags, "items": self._items}

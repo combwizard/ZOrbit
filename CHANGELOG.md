@@ -8,6 +8,18 @@ All notable changes to this project are listed here. The format follows
 
 ### Fixed
 
+- ZBrush 2026 and newer: a pick made during a stroke that lasted more than 10 seconds was dropped without a word.
+  The plugin's age limit no longer applies to a pick it held back for the stroke.
+- Studio and the browser no longer wipe their own settings file after one failed read. A `studio.json` or
+  `popout.json` that is held open or has a typo is left as it is; before, the next change wrote back almost
+  nothing, losing the window position, the ZBrush folders you added and every preference.
+- A `tags.json` that cannot be opened (held open, no access) is read again every few seconds instead of on every
+  poll, which reloaded every ring twice a second and filled `radiald.log`.
+- A tag fan with an item ZOrbit had not found yet could keep showing the old list until the next pick. It is now
+  built again until the item turns up, and asks for a library rescan at most every five seconds.
+- A ZBrush found only through `%APPDATA%\Maxon` (in a folder with no year in its name) now gets its year, so Setup
+  shows it as ZBrush 2026 and an older version is no longer offered the plugin.
+- The first menus file is written in one step, so the app and Studio starting together never read half of it.
 - The bridge key can no longer be an `Alt` combination or **F10**. ZBrush 2022 and 2025 run no **Apply** for those
   when ZOrbit sends them, so every pick through the bridge key was lost. Studio's recorder refuses them, and a
   `radial.json` that names one is listed as a problem and uses F9.

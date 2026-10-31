@@ -126,7 +126,10 @@ def _read_state() -> dict:
 
 def _update_state(**changes):
     with _state_lock:
-        data = _read_state()
+        data = fsutil.read_json_for_update(STATE_FILE)
+        if data is None:                  # there but unreadable now: writing would lose the window, size and side
+            _log(f"{STATE_FILE} could not be read; not saved this time")
+            return
         data.update(changes)
         try:
             os.makedirs(os.path.dirname(STATE_FILE), exist_ok=True)
