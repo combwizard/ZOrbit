@@ -1,11 +1,12 @@
 """Finds the ZBrush installations on this machine (stdlib only).
 
 Public API:
-  find_installs() -> list of {"name", "year", "path", "python"} sorted by year, newest last
+  find_installs() -> list of {"name", "year", "path", "python", "supported"} sorted by year, newest last
   install_of(exe_path) -> that dict for a running ZBrush.exe
 
 "python" is whether the installation has ZBrush's Python API (2026 and later): those load the Python bridge,
-older ones (2022-2025) need the ZScript bridge. Sources, all optional: the uninstall entries in the registry,
+older ones (2022-2025) need the ZScript bridge. "supported" is False for a year before 2022 (kept in the
+list so the page can show it greyed out). Sources, all optional: the uninstall entries in the registry,
 %APPDATA%\\Maxon\\*\\installpath.txt (written by recent versions), and the usual Program Files folders.
 """
 from __future__ import annotations
@@ -16,6 +17,7 @@ import re
 import winreg
 
 _YEAR_RE = re.compile(r"\b(20\d\d)\b")
+MIN_YEAR = 2022                  # older versions have neither the Python API nor a ZScript plugin we support
 _UNINSTALL = r"Software\Microsoft\Windows\CurrentVersion\Uninstall"
 
 
@@ -34,7 +36,8 @@ def entry(path, name_hint="") -> dict | None:
     m = _YEAR_RE.search(name_hint) or _YEAR_RE.search(os.path.basename(path))
     year = int(m.group(1)) if m else None
     name = f"ZBrush {year}" if year else os.path.basename(path)
-    return {"name": name, "year": year, "path": path, "python": has_python_api(path)}
+    return {"name": name, "year": year, "path": path, "python": has_python_api(path),
+            "supported": year is None or year >= MIN_YEAR}
 
 
 def _from_registry():

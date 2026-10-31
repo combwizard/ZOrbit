@@ -1,3 +1,4 @@
+// Recompile in ZBrush 2022 after a change (tools/compile-zscript.ps1).
 // ZOrbit bridge for ZBrush 2022-2025 (ZScript): the counterpart of zorbit_bridge.py, for versions
 // without ZBrush's Python API. Compile it in ZBrush (ZScript > Load, pick this file) to ZOrbitBridge.zsc;
 // ZOrbit Studio copies that into <ZBrush>\ZStartup\ZPlugs64 together with ZOrbitData\bridge.cfg.
@@ -9,10 +10,11 @@
 //              no setup. Another key is bound natively: Ctrl+Alt+click Apply, press it, Preferences > Hotkeys > Store.
 //   Studio     opens ZOrbit Studio.
 //   Start App  starts the ZOrbit app (it also starts when ZBrush loads this plugin).
-//   Status     shows where picks arrive, whether one is pending, and the last pick.
+//   Status     shows where picks arrive, whether one is pending, and the last pick (read from zscript_bridge.log).
 //
 // bridge.cfg, one value per line: ZORBIT 1 / folder with a trailing backslash / app command line /
-// Studio command line / 1 to start the app on load. ZOrbitData also holds app.lnk and studio.lnk.
+// Studio command line / 1 to start the app on load. ZOrbitData also holds app.lnk and studio.lnk
+// (left out where PowerShell is restricted: install.txt says why, and the command lines above are used instead).
 // request.txt: ZORBIT 1 / id / label / then per action its kind and arguments:
 //   brush|alpha|material|texture <name> <file or ->   press <path>   set <path> <value>   toggle <path>
 // Both are written by the app with 8.3 paths where needed, since ZScript strings stop at 255 characters.
@@ -42,7 +44,7 @@
 [VarDef, rmCount, 0]
 [VarDef, rmRes, ""]            // result of the last action
 [VarDef, rmAll, ""]            // the results of every action of the pick, joined with "; "
-[VarDef, rmLast, "none yet"]   // summary of the last pick
+[VarDef, rmLast, ""]           // summary of the last pick (reset on every button press; Status reads the log)
 
 // --- reading files line by line ------------------------------------------------------------------
 [RoutineDef, RM_Close,
@@ -284,11 +286,11 @@
 				]
 				[VarSet, rmLast, [StrMerge, "#", #rmId, " '", #rmLabel, "': ", #rmAll]],
 				[VarSet, rmLast, "unreadable request.txt (deleted)"]
-			],
-			[VarSet, rmLast, "Apply pressed, no pending pick"]
+			]
+			[RoutineCall, RM_Log],        // only a real pick is logged: the Studio shows this file as the last pick
+			[VarSet, rmLast, ""]          // Apply with no request.txt changes nothing
 		]
-		[RoutineCall, RM_Close]
-		[RoutineCall, RM_Log],
+		[RoutineCall, RM_Close],
 		[Note, "ZOrbit: ZOrbitData/bridge.cfg is missing. Install the bridge again in ZOrbit Studio (Settings).", , 3]
 	]
 ]
@@ -329,6 +331,13 @@
 	[If, rmOk,
 		[VarSet, rmP, [StrMerge, #rmDir, "request.txt"]]
 		[If, [FileExists, #rmP], [VarSet, rmB, "yes"], [VarSet, rmB, "no"]]
+		// The last pick is what Apply wrote to zscript_bridge.log; rmLast itself starts over with every button press.
+		[VarSet, rmP, [StrMerge, #rmDir, "zscript_bridge.log"]]
+		[RoutineCall, RM_Open]
+		[RoutineCall, RM_ReadLine]
+		[VarSet, rmLast, #rmLine]
+		[RoutineCall, RM_Close]
+		[If, [StrLength, #rmLast] == 0, [VarSet, rmLast, "none yet"]]
 		[MessageOK, [StrMerge, "Picks arrive in: ", #rmDir, "\nPending pick: ", #rmB, "\nLast pick: ", #rmLast], "ZOrbit"],
 		[MessageOK, "ZOrbitData/bridge.cfg is missing or unreadable. Install the bridge again in ZOrbit Studio (Settings).", "ZOrbit"]
 	]

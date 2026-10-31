@@ -55,10 +55,13 @@ These versions have no Python API, so they get a ZScript plugin with the same pa
 
 Differences from ZBrush 2026 and newer:
 
-- There is no listener, so **every pick uses the bridge key**, whatever the mode. The plugin binds **F9** to **Apply** itself, so the default key needs no setup. If you choose another bridge key, bind and store it in each of these versions (the steps in [How picks reach ZBrush](#how-picks-reach-zbrush-bridge-modes)); each version keeps its own hotkeys.
+- There is no listener, so **every pick uses the bridge key**, whatever the mode. When ZBrush loads the plugin it binds **F9** to **Apply** if **Apply** has no hotkey yet (checked in ZBrush 2022; in the other versions look at **Zplugin > ZOrbit > Apply** and bind F9 yourself if it is empty). If you choose another bridge key, bind and store it in each of these versions (the steps in [How picks reach ZBrush](#how-picks-reach-zbrush-bridge-modes)); each version keeps its own hotkeys.
 - A pick does not wait for the end of a stroke (see above).
 - Brushes load from that version's own `.zbp` files, because an older ZBrush cannot always read a newer version's brushes.
-- Status shows where picks arrive, whether one is waiting, and the last pick. The plugin also writes that last pick to `zscript_bridge.log`, which Studio's Status screen shows.
+- Status shows where picks arrive, whether one is waiting, and the last pick. The plugin also writes that last pick to `zscript_bridge.log`, which Studio's Status screen shows. Pressing **Apply** when no pick is waiting changes nothing, so it does not replace that last pick.
+- The start shortcuts may be left out. The plugin starts the app and Studio through two shortcuts (`app.lnk` and `studio.lnk` in `ZOrbitData`), which Studio makes with PowerShell. On a PC where PowerShell is restricted (Constrained Language Mode, AppLocker or an antivirus), Studio installs without them and says so. The plugin then starts ZOrbit the slower way, with the command lines in `bridge.cfg`, which can take a few seconds on Windows 11. `ZOrbitData\install.txt` records the reason.
+- The data folder path has to fit the plugin. ZScript reads `bridge.cfg` in the Windows code page, one line of at most 255 characters. If the path of `%LOCALAPPDATA%\ZOrbit` has characters outside that code page (for example a user name in another script) and 8.3 short names are off, Studio refuses to install and says so. Move the data folder, or turn on 8.3 names with `fsutil 8dot3name set 0` as administrator, then install again.
+- ZBrush 2021 and older are not supported. Studio lists them but refuses to install the plugin.
 
 When this version of ZOrbit has a newer plugin than one you installed, **Settings** shows a badge and that row says **Update available**. After **Update**, restart that ZBrush.
 
@@ -67,7 +70,7 @@ When this version of ZOrbit has a newer plugin than one you installed, **Setting
 | Button | What it does |
 |---|---|
 | Studio | Opens ZOrbit Studio. |
-| Apply | Carries out the pending pick. Bound to the bridge key for the fallback route. In ZBrush 2022 to 2025 it comes with F9 already bound. |
+| Apply | Carries out the pending pick. Bound to the bridge key for the fallback route. In ZBrush 2022 to 2025 the plugin binds F9 to it when it has no hotkey. |
 | Start App | Starts the app if it is not running. Normally unnecessary. |
 | Status | Shows whether the listener is verified, whether the app is running, and the last pick. |
 

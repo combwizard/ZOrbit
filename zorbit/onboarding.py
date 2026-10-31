@@ -23,7 +23,7 @@ import zscript_bridge
 ENV_KEY = "Environment"
 ENV_VALUE = "ZBRUSH_PLUGIN_PATH"
 START_GRACE = 90          # seconds after ZBrush starts during which "not loaded yet" is still "starting"
-BRIDGE_FILES = ("zorbit_bridge.py", "radial_bridge.py", "radialmenu_bridge.py")    # ours and the old names
+BRIDGE_FILES = ("zorbit_bridge.py", "radial_menu_bridge.py")    # ours and the old names
 
 
 # --- ZBRUSH_PLUGIN_PATH ----------------------------------------------------------------------------
@@ -74,20 +74,37 @@ def other_zorbit_entries(dir: str | None, entries: list[str]) -> list[dict]:
         low = e.lower()
         bridge_like = ntpath.basename(ntpath.normpath(real)).lower() == "bridge" and any(
             os.path.isfile(os.path.join(real, f)) for f in BRIDGE_FILES)
-        if bridge_like or "zorbit" in low or "radialmenu" in low:
+        if bridge_like or "zorbit" in low or "radialmenu" in low or "radial menu" in low:
             out.append({"path": e, "exists": os.path.isdir(real)})
     return out
 
 
+MACHINE_ENV_KEY = r"SYSTEM\CurrentControlSet\Control\Session Manager\Environment"
+
+
+def _machine_plugin_path() -> tuple[str, int]:
+    """(value, registry type) of the machine-wide ZBRUSH_PLUGIN_PATH, or ("", REG_SZ). Read only."""
+    try:
+        with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, MACHINE_ENV_KEY, 0, winreg.KEY_READ) as key:
+            value, regtype = winreg.QueryValueEx(key, ENV_VALUE)
+    except OSError:
+        return "", winreg.REG_SZ
+    if not isinstance(value, str) or regtype not in (winreg.REG_SZ, winreg.REG_EXPAND_SZ):
+        return "", winreg.REG_SZ
+    return value, regtype
+
+
 def register_plugin_path(dir: str) -> dict:
     """Adds dir to the user's ZBRUSH_PLUGIN_PATH, like the installer does, and tells running programs. The
-    caller must pass a folder it computed itself (paths.bridge_dir()), never one the UI sent."""
+    caller must pass a folder it computed itself (paths.bridge_dir()), never one the UI sent. Windows uses
+    the user value of this variable and ignores the machine one, so when the user has no value yet the new
+    one starts from the machine entries (if any) followed by dir. The machine value is never written."""
     try:
         with winreg.OpenKey(winreg.HKEY_CURRENT_USER, ENV_KEY, 0, winreg.KEY_READ | winreg.KEY_SET_VALUE) as key:
             try:
                 current, regtype = winreg.QueryValueEx(key, ENV_VALUE)
             except OSError:
-                current, regtype = "", winreg.REG_SZ
+                current, regtype = _machine_plugin_path()
             if not isinstance(current, str) or regtype not in (winreg.REG_SZ, winreg.REG_EXPAND_SZ):
                 current, regtype = "", winreg.REG_SZ
             entries = [p.strip() for p in current.split(";") if p.strip()]
@@ -197,7 +214,8 @@ def snapshot(all_installs: list[dict], listener: dict | None, last_pick: dict | 
         if key in index:
             return index[key]
         r = {"name": e["name"], "year": e["year"], "path": e["path"], "python": bool(e["python"]),
-             "added": added, "kind": "modern" if e["python"] else "legacy", "procs": []}
+             "supported": bool(e.get("supported", True)), "added": added,
+             "kind": "modern" if e["python"] else "legacy", "procs": []}
         if e["python"]:
             r["plugin"] = {"state": "no_bridge" if not bridge["dir_ok"] else ("ok" if registered else "unregistered")}
             r["ready"] = bool(registered and bridge["dir_ok"])

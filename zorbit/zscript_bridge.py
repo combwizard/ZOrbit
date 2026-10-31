@@ -4,7 +4,8 @@ Files:
   <ZBrush>\\ZStartup\\ZPlugs64\\ZOrbitBridge.zsc        compiled in ZBrush from bridge/zscript/ZOrbitBridge.txt
   <ZBrush>\\ZStartup\\ZPlugs64\\ZOrbitData\\bridge.cfg   written here: where picks arrive, how to start the app
   <ZBrush>\\ZStartup\\ZPlugs64\\ZOrbitData\\*.lnk        shortcuts that start the app and the Studio (see SHORTCUTS)
-  %LOCALAPPDATA%\\ZOrbit\\request.txt                  every pick, next to request.json (written by the app)
+  <ZBrush>\\ZStartup\\ZPlugs64\\ZOrbitData\\install.txt  "shortcuts: ok", or why they could not be made
+  %LOCALAPPDATA%\\ZOrbit\\request.txt                every pick, next to request.json (written by the app)
 
 Before the rename the plugin was RadialMenuBridge.zsc with a RadialMenuData folder. Those count as an installed
 plugin that needs an update; installing replaces them and removing removes them too.
@@ -34,6 +35,7 @@ import sys
 import threading
 import time
 
+import installs
 import paths
 
 PLUGIN = "ZOrbitBridge.zsc"
@@ -42,6 +44,8 @@ DATA = "ZOrbitData"
 LEGACY_PLUGIN = "RadialMenuBridge.zsc"  # the same plugin from before the rename
 LEGACY_DATA = "RadialMenuData"
 CFG = "bridge.cfg"
+NOTE = "install.txt"                    # why the shortcuts are missing, when they could not be made
+MIN_YEAR = 2022
 MAGIC = "ZORBIT 1"
 MAX_LINE = 255                          # longest string ZScript reads in one go
 ASSET_KINDS = ("brush", "alpha", "material", "texture")     # actions that carry a name and a file
@@ -159,7 +163,8 @@ def status(install_path) -> dict:
         try:
             with open(cfg, encoding="mbcs", errors="replace") as f:
                 cfg_ok = f.read().splitlines() == cfg_lines()
-            links_ok = all(os.path.isfile(os.path.join(dest, DATA, n)) for n in SHORTCUTS)
+            links_ok = shortcuts_skipped(dest) is not None or all(
+                os.path.isfile(os.path.join(dest, DATA, n)) for n in SHORTCUTS)
             current = cfg_ok and links_ok and filecmp.cmp(plug, bundled(), shallow=False)
         except OSError:
             pass
@@ -182,9 +187,34 @@ def _make_shortcut(path, argv) -> None:
                    timeout=60, creationflags=0x08000000, capture_output=True)          # CREATE_NO_WINDOW
 
 
-def build_plugin_files(folder, user_data=None) -> None:
+def _reason(e) -> str:
+    """One short line saying why the shortcut step failed."""
+    text = ""
+    if isinstance(e, subprocess.CalledProcessError):
+        err = e.stderr or b""
+        text = err.decode("utf-8", "replace") if isinstance(err, bytes) else str(err)
+    text = " ".join(text.split()) or " ".join(f"{type(e).__name__}: {e}".split())
+    return text[:200]
+
+
+def shortcuts_skipped(dest) -> str | None:
+    """The reason in ZOrbitData/install.txt (under dest) when the shortcuts could not be made, else None."""
+    try:
+        with open(os.path.join(dest, DATA, NOTE), encoding="utf-8", errors="replace") as f:
+            for line in f.read().splitlines():
+                if line.startswith("shortcuts:"):
+                    why = line[len("shortcuts:"):].strip()
+                    return None if why in ("", "ok") else why
+    except OSError:
+        pass
+    return None
+
+
+def build_plugin_files(folder, user_data=None) -> str | None:
     """Writes the plugin and its data folder (bridge.cfg, shortcuts) into folder, from this build's own sources:
-    the bundled .zsc, cfg_lines() and launch_commands(). The data folder goes first, the plugin last."""
+    the bundled .zsc, cfg_lines() and launch_commands(). The data folder goes first, the plugin last. The
+    shortcuts are optional (PowerShell may be locked down): when they cannot be made the plugin falls back to the
+    command lines in bridge.cfg, install.txt records why, and that reason is returned (None when all is well)."""
     src = bundled()
     if not src:
         raise FileNotFoundError(f"This build has no compiled ZScript bridge ({PLUGIN}).")
@@ -194,9 +224,51 @@ def build_plugin_files(folder, user_data=None) -> None:
     with open(os.path.join(data_dir, CFG), "wb") as f:
         f.write(data)
     cmds = paths.launch_commands()
-    for name, which in SHORTCUTS.items():
-        _make_shortcut(os.path.join(data_dir, name), cmds[which])
+    skipped = None
+    try:
+        for name, which in SHORTCUTS.items():
+            _make_shortcut(os.path.join(data_dir, name), cmds[which])
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError) as e:
+        skipped = _reason(e)
+        for name in SHORTCUTS:
+            try:
+                os.remove(os.path.join(data_dir, name))
+            except OSError:
+                pass
+    with open(os.path.join(data_dir, NOTE), "w", encoding="utf-8") as f:
+        f.write(f"shortcuts: {skipped or 'ok'}\n")
     shutil.copyfile(src, os.path.join(folder, PLUGIN))
+    return skipped
+
+
+def cfg_problem(data_dir=None) -> str | None:
+    """Why bridge.cfg cannot be read by the plugin from this account, or None. ZScript reads the file in the
+    ANSI code page with lines of at most 255 bytes, so a data folder that is neither plain ASCII nor available
+    as an 8.3 short name cannot be passed on."""
+    lines = cfg_lines(data_dir)
+    folder = lines[1] if len(lines) > 1 else ""
+    if encode([folder])[1]:
+        if len(folder.encode("mbcs", errors="replace")) > MAX_LINE:
+            return (f"The ZBrush 2022 to 2025 plugin cannot find ZOrbit's data folder from this account: the path "
+                    f"{folder} is longer than {MAX_LINE} characters. Move the data folder somewhere shorter, "
+                    f"then try again.")
+        return (f"The ZBrush 2022 to 2025 plugin cannot find ZOrbit's data folder from this account: the path "
+                f"{folder} has characters outside the Windows code page and 8.3 short names are off. Move the "
+                f"data folder or turn on 8.3 names (fsutil 8dot3name set 0), then try again.")
+    for label, line in zip(("start the app", "open the Studio"), lines[2:4]):
+        if encode([line])[1]:
+            return (f"The ZBrush 2022 to 2025 plugin cannot use the command that has to {label}: it has characters "
+                    f"outside the Windows code page, or is longer than {MAX_LINE} characters, and has no 8.3 short "
+                    f"name. Install ZOrbit in a plain path, then try again.")
+    return None
+
+
+def _installed_message(dest) -> str:
+    why = shortcuts_skipped(dest)
+    if why:
+        return ("Installed without the start shortcuts (PowerShell is restricted here): the plugin starts ZOrbit "
+                "the slower way. Restart ZBrush so it loads the plugin.")
+    return "Installed. Restart ZBrush so it loads the plugin."
 
 
 def _stage() -> str:
@@ -210,8 +282,12 @@ def copy_staged(stage, dest) -> None:
     """Puts the staged plugin and its data folder into ZPlugs64 (the plain copy; never run elevated)."""
     os.makedirs(os.path.join(dest, DATA), exist_ok=True)
     shutil.copyfile(os.path.join(stage, PLUGIN), os.path.join(dest, PLUGIN))
-    for name in (CFG, *SHORTCUTS):
-        shutil.copyfile(os.path.join(stage, DATA, name), os.path.join(dest, DATA, name))
+    for name in (CFG, NOTE, *SHORTCUTS):
+        src = os.path.join(stage, DATA, name)
+        if os.path.isfile(src):                          # the shortcuts are missing when they could not be made
+            shutil.copyfile(src, os.path.join(dest, DATA, name))
+        elif os.path.isfile(os.path.join(dest, DATA, name)):
+            os.remove(os.path.join(dest, DATA, name))    # not left over from an earlier install
     remove_from(dest, legacy_only=True)
 
 
@@ -219,7 +295,7 @@ def remove_from(dest, legacy_only=False) -> None:
     """Deletes only what build_plugin_files() puts there, and the same files from before the rename."""
     names = [(LEGACY_PLUGIN, LEGACY_DATA)] + ([] if legacy_only else [(PLUGIN, DATA)])
     for plugin, data in names:
-        for p in (os.path.join(dest, plugin), *(os.path.join(dest, data, n) for n in (CFG, *SHORTCUTS))):
+        for p in (os.path.join(dest, plugin), *(os.path.join(dest, data, n) for n in (CFG, NOTE, *SHORTCUTS))):
             if os.path.exists(p):
                 os.remove(p)
         try:
@@ -289,14 +365,23 @@ def install(install_path) -> dict:
 def _install(install_path) -> dict:
     if not bundled():
         return {"ok": False, "message": "This build has no compiled ZScript bridge (ZOrbitBridge.zsc)."}
+    e = installs.entry(install_path)
+    if e and not e["supported"]:
+        return {"ok": False, "message": f"ZBrush {e['year']} is not supported (2022 or newer)."}
     dest = zplugs(install_path)
+    try:
+        problem = cfg_problem()
+    except OSError as err:
+        return {"ok": False, "message": f"Could not prepare the plugin files: {err}"}
+    if problem:
+        return {"ok": False, "message": problem}
     try:
         stage = _stage()
     except (OSError, subprocess.SubprocessError) as e:
         return {"ok": False, "message": f"Could not prepare the plugin files: {e}"}
     try:
         copy_staged(stage, dest)
-        return {"ok": True, "elevated": False, "message": "Installed. Restart ZBrush so it loads the plugin."}
+        return {"ok": True, "elevated": False, "message": _installed_message(dest)}
     except PermissionError:
         pass
     except OSError as e:
@@ -305,7 +390,7 @@ def _install(install_path) -> dict:
     shutil.rmtree(STAGE_DIR, ignore_errors=True)
     os.makedirs(STAGE_DIR, exist_ok=True)
     ok, msg = _run_elevated(["--zscript-copy", STAGE_DIR, dest])
-    return {"ok": ok, "elevated": True, "message": "Installed. Restart ZBrush so it loads the plugin." if ok else msg}
+    return {"ok": ok, "elevated": True, "message": _installed_message(dest) if ok else msg}
 
 
 def remove(install_path) -> dict:
@@ -361,16 +446,16 @@ def elevated_main(args) -> int:
             # is where picks must arrive even when UAC ran this as another account.
             st = os.path.normpath(stage)
             user_data = os.path.dirname(st) if os.path.basename(st).lower() == "zscript_stage" and os.path.isdir(st) else None
+            problem = cfg_problem(user_data)
+            if problem:
+                raise ValueError(problem)
             build_plugin_files(dest, user_data)
             remove_from(dest, legacy_only=True)
         else:
             remove_from(dest)
         return 0
     except Exception as e:
-        if isinstance(e, subprocess.CalledProcessError):
-            msg = f"Could not create the shortcuts: {(e.stderr or b'').decode('utf-8', 'replace').strip() or e}"
-        else:
-            msg = str(e) if isinstance(e, ValueError) else f"{type(e).__name__}: {e}"
+        msg = str(e) if isinstance(e, ValueError) else f"{type(e).__name__}: {e}"
         try:
             if os.path.basename(os.path.normpath(stage)).lower() == "zscript_stage" and os.path.isdir(stage):
                 with open(os.path.join(stage, "error.txt"), "w", encoding="utf-8") as f:
