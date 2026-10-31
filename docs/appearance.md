@@ -8,13 +8,13 @@ These are on the Settings screen in Studio, and under `"ring"` in `radial.json`.
 
 | Setting (`ring.`) | Default | Range | Meaning |
 |---|---|---|---|
-| `radius` | 145 | 60 to 400 | Distance from the centre to the slots, in pixels. |
+| `radius` | 145 | 60 to 400 | Distance from the centre to the slots, in pixels. This is the smallest the ring gets: a menu with many items spreads wider. |
 | `slot` | 72 | 32 to 160 | Diameter of each icon disc. |
 | `dead_zone` | 38 | 10 to 120 | Radius around the centre where no slot is picked. |
 | `tap_ms` | 250 | 0 to 1000 | A hotkey press shorter than this is a tap. |
 | `timeout_s` | 20 | 2 to 120 | An open ring closes itself after this many seconds. |
 | `animation` | `smooth` | see [Open animations](#open-animations) | The open animation. |
-| `labels` | `name` | `name`, `none` | Show names under the slots, or icons only. |
+| `labels` | `name` | `name`, `none` | Show names under the slots, or icons only. A name sits on a soft dark pill, so it stays readable when a neighbouring slot is close. |
 | `flick` | `true` | `true`, `false` | Moving out past a slot picks it without releasing or clicking. |
 | `hover_submenus` | `true` | `true`, `false` | Reaching a submenu slot opens the submenu, centred on that slot. |
 | `tag_colors` | `tint` | `none`, `tint`, `glow`, `both` | Whether an item's first tag tints its icon, glows, or both. See [Tag colours](#tag-colours). |
@@ -26,6 +26,8 @@ These are on the Settings screen in Studio, and under `"ring"` in `radial.json`.
 | `tag_tint_blend` | `multiply` | `multiply`, `overlay` | `multiply` darkens the icon. `overlay` keeps its light and shade. |
 
 Sizes are scaled for high-DPI screens automatically.
+
+The radius is a minimum. When a menu has so many items that neighbouring slots would sit closer than 1.25 slot widths apart, the ring grows until they do not. With the default slot size that starts at 10 items: 12 items make a ring about 174 pixels in radius, 24 items about 345. The Studio preview grows the same way, so lowering **Ring radius** changes nothing once a menu is past that point. Raise **Slot size** or cut the number of items to keep the ring smaller. Names in Chinese, Japanese or Korean are drawn with Microsoft YaHei, Yu Gothic or Malgun Gothic, whichever Windows has; other names use Segoe UI.
 
 ### Colours
 

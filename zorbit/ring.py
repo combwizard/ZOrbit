@@ -9,6 +9,9 @@ border, spoke and label take the colour too. A band through the slot centres (ri
 colour, faint for one without; it is left out when no slot has a colour. A tag slot is a solid disc in the tag colour with a tag glyph whatever ring.tag_colors says; one with no
 brushes is a faint tag glyph and nothing else of it is coloured.
 All of it is drawn into the sprites when they are built, so a frame costs the same as before.
+Every disc is drawn before any label, and a label sits on a soft dark pill, so a neighbouring disc never hides a name. The radius is
+a minimum: a ring with many items grows until neighbouring slots are SLOT_GAP slot widths apart.
+Sprites are kept between opens (_sprite_cache), so a menu opened again starts at once.
 Selection is by angle outside a dead zone; a slot covers at most a quarter of the circle, so a ring of one to
 three slots has gaps between them.
 
@@ -36,10 +39,13 @@ on_done(item_or_None, reason, at) exactly once and destroys itself. at: screen p
 for a flick or submenu hover (where a submenu should open), else None.
 """
 import ctypes
+import hashlib
 import math
 import os
+import threading
 import time
 import traceback
+from collections import OrderedDict
 
 from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageFont
 
@@ -58,7 +64,13 @@ FAN_SPAN = (130.0, 110.0)   # widest arc (degrees) of a first fan and of a deepe
 FAN_TURNS = (0, 15, -15, 30, -30, 45, -45, 60, -60, 75, -75, 90, -90)   # turns tried to dodge slots and edges
 FAN_MS = 220                # longest fan open animation (per slot)
 FAN_GRACE = 0.12            # seconds a fan stays open after the cursor leaves it
+SLOT_GAP = 1.25             # neighbouring slot centres are at least this many slot widths apart
+HINT_ALPHA = 140            # opacity (of 255) of the hint text under the title
+PILL_ALPHA = 140            # opacity (of 255) of the dark pill behind a label
+SPRITE_MENUS = 8            # menus whose sprites are kept between opens
 _instances = {}
+_sprite_cache = OrderedDict()   # key (see Ring._sprite_key) -> (sprites, labels, dot), least recently used first
+_sprite_lock = threading.Lock()
 _class_registered = False
 _wndproc_ref = None
 try:
@@ -121,14 +133,97 @@ MODES = {
 MODE_NAMES = list(MODES)
 
 
-def _font(px: int, bold=True):
-    fonts = os.path.join(os.environ.get("WINDIR", r"C:\Windows"), "Fonts")
-    for name in (("segoeuib.ttf", "seguisb.ttf", "arialbd.ttf") if bold else ("segoeui.ttf", "arial.ttf")):
+_FONT_CACHE = {}            # (font file, px) -> loaded font, or None when it would not load
+
+
+def _fonts_dir():
+    return os.path.join(os.environ.get("WINDIR", r"C:\Windows"), "Fonts")
+
+
+def _load_font(name, px):
+    path = os.path.join(_fonts_dir(), name)
+    key = (path, px)
+    if key not in _FONT_CACHE:
         try:
-            return ImageFont.truetype(os.path.join(fonts, name), max(6, px))
+            if not os.path.isfile(path):           # Pillow would go looking in the other font folders
+                raise OSError(path)
+            _FONT_CACHE[key] = ImageFont.truetype(path, px, index=0)   # index 0 picks the first face of a .ttc
         except OSError:
-            pass
+            _FONT_CACHE[key] = None
+    return _FONT_CACHE[key]
+
+
+def _font(px: int, bold=True):
+    px = max(6, px)
+    for name in (("segoeuib.ttf", "seguisb.ttf", "arialbd.ttf") if bold else ("segoeui.ttf", "arial.ttf")):
+        f = _load_font(name, px)
+        if f is not None:
+            return f
     return ImageFont.load_default()
+
+
+# Code point ranges Segoe UI draws: Latin (with its extensions), Greek, Cyrillic, general punctuation, currency.
+_SEGOE_RANGES = ((0x0000, 0x024F), (0x0370, 0x03FF), (0x0400, 0x052F), (0x1E00, 0x1FFF), (0x2000, 0x206F),
+                 (0x20A0, 0x20CF))
+_HANGUL = ((0x1100, 0x11FF), (0x3130, 0x318F), (0xAC00, 0xD7AF))
+_KANA = ((0x3040, 0x30FF),)
+_WIDE_FONTS = {                                    # bold, regular: Chinese, Japanese, Korean, symbols
+    "zh": ("msyhbd.ttc", "msyh.ttc"), "ja": ("YuGothB.ttc", "YuGothM.ttc"),
+    "ko": ("malgunbd.ttf", "malgun.ttf"), "sym": ("seguisym.ttf", "seguisym.ttf"),
+}
+
+
+def _in(ch, ranges):
+    c = ord(ch)
+    return any(lo <= c <= hi for lo, hi in ranges)
+
+
+def _font_for(text: str, px: int, bold=True):
+    """The font for text: Segoe UI when every character is Latin, Greek, Cyrillic or common punctuation,
+    otherwise the first of YaHei, Yu Gothic, Malgun Gothic and Segoe UI Symbol that loads (Yu Gothic comes first
+    for text with kana, Malgun first for Hangul), then the Segoe chain. Loaded fonts are cached."""
+    if all(_in(ch, _SEGOE_RANGES) for ch in text):
+        return _font(px, bold)
+    first = "ko" if any(_in(ch, _HANGUL) for ch in text) else "ja" if any(_in(ch, _KANA) for ch in text) else "zh"
+    px = max(6, px)
+    for lang in (first,) + tuple(k for k in ("zh", "ja", "ko", "sym") if k != first):
+        f = _load_font(_WIDE_FONTS[lang][0 if bold else 1], px)
+        if f is not None:
+            return f
+    return _font(px, bold)
+
+
+def _sprite_get(key):
+    with _sprite_lock:
+        val = _sprite_cache.get(key)
+        if val is not None:
+            _sprite_cache.move_to_end(key)
+        return val
+
+
+def _sprite_put(key, val):
+    """Keeps val for key; only the SPRITE_MENUS most recently used entries stay."""
+    with _sprite_lock:
+        _sprite_cache[key] = val
+        _sprite_cache.move_to_end(key)
+        while len(_sprite_cache) > SPRITE_MENUS:
+            _sprite_cache.popitem(last=False)
+
+
+def _icon_sig(im):
+    """A short fingerprint of an icon image: same picture, same signature, however many objects hold it."""
+    if im is None:
+        return None
+    return (im.size, im.mode, hashlib.blake2b(im.tobytes(), digest_size=8).hexdigest())
+
+
+def _shorten(draw, text, font, maxw):
+    """text cut short with an ellipsis until it is no wider than maxw pixels in font."""
+    if draw.textbbox((0, 0), text, font=font)[2] <= maxw:
+        return text
+    while len(text) > 1 and draw.textbbox((0, 0), text + "…", font=font)[2] > maxw:
+        text = text[:-1]
+    return text + "…"
 
 
 def _rgb(c: str):
@@ -311,6 +406,7 @@ class Ring:
         self._dib = None
         self._last_key = None
         self._base_cache = None
+        self._icons = {}                           # id(item) -> its icon image, for _sprite_key and the sprites
 
     # --- public ----------------------------------------------------------------------------------
     @classmethod
@@ -424,6 +520,8 @@ class Ring:
         self.step = 360.0 / self.n
         self.R = c["radius"] * scale
         self.slot = c["slot"] * scale
+        if self.n >= 2:                            # the radius is a minimum: grow it until neighbours have room
+            self.R = max(self.R, SLOT_GAP * self.slot / (2 * math.sin(math.pi / self.n)))
         self.dead = c["dead_zone"] * scale
         if self.nested:                            # entered on the parent's slot disc: no instant pick there
             self.dead = max(self.dead, self.slot / 2 + 4 * scale)
@@ -766,16 +864,42 @@ class Ring:
         col = self.cfg["colors"]
         self.c_bg, self.c_accent, self.c_hi = col["bg"], col["accent"], col["highlight"]
         self.c_text, self.c_lines = col["text"], col.get("lines", col["accent"])
-        self.f_label = _font(int(11 * self.scale * SS))
         self.f_glyph = _font(int(15 * self.scale * SS))
-        self.f_title = _font(int(9 * self.scale * SS))
-        self.sprites = [self._slot_sprites(it) for it in self.items]
-        self.labels = [self._label_sprites(it) for it in self.items]
+        t0 = time.perf_counter()
+        key = self._sprite_key()
+        cached = _sprite_get(key)
+        hit = cached is not None
+        if not hit:
+            cached = ([self._slot_sprites(it) for it in self.items], [self._label_sprites(it) for it in self.items],
+                      self._dot_sprite())
+            _sprite_put(key, cached)
+        self.sprites, self.labels, self._dot = cached
+        ms = (time.perf_counter() - t0) * 1000
+        self._log(f"ring '{self.menu.id}' sprites " + (f"from cache ({ms:.0f} ms)" if hit else f"built in {ms:.0f} ms"))
         self._static_cache = None
         self._base_cache = None
-        self._dot = self._dot_sprite()
         self.hv = [[0.0, 0.0, 0.0] for _ in self.items]       # per slot: from, to, t0
         self._blend_cache = {}
+
+    def _icon(self, it):
+        """The icon image of an item (or None), asked of icon_for once per ring."""
+        if id(it) not in self._icons:
+            try:
+                self._icons[id(it)] = self.icon_for(it)
+            except Exception:
+                self._icons[id(it)] = None
+        return self._icons[id(it)]
+
+    def _sprite_key(self):
+        """What the ring's sprites are drawn from: the menu, each item's look (its icon by content, since a
+        thumbnail can turn up later), and every setting that reaches a sprite."""
+        c, col = self.cfg, self.cfg["colors"]
+        items = tuple((it.kind, it.label, _icon_sig(self._icon(it)), it.color, it.tag,
+                       self._fans_out(it) if it.kind == "menu" else False) for it in self.items)
+        look = (c["slot"], col["bg"], col["accent"], col["highlight"], col["text"],
+                c.get("tag_colors", "tint"), c.get("tag_glow_opacity", 0.4), c.get("tag_tint_opacity", 0.3),
+                c.get("tag_tint_style", "gradient"), c.get("tag_tint_blend", "multiply"))
+        return self.menu.id, items, look, self.scale, c.get("labels", "name")
 
     def _slot_sprites(self, it, slot=None):
         """(idle, hover) RGBA sprites, drawn at the 1.12x hover size so scaling always reduces."""
@@ -792,11 +916,7 @@ class Ring:
         tint = bool(col) and (mode in ("tint", "both") or bool(it.tag))
         glow_a = self.cfg.get("tag_glow_opacity", 0.4)
         soft = bool(col) and mode in ("glow", "both") and glow_a > 0
-        icon = None
-        try:
-            icon = self.icon_for(it)
-        except Exception:
-            icon = None
+        icon = self._icon(it)
         ins = int(D - 16 * 1.12 * self.scale * s)
         if icon is not None:
             icon = icon.convert("RGBA").resize((ins, ins), Image.LANCZOS)
@@ -854,8 +974,9 @@ class Ring:
                     _glyph_grid(gd, c, c, ins * 0.46, _rgba(it.color or self.c_text, 0.95))
                 else:
                     glyph = it.label if len(it.label) <= 4 else "".join(w[0] for w in it.label.split()[:2]).upper()
-                    l, t_, r_, b_ = gd.textbbox((0, 0), glyph, font=self.f_glyph)
-                    gd.text((c - (r_ - l) / 2 - l, c - (b_ - t_) / 2 - t_), glyph, font=self.f_glyph,
+                    gf = _font_for(glyph, int(15 * self.scale * SS))
+                    l, t_, r_, b_ = gd.textbbox((0, 0), glyph, font=gf)
+                    gd.text((c - (r_ - l) / 2 - l, c - (b_ - t_) / 2 - t_), glyph, font=gf,
                             fill=_rgba(self.c_text, 0.9))
             if sub:                                # submenu badge, bottom-right: a fan, or an arrow for a ring
                 u = self.scale * s
@@ -882,28 +1003,26 @@ class Ring:
         return disc(False), disc(True)
 
     def _label_sprites(self, it, slot=None):
+        """(idle, hover) label sprites: the name on a soft dark pill, so it reads over a neighbouring disc."""
         if self.cfg.get("labels", "name") == "none":
             return None
         s = SS
-        font = self.f_label
+        font = _font_for(it.label, int(11 * self.scale * s))
         tmp = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
-        text = it.label
-        maxw = (slot or self.slot) * 1.9 * s
-        if tmp.textbbox((0, 0), text, font=font)[2] > maxw:
-            while len(text) > 1 and tmp.textbbox((0, 0), text + "…", font=font)[2] > maxw:
-                text = text[:-1]
-            text += "…"
-        l, t, r, b = tmp.textbbox((0, 0), text, font=font)
+        text = _shorten(tmp, it.label, font, (slot or self.slot) * 1.9 * s)
+        l, _, r, _ = tmp.textbbox((0, 0), text, font=font, anchor="ls")          # anchor: left of the baseline
+        top, bottom = tmp.textbbox((0, 0), "Åg", font=font, anchor="ls")[1::2]   # one line height for every label
         pad = int(6 * self.scale * s)
-        Wd, Hd = r - l + 2 * pad, b - t + 2 * pad
+        Wd, Hd = r - l + 2 * pad, bottom - top + 2 * pad
+        hx, vy = 5 * self.scale * s, 2 * self.scale * s                          # how far the pill reaches past the text
+        pill = (pad - hx, pad - vy, Wd - pad + hx, Hd - pad + vy)
         out = []
         for hover in (False, True):
             hue = (_chrome(it) or (self.c_hi if it.kind == "menu" else self.c_accent)) if hover else self.c_text
             im = Image.new("RGBA", (Wd, Hd), (0, 0, 0, 0))
-            sh = Image.new("RGBA", (Wd, Hd), (0, 0, 0, 0))
-            ImageDraw.Draw(sh).text((pad - l, pad - t + self.scale * s), text, font=font, fill=(0, 0, 0, 205))
-            im.alpha_composite(sh.filter(ImageFilter.GaussianBlur(2.2 * self.scale * s)))
-            ImageDraw.Draw(im).text((pad - l, pad - t), text, font=font, fill=_rgba(hue, 1.0))
+            d = ImageDraw.Draw(im)
+            d.rounded_rectangle(pill, radius=(pill[3] - pill[1]) / 2, fill=(0, 0, 0, PILL_ALPHA))
+            d.text((pad - l, pad - top), text, font=font, fill=_rgba(hue, 1.0), anchor="ls")
             out.append(im.resize((max(1, int(Wd / s)), max(1, int(Hd / s))), Image.LANCZOS))
         return out
 
@@ -969,15 +1088,56 @@ class Ring:
             colr = _rgba(_chrome(it), 0.35) if _chrome(it) else (
                 _rgba(self.c_hi, 0.35) if it.kind == "menu" else _rgba(self.c_lines, 0.30))
             d.line((cx + ux * r0, cy + uy * r0, cx + ux * r1, cy + uy * r1), fill=colr, width=lw)
-        title = " ".join(self.menu.title.upper())                 # letter-spaced caps
-        hint = ("move into the ring" if not self._armed
-                else "release to pick" if self.mode == "hold" else "click to cancel")
-        for text, dy, colr in ((title, 18, _rgba(self.c_accent, 0.85)), (hint, 30, (255, 255, 255, 56))):
-            l, t, r_, b = d.textbbox((0, 0), text, font=self.f_title)
-            d.text((cx - (r_ - l) / 2 - l, cy + dy * self.scale * s - (b - t) / 2 - t), text, font=self.f_title,
-                   fill=colr)
+        for text, font, dy, colr in self._caption(d):
+            l, t, r_, b = d.textbbox((0, 0), text, font=font)
+            d.text((cx - (r_ - l) / 2 - l, cy + dy * self.scale * s - (b - t) / 2 - t), text, font=font, fill=colr)
         self._static_cache = im.resize((self.rsize, self.rsize), Image.LANCZOS)
         return self._static_cache
+
+    def _hint_lines(self):
+        """The hint for the ring's state as candidates, longest first: each a tuple of lines."""
+        if not self._armed:
+            return [("move into the ring",)]
+        if self.mode == "hold":
+            if self.cfg.get("flick", True):
+                return [("release or flick to pick",), ("release to pick",)]
+            return [("release to pick",)]
+        return [("click a slot, centre or right-click cancels",), ("click a slot,", "centre or right-click cancels"),
+                ("click to cancel",)]
+
+    def _caption(self, d):
+        """[(text, font, dy, colour)] for the title and the hint, dy in unscaled pixels below the centre. Both
+        stay inside the free circle (inside the slot discs) whatever the ring's size: the title shrinks and
+        then loses letters, the hint tries its shorter wordings and smaller sizes and is left out when none
+        fits, so a small ring never has text across its slots or its centre dot."""
+        s = SS
+        free = self.R - self.slot * 0.62 - 4 * self.scale          # radius of the space inside the discs
+
+        def room(dy):                                              # width of that space at dy, supersampled
+            return 2 * math.sqrt(max(0.0, free * free - (dy * self.scale) ** 2)) * s
+
+        def width(text, font):
+            box = d.textbbox((0, 0), text, font=font)
+            return box[2] - box[0]
+        out = []
+        title = self.menu.title.upper()
+        for px in (9, 8, 7):
+            font = _font_for(title, int(px * self.scale * s))
+            text = " ".join(title)                                 # letter-spaced caps
+            if width(text, font) <= room(18):
+                break
+        else:
+            while len(title) > 1 and width(" ".join(title + "…"), font) > room(18):
+                title = title[:-1]
+            text = " ".join(title + "…")
+        out.append((text, font, 18, _rgba(self.c_accent, 0.85)))
+        for lines in self._hint_lines():
+            for px in (10, 9, 8, 7):
+                fonts = [_font_for(t, int(px * self.scale * s)) for t in lines]
+                dys = [30 + 11 * k for k in range(len(lines))]
+                if all(width(t, f) <= room(dy) for t, f, dy in zip(lines, fonts, dys)):
+                    return out + [(t, f, dy, (255, 255, 255, HINT_ALPHA)) for t, f, dy in zip(lines, fonts, dys)]
+        return out
 
     def _band(self, im, cx, cy):
         """The tag band (supersampled, into im): a ring through the slot centres, each slot's stretch of it in
@@ -1121,11 +1281,15 @@ class Ring:
             dd = dot if k == dot.size[0] else dot.resize((k, k), Image.BILINEAR)
             _blit(canvas, dd, cx - k / 2, cy - k / 2)
         order = sorted(range(self.n), key=lambda i: self.hv[i][1])  # hovered slot drawn last (on top)
-        for i in order:
+        labels = []
+        for i in order:                            # every disc first, then every label, so no disc covers a name
             sc, alpha, dx, dy, rot, blur = self._slot_state(i, now)
             ux, uy = self.seats[i]
-            self._draw_slot(canvas, ((), i), self.sprites[i], self.labels[i], cx + ux * self.R + dx,
-                            cy + uy * self.R + dy, sc, alpha, self._hover_val(self.hv, i, now), rot, blur, self.slot)
+            px, py, h = cx + ux * self.R + dx, cy + uy * self.R + dy, self._hover_val(self.hv, i, now)
+            self._draw_disc(canvas, ((), i), self.sprites[i], px, py, sc, alpha, h, rot, blur)
+            labels.append((self.labels[i], px, py, sc, alpha, h, self.slot))
+        for args in labels:
+            self._draw_label(canvas, *args)
         for fan in self._open_fans():
             self._draw_fan(canvas, fan, now)
         return canvas
@@ -1140,19 +1304,22 @@ class Ring:
         im = _fade(im, min(1.0, el / fade) if fade else 1.0)
         if im is not None:
             _blit(canvas, im, cx + lx, cy + ly)
+        labels = []
         for k in sorted(range(len(fan.items)), key=lambda j: fan.hv[j][1]):
             e, alpha = 1.0, 1.0
             if dur > 0:
                 ek = el - stagger * k
                 e = curve(min(1.0, max(0.0, ek / dur)))
                 alpha = min(1.0, max(0.0, ek / fade))
-            px, py = fan.pos[k]
-            self._draw_slot(canvas, (fan.path, k), fan.sprites[k], fan.labels[k], cx + ax + (px - ax) * e,
-                            cy + ay + (py - ay) * e, 0.6 + 0.4 * e, alpha, self._hover_val(fan.hv, k, now), 0, 0.0,
-                            fan.cslot)
+            px, py = cx + ax + (fan.pos[k][0] - ax) * e, cy + ay + (fan.pos[k][1] - ay) * e
+            sc, h = 0.6 + 0.4 * e, self._hover_val(fan.hv, k, now)
+            self._draw_disc(canvas, (fan.path, k), fan.sprites[k], px, py, sc, alpha, h, 0, 0.0)
+            labels.append((fan.labels[k], px, py, sc, alpha, h, fan.cslot))
+        for args in labels:
+            self._draw_label(canvas, *args)
 
-    def _draw_slot(self, canvas, key, sprites, labels, px, py, sc, alpha, h, rot, blur, slot):
-        """One slot (and its label) centred on px, py. key: blend cache key of that slot."""
+    def _draw_disc(self, canvas, key, sprites, px, py, sc, alpha, h, rot, blur):
+        """One slot's disc centred on px, py. key: blend cache key of that slot."""
         if alpha <= 0.001:
             return
         idle, hov = sprites
@@ -1176,15 +1343,18 @@ class Ring:
         if blur > 0.3:
             spr = spr.filter(ImageFilter.GaussianBlur(blur))
         spr = _fade(spr, alpha)
-        if spr is None:
+        if spr is not None:
+            _blit(canvas, spr, px - wk / 2, py - wk / 2)
+
+    def _draw_label(self, canvas, labels, px, py, sc, alpha, h, slot):
+        """The name under the slot centred on px, py (slot: its width at rest)."""
+        if labels is None or alpha <= 0.001:
             return
-        _blit(canvas, spr, px - wk / 2, py - wk / 2)
-        if labels is not None:
-            lab = Image.blend(*labels, h) if 0 < h < 1 else labels[1 if h >= 1 else 0]
-            lab = _fade(lab, alpha)
-            if lab is not None:
-                ly = py + slot / 2 * (1.0 + 0.12 * h) * sc + 2 * self.scale
-                _blit(canvas, lab, px - lab.size[0] / 2, ly)
+        lab = Image.blend(*labels, h) if 0 < h < 1 else labels[1 if h >= 1 else 0]
+        lab = _fade(lab, alpha)
+        if lab is not None:
+            ly = py + slot / 2 * (1.0 + 0.12 * h) * sc + 2 * self.scale
+            _blit(canvas, lab, px - lab.size[0] / 2, ly)
 
     # --- window plumbing -------------------------------------------------------------------------
     def _render(self, now):

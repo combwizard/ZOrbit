@@ -6,8 +6,55 @@ All notable changes to this project are listed here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Tooling: GitHub Actions runs the test suite (`pytest`) on every push and pull request, and the build only starts
+  when the tests pass. `ZOrbit.exe --selftest` checks that the libraries, app modules and bundled files are all
+  present, and CI runs it on the built exe. `requirements-lock.txt` pins the exact package versions, and
+  `packaging\build.ps1` and CI install from it. Release notes start with which file to download and the SHA256 of
+  the installer and the portable zip.
+
+### Changed
+
+- The starter Brushes menu no longer swallows **Q** (new installs only): ZBrush switches to Draw mode when the ring
+  opens, and **Q** still types in ZBrush's own fields. Switch **Swallow hotkey** on in the menu settings to hide the
+  key again.
+- Typing another key closes a ring that was opened by a tap and is waiting for a click. Hotkeys are ignored in
+  Windows dialogs (such as Save As) and Windows text boxes.
+- Keys sent by a tablet driver, a macro tool or a key remapper open the ring like the real key. Only ZOrbit's own
+  key presses are ignored. The hidden `--accept-injected` option is gone.
+- Ring: the ring radius is now a minimum. A menu with many items makes the ring wider so neighbouring slots keep a
+  gap (from 10 items at the default slot size); the Studio preview does the same.
+- Ring: slot names sit on a soft dark pill, and every disc is drawn before any name, so a neighbouring slot no
+  longer covers a label. The same goes for fans.
+- Ring: the hint under the menu title is clearer ("release or flick to pick", "click a slot, centre or right-click
+  cancels") and easier to see. The title and hint shrink or shorten to fit a small ring.
+- Ring: a menu opened again reuses its drawn slots, so the ring appears sooner (about 4 ms instead of about 90 ms
+  for an 11-item menu).
+- Installer: Setup asks ZOrbit Studio to close the normal way and waits up to 15 seconds instead of ending it; if
+  Studio is still open (it may have unsaved changes) Setup and the uninstaller stop and ask you to close it. An
+  update keeps a custom install folder. `LICENSE` and `THIRD_PARTY_NOTICES.md` are installed next to the program
+  and included in the portable zip, and the program's file properties name the copyright holder.
+- ZBrush 2021 and older are no longer offered the ZScript plugin; Studio refuses to install it and marks them as
+  unsupported. The docs say the plugin binds F9 to Apply when Apply has no hotkey (verified in ZBrush 2022), not
+  that it always does.
+
 ### Fixed
 
+- Ring: names, menu titles and placeholder letters in Chinese, Japanese and Korean are drawn with a font that has
+  the characters (Microsoft YaHei, Yu Gothic, Malgun Gothic) instead of empty boxes. A long menu title is shortened
+  with an ellipsis instead of running across the slots.
+- Installer: updating no longer leaves files of older versions behind in the install folder. Uninstalling removes
+  the plugin from ZBrush 2022 to 2025 in the usual folders under Program Files (one UAC prompt each), lists any
+  folder it could not clean, and removes the install folder. A machine-wide `ZBRUSH_PLUGIN_PATH` is no longer
+  shadowed: when you have no user value, the new one starts from the machine entries (installer and Setup's
+  **Fix**).
+- ZBrush 2022 to 2025: the plugin installs without its start shortcuts when PowerShell is restricted (Constrained
+  Language Mode, AppLocker, an antivirus) instead of failing; the plugin then starts ZOrbit the slower way, and
+  Studio no longer reports it as outdated. Installing is refused with a clear message when the data folder path
+  cannot be passed to the plugin (characters outside the Windows code page with 8.3 names off). Pressing Apply with
+  no pick waiting no longer overwrites the last pick in `zscript_bridge.log`, and the Status button shows the real
+  last pick. Setup spots the old Radial Menu bridge folder as a second copy of the plugin.
 - App: a second ZOrbit instance is detected reliably again (the check could be lost to another Windows call).
 - App: a hotkey whose key-up the app missed (after Windows dropped the keyboard hook, say) no longer stays dead: a
   key that is no longer down is let go, a swallowed one after 30 seconds, and the hook is re-installed whenever no

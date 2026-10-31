@@ -6,7 +6,7 @@ A menu is a named list of items shown as one ring. Menus live in one file, `%APP
 
 - A menu **with a hotkey** can be opened from ZBrush.
 - A menu **without a hotkey** is a submenu: it opens when you pick an item of type `menu` in another ring.
-- Rings work best with 4 to 12 items. They are spread evenly around the circle. Past 12, the slots start to overlap at the default **Ring radius** and **Slot size**: raise the radius or shrink the slots to make room. Studio shows a note above the item list when a menu has more than 12.
+- Rings work best with 4 to 12 items. They are spread evenly around the circle. **Ring radius** is a minimum: a menu with more items makes the ring wider so the slots keep a gap (see [Appearance](appearance.md#appearance-and-behaviour-settings)). Past 12 the ring gets large, and with very many items the angle between neighbouring slots is small, so they are harder to hit. Shrink **Slot size** or split the menu into submenus. Studio shows a note above the item list when a menu has more than 12.
 - At least one menu needs a hotkey, otherwise nothing can open the ring.
 - A menu can have its own open animation (`"animation": "spiral"`, or pick one in the menu settings in Studio). Without one it uses `ring.animation`. See [Open animations](appearance.md#open-animations).
 - A menu can **fan out** when it is opened as a submenu (`"fan": true`, or switch on **Fan out when opened from another menu** in the menu settings in Studio). See [Submenu](#submenu).
