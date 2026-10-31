@@ -7,13 +7,15 @@
   --line: rgba(255, 255, 255, .07);
   --line2: rgba(255, 255, 255, .14);
   --text: #f0f0f0;
-  --sub: #92949a;
+  --sub: #9a9ca3;                              /* the dimmed text: 5.0:1 on --bg3 and on a selected row, 6.7:1 on --bg0 (was #92949a, 4.5:1 on --bg3 and less on a tint) */
   --accent: #f86b33;
   --on-accent: #141416;                        /* text on an accent fill: 6.3:1 (white would be 2.9:1) */
   --muted: #9a9ca3;                            /* the quiet greys: 5.0:1 on --bg3, 6.7:1 on --bg0 */
   --cyan: #4dc8e9;
   --lime: #a8df23;
-  --danger: #e05555;
+  --danger: #e05555;                           /* borders, dots and marks only: as text it is 3.7:1 on --bg3, as a fill under white text 3.7:1 */
+  --danger-text: #f08585;                      /* red text: 5.5:1 on --bg3, 5.0:1 on its own hover wash */
+  --danger-fill: #bd3a3a;                      /* red under white text: 5.5:1, 4.7:1 with the hover brightness */
   --amber: #f0c040;
   --accent-wash: rgba(248, 107, 51, .09);
   --accent-glow: rgba(248, 107, 51, .35);
@@ -93,7 +95,7 @@ h1, h2, h3, p { margin: 0; }
 .winbtn { width: 46px; border: 0; background: transparent; color: var(--sub); display: grid; place-items: center;
   transition: background .12s, color .12s; }
 .winbtn:hover { background: rgba(255, 255, 255, .07); color: var(--text); }
-.winbtn.close:hover { background: #e05555; color: #fff; }
+.winbtn.close:hover { background: var(--danger-fill); color: #fff; }
 .winbtn .i-restore { display: none; }
 .is-max .winbtn .i-restore { display: block; }
 .is-max .winbtn .i-max { display: none; }
@@ -116,6 +118,7 @@ h1, h2, h3, p { margin: 0; }
   position: absolute; top: 49px; left: 8px; z-index: 60; width: 520px; max-width: calc(100% - 16px); max-height: 40vh; display: flex; flex-direction: column;
   background: var(--bg3); border: 1px solid rgba(240, 192, 64, .3); border-radius: 10px; box-shadow: 0 14px 36px rgba(0, 0, 0, .5); color: var(--amber); overflow: hidden;
 }
+.problems-panel:focus { outline: none; }
 .problems-note { flex: none; padding: 8px 14px 6px; font-size: 11px; color: var(--sub); border-bottom: 1px solid var(--line); }
 .problems-list { flex: 1; min-height: 0; overflow: auto; padding: 4px 6px 6px; }
 .problem { display: flex; align-items: flex-start; gap: 9px; width: 100%; padding: 7px 8px; border-radius: 6px; color: #f6d98c; font-size: 12.5px; line-height: 1.4; background: none; border: 0; text-align: left; }
@@ -158,10 +161,10 @@ h1, h2, h3, p { margin: 0; }
 .btn.primary:hover:not(:disabled) { filter: brightness(1.1); color: var(--on-accent); border-color: var(--accent); }
 .btn.primary.pending { box-shadow: 0 0 0 3px rgba(248, 107, 51, .22), 0 0 18px rgba(248, 107, 51, .3); }
 .btn.primary kbd { font: 500 11px var(--mono); opacity: .85; background: rgba(0, 0, 0, .22); padding: 1px 5px; border-radius: 4px; }
-.btn.danger { background: var(--danger); border-color: var(--danger); color: #fff; }
-.btn.danger:hover:not(:disabled) { filter: brightness(1.1); color: #fff; border-color: var(--danger); }
-.btn.danger-o { background: transparent; color: var(--danger); border-color: rgba(224, 85, 85, .4); }
-.btn.danger-o:hover:not(:disabled) { background: var(--danger); border-color: var(--danger); color: #fff; }
+.btn.danger { background: var(--danger-fill); border-color: var(--danger-fill); color: #fff; }
+.btn.danger:hover:not(:disabled) { filter: brightness(1.1); color: #fff; border-color: var(--danger-fill); }
+.btn.danger-o { background: transparent; color: var(--danger-text); border-color: rgba(224, 85, 85, .4); }
+.btn.danger-o:hover:not(:disabled) { background: var(--danger-fill); border-color: var(--danger-fill); color: #fff; }
 .btn-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .btn-row.between { justify-content: space-between; margin-top: 14px; }
 .ibtn {
@@ -176,7 +179,7 @@ h1, h2, h3, p { margin: 0; }
 .histctl .ibtn { width: 30px; height: 30px; }
 .ibtn.accent { color: var(--accent); }
 .ibtn.accent:hover { background: var(--accent-wash); }
-.ibtn.danger:hover { color: #fff; background: var(--danger); }
+.ibtn.danger:hover { color: #fff; background: var(--danger-fill); }
 .link { background: none; border: 0; padding: 0; color: var(--cyan); text-decoration: underline; text-underline-offset: 2px; font: inherit; }
 .link:hover { color: #8fe0f5; }
 .dashed {
@@ -423,9 +426,9 @@ body.dragging, body.dragging * { cursor: grabbing !important; }
 .stage-info b { color: var(--text); font-weight: 600; }
 .stage-info.on { opacity: 1; transform: none; }
 .stage-play { position: absolute; right: 12px; bottom: 12px; background: rgba(34, 35, 39, .9); }
-.stage-trash { position: absolute; left: 12px; top: 12px; display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 14px; border-radius: 99px; font-size: 12px; font-weight: 600; color: var(--danger); background: rgba(34, 35, 39, .92); border: 1px dashed rgba(224, 85, 85, .6); opacity: 0; transform: scale(.85); pointer-events: none; transition: opacity .14s, transform .14s, background .14s, color .14s, border-color .14s, box-shadow .14s; }
+.stage-trash { position: absolute; left: 12px; top: 12px; display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 14px; border-radius: 99px; font-size: 12px; font-weight: 600; color: var(--danger-text); background: rgba(34, 35, 39, .92); border: 1px dashed rgba(224, 85, 85, .6); opacity: 0; transform: scale(.85); pointer-events: none; transition: opacity .14s, transform .14s, background .14s, color .14s, border-color .14s, box-shadow .14s; }
 .stage.can-trash .stage-trash { opacity: 1; transform: none; pointer-events: auto; }
-.stage.can-trash .stage-trash.over { transform: scale(1.1); color: #fff; background: var(--danger); border-style: solid; border-color: var(--danger); box-shadow: 0 0 18px rgba(224, 85, 85, .5); }
+.stage.can-trash .stage-trash.over { transform: scale(1.1); color: #fff; background: var(--danger-fill); border-style: solid; border-color: var(--danger); box-shadow: 0 0 18px rgba(224, 85, 85, .5); }
 .stage-busy { position: absolute; right: 14px; top: 14px; width: 10px; height: 10px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 10px var(--accent); opacity: 0; transition: opacity .15s; }
 .stage.busy .stage-busy { opacity: 1; animation: pulse .9s infinite; }
 
@@ -449,7 +452,10 @@ body.dragging, body.dragging * { cursor: grabbing !important; }
 .irow.bad { opacity: .75; }
 .irow.flash, .mrow.flash { animation: rowflash 1.2s ease-out; }
 @keyframes rowflash { 0% { background: rgba(248, 107, 51, .5); box-shadow: inset 0 0 0 1px var(--accent); } 100% { background: transparent; box-shadow: inset 0 0 0 1px transparent; } }
-.irow .grip { color: #5d5f66; cursor: grab; display: grid; }
+/* The drag sources (DnD in app.js moves them from pointer events): without this a pen or a finger scrolls or pans the page instead of dragging.
+   The popout's cards use the browser's own drag, so they keep touch scrolling. */
+.irow, .mrow, .ring-wrap, body:not(.popout) .bcard { touch-action: none; }
+.irow .grip { color: #7a7c83; cursor: grab; display: grid; }
 .irow:hover .grip { color: var(--sub); }
 .inum { width: 16px; text-align: right; font-size: 10.5px; color: var(--sub); flex: none; }
 .imain { flex: 1; min-width: 0; display: flex; flex-direction: column; }
@@ -790,6 +796,9 @@ body.dragging .irow:hover { background: transparent; }
 .sub-check.warn { --c: var(--amber); }
 .sub-check.off { --c: var(--danger); }
 .sub-check.pending .sdot { box-shadow: none; opacity: .6; }
+.sdot.sglyph { width: 18px; height: 18px; display: grid; place-items: center; color: var(--on-accent); box-shadow: none; }      /* a check's state as a glyph on its colour, so it reads without the colour */
+.sub-check.pending .sdot.sglyph { background: transparent; border: 1.5px solid var(--c); color: var(--c); opacity: 1; }
+.sdot.sglyph svg { stroke-width: 2.4; }
 .sub-check small { display: block; color: var(--sub); font-size: 12px; }
 .setup-where { display: flex; flex-direction: column; gap: 8px; }
 .setup-where .zrow b { font-weight: 600; }
@@ -829,11 +838,13 @@ body.dragging .irow:hover { background: transparent; }
   .choices.bridge-cards { grid-template-columns: 1fr; }
 }
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+  /* Nothing loops: an infinite animation at .01ms would flicker, so each one stops in its settled look (a steady dot, a still ring, a flat placeholder). */
+  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+  .dirty .dot, .livedot, .spin, .thumb.loading, .stage.loading .ring-wrap::before, .stage.busy .stage-busy, .hk-field.rec, .version-chip .upd-dot { animation: none !important; }
 }
 
 /* Destructive buttons that stay quiet until hovered */
-.btn.danger-ghost { color: var(--danger); border-color: rgba(224, 85, 85, .35); }
+.btn.danger-ghost { color: var(--danger-text); border-color: rgba(224, 85, 85, .35); }
 .btn.danger-ghost:hover { background: rgba(224, 85, 85, .10); }
 
 /* Settings: "On this page" contents column */

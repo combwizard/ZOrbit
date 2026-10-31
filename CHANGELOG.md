@@ -8,6 +8,9 @@ All notable changes to this project are listed here. The format follows
 
 ### Added
 
+- Studio: **Alt+Up/Down** moves a menu in the Menus list, and **Move to menu...** (a button on the Item tab, or
+  **M** on an item row) moves an item to another menu without dragging. The Setup checks show their state as an
+  icon and a word (OK, Needs attention, Not working, Not checked yet), not only as a colour.
 - A short message near the cursor when ZOrbit knows why a pick did nothing: no connection to the plugin, no answer
   from it, ZBrush not in front, no bridge key, an empty slot, a submenu with nothing in it, or a brush, alpha,
   material, texture or button that ZBrush could not find. A working pick shows nothing.
@@ -21,6 +24,11 @@ All notable changes to this project are listed here. The format follows
 
 ### Changed
 
+- Studio and browser: Library cards and folder rows are one Tab stop each, with the arrow keys, Home and End
+  moving inside them; opening the problems list with the keyboard puts the focus on its first entry; dimmed and
+  red text reach a 4.5:1 contrast; with Windows animations off the spinners and pulsing dots stand still instead
+  of flickering; a pen or a finger can drag rows, cards and ring slots. A rescan of an unchanged library keeps
+  the list and its cards, and thumbnails load in small batches with the visible ones first.
 - Studio: Setup says what to do when ZBrush has not loaded the plugin (press **Fix** and restart, or close ZBrush
   and start it from the Start menu, then read `bridge.log` or `zscript_launch.log` if it exists), notices a
   ZBrush started from a program that was already open before the plugin was registered, and explains a ZBrush
@@ -90,6 +98,7 @@ All notable changes to this project are listed here. The format follows
 
 ### Fixed
 
+- Studio: the focus was lost after deleting a menu from the Menu tab or renaming its id.
 - Studio: **Restore backup** asks first and says the old file is kept; **Start from defaults** no longer claims the
   current file is lost. **Start app** shows a busy label for the whole wait, treats a slow start as progress and
   shows a failed start's log lines on Setup with an **Open Status** button; a failed Setup check shows its error

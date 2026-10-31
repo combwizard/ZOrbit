@@ -586,6 +586,7 @@ function popover(anchor, entries) {
 }
 
 /* ================================================================== thumbnails */
+const THUMB_BATCH = { brush: 40, other: 8 };   // names per get_thumbs call: the backend decodes a batch on a pool and returns it together, so a small batch lands sooner
 const Thumbs = {
   cache: new Map(), waiting: new Map(), queue: new Map(), timer: null, busy: false,
   key: (name, res, kind) => kind + '|' + res + '|' + name,       // a thumbnail is cached per kind and size
@@ -597,14 +598,34 @@ const Thumbs = {
     this.queue.set(k, { name, res, kind });
     if (!this.timer) this.timer = setTimeout(() => this.flush(), 30);
   },
+  /* 0: a card on show in its scroller, 1: within the pre-load margin, 2: further away (or hidden). A picture asked for without a card (el null) counts as on show. */
+  rank(k) {
+    let best = 2;
+    for (const w of this.waiting.get(k) || []) {
+      const el = w.el;
+      if (!el) return 0;
+      if (!el.isConnected) continue;
+      const r = el.getBoundingClientRect();
+      if (!r.width && !r.height) continue;
+      const root = el._io && el._io.root, rr = root ? root.getBoundingClientRect() : { top: 0, bottom: innerHeight };
+      if (r.bottom > rr.top && r.top < rr.bottom) return 0;
+      if (r.bottom > rr.top - 320 && r.top < rr.bottom + 320) best = 1;
+    }
+    return best;
+  },
   forgetMisses(kind) { for (const [k, v] of Array.from(this.cache)) if (!v && (!kind || k.startsWith(kind + '|'))) this.cache.delete(k); },
   async flush() {
     this.timer = null;
     if (this.busy) { this.timer = setTimeout(() => this.flush(), 10); return; }   // one call in flight at a time: the slider cannot stack them
     const batch = [];
     let res = 0, kind = '';
-    for (const [k, q] of this.queue) {                            // FIFO, up to 40 names of one size and kind per call
-      if (batch.length >= 40) break;
+    let ents = Array.from(this.queue);
+    if (ents.length > THUMB_BATCH.other) {                        // more waiting than one call takes: the cards on show go first, then the ones near, then the rest (a stable sort keeps the order inside each)
+      const rank = new Map(ents.map(([k]) => [k, this.rank(k)]));
+      ents = ents.sort((a, b) => rank.get(a[0]) - rank.get(b[0]));
+    }
+    for (const [k, q] of ents) {                                  // up to 40 brushes or 8 others of one size and kind per call: the first cards of a big library fill in sooner
+      if (batch.length && batch.length >= (THUMB_BATCH[kind] || THUMB_BATCH.other)) break;
       if (res && (q.res !== res || q.kind !== kind)) continue;
       this.queue.delete(k);
       const all = this.waiting.get(k) || [];
@@ -649,7 +670,7 @@ function thumb(name, { size = 28, lazy = null, cls = '', res = 128, kind = 'brus
   el._res = res; el._kind = kind;
   const done = (url, failed) => {
     el.classList.remove('loading');
-    if (url) { el.classList.remove('fallback'); el.replaceChildren(h('img', { src: url, alt: '', draggable: 'false' })); }
+    if (url) { el.classList.remove('fallback'); el.replaceChildren(h('img', { src: url, alt: '', draggable: 'false' })); el._got = el._res; }   // _got: the size of the picture on show
     else if (!el.querySelector('img')) { el.classList.add('fallback'); el.textContent = initials(name); }
     if (failed && el._io) setTimeout(() => {                       // look again in a while, or when it scrolls back into view
       const root = el._io.root;
@@ -670,6 +691,10 @@ function rethumb(el, res) {
   if (el._res === res || !el._io) return;
   el._res = res;
   el._io.unobserve(el); el._io.observe(el);
+}
+/* After the misses of a kind were forgotten (a rescan): the cards on show that fell back to initials ask for their picture again. */
+function retryMissedThumbs(kind) {
+  for (const t of document.querySelectorAll('.thumb.fallback')) if (t._io && t._load && t._kind === kind) { t._io.unobserve(t); t._io.observe(t); }
 }
 function itemThumb(it, size = 30) {
   const k = kindOf(it);
@@ -1233,6 +1258,8 @@ async function deleteMenu(id) {
   if (S.menuId === id) { const rest = Object.keys(S.cfg.menus); S.menuId = rest[Math.min(pos, rest.length - 1)] || null; S.itemIdx = null; }
   if (S.itemIdx !== null && curMenu() && S.itemIdx >= curMenu().items.length) S.itemIdx = null;
   commit({ inspector: true }); if (R.head) R.head(); if (R.preview) R.preview();
+  const fa = document.activeElement;
+  if (R.focusMenu && (!fa || fa === document.body || !fa.isConnected)) R.focusMenu();      // the Delete button (the Menu tab's, or the row's) went with the menu: the next row takes the keyboard
   undoToast(`Deleted "${m.title || id}"`);
 }
 /* What is wrong with newId as the id of menu oldId, in words, or null when it is fine (or unchanged). */
@@ -1353,6 +1380,12 @@ function transferItem(fromId, index, toId, copy) {
   if (mrow) { mrow.classList.remove('flash'); void mrow.offsetWidth; mrow.classList.add('flash'); setTimeout(() => mrow.classList.remove('flash'), 1400); }
   undoToast(`${copy ? 'Copied' : 'Moved'} "${label}" to "${dstName}"`);
 }
+/* "Move to menu...": a popover with the other menus, so an item can change menus without dragging. `then` runs after the move (the caller puts the focus back). */
+function moveToMenuPopover(anchor, menuId, index, then) {
+  const others = Object.keys(S.cfg.menus).filter(id => id !== menuId);
+  if (!others.length || !S.cfg.menus[menuId] || !S.cfg.menus[menuId].items[index]) return;
+  popover(anchor, others.map(id => { const mm = S.cfg.menus[id]; return { icon: 'k_menu', label: mm.title || id, hint: plural((mm.items || []).length, 'item'), fn: () => { transferItem(menuId, index, id, false); if (then) then(); } }; }));
+}
 function dropOnMenu(menuId, payload, at) {
   if (payload.type === 'asset') insertAsset(menuId, payload.kind, payload.name, at);
   else if (payload.type === 'item' && payload.menuId === menuId) moveItem(menuId, payload.index, at === null ? S.cfg.menus[menuId].items.length : at);
@@ -1392,14 +1425,14 @@ function sectionTitle(t, sub) { return h('div', { class: 'sect' }, h('span', nul
 /* ================================================================== MENUS screen */
 function buildMenusScreen(root) {
   root.replaceChildren();
-  const listEl = h('div', { class: 'mlist', role: 'listbox', 'aria-label': 'Menus' });
+  const listEl = h('div', { class: 'mlist', role: 'listbox', 'aria-label': 'Menus', title: 'Up and Down move through the menus. Alt+Up/Down moves the selected menu.' });
   const left = h('aside', { class: 'col menus-col' },
     h('div', { class: 'col-head' }, h('span', { class: 'micro' }, 'Menus'), h('span', { class: 'count' }, '', ), iconBtn('plus', 'Add menu', () => addMenu(), 'accent')),
     listEl,
     h('button', { class: 'dashed', type: 'button', onclick: () => addMenu() }, icon('plus', 14), 'Add menu'));
   const head = h('div', { class: 'center-head' });
   const stageBox = buildStage();
-  const itemsEl = h('div', { class: 'ilist', role: 'listbox', 'aria-label': 'Items in this menu', title: 'Up and Down move through the items. Alt+Up/Down moves the selected item.' });
+  const itemsEl = h('div', { class: 'ilist', role: 'listbox', 'aria-label': 'Items in this menu', title: 'Up and Down move through the items. Alt+Up/Down moves the selected item. M moves it to another menu.' });
   const itemsHead = h('div', { class: 'col-head slim' });
   const itemsNote = h('div', { class: 'items-note', hidden: true });
   const itemsPanel = h('div', { class: 'items-panel' }, itemsHead, itemsNote, itemsEl);
@@ -1459,7 +1492,14 @@ function buildMenusScreen(root) {
         if (e.target !== row) return;
         const i = ids.indexOf(id);
         const go = j => { selectMenu(ids[j]); const t = menuRowOf(ids[j]); if (t) t.focus(); };
-        if (e.key === 'ArrowDown' && ids[i + 1]) { e.preventDefault(); go(i + 1); }
+        if (e.altKey && !e.ctrlKey && !e.metaKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {     // Alt+Up/Down moves the menu in the list, like an item
+          e.preventDefault();
+          if (e.key === 'ArrowUp' ? i > 0 : i < ids.length - 1) {
+            moveMenu(id, e.key === 'ArrowUp' ? ids[i - 1] : (ids[i + 2] || null));
+            const t = menuRowOf(id); if (t) t.focus();
+          }
+        }
+        else if (e.key === 'ArrowDown' && ids[i + 1]) { e.preventDefault(); go(i + 1); }
         else if (e.key === 'ArrowUp' && ids[i - 1]) { e.preventDefault(); go(i - 1); }
         else if (e.key === 'Home' && i > 0) { e.preventDefault(); go(0); }
         else if (e.key === 'End' && i < ids.length - 1) { e.preventDefault(); go(ids.length - 1); }
@@ -1495,6 +1535,8 @@ function buildMenusScreen(root) {
       if (t) t.focus();
     }
   };
+  /* Puts the keyboard on the selected menu's row (else the first row, else the list's Add menu button): after the control that had it is gone. */
+  R.focusMenu = () => { const t = menuRowOf(S.menuId) || menuRows()[0] || $('button', listEl) || $('.dashed', left); if (t) t.focus(); };
   R.renameMenu = id => {
     const row = $(`.mrow[data-id="${CSS.escape(id)}"]`, listEl); if (!row) return;
     const title = $('.mrow-title', row), m = S.cfg.menus[id];
@@ -1629,6 +1671,7 @@ function renderItemList(box, menuId, compact) {
       else if (e.key === 'End' && i < rows.length - 1) { e.preventDefault(); go(rows.length - 1); }
       else if (e.key === 'Enter' && !compact) { e.preventDefault(); selectItem(i, { focusTarget: true }); }
       else if (e.key === 'Delete') { e.preventDefault(); delItem(i, menuId); }
+      else if ((e.key === 'm' || e.key === 'M') && !compact && !e.ctrlKey && !e.metaKey && !e.altKey) { e.preventDefault(); moveToMenuPopover(row, menuId, i); }
     });
     if (!compact) {
       row.addEventListener('click', () => selectItem(i));
@@ -1942,8 +1985,12 @@ function buildItemInspector() {
   }
   const i = S.itemIdx, k = kindOf(it);
   const locked = !isFull() && kindIsFull(k);          // a Full-only item in Simple: shown read-only, still deletable, duplicable and convertible
+  const moveBtn = iconBtn('k_menu', Object.keys(S.cfg.menus).length > 1 ? 'Move to menu...' : 'Move to menu (there is no other menu)', e => moveToMenuPopover(e.currentTarget, S.menuId, i, () => {
+    const t = $('.irow.sel') || $('.items-panel .col-head .btn'); if (t) t.focus();       // the inspector was rebuilt around the next item
+  }));
+  moveBtn.disabled = Object.keys(S.cfg.menus).length < 2;
   box.append(h('div', { class: 'insp-head' }, itemThumb(it, 36), h('div', { class: 'insp-title' }, h('b', null, itemLabel(it)), h('span', null, `Item ${i + 1} of ${m.items.length}`)),
-    h('div', { class: 'spacer' }), iconBtn('copy', 'Duplicate item', () => dupItem(i)), iconBtn('trash', 'Delete item', e => { if (e.detail > 1) return; delItem(i); const t = $('.irow.sel') || $('.items-panel .col-head .btn'); if (t) t.focus(); }, 'danger')));    // delItem already selected the neighbour, as the row's own button does
+    h('div', { class: 'spacer' }), moveBtn, iconBtn('copy', 'Duplicate item', () => dupItem(i)), iconBtn('trash', 'Delete item', e => { if (e.detail > 1) return; delItem(i); const t = $('.irow.sel') || $('.items-panel .col-head .btn'); if (t) t.focus(); }, 'danger')));    // delItem already selected the neighbour, as the row's own button does
 
   /* action type */
   const seg = h('div', { class: 'kinds', role: 'radiogroup', 'aria-label': 'Action type' }, Object.keys(KIND).filter(kk => isFull() || !KIND[kk].full || kk === k).map(kk =>
@@ -2147,8 +2194,17 @@ function buildMenuProps() {
   const idShow = msg => { clearTimeout(idTimer); idTimer = null; idErr.textContent = msg || ''; idErr.hidden = !msg; idInp.classList.toggle('bad', !!msg); };
   idInp.addEventListener('input', () => idShow(menuIdProblem(id, idInp.value)));          // live: red as soon as it is wrong, clear as soon as it is right
   const idCommit = () => {
+    const had = document.activeElement === idInp;
     const bad = renameMenuId(id, idInp.value);                                             // null: renamed (the panel is rebuilt) or unchanged
-    if (!bad) { idShow(''); if (idInp.value !== id && idInp.isConnected) idInp.value = id; return; }
+    if (!bad) {
+      idShow(''); if (idInp.value !== id && idInp.isConnected) idInp.value = id;
+      if (!idInp.isConnected) {                                                            // renamed: the panel was rebuilt, so the keyboard goes to the new Id field, else to the menu's row
+        const fa = document.activeElement;
+        if (had) { const ni = $('.insp input[aria-label="Menu id"]'); if (ni) ni.focus(); }
+        else if (R.focusMenu && (!fa || fa === document.body || !fa.isConnected)) R.focusMenu();
+      }
+      return;
+    }
     idInp.value = id; idShow(bad); idInp.classList.remove('bad');                          // back to the old id; the reason stays for a moment
     idTimer = setTimeout(() => idShow(''), 3000);
   };
@@ -2853,6 +2909,8 @@ function makeBrowser({ compact, st, host = STUDIO_HOST, kindUi = compact ? 'comp
   side.append(catsBox, tagSec);
   const lazy = makeLazyIO(scroll);
   let token = 0, curRes = compact ? 128 : resFor(st.size), lastSig = '';
+  let built = '', gridKind = '';         // built: kind + names of the cards on show once all are drawn (renderGrid keeps them when the list is the same); gridKind: the kind they were made for
+  let rov = null, rovEl = null;          // the card that is the grid's one Tab stop (name, node)
   const sel = new Set();                 // names of the selected items
   let anchor = null;                     // the last plain or Ctrl click: where a Shift-click range starts
   if (!st.open) st.open = new Set();
@@ -3062,7 +3120,7 @@ function makeBrowser({ compact, st, host = STUDIO_HOST, kindUi = compact ? 'comp
     const name = card.dataset.name, on = isFav(st.kind, name), box = $('.bthumb', card);
     let btn = $('.bstar', box);
     if (!btn) {
-      btn = h('button', { class: 'bstar', type: 'button',
+      btn = h('button', { class: 'bstar', type: 'button', tabindex: '-1',      // the card is the Tab stop; Ctrl+D stars it, Enter adds it
         onclick: e => { e.stopPropagation(); const n = card.dataset.name; setFavs(sel.size > 1 && sel.has(n) ? Array.from(sel) : [n], !isFav(st.kind, n)); },
         ondblclick: e => e.stopPropagation() }, icon('star', 14));          // a double-click must not pick the item
       box.append(btn);
@@ -3074,9 +3132,9 @@ function makeBrowser({ compact, st, host = STUDIO_HOST, kindUi = compact ? 'comp
   }
   function makeCard(b) {
     const on = sel.has(b.name);
-    const card = h('div', { class: 'bcard' + (on ? ' sel' : ''), tabindex: '0', role: 'button', 'aria-pressed': on ? 'true' : 'false', dataset: { name: b.name } },
+    const card = h('div', { class: 'bcard' + (on ? ' sel' : ''), tabindex: '-1', role: 'button', 'aria-pressed': on ? 'true' : 'false', dataset: { name: b.name } },   // renderGrid gives one card tabindex 0
       h('div', { class: 'bthumb' }, thumb(b.name, { size: 0, lazy, cls: 'fill', res: curRes, kind: st.kind }),
-        h('button', { class: 'badd', type: 'button', title: host.cardTitle(st.kind), 'aria-label': host.cardLabel(b.name, st.kind), onclick: e => { e.stopPropagation(); host.primary(b.name, st.kind); } }, icon(host.primaryIcon(st.kind), 14))),
+        h('button', { class: 'badd', type: 'button', tabindex: '-1', title: host.cardTitle(st.kind), 'aria-label': host.cardLabel(b.name, st.kind), onclick: e => { e.stopPropagation(); host.primary(b.name, st.kind); } }, icon(host.primaryIcon(st.kind), 14))),
       h('div', { class: 'bname' }, b.name));
     card.addEventListener('click', e => {
       if (e.shiftKey && anchor && L().byName.has(nameKey(anchor))) {      // a range over the items on show, from the last plain click
@@ -3133,6 +3191,22 @@ function makeBrowser({ compact, st, host = STUDIO_HOST, kindUi = compact ? 'comp
     paintFav(card);
     return card;
   }
+  const cardEls = () => Array.from(grid.querySelectorAll('.bcard[data-name]'));
+  /* A card made earlier, put back on show: only what changes without a rebuild (selection, a picture still to come) is brought up to date. */
+  function reuseCard(card) {
+    const on = sel.has(card.dataset.name);
+    card.classList.toggle('sel', on); card.setAttribute('aria-pressed', on ? 'true' : 'false');
+    const t = card.querySelector('.thumb');
+    if (t && t._io && (!t.querySelector('img') || t._got !== t._res)) t._io.observe(t);      // renderGrid let go of every thumbnail: the unfinished ones ask again
+    return card;
+  }
+  /* The grid is one Tab stop: the card that has the keyboard (or was clicked) is the one with tabindex 0. */
+  grid.addEventListener('focusin', e => {
+    const c = e.target.closest && e.target.closest('.bcard[data-name]');
+    if (!c || c.classList.contains('skel') || c === rovEl) return;
+    if (rovEl) rovEl.tabIndex = -1;
+    c.tabIndex = 0; rovEl = c; rov = c.dataset.name;
+  });
   function paintCount(list) {
     const f = tagFilterOn();
     let t = list.length + ' ' + (list.length === 1 ? W().one : W().many) + (st.cat !== 'All' || st.q || f ? ' of ' + L().items.length : '');
@@ -3141,27 +3215,43 @@ function makeBrowser({ compact, st, host = STUDIO_HOST, kindUi = compact ? 'comp
   }
   /* keep: put the scroll position back once enough cards are drawn (a rescan or a refresh must not throw you to the top). */
   function renderGrid(keep = false) {
+    const loading = L().state === 'loading' || L().state === 'idle';
+    if (!loading) {
+      const gone = Array.from(sel).filter(n => !L().byName.has(nameKey(n)));
+      if (gone.length) { gone.forEach(n => sel.delete(n)); paintSel(); }
+    }
+    const usable = !loading && L().state !== 'error' && L().items.length > 0;
+    const list = usable ? filtered() : null;
+    const sig = list ? list.map(b => b.name).join('\n') : '';
+    const dropHidden = () => {
+      const onShow = new Set(list.map(b => b.name)), hidden = Array.from(sel).filter(n => !onShow.has(n));       // a filter, folder or search can hide what was selected: it is no longer selected
+      if (hidden.length) { hidden.forEach(n => sel.delete(n)); if (anchor && hidden.includes(anchor)) anchor = null; paintSel(); }
+    };
+    if (usable && list.length && built === st.kind + '\n' + sig) {          // the same cards in the same order are on show: keep them, repaint what a library reload can change
+      lastSig = sig;
+      dropHidden(); paintCount(list);
+      if (keep) { cardEls().forEach(c => { paintBadge(c); paintTags(c); paintFav(c); }); retryMissedThumbs(st.kind); }
+      return;
+    }
     let keepTop = keep ? scroll.scrollTop : null;
+    const act = document.activeElement, focusName = act && act.classList && act.classList.contains('bcard') && grid.contains(act) ? act.dataset.name : null;
+    const pool = new Map(usable && gridKind === st.kind ? cardEls().map(c => [c.dataset.name, c]) : []);   // cards of this kind already built: reused by name, not made again
     $$('.thumb', grid).forEach(t => { if (t._io) t._io.unobserve(t); });   // the old cards are about to go: do not keep them in the observer
     const my = ++token;
     grid.replaceChildren();
-    lastSig = '';
-    if (L().state === 'loading' || L().state === 'idle') {
+    lastSig = ''; built = ''; gridKind = ''; rovEl = null;
+    if (loading) {
       setText(count, 'Scanning...');
       for (let i = 0; i < 24; i++) grid.append(h('div', { class: 'bcard skel' }, h('div', { class: 'bthumb' }, h('span', { class: 'thumb fill loading' })), h('div', { class: 'bname' }, ' ')));
       return;
     }
-    const gone = Array.from(sel).filter(n => !L().byName.has(nameKey(n)));
-    if (gone.length) { gone.forEach(n => sel.delete(n)); paintSel(); }
-    if (L().state === 'error' || !L().items.length) {
+    if (!usable) {
       setText(count, `0 ${W().many}`);
       grid.append(h('div', { class: 'grid-empty' }, libEmptyState(st.kind)));
       return;
     }
-    const list = filtered();
-    lastSig = list.map(b => b.name).join('\n');
-    const onShow = new Set(list.map(b => b.name)), hidden = Array.from(sel).filter(n => !onShow.has(n));       // a filter, folder or search can hide what was selected: it is no longer selected
-    if (hidden.length) { hidden.forEach(n => sel.delete(n)); if (anchor && hidden.includes(anchor)) anchor = null; paintSel(); }
+    lastSig = sig;
+    dropHidden();
     paintCount(list);
     if (!list.length) {
       let e;
@@ -3184,12 +3274,23 @@ function makeBrowser({ compact, st, host = STUDIO_HOST, kindUi = compact ? 'comp
       grid.append(h('div', { class: 'grid-empty' }, e));
       return;
     }
+    gridKind = st.kind;
+    const have = new Set(list.map(b => b.name));
+    const stop = [rov, anchor, sel.values().next().value].find(n => n && have.has(n)) || list[0].name;       // the card that is the one Tab stop of the grid
     let i = 0;
     const chunk = () => {
       if (my !== token) return;
       const frag = document.createDocumentFragment();
-      for (const end = Math.min(i + 160, list.length); i < end; i++) frag.append(makeCard(list[i]));
+      let focusEl = null;
+      for (const end = Math.min(i + 160, list.length); i < end; i++) {
+        const name = list[i].name, old = pool.get(name), card = old ? reuseCard(old) : makeCard(list[i]);
+        if (name === stop) { card.tabIndex = 0; rovEl = card; rov = name; } else card.tabIndex = -1;
+        if (name === focusName) focusEl = card;
+        frag.append(card);
+      }
       grid.append(frag);
+      if (focusEl) focusEl.focus({ preventScroll: true });                                  // the card that had the keyboard is still here: it keeps it
+      if (i >= list.length) built = st.kind + '\n' + sig;
       if (keepTop !== null && (i >= list.length || scroll.scrollHeight - scroll.clientHeight >= keepTop)) { scroll.scrollTop = keepTop; keepTop = null; }
       if (i < list.length) requestAnimationFrame(chunk);
     };
@@ -3215,9 +3316,19 @@ function makeBrowser({ compact, st, host = STUDIO_HOST, kindUi = compact ? 'comp
         if (o.hasKids) st.open.add(id);
         renderAll(); rehighlight();
       };
-      const r = h('div', { class: 'cat' + (st.cat === id ? ' on' : '') + (o.kid ? ' kid' : '') + (o.group ? ' group' : ''), role: 'option', tabindex: '0', 'aria-selected': st.cat === id ? 'true' : 'false', title: label, dataset: { id },
-        onclick: activate, onkeydown: e => { if (e.target === r && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); activate(); } } },
-        o.hasKids ? h('button', { class: 'cat-chev' + (st.open.has(id) ? ' open' : ''), type: 'button', 'aria-label': (st.open.has(id) ? 'Collapse ' : 'Expand ') + label, 'aria-expanded': st.open.has(id) ? 'true' : 'false',
+      const r = h('div', { class: 'cat' + (st.cat === id ? ' on' : '') + (o.kid ? ' kid' : '') + (o.group ? ' group' : ''), role: 'option', tabindex: '-1', 'aria-selected': st.cat === id ? 'true' : 'false', title: label, dataset: { id },      // the list is one Tab stop (setRoving below); the arrow keys move inside it
+        onclick: activate, onkeydown: e => {
+          if (e.target !== r || e.ctrlKey || e.metaKey || e.altKey) return;
+          const rs = $$('.cat', catsBox), at = rs.indexOf(r);
+          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); activate(); }
+          else if (e.key === 'ArrowDown' && rs[at + 1]) { e.preventDefault(); rs[at + 1].focus(); }
+          else if (e.key === 'ArrowUp' && rs[at - 1]) { e.preventDefault(); rs[at - 1].focus(); }
+          else if (e.key === 'Home' && at > 0) { e.preventDefault(); rs[0].focus(); }
+          else if (e.key === 'End' && at < rs.length - 1) { e.preventDefault(); rs[rs.length - 1].focus(); }
+          else if (o.hasKids && e.key === 'ArrowRight' && !st.open.has(id)) { e.preventDefault(); toggle(); }      // a folder with sub-folders opens and closes with Right and Left
+          else if (o.hasKids && e.key === 'ArrowLeft' && st.open.has(id)) { e.preventDefault(); toggle(); }
+        } },
+        o.hasKids ? h('button', { class: 'cat-chev' + (st.open.has(id) ? ' open' : ''), type: 'button', tabindex: '-1', 'aria-label': (st.open.has(id) ? 'Collapse ' : 'Expand ') + label, 'aria-expanded': st.open.has(id) ? 'true' : 'false',
           onclick: e => { e.stopPropagation(); toggle(); } }, icon('chevR', 12)) : h('span', { class: 'cat-chev none' + (o.ico ? ' cat-ico' : '') }, o.ico ? icon(o.ico, 13) : null),
         h('span', { class: 'cat-name' }, label), h('span', { class: 'cat-n mono' }, String(n)));
       return r;
@@ -3230,12 +3341,14 @@ function makeBrowser({ compact, st, host = STUDIO_HOST, kindUi = compact ? 'comp
       if (hasKids && st.open.has(g.id)) g.kids.forEach(k => rows.push(row(k.id, k.label, k.count, { kid: true })));
     });
     catsBox.replaceChildren(...rows);
-    if (fid !== null) {
-      const nr = $$('.cat', catsBox).find(r => r.dataset.id === fid);
-      const t = nr && ((onChev && $('button.cat-chev', nr)) || nr);
-      if (t) t.focus();
+    const crs = $$('.cat', catsBox), nr = fid !== null ? crs.find(r => r.dataset.id === fid) : null;
+    setRoving(crs, nr || crs.find(r => r.dataset.id === st.cat));          // one Tab stop: the row that had the keyboard, else the open folder
+    if (nr) {
+      const t = (onChev && $('button.cat-chev', nr)) || nr;
+      t.focus();
     }
   }
+  catsBox.addEventListener('focusin', e => { const x = e.target.closest && e.target.closest('.cat'); if (x) setRoving($$('.cat', catsBox), x); });
   function renderAll(keep = false) { if (L().state === 'ready') renderCats(); renderTags(); renderGrid(keep); }
 
   /* --- keyboard help for the popout: a highlight that follows the arrow keys and Enter picks */
@@ -3253,13 +3366,30 @@ function makeBrowser({ compact, st, host = STUDIO_HOST, kindUi = compact ? 'comp
     const top0 = cards[0].offsetTop;
     let cols = 0;
     while (cols < cards.length && cards[cols].offsetTop === top0) cols++;
-    const at = anchor ? cards.findIndex(c => c.dataset.name === anchor) : -1;
+    const act = document.activeElement, onCard = !!act && act.classList.contains('bcard') && grid.contains(act);
+    const at = onCard ? cards.indexOf(act) : anchor ? cards.findIndex(c => c.dataset.name === anchor) : -1;     // from the card that has the keyboard, else from the highlight
     const to = at < 0 ? 0 : clamp(at + dx + dy * cols, 0, cards.length - 1);
-    const onCard = document.activeElement && document.activeElement.classList.contains('bcard');
     setSel(cards[to].dataset.name, onCard);
     cards[to].scrollIntoView({ block: 'nearest' });
     return true;
   }
+  /* Home and End on a card: the first or the last card on show. */
+  function moveEdge(last) {
+    onSearch.flush();
+    const cards = $$('.bcard[data-name]', grid);
+    if (!cards.length) return false;
+    const c = cards[last ? cards.length - 1 : 0];
+    setSel(c.dataset.name, true);
+    c.scrollIntoView({ block: 'nearest' });
+    return true;
+  }
+  /* Studio's Library and the dock: the arrow keys on a card move to the next one (the popout's window handler does the same from its search box). */
+  scroll.addEventListener('keydown', e => {
+    if (e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey || e.shiftKey || !e.target.classList || !e.target.classList.contains('bcard')) return;
+    const dx = e.key === 'ArrowLeft' ? -1 : e.key === 'ArrowRight' ? 1 : 0, dy = e.key === 'ArrowUp' ? -1 : e.key === 'ArrowDown' ? 1 : 0;
+    if (dx || dy) { e.preventDefault(); move(dx, dy); }
+    else if (e.key === 'Home' || e.key === 'End') { e.preventDefault(); moveEdge(e.key === 'End'); }
+  });
   function pickSelected() {
     onSearch.flush();
     const names = shownSel();
@@ -3312,7 +3442,7 @@ function makeBrowser({ compact, st, host = STUDIO_HOST, kindUi = compact ? 'comp
     typeChar(ch) { search.value += ch; search.dispatchEvent(new Event('input', { bubbles: true })); },
     inSearch: el => !!el && el.closest && !!el.closest('.searchbox'),
     searchValue: () => search.value,
-    highlightFirst, move, pickSelected, setFilter,
+    highlightFirst, move, moveEdge, pickSelected, setFilter,
     updateBadges() { $$('.bcard[data-name]', grid).forEach(paintBadge); paintTarget(); if (L().state === 'ready') { renderCats(); if (st.cat === '@used') renderGrid(); } },
     /* After a tag change: dots, chips, and the grid itself when the tag filter now shows other items. */
     updateTags() {
@@ -4290,7 +4420,9 @@ function buildSetupScreen(root) {
     if (out.starting) watchStart(() => ask(false));
   }
 
-  const subCheck = (tone, text, sub, extra) => h('div', { class: 'sub-check ' + tone }, h('i', { class: 'sdot' }),
+  // The state is a glyph and a name as well as a colour: a tick, a warning triangle, a cross or a clock, read out as "OK", "Needs attention", "Not working" or "Not checked yet".
+  const CHECK_STATE = { ok: ['check', 'OK'], warn: ['alert', 'Needs attention'], off: ['x', 'Not working'], pending: ['clock', 'Not checked yet'] };
+  const subCheck = (tone, text, sub, extra) => h('div', { class: 'sub-check ' + tone }, (([ico, word]) => h('span', { class: 'sdot sglyph', role: 'img', title: word, 'aria-label': word }, icon(ico, 11)))(CHECK_STATE[tone] || CHECK_STATE.warn),
     h('div', { class: 'grow' }, h('div', null, text), sub ? h('small', null, sub) : null), extra || null);
   const note = (text, warn) => h('div', { class: 'fhint' + (warn ? ' warn' : '') }, text);
 
@@ -5019,12 +5151,28 @@ async function loadLibrary(kind = 'brush', refresh = false) {
   if (!refresh) L.state = 'loading';
   L.busy = true; paintRescan();
   let r = null;
-  try { r = await call('get_library', !!refresh, kind); } catch (e) { r = { error: String((e && e.message) || e) }; }
+  const since = refresh && L.loaded && L.state === 'ready' && L.signature ? L.signature : '';      // the list the page holds: the backend answers "unchanged" without it when the folders still give that list
+  try { r = await call('get_library', ...(since ? [true, kind, since] : [!!refresh, kind])); } catch (e) { r = { error: String((e && e.message) || e) }; }
   r = r || {};
   if (refresh && r.error && L.loaded && L.state === 'ready' && L.items.length) {   // a rescan that failed: keep what is on show, report the error
     L.error = String(r.error); L.busy = false; paintRescan();
     return;
   }
+  if (since && r.unchanged && r.signature === since) {                    // the same list: keep it, and take only what may differ beside it
+    const was = JSON.stringify([L.sources, L.zbrushFound, L.error]);
+    L.sources = Array.isArray(r.sources) ? r.sources : [];
+    L.zbrushFound = r.zbrush_found !== false;
+    L.error = r.error ? String(r.error) : null;
+    L.state = L.error ? 'error' : 'ready';
+    L.busy = false;
+    popScanned[kind] = Date.now();
+    Thumbs.forgetMisses(kind);
+    if (was !== JSON.stringify([L.sources, L.zbrushFound, L.error])) { if (R.libRefresh) R.libRefresh(kind); }
+    else retryMissedThumbs(kind);
+    paintRescan();
+    return;
+  }
+  L.signature = r.signature || '';
   L.items = Array.isArray(r.items) ? r.items : Array.isArray(r.brushes) ? r.brushes : [];
   L.sources = Array.isArray(r.sources) ? r.sources : [];
   L.zbrushFound = r.zbrush_found !== false;
@@ -5178,7 +5326,10 @@ function init() {
   }
   $('#undoBtn').addEventListener('click', () => { if (S.ready && !S.fatal) undo(); });
   $('#redoBtn').addEventListener('click', () => { if (S.ready && !S.fatal) redo(); });
-  $('#problemsBtn').addEventListener('click', () => { S.problemsOpen = !S.problemsOpen; renderProblems(); });
+  $('#problemsBtn').addEventListener('click', e => {
+    S.problemsOpen = !S.problemsOpen; renderProblems();
+    if (S.problemsOpen && e.detail === 0) { const first = $('#problemsList .problem.go') || $('#problemsPanel'); if (first) first.focus(); }   // opened with the keyboard: the first entry takes it (Escape gives it back to the pill)
+  });
   document.addEventListener('mousedown', e => { if (S.problemsOpen && !e.target.closest('#problemsPanel, #problemsBtn')) closeProblems(false); }, true);
   window.addEventListener('keydown', e => {
     if (e.key !== 'Escape' || !S.problemsOpen || e.defaultPrevented || $('#overlay-root').firstElementChild) return;

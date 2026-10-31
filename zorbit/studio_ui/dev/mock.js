@@ -24,6 +24,8 @@
    ?importtags (the file holds tags only), ?importnotags (the file holds no tags, so there is no Merge or Replace); pick_import reports menus,
    current_menus, tags, current_tags and has_tags like the backend; an import changes the ring accent to cyan so it can be seen.
    get_library/get_thumbs answer for every kind (brush, alpha, material, texture); the ?nozbrush/?nolib/?liberr switches apply to all of them.
+   get_library gives a "signature" and, when called with the one the page holds, answers {unchanged: true, ...} without items (logged to the console);
+   ?libsig=changing makes every call give a new signature, so the full list always comes back.
    The popout page (popout.html?mock): ?nopick (a pick is refused as "ZOrbit is not running"), ?tag=blocking (opens filtered, as --tag does),
    ?kind=alpha (opens on that tab, else the last one, kept in localStorage rm_pop_kind);
    Keep on top is kept in localStorage rm_pop_on_top (on until switched off), and the popout_* calls only log.
@@ -47,7 +49,7 @@
   var lag = +(q.get('lag') || 0);
   var sleep = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
   var clone = function (o) { return JSON.parse(JSON.stringify(o)); };
-  var ticks = 0, thumbCalls = 0, alreadyDone = false, appStarted = false, setupCalls = 0, modernAdded = false, keptDone = false;
+  var libSeq = {}, ticks = 0, thumbCalls = 0, alreadyDone = false, appStarted = false, setupCalls = 0, modernAdded = false, keptDone = false;
   var saved = clone(M.get_config.config);
   var TAG_DEFAULTS = { tag_colors: 'tint', tag_band: 'medium', tag_band_opacity: 0.45, tag_glow_opacity: 0.4, tag_tint_opacity: 0.3, tag_tint_style: 'gradient', tag_tint_blend: 'multiply' };
   var KINDS = ['brush', 'alpha', 'material', 'texture', 'press', 'set', 'toggle', 'steps', 'menu', 'auto', 'tag', 'browser'];
@@ -582,15 +584,21 @@
         return o;
       });
     },
-    get_library: function (refresh, kind) {
+    get_library: function (refresh, kind, since) {
       kind = ASSET_KIND[kind] ? kind : 'brush';
+      var libCalls = (libSeq[kind] = (libSeq[kind] || 0) + 1);
       return sleep(refresh ? 700 : 250).then(function () {
         var A = ASSET_KIND[kind], lib = libFor(kind), n = lib.items.length;
+        var sig = 'mock-' + kind + '-' + n + (q.get('libsig') === 'changing' ? '-' + libCalls : '');       // like the backend: a hash of what was found
+        if (since && since === sig && !q.has('liberr') && !q.has('nozbrush') && !q.has('nolib')) {
+          console.log('[mock] get_library', kind, 'unchanged');
+          return { kind: kind, unchanged: true, signature: sig, sources: A.sources.map(function (src, i) { return { label: src.label, path: src.path, exists: src.exists, count: i === 0 ? n : 0 }; }), zbrush_found: true, error: null };
+        }
         var sources = A.sources.map(function (src, i) { return { label: src.label, path: src.path, exists: src.exists, count: i === 0 ? n : 0 }; });
         if (q.has('liberr')) return { kind: kind, items: [], brushes: [], categories: [], sources: [], zbrush_found: true, error: 'Could not read the ' + kind + ' folders: [WinError 5] Access is denied (mock)' };
         if (q.has('nozbrush')) return { kind: kind, items: [], brushes: [], categories: [], sources: [], zbrush_found: false, error: null };
         if (q.has('nolib')) { sources[0].count = 0; return { kind: kind, items: [], brushes: [], categories: [], sources: sources, zbrush_found: true, error: null }; }
-        var out = { kind: kind, items: lib.items, categories: lib.categories, sources: sources, zbrush_found: true, error: null };
+        var out = { kind: kind, items: lib.items, categories: lib.categories, sources: sources, zbrush_found: true, error: null, signature: sig };
         if (kind === 'brush') out.brushes = lib.items;      // the alias the backend keeps for one release
         return out;
       });
