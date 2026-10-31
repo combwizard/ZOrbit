@@ -18,6 +18,7 @@ tested with. Each project's full licence text is available from its own reposito
 | typing_extensions 4.x | A dependency of pywebview | PSF-2.0 | https://github.com/python/typing_extensions |
 | Microsoft Edge WebView2 SDK (the `Microsoft.Web.WebView2` assemblies and loader shipped inside pywebview) | Hosting the Studio page | BSD-3-Clause | https://www.nuget.org/packages/Microsoft.Web.WebView2 |
 | PyInstaller bootloader | Starts the packaged app | GPL-2.0-or-later with a special exception that allows bundling non-GPL code | https://github.com/pyinstaller/pyinstaller |
+| setuptools (and the packages it vendors) | Bundled into the packaged app by PyInstaller | MIT | https://github.com/pypa/setuptools |
 
 ## Notes
 

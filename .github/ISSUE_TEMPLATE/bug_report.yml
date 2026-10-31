@@ -39,7 +39,35 @@ body:
     attributes:
       label: Logs
       description: |
-        The last lines of `radiald.log` and `bridge.log` (and `popout.log` for a problem with the browser), from
-        `%LOCALAPPDATA%\ZOrbit`. Studio's **Status** screen has a button that opens the folder. The logs contain brush
-        names and menu ids; look them over and remove anything you would rather not share.
+        The last lines of the logs for the problem, from `%LOCALAPPDATA%\ZOrbit`. Studio's **Status** screen has a
+        button that opens the folder. Which logs to send depends on your ZBrush version:
+
+        - ZBrush 2026 and newer: `radiald.log` and `bridge.log`
+        - ZBrush 2022 to 2025: `radiald.log`, `zscript_bridge.log`, `zscript_hotkey.log` and `zscript_launch.log`
+        - A crash at start: `app_stderr.log`
+        - Studio problems: `studio.log`
+        - The browser: `popout.log`
+
+        The logs contain file paths with your Windows user name; look them over and remove anything you would rather
+        not share.
       render: text
+  - type: dropdown
+    id: install
+    attributes:
+      label: How did you install ZOrbit?
+      options:
+        - Installer
+        - Portable zip
+        - From source
+    validations:
+      required: true
+  - type: dropdown
+    id: admin
+    attributes:
+      label: Does ZBrush run as administrator?
+      options:
+        - "Yes"
+        - "No"
+        - Not sure
+    validations:
+      required: true

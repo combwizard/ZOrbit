@@ -9,8 +9,9 @@ Bug reports and ideas are welcome on the
 
 - your Windows and ZBrush versions;
 - what you did, what you expected and what happened;
-- the last lines of `%LOCALAPPDATA%\ZOrbit\radiald.log` and `bridge.log`. Look them over first and remove
-  anything you would rather not share.
+- the last lines of the logs for the problem, from `%LOCALAPPDATA%\ZOrbit`, as the
+  [bug report template](.github/ISSUE_TEMPLATE/bug_report.yml) lists them for each ZBrush version. Look them over
+  first and remove anything you would rather not share.
 
 What's planned is on the [roadmap board](https://github.com/users/combwizard/projects/2), and every idea there is
 an issue of its own. Add a thumbs-up to the ideas you want and comment on how you'd use them.
@@ -30,13 +31,15 @@ follow the [code of conduct](CODE_OF_CONDUCT.md).
 4. Try it in ZBrush if you can. When behaviour changes, update the page in `docs\` that describes it (the table in
    [CLAUDE.md](CLAUDE.md) says which) and `CHANGELOG.md`, in the same pull request. The docs are published at
    <https://zorbit.lol/docs/>; preview them with `pip install -r requirements-docs.txt` and `mkdocs serve`.
-   The pre-commit hook (`tools/hooks/install.sh` installs it) stops a commit that changes `zorbit\` or `bridge\`
-   without touching `docs\`; commit with `ZORBIT_NO_DOCS=1` when there is nothing to document.
+   The pre-commit hook stops a commit that changes `zorbit\` or `bridge\` without touching `docs\`. Install it once
+   with `sh tools/hooks/install.sh` in Git Bash. When there is nothing to document, commit with
+   `ZORBIT_NO_DOCS=1 git commit ...` in Git Bash, or `$env:ZORBIT_NO_DOCS=1; git commit ...` in PowerShell.
 5. By contributing, you agree that your work is licensed under the GPL-3.0, like the rest of the project.
 
 ## Development setup
 
-You need Windows, Python 3.12 and ZBrush 2026 or newer.
+You need Windows, Python 3.12 and ZBrush 2026 or newer. A change to the ZScript bridge also needs ZBrush 2022
+installed, to compile it (see [The ZScript bridge](#the-zscript-bridge-zbrush-2022-2025) below).
 
 ```powershell
 git clone https://github.com/combwizard/zorbit

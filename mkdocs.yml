@@ -9,8 +9,6 @@ edit_uri: edit/main/docs/
 copyright: ZOrbit is free software under the GPL-3.0. It is not affiliated with or endorsed by Maxon.
 
 docs_dir: docs
-exclude_docs: |
-  user-guide.md
 
 nav:
   - Home: index.md
