@@ -54,6 +54,7 @@ Useful commands:
 python zorbit\main.py --check     # validate your menus file and print it
 python zorbit\main.py --studio    # open Studio
 python zorbit\main.py             # run the app by hand (it keeps running until you stop it)
+pytest                            # run the tests
 ```
 
 Source layout:
