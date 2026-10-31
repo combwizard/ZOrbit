@@ -283,8 +283,9 @@ function actionValid(a, nested) {
   }
   if (k === 'auto') return a.auto === 'brush';
   if (k === 'browser') return typeof a.browser === 'string' && (a.kind === undefined || isLib(a.kind));          // '' = every item; kind: which tab it opens on
+  if (typeof a[k] !== 'string') return false;                                       // null or a number from a hand edit: unusable, never a crash
   if (isLib(k) && (/[\\/:]/.test(a[k]) || a[k].includes('..'))) return false;      // an asset is a plain name, never a path (config.py _bad_asset_name)
-  return typeof a[k] === 'string' && a[k].trim() !== '';
+  return a[k].trim() !== '';
 }
 /* The menus the loader keeps (config.py load): an object whose id does not start with "tag:" and that has an item left, where
    a submenu item only counts while its target is kept too. A submenu whose own items all go takes the slots that open it
@@ -701,7 +702,7 @@ function itemThumb(it, size = 30) {
   let name = null, kind = 'brush';                                 // an icon override is always a brush name
   if (it.icon && !isPath(it.icon)) name = it.icon;
   else if (!it.icon && isLib(k)) { name = it[k]; kind = k; }
-  else if (!it.icon && k === 'steps') for (const s of it.steps || []) { const sk = s && LIB_KINDS.find(x => s[x]); if (sk) { name = s[sk]; kind = sk; break; } }
+  else if (!it.icon && k === 'steps') for (const s of Array.isArray(it.steps) ? it.steps : []) { const sk = s && LIB_KINDS.find(x => typeof s[x] === 'string' && s[x]); if (sk) { name = s[sk]; kind = sk; break; } }
   if (name) return thumb(name, { size, kind });
   const g = h('span', { class: 'thumb glyph k-' + k, style: { '--sz': size + 'px' } }, icon(KIND[k].icon, Math.round(size * 0.52)));
   return g;
@@ -2201,6 +2202,12 @@ function buildSteps(it) {
 }
 
 /* ---------- menu properties */
+/* Whether a mouse button or pen is down right now (a field left by a click sees its change event before the click). */
+let pointerHeld = false;
+addEventListener('pointerdown', () => { pointerHeld = true; }, true);
+addEventListener('pointerup', () => { pointerHeld = false; }, true);
+addEventListener('pointercancel', () => { pointerHeld = false; }, true);
+
 function buildMenuProps() {
   const m = curMenu(), id = S.menuId;
   const box = h('div', { class: 'insp' });
@@ -2209,7 +2216,22 @@ function buildMenuProps() {
   // The id follows the title when the field is left, not on every key: the panel is rebuilt around the new id.
   const title0 = m.title || '';
   const titleInp = textInput(m.title || '', v => { m.title = v; commit(); if (R.head) R.head(); }, { placeholder: id, label: 'Menu title',
-    onChange: () => { const nid = idForTitle(id, title0); if (nid) { moveMenuId(id, nid); commit({ inspector: true }); if (R.head) R.head(); } } });
+    onChange: () => {
+      const nid = idForTitle(id, title0);
+      if (!nid) return;
+      // The panel is rebuilt around the new id. With a mouse button down (the click that left the field), that waits
+      // for the click to land, or the button under the pointer would be swapped out and the click lost; then the
+      // keyboard goes back to the same field in the new panel.
+      const run = () => {
+        if (!S.cfg.menus[id] || S.cfg.menus[nid]) return;            // changed meanwhile (the click deleted or renamed it)
+        const fa = document.activeElement, label = fa && fa.isConnected && box.contains(fa) && fa.getAttribute('aria-label');
+        moveMenuId(id, nid); commit({ inspector: true }); if (R.head) R.head();
+        const back = label && $(`.insp [aria-label="${label}"]`);
+        if (back) back.focus();
+      };
+      if (pointerHeld) addEventListener('pointerup', () => setTimeout(run, 0), { once: true, capture: true });
+      else run();
+    } });
   box.append(sectionTitle('Menu', 'Shown in the list and at the ring centre'), field('Title', titleInp));
   const idErr = h('div', { class: 'fhint bad id-err', role: 'alert', hidden: true });
   const idInp = textInput(id, () => {}, { mono: true, label: 'Menu id' });
@@ -4352,6 +4374,8 @@ function deriveSteps(d, tryFrom, ctx) {
   if (loaded.length) {
     const names = [...new Set(loaded.map(p => p.name))];
     s2.state = 'ok'; s2.detail = list(names) + (names.length === 1 ? ' has the plugin.' : ' have the plugin.');
+  } else if (!procs.length && !adminProcs.length && unmatched.length) {
+    s2.state = 'warn'; s2.detail = 'ZBrush is running from a folder Studio does not know, so it cannot check the plugin there. Add that folder with Add a ZBrush folder in step 1.';
   } else if (!procs.length && !adminProcs.length) {
     s2.state = 'pending'; s2.detail = zb.check_ok === false ? 'Studio could not tell whether ZBrush is running.' : 'Start ZBrush. The plugin loads with it and starts the app.';
   } else if (worst && worst.state === 'restart') {
@@ -4573,6 +4597,9 @@ function buildSetupScreen(root) {
       }
     } catch (e) { st.err = String(e.message || e); }
     finally { st.busy = false; }
+    // An action (Fix, Install, Forget...) waits for this answer to redraw its button. A failed check still redraws the
+    // last good steps, so a button never stays on "Fixing..." while the checks keep failing.
+    if (st.err && force && st.data && S.screen === 'setup') paint(true);
     paintErr();
   }
   R.setup = () => ask(true);
@@ -4841,6 +4868,11 @@ const newProblems = (before, after) => { const had = new Set(before.map(String))
    problems and carries on, but the screens would throw on them. */
 function normaliseMenus(cfg) {
   if (!cfg.menus || typeof cfg.menus !== 'object' || Array.isArray(cfg.menus)) cfg.menus = {};   // an array would lose menus on save
+  for (const sec of ['ring', 'bridge', 'browser']) {        // a hand-edited "ring": "big": the loader uses the defaults, and so does Studio
+    const v = cfg[sec];
+    if (v !== undefined && (!v || typeof v !== 'object' || Array.isArray(v))) delete cfg[sec];
+  }
+  if (cfg.ring && cfg.ring.colors !== undefined && (!cfg.ring.colors || typeof cfg.ring.colors !== 'object' || Array.isArray(cfg.ring.colors))) delete cfg.ring.colors;
   for (const [id, m] of Object.entries(cfg.menus)) {
     if (!m || typeof m !== 'object' || Array.isArray(m)) return `The menu "${id}" is not an object.`;
     if (m.items === undefined || m.items === null) m.items = [];
@@ -4913,7 +4945,7 @@ async function importSettings() {
       hasCfg ? h('p', null, h('b', null, 'Menus and settings. '), `The file’s ${n(info.menus, 'menu', 'menus')} ${info.menus === 1 ? 'replaces' : 'replace'} your ${yourMenus}, and its ring settings replace yours. `,
         'They load into the editor and nothing is written until you press Save. Undo brings yours back' + (dirtyNow() ? ', unsaved changes included.' : '.')) : h('p', null, 'The editor is not touched.'),
       hasTags ? h('p', null, h('b', null, 'Tags. '), 'They are saved straight away, and Undo does not bring them back. ',
-        `Merge tags adds the file’s tags to your ${yourTags}. Replace tags swaps your ${yourTags} for the file’s and keeps a copy of the old tags file. Neither button touches the menus.`) : null,
+        `Merge tags adds the file’s tags to your ${yourTags}. Replace tags swaps your ${yourTags} for the file’s and keeps a copy of the old tags file.` + (hasCfg ? ' Either button also loads the file’s menus and settings into the editor, as above.' : '')) : null,
       probs.length ? h('div', { class: 'changes-list' }, h('div', { class: 'chg-group' }, h('div', { class: 'micro' }, n(probs.length, 'problem', 'problems') + ' in the menus'),
         h('ul', null, shown.map(p => h('li', null, describeProblem(p).text)), probs.length > shown.length ? h('li', null, `and ${probs.length - shown.length} more`) : null))) : null),
     actions: hasTags ? [{ text: 'Cancel', value: null }, merge, replace] : [{ text: 'Cancel', value: null, focus: !hasCfg }, { text: 'Import', value: 'none', kind: 'primary', focus: hasCfg }] });

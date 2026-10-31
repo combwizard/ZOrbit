@@ -8,6 +8,15 @@ All notable changes to this project are listed here. The format follows
 
 ### Fixed
 
+- Studio: a menus file with a brush, alpha, material or texture name that is not text (`null` or a number, from a
+  hand edit) left Studio half-built with Save greyed out. The item is now shown as unusable. A `ring`, `bridge` or
+  `browser` section that is not an object, or a `steps` value that is not a list, no longer breaks a screen either.
+- Studio: retyping a new menu's title and then clicking a button (such as **Duplicate**) lost the click, and Enter
+  or Tab lost the focus. The menu's id now follows the title after the click, and the focus stays in the field.
+- Studio: the import dialog said the tag buttons do not touch the menus; it now says both also load the file's
+  menus and settings into the editor, which they do.
+- Studio: after a Setup check failed, a **Fix**, **Install** or **Forget** button stayed on its busy label. Setup
+  now redraws the last good steps, and says when ZBrush runs from a folder it does not know.
 - ZBrush 2026 and newer: a pick made during a stroke that lasted more than 10 seconds was dropped without a word.
   The plugin's age limit no longer applies to a pick it held back for the stroke.
 - Studio and the browser no longer wipe their own settings file after one failed read. A `studio.json` or

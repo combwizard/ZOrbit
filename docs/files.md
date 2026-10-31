@@ -11,7 +11,7 @@
 **Import...** reads a file and shows what it holds before anything changes. It also accepts a plain `radial.json` or a plain `tags.json`, such as one you copied by hand.
 
 - The menus and settings load into the editor as an unsaved change. **Save** keeps them and **Undo** takes them back.
-- If the file has tags, you choose each time:
+- If the file has tags, you choose each time (both buttons also load the file's menus and settings, as above):
   - **Merge tags** adds the tags you do not have. A tag that matches one of yours, by key or by label, keeps your name and colour. Each item's tag list is joined with yours, your tags first and no repeats.
   - **Replace tags** swaps your tags for the file's. Your old `tags.json` is kept as `tags.json.bak` first.
 - Tags save straight away, as tag edits always do, so they are not part of **Undo**.
