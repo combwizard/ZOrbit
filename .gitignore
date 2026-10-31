@@ -9,6 +9,8 @@ build/
 dist/
 packaging/Output/
 *.spec.bak
+# mkdocs build output
+site/
 
 # Recorded responses from a developer's own machine (personal paths, hotkeys, logs): never commit.
 zorbit/studio_ui/dev/mock_data.js
@@ -16,5 +18,7 @@ zorbit/studio_ui/dev/mock_data.js
 # Editors / OS
 .vscode/
 .idea/
+*.code-workspace
+cursor_workspace.txt
 Thumbs.db
 desktop.ini

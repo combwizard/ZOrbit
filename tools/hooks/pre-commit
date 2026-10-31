@@ -4,7 +4,18 @@
 # 2. Recompiles the ZScript bridge when its source is committed, so ZOrbitBridge.txt and ZOrbitBridge.zsc never
 #    go in out of step. Needs ZBrush closed (tools/compile-zscript.ps1 starts ZBrush 2022 for the compile).
 #    Skip once: ZORBIT_SKIP_ZSC=1 git commit ...
+# 3. Refuses a commit whose text files name a Windows user folder other than "you" (a personal path, as in
+#    C:\Users\<name> or the JSON-escaped form). Write C:\Users\you in docs, tests and the mock.
 # Install: tools/hooks/install.sh.
+
+bad=$(git diff --cached --name-only --diff-filter=AM | while IFS= read -r f; do
+	case $f in *.png|*.gif|*.ico|*.zsc|*.jpg) continue ;; esac
+	git show ":$f" | grep -aEo '[Cc]:\\\\?[Uu]sers\\\\?[A-Za-z0-9_-]+' | grep -aEv '[Uu]sers\\\\?you$' >/dev/null && echo "$f"
+done)
+if [ -n "$bad" ]; then
+	echo "$bad" | while IFS= read -r f; do echo "pre-commit: personal path in $f: use C:\Users\you" >&2; done
+	exit 1
+fi
 
 code=$(git diff --cached --name-only -- zorbit bridge | grep -v '^zorbit/studio_ui/dev/')
 # A release commit only bumps VERSION in paths.py.

@@ -102,7 +102,7 @@ machine, including your folder paths, hotkeys and logs. It is listed in `.gitign
 check `git status` before you commit.
 
 More generally, keep personal information out of commits, issues and screenshots: no real names, email
-addresses, machine names or user-folder paths. Use placeholders such as `%APPDATA%` in documentation.
+addresses, machine names or user-folder paths. Use placeholders such as `%APPDATA%` in documentation. The pre-commit hook refuses a commit that contains a `C:\Users\<name>` path other than `C:\Users\you`.
 
 When you make documentation images, use the project's own renderer with the shipped starter menus, so that
 only brushes included with ZBrush appear.

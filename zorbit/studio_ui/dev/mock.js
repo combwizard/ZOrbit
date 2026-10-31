@@ -209,7 +209,7 @@
     st.tags.forEach(function (t) { count[t.key] = 0; });
     Object.keys(st.items).forEach(function (ik) { st.items[ik].forEach(function (k) { if (k in count) count[k]++; }); });
     return { ok: true, tags: st.tags.map(function (t) { var o = { key: t.key, label: t.label, color: t.color, count: count[t.key] }; if (t.key === FAV) o.builtin = true; return o; }),
-      items: clone(st.items), palette: TAG_PALETTE.slice(), mtime_ns: tagMtime, path: 'C:\\Users\\mock\\AppData\\Roaming\\ZOrbit\\tags.json', error: null };
+      items: clone(st.items), palette: TAG_PALETTE.slice(), mtime_ns: tagMtime, path: 'C:\\Users\\you\\AppData\\Roaming\\ZOrbit\\tags.json', error: null };
   }
   // Runs one change like TagStore._change: refused under ?tagfail; written (and the time bumped) only when it says ok
   function tagChange(apply) {
@@ -264,16 +264,16 @@
      recorded ({items|brushes, categories}), else made from the first 48 recorded brushes: the same pictures under new names. */
   var ASSET_KIND = {
     brush: { suffix: '', ext: '.ZBP', cats: null,
-      sources: [{ label: 'ZBrush 2026 brush presets', path: 'C:\\Users\\david\\OneDrive\\Documents\\ZBrush 2026 Assets\\ZStartup\\BrushPresets', exists: true },
+      sources: [{ label: 'ZBrush 2026 brush presets', path: 'C:\\Users\\you\\Documents\\ZBrush 2026 Assets\\ZStartup\\BrushPresets', exists: true },
                 { label: 'ZBrush 2022 brush presets', path: 'C:\\Program Files\\Maxon ZBrush 2022\\ZStartup\\BrushPresets', exists: false }] },
     alpha: { suffix: ' Alpha', ext: '.psd', cats: ['My Alphas', 'ZBrush', 'Lightbox/HardSurfaceAlphas'],
-      sources: [{ label: 'ZBrush 2026 alphas', path: 'C:\\Users\\david\\OneDrive\\Documents\\ZBrush 2026 Assets\\ZStartup\\Alphas', exists: true },
+      sources: [{ label: 'ZBrush 2026 alphas', path: 'C:\\Users\\you\\Documents\\ZBrush 2026 Assets\\ZStartup\\Alphas', exists: true },
                 { label: 'ZBrush 2022 alphas', path: 'C:\\Program Files\\Maxon ZBrush 2022\\ZStartup\\Alphas', exists: false }] },
     material: { suffix: ' Mat', ext: '.zmt', cats: ['My Materials', 'ZBrush/MatCap', 'Lightbox/Standard'],
-      sources: [{ label: 'ZBrush 2026 materials', path: 'C:\\Users\\david\\OneDrive\\Documents\\ZBrush 2026 Assets\\ZStartup\\Materials', exists: true },
+      sources: [{ label: 'ZBrush 2026 materials', path: 'C:\\Users\\you\\Documents\\ZBrush 2026 Assets\\ZStartup\\Materials', exists: true },
                 { label: 'ZBrush 2022 materials', path: 'C:\\Program Files\\Maxon ZBrush 2022\\ZStartup\\Materials', exists: false }] },
     texture: { suffix: ' Tex', ext: '.psd', cats: ['My Textures', 'ZBrush', 'Lightbox/Panoramas'],
-      sources: [{ label: 'ZBrush 2026 textures', path: 'C:\\Users\\david\\OneDrive\\Documents\\ZBrush 2026 Assets\\ZStartup\\Textures', exists: true },
+      sources: [{ label: 'ZBrush 2026 textures', path: 'C:\\Users\\you\\Documents\\ZBrush 2026 Assets\\ZStartup\\Textures', exists: true },
                 { label: 'ZBrush 2022 textures', path: 'C:\\Program Files\\Maxon ZBrush 2022\\ZStartup\\Textures', exists: false }] }
   };
   var libCache = {};
@@ -289,7 +289,7 @@
     } else {
       var items = ((M.get_library && M.get_library.brushes) || []).slice(0, 48).map(function (b, i) {
         var cat = A.cats[i % A.cats.length], name = b.name + A.suffix;
-        return { name: name, source: cat.split('/')[0], category: cat, path: 'C:\\Users\\david\\ZBrush Assets\\' + cat.replace(/\//g, '\\') + '\\' + name + A.ext };
+        return { name: name, source: cat.split('/')[0], category: cat, path: 'C:\\Users\\you\\ZBrush Assets\\' + cat.replace(/\//g, '\\') + '\\' + name + A.ext };
       });
       var counts = {};
       items.forEach(function (it) { counts[it.category] = (counts[it.category] || 0) + 1; });
@@ -450,7 +450,7 @@
     export_settings: function (cfg) {
       return sleep(150).then(function () {
         if (q.has('importcancel')) return { ok: false, cancelled: true };
-        return { ok: true, path: 'C:\\Users\\mock\\Documents\\ZOrbit settings 2026-10-30.json', message: 'Exported ' + Object.keys((cfg && cfg.menus) || {}).length + ' menus and the tags to ZOrbit settings 2026-10-30.json (mock).' };
+        return { ok: true, path: 'C:\\Users\\you\\Documents\\ZOrbit settings 2026-10-30.json', message: 'Exported ' + Object.keys((cfg && cfg.menus) || {}).length + ' menus and the tags to ZOrbit settings 2026-10-30.json (mock).' };
       });
     },
     pick_import: function () {
@@ -458,7 +458,7 @@
         if (q.has('importcancel')) return { ok: false, cancelled: true };
         if (q.has('importfail')) return { ok: false, message: "That file is not valid JSON: Expecting ',' delimiter: line 12 column 5 (mock)." };
         var tagsOnly = q.has('importtags'), n = Object.keys(saved.menus || {}).length;
-        return { ok: true, path: 'C:\\Users\\mock\\Documents\\ZOrbit settings 2026-10-30.json', kind: tagsOnly ? 'tags' : 'bundle', has_config: !tagsOnly, menus: tagsOnly ? 0 : n,
+        return { ok: true, path: 'C:\\Users\\you\\Documents\\ZOrbit settings 2026-10-30.json', kind: tagsOnly ? 'tags' : 'bundle', has_config: !tagsOnly, menus: tagsOnly ? 0 : n,
           has_tags: true, tags: 4, new_tags: 2, items: 17, problems: tagsOnly || !q.has('problems') ? [] : validate(saved), version: '0.11.0' };
       });
     },
