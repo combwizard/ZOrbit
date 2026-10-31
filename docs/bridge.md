@@ -70,3 +70,5 @@ When this version of ZOrbit has a newer plugin than one you installed, **Setting
 | Apply | Carries out the pending pick. Bound to the bridge key for the fallback route. In ZBrush 2022 to 2025 it comes with F9 already bound. |
 | Start App | Starts the app if it is not running. Normally unnecessary. |
 | Status | Shows whether the listener is verified, whether the app is running, and the last pick. |
+
+If the plugin fails while it starts, it writes the error to `bridge.log` before ZBrush reports it, and a button or the listener that cannot be created is skipped without stopping the rest. Picks that load a brush, alpha, material or texture from a file press the button ZBrush names after that file (`ClayBuildup` for `ClayBuildup.zbp`), whatever the item is called in the menu.

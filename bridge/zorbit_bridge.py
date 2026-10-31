@@ -28,8 +28,6 @@ import time
 import traceback
 import types
 
-import zbrush.commands as zbc
-
 # --- locations -----------------------------------------------------------------------------------
 DATA_DIR = os.path.join(os.environ.get("LOCALAPPDATA") or os.path.expanduser("~"), "ZOrbit")
 LAUNCH_FILE = os.path.join(os.environ.get("APPDATA") or os.path.expanduser("~"), "ZOrbit", "launch.json")
@@ -39,18 +37,6 @@ LISTENER_FILE = os.path.join(DATA_DIR, "listener.json")
 LOG_FILE = os.path.join(DATA_DIR, "bridge.log")
 BRIDGE_DIR = os.path.dirname(os.path.abspath(__file__))
 PALETTE = "Zplugin:ZOrbit"
-
-WM_APP_PICK = 0x8000 + 1
-WM_TIMER = 0x113
-TIMER_VERIFY, TIMER_RETRY, TIMER_SELECT = 1, 2, 3
-SELECT_TRIES = 25                 # an asset just loaded: look for its button every 40 ms, for up to a second
-# kind -> (palette its buttons live in, interface path of the button that loads a file). Maxon's own xmd_bridge
-# plugin selects and loads alphas, materials and textures the same way.
-ASSETS = {"brush": ("Brush", "Brush:Load Brush"), "alpha": ("Alpha", "Alpha:Import"),
-          "material": ("Material", "Material:Load"), "texture": ("Texture", "Texture:Import")}
-VK_LBUTTON, VK_RBUTTON = 0x01, 0x02
-SM_SWAPBUTTON = 23
-REQUEST_MAX_AGE_S = 10            # a request older than this is stale (its pick never went out): not carried out
 
 
 def log(msg: str) -> None:
@@ -66,10 +52,32 @@ def log(msg: str) -> None:
         pass
 
 
+# Before the first log line a failure would reach only ZBrush's console, so the import is logged here.
+try:
+    import zbrush.commands as zbc
+except Exception:
+    log("the plugin could not start: ZBrush's Python API could not be imported:\n" + traceback.format_exc())
+    raise
+
+WM_APP_PICK = 0x8000 + 1
+WM_TIMER = 0x113
+TIMER_VERIFY, TIMER_RETRY, TIMER_SELECT = 1, 2, 3
+SELECT_TRIES = 25                 # an asset just loaded: look for its button every 40 ms, for up to a second
+# kind -> (palette its buttons live in, interface path of the button that loads a file). Maxon's own xmd_bridge
+# plugin selects and loads alphas, materials and textures the same way.
+ASSETS = {"brush": ("Brush", "Brush:Load Brush"), "alpha": ("Alpha", "Alpha:Import"),
+          "material": ("Material", "Material:Load"), "texture": ("Texture", "Texture:Import")}
+VK_LBUTTON, VK_RBUTTON = 0x01, 0x02
+SM_SWAPBUTTON = 23
+REQUEST_MAX_AGE_S = 10            # a request older than this is stale (its pick never went out): not carried out
+
+
 # State that must survive a reload of this file (ZBrush's Python VM is shared and persistent).
 S = sys.modules.setdefault("_zorbit_bridge_state", types.ModuleType("_zorbit_bridge_state"))
 if not hasattr(S, "keepalive"):
     S.keepalive, S.hwnd, S.seq, S.verified, S.last = [], None, 0, False, "none yet"
+if not isinstance(getattr(S, "select_pending", None), list):
+    S.select_pending = []         # (interface path, tries left) per asset this pick loaded from file, in order
 
 # --- Win32 (own WinDLL instances so other plugins' argtypes are untouched) -----------------------
 user32 = ctypes.WinDLL("user32", use_last_error=True)
@@ -116,27 +124,45 @@ def primary_down() -> bool:
 
 
 # --- carrying out a pick -------------------------------------------------------------------------
+def _button_paths(palette: str, name: str, a: dict) -> list:
+    """Interface paths a loaded asset's button may have, best first. ZBrush names the button after the item's
+    file, not after the name in the menu: 'Clay Buildup' is the button ClayBuildup. The app puts that name in
+    a['button'] when it found the file; failing that, the file's own name is tried."""
+    names = [a.get("button"), name]
+    f = a.get("file")
+    if f:
+        names.append(os.path.splitext(os.path.basename(str(f).replace("\\", "/")))[0])
+    out = []
+    for n in names:
+        if n and f"{palette}:{n}" not in out:
+            out.append(f"{palette}:{n}")
+    return out
+
+
 def _do_asset(kind: str, a: dict) -> str:
     palette, loader = ASSETS[kind]
     name = a[kind]
-    path = f"{palette}:{name}"
-    if zbc.exists(path):
+    paths = _button_paths(palette, name, a)
+    path = next((p for p in paths if zbc.exists(p)), None)
+    if path:
         zbc.press(path)
-        S.select_pending = None                           # a later asset of the same pick wins
+        # A later asset of the same kind wins over one of the pick still waiting to be selected; other kinds stay.
+        S.select_pending = [e for e in S.select_pending if not e[0].startswith(palette + ":")]
         return f"{kind} {name}: selected"
     f = a.get("file")
     if f and os.path.isfile(f):
         zbc.set_next_filename(f.replace("\\", "/"))
         zbc.press(loader)
-        now = zbc.exists(path)
+        now = next((p for p in paths if zbc.exists(p)), None)
         if now:
-            zbc.press(path)
+            zbc.press(now)
         # ZBrush finishes adding the new item only after the pick returns, so a press now may find no button or
         # not take: the listener presses it again once ZBrush is done (apply_request starts that after the last
-        # action). Without a listener (the Apply button only) this is all we can do.
-        S.select_pending = (path, SELECT_TRIES)
+        # action). Without a listener (the Apply button only) this is all we can do. One entry per asset, in
+        # order. Until the button shows, the one named after the file is the likeliest.
+        S.select_pending.append((now or (paths[0] if a.get("button") else paths[-1]), SELECT_TRIES))
         later = "; selecting it once ZBrush has added it" if S.hwnd and IsWindow(S.hwnd) else ""
-        return f"{kind} {name}: loaded from {f}{later} (button there now: {now})"
+        return f"{kind} {name}: loaded from {f}{later} (button there now: {bool(now)})"
     return f"{kind} {name}: NOT loaded in ZBrush and no file known"
 
 
@@ -195,7 +221,7 @@ def apply_request(sender: str = "") -> None:
     if age > REQUEST_MAX_AGE_S:
         log(f"apply ({sender or 'button'}): request #{req.get('id')} is {age:.0f} s old; ignored")
         return
-    S.select_pending = None                               # a newer pick wins over an item still waiting to be selected
+    S.select_pending = []                                 # a newer pick wins over items still waiting to be selected
     if S.hwnd and IsWindow(S.hwnd):
         KillTimer(S.hwnd, TIMER_SELECT)
     results = []
@@ -204,12 +230,17 @@ def apply_request(sender: str = "") -> None:
             results.append(_do_action(a))
         except Exception as e:
             results.append(f"{a!r}: FAILED {type(e).__name__}: {e}")
-    S.last = f"#{req.get('id')} '{req.get('label')}' via {sender or 'button'}: " + "; ".join(results)
+    listening = bool(S.hwnd and IsWindow(S.hwnd))
+    later = ""
+    if S.select_pending and listening:
+        # The other actions have already run; these are pressed one after another once ZBrush shows them.
+        later = " (selected after the pick: " + ", ".join(p for p, _ in S.select_pending) + ")"
+    S.last = f"#{req.get('id')} '{req.get('label')}' via {sender or 'button'}: " + "; ".join(results) + later
     log(S.last)
-    if getattr(S, "select_pending", None) and S.hwnd and IsWindow(S.hwnd):
-        SetTimer(S.hwnd, TIMER_SELECT, 40, None)          # the item this pick loaded last, once ZBrush shows it
+    if S.select_pending and listening:
+        SetTimer(S.hwnd, TIMER_SELECT, 40, None)          # the items this pick loaded, once ZBrush shows them
     else:
-        S.select_pending = None
+        S.select_pending = []
 
 
 # --- listener window -----------------------------------------------------------------------------
@@ -223,33 +254,34 @@ def _publish_listener():
 
 
 def _select_pending(hwnd):
-    """Presses the button of a brush, alpha, material or texture loaded a moment ago, once ZBrush shows it
-    (never during a stroke)."""
-    pend = getattr(S, "select_pending", None)
-    if pend is None:
+    """Presses the buttons of the brushes, alphas, materials and textures a pick loaded a moment ago, one after
+    another in the pick's order, each once ZBrush shows it (never during a stroke). Every entry has its own tries."""
+    pend = S.select_pending
+    if not pend:
         KillTimer(hwnd, TIMER_SELECT)
         return
-    path, tries = pend
     if primary_down():
         return                                            # a stroke: wait, without using up a try
+    path, tries = pend[0]
     if zbc.exists(path):
         try:
             zbc.press(path)
         except Exception as e:                            # ZBrush busy: the next tick tries again, while tries last
-            S.select_pending = (path, tries - 1) if tries > 1 else None
-            if tries <= 1:
-                KillTimer(hwnd, TIMER_SELECT)
+            if tries > 1:
+                pend[0] = (path, tries - 1)
+            else:
+                pend.pop(0)
             log(f"{path}: press failed after loading ({e!r}); {'trying again' if tries > 1 else 'giving up'}")
-            return
-        KillTimer(hwnd, TIMER_SELECT)
-        S.select_pending = None
-        log(f"{path}: selected after loading ({SELECT_TRIES - tries + 1} looks)")
+        else:
+            pend.pop(0)
+            log(f"{path}: selected after loading ({SELECT_TRIES - tries + 1} looks)")
     elif tries <= 1:
-        KillTimer(hwnd, TIMER_SELECT)
-        S.select_pending = None
+        pend.pop(0)
         log(f"{path}: loaded, but its button did not appear within a second; not selected")
     else:
-        S.select_pending = (path, tries - 1)
+        pend[0] = (path, tries - 1)
+    if not pend:
+        KillTimer(hwnd, TIMER_SELECT)
 
 
 def _wndproc(hwnd, msg, wparam, lparam):
@@ -388,31 +420,53 @@ def status(sender: str = "") -> None:
 
 
 def install() -> None:
-    if not zbc.exists(PALETTE):
-        zbc.add_subpalette(PALETTE, 0)
-    for name, info, fn in (("Studio", "Opens ZOrbit Studio: edit menus, browse brushes, settings.", open_studio),
-                           ("Apply", "Carries out the ZOrbit pick. Bind F9 to it natively.", apply_request),
-                           ("Start App", "Starts the ZOrbit app if it is not running.", start_app),
-                           ("Status", "Shows the ZOrbit bridge state.", status)):
+    """Builds the palette and starts the listener and the app. Each part is tried on its own and a failure is
+    logged, so one broken button does not take the rest of the palette down."""
+    failed = 0
+
+    def attempt(what, fn, *args):
+        nonlocal failed
+        try:
+            fn(*args)
+        except Exception:
+            failed += 1
+            log(f"could not {what}:\n" + traceback.format_exc())
+
+    def add_palette():
+        if not zbc.exists(PALETTE):
+            zbc.add_subpalette(PALETTE, 0)
+
+    def add_button(name, info, fn):
         path = f"{PALETTE}:{name}"
         if zbc.exists(path):
             zbc.delete_interface_item(path)
         zbc.add_button(path, info, fn)
+
+    attempt("create the palette " + PALETTE, add_palette)
+    for name, info, fn in (("Studio", "Opens ZOrbit Studio: edit menus, browse brushes, settings.", open_studio),
+                           ("Apply", "Carries out the ZOrbit pick. Bind F9 to it natively.", apply_request),
+                           ("Start App", "Starts the ZOrbit app if it is not running.", start_app),
+                           ("Status", "Shows the ZOrbit bridge state.", status)):
+        attempt(f"create the button {name}", add_button, name, info, fn)
     for p in (REQUEST_FILE, REQUEST_TXT):          # a pick left by a ZBrush that quit before applying it
         try:
             os.remove(p)
             log(f"removed a pick left over from earlier: {os.path.basename(p)}")
         except OSError:
             pass
-    start_listener()
+    attempt("start the listener", start_listener)
     try:
         start_app()
     except Exception:
         log("could not start the app:\n" + traceback.format_exc())
-    log(f"bridge loaded from {BRIDGE_DIR}")
+    log(f"bridge loaded from {BRIDGE_DIR}" + (f" ({failed} part(s) failed, see above)" if failed else ""))
 
 
 # ZBrush runs plugin files at startup without promising __name__ == "__main__", so install
 # unconditionally. Tests import this file with RADIAL_BRIDGE_NO_INSTALL=1 and call install() themselves.
 if not os.environ.get("RADIAL_BRIDGE_NO_INSTALL"):
-    install()
+    try:
+        install()
+    except Exception:
+        log("the plugin could not start:\n" + traceback.format_exc())
+        raise

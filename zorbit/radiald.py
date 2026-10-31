@@ -643,7 +643,7 @@ class App:
 
         def start():
             try:
-                self._popout_proc = subprocess.Popen(
+                p = self._popout_proc = subprocess.Popen(
                     cmd, env=paths.clean_env(),
                     creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP,
                     close_fds=True, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -651,8 +651,14 @@ class App:
             except Exception:
                 self._popout_proc = None
                 log(f"could not start the popout {cmd}:\n" + traceback.format_exc())
+                return
             finally:
                 self._popout_spawning = False
+            try:                                   # this thread has nothing else to do: it sees how the process ends
+                code = p.wait()
+                log(f"popout exited with code {code}" + (" (popout.log says why)" if code else ""))
+            except Exception:
+                log("could not wait for the popout:\n" + traceback.format_exc())
         threading.Thread(target=start, daemon=True).start()
 
     def open_browser(self, tag=None, toggle=False, kind=None):
@@ -791,6 +797,9 @@ class App:
             if got and assets is not None:
                 p = assets.find_or_rescan(got[0], got[1], legacy["path"] if legacy else None)
                 a["file"] = str(p).replace("\\", "/") if p else None
+                if p:
+                    # ZBrush names the button of a loaded item after its file
+                    a["button"] = os.path.splitext(os.path.basename(str(p)))[0]
             out.append(a)
         return out
 
@@ -1063,7 +1072,8 @@ def check(cfg_path) -> int:
             elif it.kind == "browser":
                 extra = f"  (opens on {it.data.get('kind', 'brush')})"
             print(f"      {it.kind:7s} {it.label}{extra}")
-    problems = ([f"tags: {store.error}"] if store.error else []) + cfg.errors
+    said = any(e.startswith("tags.json could not be read") for e in cfg.errors)     # config.load says it once
+    problems = ([store.error] if store.error and not said else []) + cfg.errors
     for e in problems:
         print(f"  PROBLEM: {e}")
     return 1 if problems else 0
@@ -1078,11 +1088,15 @@ def main(argv=None) -> int:
     ap.add_argument("--no-tray", action="store_true", help="do not show the notification-area icon")
     ap.add_argument("--check", action="store_true", help="validate the config and exit")
     a = ap.parse_args(argv)
-    if a.config is None:
-        a.config = paths.ensure_config()
-    if a.check:
-        return check(a.config)
     try:
+        if a.config is None:
+            try:
+                a.config = paths.ensure_config()
+            except OSError as e:                  # an unwritable %APPDATA%: say so plainly, not with a traceback
+                log(f"fatal: cannot create the menus file in {paths.CONFIG_DIR}: {e}")
+                return 1
+        if a.check:
+            return check(a.config)
         return App(a.config, a.target_exe, a.exit_with_zbrush, a.accept_injected, a.no_tray).run()
     except Exception:
         log("fatal:\n" + traceback.format_exc())
