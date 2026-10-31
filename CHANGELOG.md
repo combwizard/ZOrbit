@@ -21,6 +21,10 @@ All notable changes to this project are listed here. The format follows
 
 ### Changed
 
+- Studio: the import dialog says how many of the file's menus replace how many of yours, that nothing is written
+  until Save, and that **Merge tags** and **Replace tags** touch tags only (hidden when the file has none).
+  Problems from the menus file are described in plain words, the note about crowded menus says the ring grows,
+  and a ZBrush folder added by hand can be forgotten from Setup.
 - Browser and Library: thumbnails are decoded four at a time and big JPEGs are read at a reduced scale, so a
   page of large textures fills in about three times faster; at most a few hundred thumbnails are kept in
   memory; a library refresh that finds nothing new no longer resends the whole list.
@@ -75,6 +79,21 @@ All notable changes to this project are listed here. The format follows
 
 ### Fixed
 
+- Studio: **Restore backup** asks first and says the old file is kept; **Start from defaults** no longer claims the
+  current file is lost. **Start app** shows a busy label for the whole wait, treats a slow start as progress and
+  shows a failed start's log lines on Setup with an **Open Status** button; a failed Setup check shows its error
+  and keeps the last good answer, and the rail dot no longer clears on it.
+- Studio: **Rescan** rescans the tab you are on, not the one the Library opened on. Enter and **Add** no longer
+  act on an item a filter has hidden. Merging a tag re-points the ring slots that used it (one Undo step) and
+  the problems list refreshes after any tag is added, removed or merged. The ring preview no longer draws a
+  slot for a submenu whose own menu has no usable items. A hand-edited menus file with a null menu or a menu
+  without items no longer leaves Studio on "Loading...": it opens as an empty menu or on the recovery screen.
+- Studio: the hotkey recorder refuses numpad keys and punctuation that sits elsewhere on your layout instead of
+  recording a key that never fires, accepts dead and IME keys by position, and Alt+1 to Alt+5 work on AZERTY.
+- Studio: the **Add item** list is no longer cut off in a short window and the Library toolbar wraps in a narrow
+  one. The Add-to-menu list keeps its scroll position, the item inspector is not rebuilt under you when the
+  library finishes loading, Undo and Redo keep the current tab, Set values like `.5`, `5.` and `1e-3` are
+  accepted, and **Reset all colours** and clearing the bridge key leave no empty sections in the file.
 - A thumbnail cache file that was cut short is decoded again instead of being shown broken, and a picture that
   failed to decode is tried again next time instead of staying blank.
 - Studio: **Restore backup** keeps the `radial.json` it replaces as `radial.json.broken`, as **Start from defaults**

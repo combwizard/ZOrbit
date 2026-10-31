@@ -2,10 +2,13 @@
    Backed by window.__RADIAL_MOCK__ (recorded real responses from dev/mock_data.js).
    Extra URL switches for visual testing: ?problems (sample problems), ?status=down (ZBrush and the app off; Start app is refused
    with reason "zbrush"), ?status=up (the app already runs; by default ZBrush and the app both run; with ?appoff, ?startfail or any other ?status the app stays off until Start app succeeds),
-   ?startfail (start_app answers reason "failed" with three log lines after 1.5 s), ?legacy (legacy_only: key-bridge listener card),
+   ?startfail (start_app answers reason "failed" with three lines after 1.5 s; ?startfail=empty: no lines, "It wrote nothing to its log"),
+   ?startwait (start_app answers starting: true after 2 s, and the app is up 6 s later), ?startslow (start_app takes 7 s, then works), ?legacy (legacy_only: key-bridge listener card),
    ?nocheck (zbrush_check_ok false: the ZBrush card says "Could not check"),
    ?lag=300 (artificial latency in ms for preview calls and for the ZScript install/remove, so the busy row is visible), ?broken (get_config fails to parse: recovery screen),
-   ?conflict (the first save without force reports "file changed on disk"), ?blocked (a save without force is
+   ?conflict (the first save without force reports "file changed on disk"), ?keptbroken (the first save says the old file was not valid JSON and is kept as radial.json.broken),
+   ?badmenus=null|noitems|string|items (get_config hands out a hand-edited file: a null menu, a menu without items, a menu that is a string, an item that is null),
+   ?allproblems (validate lists one of every loader message, to read describeProblem's wording), ?blocked (a save without force is
    refused as "no ring can open" until forced), ?nozbrush (get_library: ZBrush not found, no brushes), ?nolib (ZBrush
    found but no .zbp files in its folders), ?liberr (get_library reports an error), ?thumbfail (the first two get_thumbs
    calls are rejected, then they work), ?already (the first "Add a ZBrush folder" says the folder is already listed), ?busy
@@ -18,7 +21,8 @@
    Usage (get_usage / forget_recent; state in localStorage rm_usage_<kind>): a made-up Recent list of six items of that kind and scores for 24
    (the order of Favourites); a pick in the popout moves that item to the front of Recent. ?usage=empty (nothing picked yet, no scores).
    Import and export (Settings): ?importfail (the picked file is refused with a message), ?importcancel (the file dialog is closed),
-   ?importtags (the file holds tags only); an import changes the ring accent to cyan so it can be seen.
+   ?importtags (the file holds tags only), ?importnotags (the file holds no tags, so there is no Merge or Replace); pick_import reports menus,
+   current_menus, tags, current_tags and has_tags like the backend; an import changes the ring accent to cyan so it can be seen.
    get_library/get_thumbs answer for every kind (brush, alpha, material, texture); the ?nozbrush/?nolib/?liberr switches apply to all of them.
    The popout page (popout.html?mock): ?nopick (a pick is refused as "ZOrbit is not running"), ?tag=blocking (opens filtered, as --tag does),
    ?kind=alpha (opens on that tab, else the last one, kept in localStorage rm_pop_kind);
@@ -29,6 +33,8 @@
    Setup screen (get_setup; state in localStorage rm_env for the registered folder and rm_zscript for the ZScript plugin, which Settings > Older
    ZBrush shares): ?firstrun (setup_done is false until Finish or Skip, so Studio opens on Setup; a reload does it again),
    ?zb=2026|2022|both|none|multi (which ZBrush installs exist; default both = 2026 plus the two older ones, multi adds 2027 and runs two),
+   ?setupfail (get_setup fails every time: only {now, checked_at, failed, error}), ?setupfail=later (the first two answers are good, then it fails),
+   ?addmodern (Add a ZBrush folder picks a ZBrush 2027: ok, python: true, listed in Setup with Fix and Forget),
    ?noenv (ZBRUSH_PLUGIN_PATH not set until Fix), ?fixfail (Fix is refused), ?nobridge (the plugin folder is missing: no Fix),
    ?zbrun=off (no ZBrush process), ?zbstale (it started before the plugin: restart), ?zbstart (it is still starting), ?noloaded (it never loaded the plugin),
    ?elevated (the ZBrush is running as administrator and cannot be matched to an install), ?appoff (the app is not running), ?otherbridge (another ZOrbit
@@ -41,14 +47,14 @@
   var lag = +(q.get('lag') || 0);
   var sleep = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
   var clone = function (o) { return JSON.parse(JSON.stringify(o)); };
-  var ticks = 0, thumbCalls = 0, alreadyDone = false, appStarted = false;
+  var ticks = 0, thumbCalls = 0, alreadyDone = false, appStarted = false, setupCalls = 0, modernAdded = false, keptDone = false;
   var saved = clone(M.get_config.config);
   var TAG_DEFAULTS = { tag_colors: 'tint', tag_band: 'medium', tag_band_opacity: 0.45, tag_glow_opacity: 0.4, tag_tint_opacity: 0.3, tag_tint_style: 'gradient', tag_tint_blend: 'multiply' };
   var KINDS = ['brush', 'alpha', 'material', 'texture', 'press', 'set', 'toggle', 'steps', 'menu', 'auto', 'tag', 'browser'];
   if (q.has('kinds') && saved.menus && saved.menus.tools) saved.menus.tools.items.push({ tag: 'blocking' }, { browser: '' });
   var mtime = 1700000000000000000, conflictDone = false;
   var FAV = 'favourite';
-  var TAG_PALETTE = ['#F86B33', '#4DC8E9', '#A8DF23', '#E8413C', '#C77DFF', '#FFD166', '#5EEAD4', '#F472B6'];
+  var TAG_PALETTE = ['#A8DF23', '#C77DFF', '#FFD166', '#5EEAD4', '#F472B6', '#E8413C', '#F86B33', '#4DC8E9'];   // as tags.PALETTE in tags.py
   var tagsMode = q.get('tags') === 'empty' ? 'empty' : q.has('tagsmany') ? 'many' : 'saved';
   var tagMtime = 1700000000000000000, tagStore = null;
   var BROKEN_ERR = "Expecting ',' delimiter: line 12 column 5 (char 301)";
@@ -65,6 +71,27 @@
       return k === 'steps' || k === 'auto' || k === 'browser' || (typeof it[k] === 'string' && it[k].trim() !== '');
     });
   }
+
+  // One of every message config.py can produce (menu ids are the recorded ones), for ?allproblems
+  var ALL_PROBLEMS = [
+    'bridge: must be an object like {"mode": "auto", "key": "F9"}', 'bridge.moed: unknown setting (did you mean mode?)', "bridge.mode 'fast' unknown; using auto",
+    "bridge.key 'Ctrl+Q+Q' not understood; using F9", 'bridge.key must not use Ctrl or Shift (ZBrush reads them as mask/smooth); use a bare F-key; using F9',
+    'ring: must be an object like {"radius": 145, "animation": "smooth"}', "ring.colors.bg: 'red' is not a #rrggbb colour", 'ring.colors.acent: unknown colour (did you mean accent?)',
+    "ring.radius: 500 must be a number from 60 to 400", "ring.flick: 'yes' must be true or false", "ring.animation: 'spin' unknown; one of smooth, bounce, pop",
+    "ring.labels: 'all' unknown; one of name, none", "ring.tag_band: 'huge' unknown; one of none, hairline, narrow, medium, wide", 'ring.raduis: unknown setting (did you mean radius?)',
+    'menus: must be a non-empty object of id -> menu',
+    'menu odd: not an object', "menu tag:x: ids starting with 'tag:' are reserved for tag submenus", "menu brushes: unknown setting 'hotkye' (did you mean hotkey?)",
+    'menu brushes item 1: not an object', 'menu brushes item 2: needs exactly one of brush, alpha, material, texture, press, set, toggle, steps, menu, auto, tag, browser',
+    "menu brushes item 3: 'set' needs a 'value'", "menu brushes item 3: 'set' value must be a number", "menu brushes item 4: 'steps' must be a non-empty list of brush/alpha/material/texture/press/set/toggle actions",
+    'menu brushes item 4 step 2: not an object', "menu brushes item 4 step 1: 'brush' must be a non-empty string", 'menu brushes item 4 step 2: steps cannot open menus, nest steps, be auto slots or open tags or the browser',
+    "menu brushes item 5: 'auto' must be one of brush", "menu brushes item 5: 'browser' must be a string (a tag key, or \"\" for everything)", "menu brushes item 5: browser 'kind' must be one of brush, alpha, material, texture",
+    "menu brushes item 6: 'press' must be a non-empty string", "menu brushes item 6: brush name 'C:\\x\\Clay' must not contain \\ / : or ..", "menu brushes item 7: submenu 'nope' does not exist",
+    "menu brushes item 7: unknown setting 'lable' (did you mean label?)", "menu brushes item 8: tag 'gone' does not exist; the slot stays empty", "menu brushes item 8: tag 'gone' does not exist; the browser opens unfiltered",
+    "menu brushes item 9: icon '\\\\pc\\share\\a.png' must be a plain file path on this PC, not a network path", "menu brushes item 9: submenu 'tools' has no usable items",
+    'menu tools: no usable items', "menu tools: hotkey 'Q' already used by menu brushes", "menu tools: hotkey 'Ctrl+Q+Q' not understood", "menu tools: animation 'spin' unknown; using ring.animation",
+    "menu tools: swallow 'no' must be true or false; using true", "menu tools: fan 'yes' must be true or false; using false",
+    'browser: must be an object like {"hotkey": "Alt+B"}', 'browser.hotkye: unknown setting (did you mean hotkey?)', "browser.hotkey 'Alt+B+B' not understood", "browser.hotkey 'Q' already used by menu brushes",
+    'tags.json could not be read: Expecting value: line 1 column 1 (char 0); tag slots stay empty until it is fixed', 'config could not be read: boom', 'no menu has a hotkey, so nothing can open the ring', 'a message nobody has taught the page'];
 
   function validate(cfg) {
     var out = [];
@@ -114,6 +141,7 @@
       else if (seen[bkey]) out.push('browser.hotkey ' + pyr(bh) + ' already used by menu ' + seen[bkey]);
     }
     if (!ids.some(function (id) { return menus[id].hotkey; })) out.push('no menu has a hotkey, so nothing can open the ring');
+    if (q.has('allproblems')) out.push.apply(out, ALL_PROBLEMS);
     if (q.has('problems')) out.push('menu brushes item 3: sample problem for the problems panel (?problems)', 'bridge.key must not use Ctrl or Shift (ZBrush reads them as mask/smooth); use a bare F-key',
       'ring.radius: 500 must be a number from 60 to 400', "menu tools: hotkey 'Q' already used by menu brushes");
     return out;
@@ -319,7 +347,11 @@
   var bridgeMode = function () { return q.get('bridgemode') || (saved.bridge && saved.bridge.mode) || 'auto'; };
   var MODERN = [{ name: 'ZBrush 2026', year: 2026, path: 'C:\\Program Files\\Maxon ZBrush 2026', python: true, added: false },
     { name: 'ZBrush 2027', year: 2027, path: 'C:\\Program Files\\Maxon ZBrush 2027', python: true, added: false }];
-  var modernInstalls = function () { return zbMode === 'none' || zbMode === '2022' ? [] : (zbMode === 'multi' ? MODERN : MODERN.slice(0, 1)); };
+  var HAND_ADDED = { name: 'ZBrush 2027', year: 2027, path: 'D:\\Apps\\ZBrush 2027', python: true, added: true };
+  var modernInstalls = function () {
+    var base = zbMode === 'none' || zbMode === '2022' ? [] : (zbMode === 'multi' ? MODERN : MODERN.slice(0, 1));
+    return modernAdded ? base.concat([HAND_ADDED]) : base;
+  };
   // The ZScript installs (ZBrush 2022 to 2025): what Settings > Older ZBrush lists, and what Setup shows for those versions
   function zsInstalls() {
     var z = JSON.parse(lsGet('rm_zscript') || '{}');
@@ -428,6 +460,14 @@
         r.config = clone(saved);                                   // what the last mock save wrote, so Reload from disk is honest
         r.defaults = Object.assign({}, r.defaults, TAG_DEFAULTS);
         if (q.has('broken') && !sessionStorage.getItem('rm_repaired')) return { config: null, error: BROKEN_ERR, path: r.path, backup_exists: true, problems: [], mtime_ns: null };
+        var bad = q.get('badmenus');
+        if (bad && r.config.menus) {
+          var ids = Object.keys(r.config.menus), id = ids[ids.length - 1];
+          if (bad === 'null') r.config.menus[id] = null;
+          else if (bad === 'noitems') delete r.config.menus[id].items;
+          else if (bad === 'string') r.config.menus[id] = 'oops';
+          else if (bad === 'items') r.config.menus[id].items.push(null);
+        }
         r.problems = q.has('problems') ? validate(r.config) : r.problems;
         r.mtime_ns = mtime; r.backup_exists = true;
         return r;
@@ -445,12 +485,13 @@
             message: 'Saving this would leave no ring that can open, so ZOrbit would stop working.' };
         }
         saved = clone(cfg); mtime += 1000000;
-        return { saved: true, problems: validate(cfg), time: Date.now() / 1000, mtime_ns: mtime };
+        var kept = q.has('keptbroken') && !keptDone; keptDone = true;
+        return { saved: true, problems: validate(cfg), time: Date.now() / 1000, mtime_ns: mtime, kept_broken: kept };
       });
     },
     // Both mark the file as repaired for this tab, so the reload after them boots normally even with ?broken.
-    restore_backup: function () { try { sessionStorage.setItem('rm_repaired', '1'); } catch (e) {} return sleep(200).then(function () { return { ok: true, message: 'Restored the last good backup (mock).' }; }); },
-    reset_config: function () { try { sessionStorage.setItem('rm_repaired', '1'); } catch (e) {} return sleep(200).then(function () { return { ok: true, message: 'Reset to the default menus (mock).' }; }); },
+    restore_backup: function () { try { sessionStorage.setItem('rm_repaired', '1'); } catch (e) {} return sleep(200).then(function () { return { ok: true, kept_broken: true, message: 'Restored radial.json from radial.json.bak. The file it replaced is kept as radial.json.broken.' }; }); },
+    reset_config: function () { try { sessionStorage.setItem('rm_repaired', '1'); } catch (e) {} return sleep(200).then(function () { return { ok: true, message: 'Started again from the default menus. The old file is kept as radial.json.broken.' }; }); },
     // Export and import: the picked file is a made-up bundle. ?importfail refuses it, ?importcancel is a closed dialog, ?importtags a tags-only file.
     export_settings: function (cfg) {
       return sleep(150).then(function () {
@@ -462,14 +503,15 @@
       return sleep(150).then(function () {
         if (q.has('importcancel')) return { ok: false, cancelled: true };
         if (q.has('importfail')) return { ok: false, message: "That file is not valid JSON: Expecting ',' delimiter: line 12 column 5 (mock)." };
-        var tagsOnly = q.has('importtags'), n = Object.keys(saved.menus || {}).length;
-        return { ok: true, path: 'C:\\Users\\you\\Documents\\ZOrbit settings 2026-10-30.json', kind: tagsOnly ? 'tags' : 'bundle', has_config: !tagsOnly, menus: tagsOnly ? 0 : n,
-          has_tags: true, tags: 4, new_tags: 2, items: 17, problems: tagsOnly || !q.has('problems') ? [] : validate(saved), version: '0.11.0' };
+        var tagsOnly = q.has('importtags'), noTags = q.has('importnotags') && !tagsOnly, n = Object.keys(saved.menus || {}).length;
+        return { ok: true, path: 'C:\\Users\\you\\Documents\\ZOrbit settings 2026-10-30.json', kind: tagsOnly ? 'tags' : noTags ? 'config' : 'bundle', has_config: !tagsOnly, menus: tagsOnly ? 0 : n,
+          current_menus: n, has_tags: !noTags, tags: noTags ? 0 : 4, new_tags: noTags ? 0 : 2, current_tags: tagState().tags.length, items: noTags ? 0 : 17, problems: tagsOnly || !q.has('problems') ? [] : validate(saved), version: '0.11.0' };
       });
     },
     apply_import: function (tag_mode) {
       return sleep(200).then(function () {
         var tagsOnly = q.has('importtags'), msg = '';
+        if (q.has('importnotags') && !tagsOnly) tag_mode = 'none';
         if (tag_mode === 'merge' || tag_mode === 'replace') {
           var st = tagState();
           if (tag_mode === 'replace') { st.tags = st.tags.filter(function (t) { return t.key === FAV; }); st.items = {}; }   // Favourites is built in: it stays
@@ -699,11 +741,16 @@
       console.log('[mock] start_app');
       if (q.get('status') === 'down') return sleep(300).then(function () { return { ok: false, running: false, reason: 'zbrush', message: 'ZBrush is not running. Start ZBrush first.' }; });
       if (q.has('startfail')) return sleep(1500).then(function () {
-        var t = Date.now();
-        return { ok: false, running: false, reason: 'failed', message: 'The app did not start. The log below says why.',
-          log: [stamp(t) + ' ZOrbit starting', stamp(t + 120) + " error: could not register hotkey 'Q' (already taken by another program)", stamp(t + 130) + ' ZOrbit failed to start; exiting'] };
+        var t = Date.now(), lines = q.get('startfail') === 'empty' ? [] : [stamp(t) + ' ZOrbit starting', stamp(t + 120) + " error: could not register hotkey 'Q' (already taken by another program)", stamp(t + 130) + ' ZOrbit failed to start; exiting'];
+        // the same words as studio.py: the colon only when there are lines to follow it
+        return { ok: false, running: false, reason: 'failed', lines: lines, log: lines.slice(),
+          message: 'The app did not start.' + (lines.length ? ' The last lines of its log:' : ' It wrote nothing to its log.') };
       });
-      return sleep(1000).then(function () { appStarted = true; return { ok: true, running: true, message: 'Started (mock: nothing was launched).' }; });
+      if (q.has('startwait')) return sleep(2000).then(function () {
+        setTimeout(function () { appStarted = true; }, 6000);
+        return { ok: false, running: false, starting: true, message: 'The app is still starting (a first start can take a few seconds while Windows scans it). Status turns green when it is up.' };
+      });
+      return sleep(q.has('startslow') ? 7000 : 1000).then(function () { appStarted = true; return { ok: true, running: true, message: 'Started.' }; });
     },
     open_folder: function (which) { console.log('[mock] open_folder', which); return Promise.resolve(true); },
     get_zscript_bridge: function () {
@@ -715,7 +762,14 @@
     },
     // The Setup screen's one look at everything (see setupSnapshot). ?ringtried / ?ringauto start their clocks from here.
     get_setup: function () {
-      return sleep(60).then(function () { setupTimers(); return setupSnapshot(); });
+      return sleep(60).then(function () {
+        var n = ++setupCalls, later = q.get('setupfail') === 'later';
+        if (q.has('setupfail') && (!later || n > 2)) {         // as studio.py: only these four keys, no installs list the page could take for "nothing found"
+          var t = Date.now() / 1000;
+          return { now: t, checked_at: t, failed: true, error: 'The setup check failed: [WinError 5] Access is denied (mock) (see studio.log)' };
+        }
+        setupTimers(); return setupSnapshot();
+      });
     },
     register_plugin_path: function () {
       if (q.has('fixfail')) return sleep(300).then(function () { return { ok: false, changed: false, restart: false, message: 'Could not write ZBRUSH_PLUGIN_PATH (mock): access denied.' }; });
@@ -730,10 +784,13 @@
       return sleep(200 + lag).then(function () { try { localStorage.removeItem('rm_zscript'); } catch (e) {} return { ok: true, message: 'Removed (mock).' }; });
     },
     add_zbrush_folder: function () {
+      // A ZBrush 2026 or later: ok, python: true. It joins the modern installs (Setup lists it, with Fix while it is unregistered, and Forget).
+      if (q.has('addmodern') && !modernAdded) return sleep(100).then(function () { modernAdded = true; return { ok: true, python: true, message: 'Added ZBrush 2027.' }; });
       if (q.has('already') && !alreadyDone) { alreadyDone = true; return sleep(100).then(function () { return { ok: true, already: true, message: 'C:\\Programs\\ZBrush 2022 is already listed.' }; }); }
       return Promise.resolve({ ok: false, cancelled: true });
     },
     forget_zbrush_folder: function (path) {
+      if (path === HAND_ADDED.path) { modernAdded = false; return sleep(100).then(function () { return { ok: true, message: 'Forgot ZBrush 2027.' }; }); }
       var f = JSON.parse(localStorage.getItem('rm_zforgot') || '{}'); f[path] = 1;
       try { localStorage.setItem('rm_zforgot', JSON.stringify(f)); } catch (e) {}
       return sleep(100).then(function () { return { ok: true, message: 'Forgot ' + path + '. The folder itself was not touched.' }; });

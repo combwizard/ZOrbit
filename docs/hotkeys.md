@@ -10,6 +10,7 @@ Q          Alt+G          Ctrl+Shift+1          F9          `
 
 - Keys: letters, digits, F1 to F24, and `space tab enter backspace insert delete home end pageup pagedown` and the punctuation keys `` ` - = [ ] \ ; ' , . / ``.
 - `~` is accepted for the backtick key.
+- In Studio, the **Hotkey** field records the key you press. Numpad keys cannot be recorded (the app has no names for them): use the main row. Letters and digits are recorded as the key your layout gives them, so Dvorak and AZERTY record what you pressed. A punctuation key is recorded by its place on a US keyboard, so Studio accepts it only when your layout types the same character there; otherwise it says "This key is in a different place on your keyboard layout. Pick another."
 - Modifiers: `Ctrl`, `Alt`, `Shift`, in any combination, joined with `+`. `Control` also works for `Ctrl`.
 - Each hotkey can belong to only one menu. The menu that comes first in `radial.json` keeps the key. A later menu with the same key is reported as a problem and has no hotkey, so it works only as a submenu. A menu with no usable items does not count: it never takes the key.
 - A hotkey only works while **ZBrush is the front window**. In every other program the key behaves normally. The browser hotkey is the one exception: it also works while the browser is in front, where it hands the keyboard back to ZBrush.

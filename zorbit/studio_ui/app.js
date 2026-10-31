@@ -283,14 +283,31 @@ function actionValid(a, nested) {
   }
   if (k === 'auto') return a.auto === 'brush';
   if (k === 'browser') return typeof a.browser === 'string' && (a.kind === undefined || isLib(a.kind));          // '' = every item; kind: which tab it opens on
+  if (isLib(k) && (/[\\/:]/.test(a[k]) || a[k].includes('..'))) return false;      // an asset is a plain name, never a path (config.py _bad_asset_name)
   return typeof a[k] === 'string' && a[k].trim() !== '';
 }
+/* The menus the loader keeps (config.py load): an object whose id does not start with "tag:" and that has an item left, where
+   a submenu item only counts while its target is kept too. A submenu whose own items all go takes the slots that open it
+   with it, and so on down the chain, so this settles by dropping menus until none changes. */
+function liveMenus() {
+  const menus = S.cfg.menus;
+  const live = new Set(Object.keys(menus).filter(id => menus[id] && typeof menus[id] === 'object' && !id.startsWith('tag:')));
+  const ok = it => actionValid(it, false) && (!('menu' in it) || live.has(it.menu));
+  for (let changed = true; changed;) {
+    changed = false;
+    for (const id of Array.from(live)) {
+      const items = menus[id].items;
+      if (!Array.isArray(items) || !items.some(ok)) { live.delete(id); changed = true; }
+    }
+  }
+  return live;
+}
 /* A tag slot whose tag does not exist stays usable: the loader keeps it as an empty slot and the Problems panel warns. */
-const itemUsable = it => actionValid(it, false) && (!('menu' in it) || !!S.cfg.menus[it.menu]);
+const itemUsable = it => actionValid(it, false) && (!('menu' in it) || liveMenus().has(it.menu));
 function usableIdx(menuId) {
   const m = S.cfg.menus[menuId];
   const out = [];
-  if (m && Array.isArray(m.items)) m.items.forEach((it, i) => { if (itemUsable(it)) out.push(i); });
+  if (m && Array.isArray(m.items)) { const live = liveMenus(); m.items.forEach((it, i) => { if (actionValid(it, false) && (!('menu' in it) || live.has(it.menu))) out.push(i); }); }
   return out;
 }
 
@@ -539,9 +556,13 @@ function popover(anchor, entries) {
     en.icon ? icon(en.icon, 16) : null, h('span', { class: 'pop-text' }, h('b', null, en.label), en.hint ? h('small', null, en.hint) : null))));
   document.body.append(pop);
   const r = anchor.getBoundingClientRect();
-  pop.style.left = Math.min(r.left, innerWidth - pop.offsetWidth - 8) + 'px';
-  const below = r.bottom + 6 + pop.offsetHeight < innerHeight;
-  pop.style.top = (below ? r.bottom + 6 : r.top - pop.offsetHeight - 6) + 'px';
+  pop.style.left = clamp(r.left, 8, Math.max(8, innerWidth - pop.offsetWidth - 8)) + 'px';
+  // Below the anchor if it fits, else above, else on whichever side has more room; a list taller than that scrolls inside the popover.
+  const roomBelow = innerHeight - r.bottom - 6 - 8, roomAbove = r.top - 6 - 8, natural = pop.offsetHeight;
+  const below = natural <= roomBelow || (natural > roomAbove && roomBelow >= roomAbove);
+  const hgt = Math.max(96, Math.min(natural, below ? roomBelow : roomAbove));
+  pop.style.maxHeight = hgt + 'px';
+  pop.style.top = Math.max(8, below ? r.bottom + 6 : r.top - 6 - Math.min(natural, hgt)) + 'px';
   requestAnimationFrame(() => pop.classList.add('in'));
   const onDown = e => { if (!pop.contains(e.target) && !anchor.contains(e.target)) close(); };
   const onKey = e => {
@@ -985,15 +1006,26 @@ const NAMED_KEYS = { Space: 'Space', Tab: 'Tab', Enter: 'Enter', NumpadEnter: 'E
   Home: 'Home', End: 'End', PageUp: 'PageUp', PageDown: 'PageDown' };          // the names config.py reads (_NAMED_VK, case-insensitive)
 const CODE_KEYS = { Backquote: '`', Minus: '-', Equal: '=', BracketLeft: '[', BracketRight: ']', Backslash: '\\',
   Semicolon: ';', Quote: "'", Comma: ',', Period: '.', Slash: '/' };
+/* What the same keys type with Shift held, on the layout CODE_KEYS describes (a US one). */
+const CODE_KEYS_SHIFT = { Backquote: '~', Minus: '_', Equal: '+', BracketLeft: '{', BracketRight: '}', Backslash: '|',
+  Semicolon: ':', Quote: '"', Comma: '<', Period: '>', Slash: '?' };
+/* The key of a keydown as config.py names it: { key } or { error } (a sentence for the user). The app matches the virtual key the
+   user's layout gives a letter or digit, so those are read from what was typed (letters) or the physical digit row. A punctuation
+   key is named by its place on a US keyboard, which only means the same key on a layout that types that character there. */
 function keyFromEvent(e) {
-  if (e.key === 'Dead' || e.key === 'Process' || e.key === 'Unidentified') return null;   // dead keys and IME composition
-  const c = e.code;
-  if (/^[a-z]$/i.test(e.key)) return e.key.toUpperCase();     // the typed character, so Dvorak/AZERTY record what the user pressed
-  if (/^[0-9]$/.test(e.key)) return e.key;
-  if (/^Key[A-Z]$/.test(c)) return c[3];                      // other layouts (Cyrillic, Greek...): fall back to the physical key
-  if (/^Digit[0-9]$/.test(c)) return c[5];
-  if (/^F([1-9]|1\d|2[0-4])$/.test(c)) return c;
-  return NAMED_KEYS[c] || CODE_KEYS[c] || null;
+  const c = e.code || '';
+  if (/^Numpad/.test(c) && c !== 'NumpadEnter') return { error: 'Numpad keys cannot be recorded. Use the main row.' };   // the app has no numpad key names, and a numpad digit would record as the main row's
+  if (/^[a-z]$/i.test(e.key)) return { key: e.key.toUpperCase() };     // the typed character, so Dvorak/AZERTY record what the user pressed
+  if (/^Digit[0-9]$/.test(c)) return { key: c[5] };                    // by position, so AZERTY's & is 1
+  if (/^[0-9]$/.test(e.key)) return { key: e.key };
+  if (/^Key[A-Z]$/.test(c)) return { key: c[3] };                      // other layouts (Cyrillic, Greek...) and dead keys: fall back to the physical key
+  if (/^F([1-9]|1\d|2[0-4])$/.test(c)) return { key: c };
+  if (NAMED_KEYS[c]) return { key: NAMED_KEYS[c] };
+  if (CODE_KEYS[c]) {
+    if (e.key === CODE_KEYS[c] || e.key === CODE_KEYS_SHIFT[c]) return { key: CODE_KEYS[c] };
+    return { error: 'This key is in a different place on your keyboard layout. Pick another.' };
+  }
+  return { key: null };
 }
 function hotkeyField({ value, mods = { ctrl: true, alt: true, shift: true }, onChange, placeholder = 'Not set', noMessage, what = 'Hotkey' }) {
   let rec = false;
@@ -1022,7 +1054,8 @@ function hotkeyField({ value, mods = { ctrl: true, alt: true, shift: true }, onC
       paint(live.length ? live.join('+') + '+...' : null); field.classList.add('rec'); return;
     }
     if (e.metaKey) { say('The Windows key cannot be used.'); return; }
-    const key = keyFromEvent(e);
+    const got = keyFromEvent(e), key = got.key;
+    if (got.error) { say(got.error); return; }
     if (!key) { say('That key is not supported. Use a letter, digit, F1-F24, space, tab, enter, backspace, insert, delete, home, end, pageup, pagedown or one of ` - = [ ] \\ ; \' , . /'); return; }
     for (const m of ['ctrl', 'alt', 'shift']) {
       if (e[m + 'Key'] && !mods[m]) {
@@ -1114,8 +1147,7 @@ function applySnap(e) {
   S.menuId = S.cfg.menus[e.menuId] ? e.menuId : (S.cfg.menus[S.menuId] ? S.menuId : (ids[0] || null));
   const m = curMenu();
   S.itemIdx = m && S.menuId === e.menuId && Number.isInteger(e.itemIdx) && e.itemIdx >= 0 && e.itemIdx < (m.items || []).length ? e.itemIdx : null;
-  if (S.itemIdx === null && S.tab === 'item') S.tab = 'menu';
-  else if (S.itemIdx !== null && S.tab === 'menu') S.tab = 'item';
+  if (S.itemIdx === null && S.tab === 'item') S.tab = 'menu';           // no item to show; any other tab stays where it was
   S.version++; updateDirty(); validateSoon(); previewSoon(); updateHistButtons();
   renderAllMenus(); if (R.settings && settingsSig() !== sigBefore) R.settings();
   const row = $('.irow.sel'); if (row) row.scrollIntoView({ block: 'nearest' });
@@ -1345,7 +1377,12 @@ function textInput(value, onInput, o = {}) {
   return inp;
 }
 /* A 'set' value must be a number (config.py rejects anything else): plain decimals become numbers, the rest stays text so it can be flagged. */
-function parseValue(s) { const t = s.trim(); return /^-?\d+(\.\d+)?$/.test(t) ? Number(t) : s; }
+function parseValue(s) {
+  const t = s.trim();
+  if (!/^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/.test(t)) return s;     // 5, -5, 0.5, .5, 5. and 1e-3
+  const n = Number(t);
+  return Number.isFinite(n) ? n : s;                                         // 1e999 is not a number JSON can hold
+}
 const validValue = v => typeof v === 'number' && Number.isFinite(v);
 const VALUE_HINT = 'Use a number, e.g. 32';
 /* A text link that is a button; it does not take focus from a field on mouse down, so the field does not blur first. */
@@ -1482,7 +1519,7 @@ function buildMenusScreen(root) {
     inp.addEventListener('keydown', e => {
       if (e.key === 'Enter') { e.stopPropagation(); finish(true); }
       else if (e.key === 'Escape') { e.stopPropagation(); finish(false); }
-      else if (((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === 's') || (e.altKey && !e.ctrlKey && /^[1-5]$/.test(e.key))) finish(true);
+      else if (((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === 's') || (e.altKey && !e.ctrlKey && screenKey(e) !== null)) finish(true);
     });
     inp.addEventListener('blur', () => finish(true));
     inp.addEventListener('click', e => e.stopPropagation());
@@ -1498,7 +1535,7 @@ function buildMenusScreen(root) {
       h('span', { class: 'micro' }, 'Items'), h('span', { class: 'count' }, m ? String(m.items.length) : '0'), h('span', { class: 'spacer' }), m ? addBtn : null].filter(Boolean));
     const crowded = !!m && m.items.length > 12;
     itemsNote.hidden = !crowded;
-    if (crowded) itemsNote.replaceChildren(icon('alert', 13), 'Rings work best with 4 to 12 items. With more, slots start to overlap unless you raise the ring radius.');
+    if (crowded) itemsNote.replaceChildren(icon('alert', 13), 'Rings work best with 4 to 12 items. With more, the ring grows so slots never overlap, and the far ones get harder to reach. Split it into submenus to keep it small.');
     renderItemList(itemsEl, S.menuId, false);
   };
 
@@ -1895,6 +1932,7 @@ function buildStage() {
 
 /* ---------- item inspector */
 function buildItemInspector() {
+  R.itemHint = null;                                  // set below by the kinds that have a hint to repaint when a library finishes loading
   const box = h('div', { class: 'insp' });
   const m = curMenu(), it = curItem();
   if (!m) return emptyState('menus', 'No menu selected', '');
@@ -1992,6 +2030,7 @@ function buildItemInspector() {
       }
     }
     updateHint();
+    R.itemHint = updateHint;
     if (k === 'set') {
       let vTouched = false;
       const vhint = h('span', { class: 'vhint' });
@@ -2181,7 +2220,7 @@ function buildMenuProps() {
 /* ================================================================== tags */
 /* Tags live in tags.json and the backend writes it as they change, so they are not part of Save, Revert or undo.
    S.tags / S.tagMap / S.itemTags mirror the last snapshot any tag call returned (see webapi.TagApi). */
-const TAG_PALETTE_FALLBACK = ['#F86B33', '#4DC8E9', '#A8DF23', '#E8413C', '#C77DFF', '#FFD166', '#5EEAD4', '#F472B6'];
+const TAG_PALETTE_FALLBACK = ['#A8DF23', '#C77DFF', '#FFD166', '#5EEAD4', '#F472B6', '#E8413C', '#F86B33', '#4DC8E9'];   // as tags.PALETTE in tags.py
 const browsers = new Map();            // browser state object (S.lib, S.dock) -> its live browser, so a tag change can repaint it
 let tagMgr = null, tagPick = null;     // repaint hooks of the open tag manager and tag picker
 const plural = (n, w) => n + ' ' + w + (n === 1 ? '' : /(s|sh|ch|x)$/.test(w) ? 'es' : 's');
@@ -2300,6 +2339,19 @@ function tagRingUses(key) {
   return n;
 }
 
+/* After a merge: points the ring items that used tag `from` ({tag} and {browser} items) at tag `to`, as one step of the editor's history
+   (Ctrl+Z puts them back). The merge itself is in tags.json and not part of Undo. Returns how many items changed. */
+function retargetTag(from, to) {
+  if (POPOUT || !S.cfg) return 0;
+  const hits = [];
+  for (const m of Object.values(S.cfg.menus)) for (const it of (m.items || [])) if (it && (it.tag === from || it.browser === from)) hits.push(it);
+  if (!hits.length) return 0;
+  sealSnap();
+  for (const it of hits) { if (it.tag === from) it.tag = to; if (it.browser === from) it.browser = to; }
+  commit({ inspector: true }); sealSnap();
+  return hits.length;
+}
+
 /* Takes a get_tags answer or a changing call's answer. A changing call reports its own failure in `error`, which is not a
    problem with the file, so only get_tags answers (mutated = false) set S.tagsErr. Returns true when anything on screen changed. */
 let tagSeq = 0, tagSeqApplied = 0;       // tag calls are numbered when they start: an answer to an older call never replaces a newer one
@@ -2314,6 +2366,7 @@ function applyTagSnapshot(res, mutated = false, seq = ++tagSeq) {
   const err = mutated ? (res.ok ? '' : S.tagsErr) : (res.error ? String(res.error) : '');
   const sig = JSON.stringify([res.tags, res.items || {}]);
   const changed = !S.tagsLoaded || sig !== S._tagSig || err !== S.tagsErr;
+  const keysChanged = S.tagsLoaded && S.tags.map(t => t.key).join('\n') !== res.tags.map(t => t.key).join('\n');   // a tag came or went: slots that use it are right or wrong now
   if (err && err !== S.tagsErr) toast(err, { tone: 'warn', ms: 5000 });
   S.tags = res.tags; S.tagMap = new Map(res.tags.map(t => [t.key, t]));
   S.itemTags = res.items && typeof res.items === 'object' ? res.items : {};
@@ -2324,7 +2377,7 @@ function applyTagSnapshot(res, mutated = false, seq = ++tagSeq) {
   if (res.path) S.tagsPath = String(res.path);
   S.tagMtime = res.mtime_ns === undefined ? S.tagMtime : res.mtime_ns;
   S.tagsErr = err; S._tagSig = sig; S.tagsLoaded = true;
-  if (changed) tagsChanged();
+  if (changed) tagsChanged(keysChanged);
   return changed;
 }
 async function loadTags(force = false) {
@@ -2344,7 +2397,10 @@ async function tagCall(name, ...args) {
   if (!res.ok && !res.exists) toast(res.error || 'That tag change did not work.', { tone: 'warn', ms: 4500 });
   return res;
 }
-function tagsChanged() {
+/* The rail dots on Status and Settings, looked at again a moment after the tags changed (one quiet look, however many changes come). */
+const railDotsSoon = debounce(() => { if (S.ready && !S.fatal) { refreshAppDown(); refreshZsBadge(); } }, 600);
+function tagsChanged(keysChanged = false) {
+  if (keysChanged && !POPOUT && S.cfg && S.ready) { validateSoon(); railDotsSoon(); }   // the problems pill and the row markers name tags that may be gone (or back)
   for (const el of $$('.tag-path')) { setText(el, S.tagsPath); el.hidden = !S.tagsPath; }
   for (const b of browsers.values()) b.updateTags();
   if (R.itemList) R.itemList();
@@ -2491,12 +2547,19 @@ function openTagManager() {
       if (other) {
         msg.replaceChildren('A tag called "' + other.label + '" already exists. ',
           h('button', { class: 'link', type: 'button', onclick: async () => {
-            const from = tag.label, ok = await modal({ title: 'Merge "' + from + '" into "' + other.label + '"?',
-              body: h('p', null, 'Items tagged "' + from + '" get "' + other.label + '" instead, and "' + from + '" is removed.'),
+            await loadTagUses();                              // the browser window reads the ring items from radial.json just now
+            const from = tag.label, srcKey = tag.key, uses = tagRingUses(srcKey);
+            const useText = !uses ? '' : POPOUT ? ' ' + plural(uses, 'ring item') + (uses === 1 ? ' uses' : ' use') + ' "' + from + '": Tag slots go empty and Browser slots open unfiltered until you pick another tag in Studio.'
+              : ' ' + plural(uses, 'ring item') + (uses === 1 ? ' uses' : ' use') + ' "' + from + '". ' + (uses === 1 ? 'It then uses' : 'They then use') + ' "' + other.label + '" instead. That change is in the editor until you press Save, and Undo takes it back.';
+            const ok = await modal({ title: 'Merge "' + from + '" into "' + other.label + '"?',
+              body: h('p', null, 'Items tagged "' + from + '" get "' + other.label + '" instead, and "' + from + '" is removed.' + useText),
               actions: [{ text: 'Cancel', value: false, focus: true }, { text: 'Merge', value: true, kind: 'danger' }] });
             if (ok) {
-              const m = await tagCall('merge_tags', tag.key, other.key);
-              if (m.ok) toast('Merged "' + from + '" into "' + other.label + '"', { tone: 'ok', ms: 2600 });
+              const m = await tagCall('merge_tags', srcKey, other.key);
+              if (m.ok) {
+                const moved = retargetTag(srcKey, other.key);       // the ring items that pointed at the removed tag (none in the browser window)
+                toast('Merged "' + from + '" into "' + other.label + '"' + (moved ? '. ' + plural(moved, 'ring item') + (moved === 1 ? ' now uses' : ' now use') + ' it. Save to keep that.' : ''), { tone: 'ok', ms: moved ? 5000 : 2600 });
+              }
             }
             openTagManager();                                 // the confirm replaced this dialog: bring it back
           } }, 'Merge into ' + other.label),
@@ -2507,7 +2570,7 @@ function openTagManager() {
     const remove = async () => {
       await loadTagUses();                                // the browser window reads the ring items from radial.json just now
       const uses = tagRingUses(tag.key);
-      const text = (tag.count ? 'It is on ' + plural(tag.count, 'item') + (uses ? ', used by ' + plural(uses, 'ring item') : '') : 'It is not on any item' + (uses ? ', but ' + plural(uses, 'ring item') + (uses === 1 ? ' uses' : ' use') + ' it' : '')) + '. The items keep working.' + (POPOUT && uses ? ' Tag slots that use it go empty; Browser slots open unfiltered.' : '');
+      const text = (tag.count ? 'It is on ' + plural(tag.count, 'item') + (uses ? ', used by ' + plural(uses, 'ring item') : '') : 'It is not on any item' + (uses ? ', but ' + plural(uses, 'ring item') + (uses === 1 ? ' uses' : ' use') + ' it' : '')) + '. The items keep working.' + (uses ? ' Tag slots that use it go empty and Browser slots open unfiltered until you pick another tag.' : '');
       const ok = await modal({ title: 'Delete tag "' + tag.label + '"?', body: h('p', null, text),
         actions: [{ text: 'Cancel', value: false, focus: true }, { text: 'Delete tag', value: true, kind: 'danger' }] });
       if (ok) await tagCall('delete_tag', tag.key);
@@ -2720,7 +2783,7 @@ function paintRescanBtn(b) {
 }
 function paintRescan() { $$('.rescan-btn').forEach(paintRescanBtn); }
 function rescanBtn(kind, label = 'Rescan') {
-  const b = h('button', { class: 'btn small rescan-btn', type: 'button', title: 'Look for ' + K(kind).one + ' files again', dataset: { label, kind }, onclick: () => rescanLibrary(kind) });
+  const b = h('button', { class: 'btn small rescan-btn', type: 'button', title: 'Look for ' + K(kind).one + ' files again', dataset: { label, kind }, onclick: () => rescanLibrary(b.dataset.kind) });   // setKind moves dataset.kind, so read it now
   paintRescanBtn(b);
   return b;
 }
@@ -2776,7 +2839,7 @@ function makeBrowser({ compact, st, host = STUDIO_HOST, kindUi = compact ? 'comp
   const L = () => lib(st.kind);                                  // the library of the kind on show
   const W = () => KINDS[st.kind];                                // its wording
   const search = h('input', { class: 'inp', type: 'text', value: st.q, spellcheck: 'false', autocomplete: 'off' });   // placeholder and label: paintStrings
-  const clearBtn = h('button', { class: 'ibtn', type: 'button', title: 'Clear search', 'aria-label': 'Clear search', hidden: !st.q, onclick: () => { clearQuery(); renderGrid(); search.focus(); } }, icon('x', 13));
+  const clearBtn = h('button', { class: 'ibtn', type: 'button', title: 'Clear search', 'aria-label': 'Clear search', hidden: !st.q, onclick: () => { clearQuery(); renderGrid(); rehighlight(); search.focus(); } }, icon('x', 13));
   const count = h('span', { class: 'b-count mono' });
   const fchips = h('span', { class: 'filter-chips', hidden: true });     // the popout's toolbar: the filters that are on (styles.css shows them only while its column is collapsed)
   const grid = h('div', { class: 'bgrid' });
@@ -2805,7 +2868,7 @@ function makeBrowser({ compact, st, host = STUDIO_HOST, kindUi = compact ? 'comp
   /* The selected items and their action strip. A click selects one, Ctrl-click adds or removes one, Shift-click selects a
      range of the items on show. The strip tags them or adds them to the menu being edited. */
   const hint = h('div', { class: 'b-hint' });
-  const addBtn = h('button', { class: 'btn primary small as-add', type: 'button', onclick: () => host.primaryMany(Array.from(sel), st.kind) });
+  const addBtn = h('button', { class: 'btn primary small as-add', type: 'button', onclick: () => { const names = shownSel(); if (names.length) host.primaryMany(names, st.kind); } });
   const tagBtn = h('button', { class: 'btn small as-tag', type: 'button', onclick: () => tagPicker(tagBtn, st.kind, Array.from(sel)) },
     icon('tag', 13), compact ? null : 'Tag...');
   const favBtn = h('button', { class: 'btn small as-fav', type: 'button', 'aria-pressed': 'false', onclick: () => toggleFavs(Array.from(sel)) }, icon('star', 13));
@@ -2907,14 +2970,21 @@ function makeBrowser({ compact, st, host = STUDIO_HOST, kindUi = compact ? 'comp
     else if (st.cat === '@recent') list.sort((a, b) => (u.recentT.get(nameKey(b.name)) || 0) - (u.recentT.get(nameKey(a.name)) || 0));
     return list;
   };
+  /* The selected items that are on show. renderGrid drops the rest, but a pick must never act on an item the filter hides. */
+  function shownSel() {
+    const shown = new Set(filtered().map(b => b.name));
+    return Array.from(sel).filter(n => shown.has(n));
+  }
+  /* The popout keeps the first match highlighted: after a filter changes by hand it moves there again. */
+  function rehighlight() { if (host.firstMatch) highlightFirst(); }
   /* Picks a folder; the two usage folders read get_usage afresh. */
   function setCat(cat) { st.cat = cat; if (usageCat(cat)) loadUsage(st.kind); }
   function toggleTag(key) {
     if (key === '@untagged') { st.untagged = !st.untagged; if (st.untagged) st.tags.clear(); }
     else { st.untagged = false; if (st.tags.has(key)) st.tags.delete(key); else st.tags.add(key); }
-    renderTags(); renderGrid();
+    renderTags(); renderGrid(); rehighlight();
   }
-  function clearTagFilter() { st.tags.clear(); st.untagged = false; renderTags(); renderGrid(); }
+  function clearTagFilter() { st.tags.clear(); st.untagged = false; renderTags(); renderGrid(); rehighlight(); }
   /* The filters that are on, as chips in the toolbar with an x that clears each: a tag filter ("Filtered: Blocking") and a folder ("Folder: My Brushes").
      The folders and tags column shows the same, so the chips only appear when the popout has collapsed it (styles.css). */
   const folderName = cat => cat === '@fav' ? 'Favourites' : cat === '@recent' ? 'Recent' : cat === '@used' ? 'In my menus' : cat.split('/').join(' / ');
@@ -2923,7 +2993,7 @@ function makeBrowser({ compact, st, host = STUDIO_HOST, kindUi = compact ? 'comp
     const chip = (text, clearText, fn) => h('button', { class: 'fchip', type: 'button', title: clearText, 'aria-label': clearText, onclick: fn },
       h('span', { class: 'fc-text' }, text), icon('x', 11));
     const chips = [];
-    if (st.cat !== 'All') chips.push(chip('Folder: ' + folderName(st.cat), 'Clear the folder filter', () => { setCat('All'); renderAll(); }));
+    if (st.cat !== 'All') chips.push(chip('Folder: ' + folderName(st.cat), 'Clear the folder filter', () => { setCat('All'); renderAll(); rehighlight(); }));
     if (st.untagged) chips.push(chip('Filtered: Untagged', 'Clear the tag filter', clearTagFilter));
     else if (st.tags.size) chips.push(chip('Filtered: ' + Array.from(st.tags).map(k => (S.tagMap.get(k) || { label: k }).label).join(', '), 'Clear the tag filter', clearTagFilter));
     fchips.hidden = !chips.length;
@@ -3034,7 +3104,8 @@ function makeBrowser({ compact, st, host = STUDIO_HOST, kindUi = compact ? 'comp
       if (e.target !== card) return;
       if (e.key === 'Enter') {
         e.preventDefault();
-        if (sel.size > 1 && sel.has(b.name)) host.primaryMany(Array.from(sel), st.kind); else { setSel(b.name); host.primary(b.name, st.kind); }
+        const names = shownSel();
+        if (names.length > 1 && sel.has(b.name)) host.primaryMany(names, st.kind); else { setSel(b.name); host.primary(b.name, st.kind); }
       } else if (e.key === ' ') {
         e.preventDefault();
         if (e.ctrlKey || e.metaKey) { if (sel.has(b.name)) sel.delete(b.name); else sel.add(b.name); anchor = b.name; paintSel(); } else setSel(b.name);
@@ -3087,6 +3158,8 @@ function makeBrowser({ compact, st, host = STUDIO_HOST, kindUi = compact ? 'comp
     }
     const list = filtered();
     lastSig = list.map(b => b.name).join('\n');
+    const onShow = new Set(list.map(b => b.name)), hidden = Array.from(sel).filter(n => !onShow.has(n));       // a filter, folder or search can hide what was selected: it is no longer selected
+    if (hidden.length) { hidden.forEach(n => sel.delete(n)); if (anchor && hidden.includes(anchor)) anchor = null; paintSel(); }
     paintCount(list);
     if (!list.length) {
       let e;
@@ -3097,8 +3170,8 @@ function makeBrowser({ compact, st, host = STUDIO_HOST, kindUi = compact ? 'comp
         const where = st.cat === '@used' ? 'In my menus' : st.cat === '@fav' ? 'Favourites' : st.cat === '@recent' ? 'Recent' : st.cat.split('/').join(' / ');
         e = emptyState('search', `No ${W().many} match "${st.q}"`, st.cat !== 'All' ? `Only "${where}" was searched.` : 'Check the spelling.');
         e.append(h('div', { class: 'btn-row' },
-          h('button', { class: 'btn small', type: 'button', onclick: () => { clearQuery(); renderAll(); } }, 'Clear search'),
-          st.cat !== 'All' ? h('button', { class: 'btn small primary', type: 'button', onclick: () => { st.cat = 'All'; renderAll(); } }, 'Search all folders') : null));
+          h('button', { class: 'btn small', type: 'button', onclick: () => { clearQuery(); renderAll(); rehighlight(); } }, 'Clear search'),
+          st.cat !== 'All' ? h('button', { class: 'btn small primary', type: 'button', onclick: () => { st.cat = 'All'; renderAll(); rehighlight(); } }, 'Search all folders') : null));
       } else if (st.cat === '@fav') {
         e = emptyState('star', 'No favourites yet', `Hover ${aOrAn(W().one)} and press its star, or press Ctrl+D.`, { text: `Show all ${W().many}`, fn: () => { st.cat = 'All'; renderAll(); } });
       } else if (st.cat === '@recent') {
@@ -3138,7 +3211,7 @@ function makeBrowser({ compact, st, host = STUDIO_HOST, kindUi = compact ? 'comp
         if (o.hasKids && st.cat === id) { toggle(); return; }                // a click on the selected folder folds or unfolds it
         setCat(id);
         if (o.hasKids) st.open.add(id);
-        renderAll();
+        renderAll(); rehighlight();
       };
       const r = h('div', { class: 'cat' + (st.cat === id ? ' on' : '') + (o.kid ? ' kid' : '') + (o.group ? ' group' : ''), role: 'option', tabindex: '0', 'aria-selected': st.cat === id ? 'true' : 'false', title: label, dataset: { id },
         onclick: activate, onkeydown: e => { if (e.target === r && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); activate(); } } },
@@ -3187,7 +3260,7 @@ function makeBrowser({ compact, st, host = STUDIO_HOST, kindUi = compact ? 'comp
   }
   function pickSelected() {
     onSearch.flush();
-    const names = Array.from(sel);
+    const names = shownSel();
     if (!names.length) return false;
     if (names.length === 1) host.primary(names[0], st.kind); else host.primaryMany(names, st.kind);
     return true;
@@ -3272,17 +3345,19 @@ function buildLibraryScreen(root) {
   root.replaceChildren(browser.el, target);
   R.libRefresh = kind => { if (kind === S.lib.kind) browser.refresh(); };
   R.badges = () => browser.updateBadges();
+  const list = h('div', { class: 'ilist' });          // kept between repaints, so a tag change does not send it back to the top
   R.libTarget = () => {
     const hadSel = !!document.activeElement && document.activeElement.matches && document.activeElement.matches('.target-sel select') && target.contains(document.activeElement);
+    const top = list.scrollTop, same = list._menu === S.menuId;
     target.replaceChildren();
     const ids = Object.keys(S.cfg.menus), m = curMenu();
     const sel = h('select', { class: 'inp sel', 'aria-label': 'Target menu', onchange: () => selectMenu(sel.value) }, ids.map(id => h('option', { value: id, selected: id === S.menuId }, (S.cfg.menus[id].title || id))));
-    const list = h('div', { class: 'ilist' });
     target.append(h('div', { class: 'col-head' }, h('span', { class: 'micro' }, 'Add to menu')),
       h('div', { class: 'target-sel' }, ids.length ? sel : null),
       h('div', { class: 'items-panel' }, list),
       h('div', { class: 'target-foot' }, h('button', { class: 'btn small', type: 'button', onclick: () => showScreen('menus') }, 'Open in Menus editor', icon('chevR', 12))));
     renderItemList(list, S.menuId, true);
+    if (same) list.scrollTop = top;                   // the same menu: it was detached just now, which resets the scroll
     if (!m) list.replaceChildren(emptyState('menus', 'No menus', 'Create a menu in the Menus screen first.'));
     if (hadSel) sel.focus();
   };
@@ -3304,13 +3379,14 @@ function normHex(v) {
   return /^[0-9a-f]{6}$/i.test(t) ? '#' + t.toLowerCase() : null;
 }
 /* After the last ring key is dropped, an empty ring object goes too when the saved file had none, so a slider put back leaves nothing to save. */
-function tidyRing() {
-  const r = S.cfg.ring;
-  if (!r || typeof r !== 'object' || Object.keys(r).length) return;
+function dropIfEmpty(name) {
+  const o = S.cfg[name];
+  if (!o || typeof o !== 'object' || Object.keys(o).length) return;
   let had = true;
-  try { had = 'ring' in JSON.parse(S.savedStr); } catch (e) { /* keep it */ }
-  if (!had) delete S.cfg.ring;
+  try { had = name in JSON.parse(S.savedStr); } catch (e) { /* keep it */ }
+  if (!had) delete S.cfg[name];
 }
+const tidyRing = () => dropIfEmpty('ring');
 /* Sets a ring value, or drops its key when it equals the default (the file then says nothing about it). */
 function ringSet(k, v) {
   if (v !== S.defaults[k]) ensureRing()[k] = v; else delete ensureRing()[k];
@@ -3469,8 +3545,12 @@ function legacyRows(box, { refresh, extra } = {}) {
   const addFolder = async () => {
     try {
       const r = await call('add_zbrush_folder');
-      if (r.already) toast(r.message || 'That folder is already listed.', { ms: 4000 });
-      else if (!r.cancelled) toast(r.message, { tone: r.ok ? 'ok' : 'warn', ms: 5000 });
+      // A ZBrush 2026 or later (python: true) has no ZScript plugin, so this list never shows it: Setup does, with its registered state and Fix.
+      const viaSetup = r.ok && r.python && S.screen !== 'setup' ? { text: 'Open Setup', fn: () => showScreen('setup') } : null;
+      const extra = viaSetup ? ' It is a newer ZBrush, so it is listed in Setup.' : '';
+      if (r.already) toast((r.message || 'That folder is already listed.') + extra, Object.assign({ ms: 4000 }, viaSetup ? { action: viaSetup } : {}));
+      else if (!r.cancelled) toast((r.message || (r.ok ? 'Added.' : 'That did not work.')) + extra, Object.assign({ tone: r.ok ? 'ok' : 'warn', ms: 5000 }, viaSetup ? { action: viaSetup } : {}));
+      if (r.ok) refreshSetupBadge();
     } catch (e) { toast('Could not add the folder: ' + e.message, { tone: 'warn' }); }
     refresh();
   };
@@ -3653,7 +3733,7 @@ function buildSettingsScreen(root) {
         const sw = h('input', { type: 'color', class: 'swatch', value: colorVal(k), 'aria-label': COLOR_INFO[k][0] + ' colour' });
         const hex = h('input', { class: 'inp mono hex', type: 'text', value: colorVal(k), maxlength: '7', spellcheck: 'false', 'aria-label': COLOR_INFO[k][0] + ' hex value' });
         const hmsg = h('span', { class: 'hex-msg', role: 'status' });
-        const rs = iconBtn('undo', 'Reset to default (' + S.defaults.colors[k] + ')', () => { const c = ring().colors; if (c) { delete c[k]; if (!Object.keys(c).length) delete ring().colors; } commit(); paint(); }, 'reset');
+        const rs = iconBtn('undo', 'Reset to default (' + S.defaults.colors[k] + ')', () => { const c = ring().colors; if (c) { delete c[k]; if (!Object.keys(c).length) delete ring().colors; } tidyRing(); commit(); paint(); }, 'reset');
         const showReset = v => { rs.style.visibility = v.toLowerCase() !== S.defaults.colors[k].toLowerCase() ? 'visible' : 'hidden'; };
         const paint = () => { const v = colorVal(k); sw.value = v; hex.value = v; hex.classList.remove('bad'); hmsg.textContent = ''; showReset(v); };
         sw.addEventListener('input', () => { setColor(k, sw.value); paint(); });
@@ -3672,7 +3752,7 @@ function buildSettingsScreen(root) {
       cimg = h('img', { class: 'ring-img', alt: 'Ring preview with the current colours', draggable: false });
       cbox = h('div', { class: 'mini-stage' }, h('div', { class: 'stage-rings', 'aria-hidden': 'true' }), h('div', { class: 'mini-wrap' }, cimg), h('div', { class: 'mini-cap micro' }, 'Preview: ' + ((curMenu() && curMenu().title) || '')));
       page.append(card('Colours', 'Applied to the ring in the app', h('div', { class: 'split' }, h('div', { class: 'split-main' }, h('div', { class: 'colors' }, colorRows)), cbox),
-        h('div', { class: 'btn-row' }, h('button', { class: 'btn small', type: 'button', onclick: () => { delete ensureRing().colors; commit(); colorPaints.forEach(f => f()); } }, icon('undo', 12), 'Reset all colours'))));
+        h('div', { class: 'btn-row' }, h('button', { class: 'btn small', type: 'button', onclick: () => { delete ensureRing().colors; tidyRing(); commit(); colorPaints.forEach(f => f()); } }, icon('undo', 12), 'Reset all colours'))));
     }
 
     /* --- behaviour */
@@ -3693,7 +3773,7 @@ function buildSettingsScreen(root) {
         const mode = (S.cfg.bridge && S.cfg.bridge.mode) || 'auto';
         keyWrap.classList.toggle('dim', mode === 'message');
         keyWrap.replaceChildren(field('Bridge key', hotkeyField({ what: 'Bridge key', value: (S.cfg.bridge && S.cfg.bridge.key) || '', mods: { ctrl: false, alt: true, shift: false }, placeholder: 'Not set (F9 is the usual choice)',
-          onChange: v => { if (v) bridge().key = v; else delete bridge().key; commit(); paintZNote(); } }),
+          onChange: v => { if (v) bridge().key = v; else { delete bridge().key; dropIfEmpty('bridge'); } commit(); paintZNote(); } }),
           mode === 'message' ? 'Not used in Message mode, but kept in case you switch back.' : 'Must be bound in ZBrush to Zplugin > ZOrbit > Apply. Ctrl and Shift are rejected because ZBrush reads them as mask and smooth. A bare F-key is best.'));
       };
       page.append(card('ZBrush bridge', 'How a pick reaches ZBrush',
@@ -3817,7 +3897,7 @@ function buildSettingsScreen(root) {
 }
 
 /* ================================================================== STATUS screen */
-let statusTimer = null, statusBusy = false, appStarting = false;
+let statusTimer = null, statusBusy = false, appStarting = false, appSlow = false;   // appSlow: the start call has taken more than a few seconds (it may block for ten)
 const LOG_LINES = 40;
 const pad2 = n => String(n).padStart(2, '0');
 const localDate = d => d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate());
@@ -3859,23 +3939,41 @@ async function refreshAppDown() {
   try { noteStatus(await call('get_status')); } catch (e) { /* no dot */ }
 }
 
+/* The label of a Start app button: the call can block for ten seconds, so after a few it says it is still going. */
+const startLabel = () => (appSlow ? 'Still starting...' : 'Starting...');
 /* Starts the app and says how it went. Shared by the Status and Setup screens. paint() is called when the starting state
-   flips (appStarting is the flag to read). Resolves to { log } (the lines a failed start brought back), or null when a
-   start is already under way. The caller looks again at the status afterwards. */
+   flips (appStarting and appSlow are the flags to read). Resolves to { log, starting }, or null when a start is already
+   under way. log: the lines a failed start brought back (empty when it wrote none). starting: the app is still coming up,
+   which is progress, not an error. The caller looks again at the status afterwards. */
 async function startAppFlow({ paint }) {
   if (appStarting) return null;
-  appStarting = true; paint();
+  appStarting = true; appSlow = false; paint();
+  const slow = setTimeout(() => { appSlow = true; paint(); }, 4000);
   let r = null;
   try { r = await call('start_app'); }
   catch (e) { toast('Could not start the app: ' + (e.message || e), { tone: 'warn', ms: 5000 }); }
-  appStarting = false; paint();
-  let log = [];
-  if (r && r.ok && r.running) toast('Started.', { tone: 'ok', ms: 3000 });
+  clearTimeout(slow);
+  appStarting = false; appSlow = false; paint();
+  const out = { log: [], starting: false };
+  if (r && r.ok) toast('Started.', { tone: 'ok', ms: 3000 });
+  else if (r && r.starting) { out.starting = true; toast(r.message || 'The app is still starting.', { ms: 6500 }); }
   else if (r && r.reason === 'failed') {
-    toast(r.message || 'The app did not start.', { tone: 'warn', ms: 6000 });
-    log = Array.isArray(r.log) ? r.log.map(String) : [];
+    out.log = (Array.isArray(r.lines) ? r.lines : Array.isArray(r.log) ? r.log : []).map(String);
+    const msg = r.message || 'The app did not start.';
+    toast(out.log.length ? msg.replace(/log:\s*$/, 'log are shown here.') : msg, { tone: 'warn', ms: 6000 });     // "...its log:" would point at nothing in a toast
   } else if (r) toast(r.message || (r.reason === 'zbrush' ? 'ZBrush must be running first.' : 'Could not start the app.'), { tone: 'warn', ms: 4500 });
-  return { log };
+  return out;
+}
+/* After a start that is still coming up: looks at the status once a second (up to 15 s) until the app shows as running or the user
+   leaves the screen. look() is the screen's own refresh. */
+async function watchStart(look) {
+  const screen = S.screen;
+  for (let i = 0; i < 15 && S.screen === screen; i++) {
+    await sleep(1000);
+    if (S.screen !== screen) return;
+    await look();
+    if (S.appDown === false) return;
+  }
 }
 
 function buildStatusScreen(root) {
@@ -3895,9 +3993,9 @@ function buildStatusScreen(root) {
     const noZ = !!st && !st.zbrush_running && st.zbrush_check_ok !== false;
     const off = appStarting || running || noZ || !st;
     startBtn.disabled = off;
-    startBtn.replaceChildren(...(appStarting ? [h('span', { class: 'spin' }), 'Starting...'] : [icon('play', 12), running ? 'Running' : 'Start app']));
+    startBtn.replaceChildren(...(appStarting ? [h('span', { class: 'spin' }), startLabel()] : [icon('play', 12), running ? 'Running' : 'Start app']));
     startBtn.classList.toggle('running', appStarting);
-    startBtn.title = appStarting ? 'Starting the app...' : running ? 'The app is already running' : noZ ? 'ZBrush must be running first'
+    startBtn.title = appStarting ? (appSlow ? 'Still waiting for the app. This can take up to ten seconds.' : 'Starting the app...') : running ? 'The app is already running' : noZ ? 'ZBrush must be running first'
       : (st && st.zbrush_check_ok === false ? 'Could not check for ZBrush. Try anyway.' : 'Start the ZOrbit app');
     if (appStarting) startBtn.setAttribute('aria-busy', 'true'); else startBtn.removeAttribute('aria-busy');
   };
@@ -3910,6 +4008,7 @@ function buildStatusScreen(root) {
     while (statusBusy) await sleep(60);       // a poll already in flight may predate the launch
     await refresh();
     if (startLog.length) logBox.scrollTop = logBox.scrollHeight;
+    if (out.starting) watchStart(refresh);    // still coming up: look every second for a while, not every three
   }
 
   const folder = which => async () => { try { await call('open_folder', which); } catch (e) { toast('Could not open the folder.', { tone: 'warn' }); } };
@@ -3994,7 +4093,7 @@ function buildStatusScreen(root) {
 /* Amber dot on the Setup rail button while a hard check fails (no ZBrush is ready, or a running one is not set up). */
 function setSetupBadge(d) {
   const rb = document.querySelector('.rail-btn[data-screen="setup"]');
-  if (!rb) return;
+  if (!rb || (d && d.failed)) return;                       // a failed check says nothing about the installs: the dot stays as it was
   const bad = !!(d && d.hard_fail);
   rb.classList.toggle('has-badge', bad);
   rb.title = 'Setup (Alt+5)' + (bad ? ' – Something needs attention' : '');
@@ -4026,7 +4125,7 @@ function setupMenu() {
 
 /* The five steps from one get_setup answer. Pure: the same data gives the same steps, and every field in a step is
    something that is drawn (nothing that ticks, like ages), so JSON of a step tells whether it needs painting again.
-   ctx: { menu: setupMenu(), done: setup_done }. */
+   ctx: { menu: setupMenu(), done: setup_done, startLog: the lines a failed Start app brought back }. */
 function deriveSteps(d, tryFrom, ctx) {
   const installs = d.installs || [], unmatched = d.unmatched_procs || [], env = d.env || {}, zb = d.zbrush || {};
   const now = typeof d.now === 'number' ? d.now : Date.now() / 1000;
@@ -4040,7 +4139,7 @@ function deriveSteps(d, tryFrom, ctx) {
     state: ready.length ? 'ok' : (installs.length ? 'warn' : 'off'),
     modern: installs.filter(i => i.kind === 'modern').map(i => {
       const st = plugin(i).state;
-      return { name: i.name, path: i.path, proc: topProc(i),
+      return { name: i.name, path: i.path, added: !!i.added, proc: topProc(i),
         tag: st === 'ok' ? 'Registered' : (st === 'no_bridge' ? 'Plugin folder missing' : 'Not registered'),
         tone: st === 'ok' ? 'cyan' : (st === 'no_bridge' ? 'dim' : 'amber'),
         fix: !!env.can_fix && st !== 'ok' && st !== 'no_bridge' };
@@ -4062,7 +4161,8 @@ function deriveSteps(d, tryFrom, ctx) {
   const s2 = { id: 'loaded', title: 'Plugin loaded in ZBrush', locked: false,
     rows: procs.map(p => ({ name: p.name, state: p.state, why: p.why })),
     elevated,
-    app: { running: !!(d.app && d.app.running), zbrush: !!zb.running, checkOk: zb.check_ok !== false } };
+    app: { running: !!(d.app && d.app.running), zbrush: !!zb.running, checkOk: zb.check_ok !== false },
+    startLog: Array.isArray(ctx.startLog) ? ctx.startLog : [] };
   if (loaded.length) {
     const names = [...new Set(loaded.map(p => p.name))];
     s2.state = 'ok'; s2.detail = list(names) + (names.length === 1 ? ' has the plugin.' : ' have the plugin.');
@@ -4148,14 +4248,19 @@ function buildSetupScreen(root) {
     const d = st.data, running = !!(d && d.app && d.app.running);
     const noZ = !!d && !(d.zbrush && d.zbrush.running) && !(d.zbrush && d.zbrush.check_ok === false);
     startBtn.disabled = appStarting || running || noZ || !d;
-    startBtn.replaceChildren(...(appStarting ? [h('span', { class: 'spin' }), 'Starting...'] : [icon('play', 12), running ? 'Running' : 'Start app']));
+    startBtn.replaceChildren(...(appStarting ? [h('span', { class: 'spin' }), startLabel()] : [icon('play', 12), running ? 'Running' : 'Start app']));
     startBtn.classList.toggle('running', appStarting);
-    startBtn.title = appStarting ? 'Starting the app...' : running ? 'The app is already running' : noZ ? 'ZBrush must be running first' : 'Start the ZOrbit app';
+    startBtn.title = appStarting ? (appSlow ? 'Still waiting for the app. This can take up to ten seconds.' : 'Starting the app...') : running ? 'The app is already running' : noZ ? 'ZBrush must be running first' : 'Start the ZOrbit app';
     if (appStarting) startBtn.setAttribute('aria-busy', 'true'); else startBtn.removeAttribute('aria-busy');
   };
   async function startApp() {
-    if (!await startAppFlow({ paint: paintStart })) return;
+    if (appStarting) return;
+    st.startLog = [];
+    const out = await startAppFlow({ paint: paintStart });
+    if (!out) return;
+    st.startLog = out.log;                          // shown in step 2 until the app runs or Start app is pressed again
     await ask(true);
+    if (out.starting) watchStart(() => ask(false));
   }
 
   const subCheck = (tone, text, sub, extra) => h('div', { class: 'sub-check ' + tone }, h('i', { class: 'sdot' }),
@@ -4173,7 +4278,14 @@ function buildSetupScreen(root) {
           catch (e) { toast('That did not work: ' + (e.message || e), { tone: 'warn' }); }
           ask(true);
         };
-        return h('div', { class: 'zrow' }, h('div', { class: 'grow' }, h('div', { class: 'zname' }, r.name, h('span', { class: 'tag ' + r.tone }, r.tag), procTag(r.proc)), h('div', { class: 'zpath mono', title: r.path }, r.path)), fix);
+        const forget = r.added ? iconBtn('x', 'Forget this folder', async () => {          // a folder added by hand can be taken off the list again
+          forget.disabled = true;
+          try { const res = await call('forget_zbrush_folder', r.path); toast(res.message || (res.ok ? 'Forgot that folder.' : 'That did not work.'), { tone: res.ok ? 'ok' : 'warn', ms: 4000 }); }
+          catch (e) { toast('Could not forget the folder: ' + e.message, { tone: 'warn' }); }
+          ask(true);
+        }) : null;
+        return h('div', { class: 'zrow' }, h('div', { class: 'grow' }, h('div', { class: 'zname' }, r.name, h('span', { class: 'tag ' + r.tone }, r.tag), procTag(r.proc)), h('div', { class: 'zpath mono', title: r.path }, r.path)),
+          fix || forget ? h('div', { class: 'btn-row' }, fix, forget) : null);
       })));
       const box = h('div', { class: 'zrows' });
       const lz = legacyRows(box, { refresh: () => ask(true), extra: z => procTag(z.proc) });
@@ -4189,7 +4301,13 @@ function buildSetupScreen(root) {
       if (s.elevated) rows.push(subCheck('warn', 'A ZBrush is running as administrator', 'Studio cannot see which version it is, or whether it has the plugin.'));
       rows.push(subCheck(s.app.running ? 'ok' : (s.app.zbrush ? 'warn' : 'pending'), ['App ', h('span', { class: 'tag ' + (s.app.running ? 'cyan' : 'dim') }, s.app.running ? 'Running' : 'Not running')],
         s.app.running ? 'Listening for your hotkeys.' : (s.app.zbrush || !s.app.checkOk ? 'Press Start app to launch it.' : 'It starts together with ZBrush.'), startBtn));
-      return [h('div', { class: 'sub-checks' }, ...rows)];
+      const out = [h('div', { class: 'sub-checks' }, ...rows)];
+      if (s.startLog.length && !s.app.running) {                  // the last Start app failed: what the app wrote, and where the whole log is
+        out.push(note('The app did not start. The last lines of its log:', true),
+          h('div', { class: 'logbox mono start-log', tabindex: '0', role: 'log', 'aria-label': 'Last lines of the app log' }, s.startLog.map(l => h('div', { class: 'logline err' }, l))),
+          h('div', { class: 'btn-row' }, h('button', { class: 'btn small', type: 'button', onclick: () => showScreen('status') }, 'Open Status')));
+      }
+      return out;
     },
     try(s) {
       const out = [h('div', { class: 'sub-checks' }, ...s.checks.map(c => subCheck(c.ok ? 'ok' : 'pending', c.label, c.sub)))];
@@ -4231,7 +4349,7 @@ function buildSetupScreen(root) {
   function paint(force) {
     const d = st.data;
     if (!d) return;
-    steps = deriveSteps(d, st.tryFrom, { menu: setupMenu(), done: S.prefs.setup_done !== false });
+    steps = deriveSteps(d, st.tryFrom, { menu: setupMenu(), done: S.prefs.setup_done !== false, startLog: st.startLog });
     steps.forEach((s, i) => {
       let el = els.get(s.id);
       if (!el) { el = h('li', { class: 'sstep', dataset: { step: s.id } }); els.set(s.id, el); list.append(el); }
@@ -4244,8 +4362,8 @@ function buildSetupScreen(root) {
     paintStart();
   }
   const paintErr = () => {
-    errBox.hidden = !st.err;
-    errBox.replaceChildren(...(st.err ? [h('div', { class: 'scard off' }, h('div', { class: 'micro' }, 'Setup'), h('div', { class: 'sval' }, h('i', { class: 'sdot' }), 'Setup check unavailable'), h('div', { class: 'ssub' }, st.err))] : []));
+    errBox.hidden = !st.err; errBox.style.marginBottom = st.err ? '12px' : '';
+    errBox.replaceChildren(...(st.err ? [h('div', { class: 'scard off' }, h('div', { class: 'micro' }, 'Setup'), h('div', { class: 'sval' }, h('i', { class: 'sdot' }), 'Setup check unavailable'), h('div', { class: 'ssub' }, st.err), st.data ? h('div', { class: 'ssub' }, 'The steps below are from the last check that worked.') : null)] : []));
   };
   // One get_setup. A caller that forces one waits for a poll already in flight, so what it changed is in the answer.
   async function ask(force) {
@@ -4253,9 +4371,14 @@ function buildSetupScreen(root) {
     st.busy = true; st.lastAsk = Date.now();
     try {
       const d = await call('get_setup');
-      st.data = d; st.err = '';
-      noteSetupStatus(d); setSetupBadge(d);
-      if (S.screen === 'setup') paint(force);
+      if (!d || d.failed || !Array.isArray(d.installs)) {         // the check itself failed: say so, keep the last good answer (if any) on screen, and keep asking
+        st.err = (d && d.error) || 'The setup check failed (see studio.log).';
+      } else {
+        st.data = d; st.err = '';
+        if (d.app && d.app.running) st.startLog = [];
+        noteSetupStatus(d); setSetupBadge(d);
+        if (S.screen === 'setup') paint(force);
+      }
     } catch (e) { st.err = String(e.message || e); }
     finally { st.busy = false; }
     paintErr();
@@ -4311,12 +4434,40 @@ const RING_NAME = { radius: 'Ring radius', slot: 'Slot size', dead_zone: 'Dead z
   hover_submenus: 'Open submenus on hover', animation: 'Open animation', labels: 'Labels', tag_colors: 'Tag colours',
   tag_band: 'Band', tag_band_opacity: 'Band opacity', tag_glow_opacity: 'Glow opacity', tag_tint_opacity: 'Icon tint opacity', tag_tint_style: 'Icon tint style', tag_tint_blend: 'Icon tint blend' };
 const unq = s => String(s).replace(/^(['"])(.*)\1$/, '$2');
+/* "(did you mean mode?)" at the end of a loader message, as a sentence of its own ('' when there is none). */
+const didYouMean = s => { const d = /\(did you mean (.+)\?\)\s*$/.exec(String(s)); return d ? ' Did you mean ' + d[1] + '?' : ''; };
 function describeProblem(raw) {
   const out = (text, target) => ({ text, raw, target: target || null });
   const cfgMenus = (S.cfg && S.cfg.menus) || {};
   const titleOf = id => '\u201c' + ((cfgMenus[id] && cfgMenus[id].title) || id) + '\u201d';
   const known = id => !!cfgMenus[id] && typeof cfgMenus[id] === 'object';
   let m;
+  /* What is wrong with one item, in words that follow "Menu item 3": t is the loader's text after the item number (": ..." or " step 2: ..."), and null when it is not one it knows. */
+  const itemReason = t => {
+    let r;
+    if ((r = /^ step (\d+)(: .*)$/s.exec(t))) {                      // a step inside a Steps item: the same reasons, led by the step number
+      if (r[2].startsWith(': steps cannot open menus')) return `step ${r[1]} cannot be a submenu, more steps, an auto slot, a tag or the browser`;
+      const inner = itemReason(r[2]);
+      return inner ? `step ${r[1]} ${inner}` : null;
+    }
+    if (t === ': not an object') return 'is not an object';
+    if (t.startsWith(': needs exactly one of ')) return 'needs exactly one action (a brush, a press and so on), no more and no less';
+    if (t === ": 'set' needs a 'value'") return 'needs a value';
+    if (t === ": 'set' value must be a number") return 'has a value that is not a number';
+    if (t.startsWith(": 'steps' must be a non-empty list")) return 'needs at least one step, and steps cannot hold other steps';
+    if (t.startsWith(": 'auto' must be one of ")) return 'has an auto slot that is not supported (only brushes can be auto)';
+    if (t.startsWith(": 'browser' must be a string")) return 'has a browser filter that is not a tag';
+    if (t.startsWith(": browser 'kind' must be one of ")) return 'opens a browser tab that does not exist';
+    if ((r = /^: '(\w+)' must be a non-empty string$/.exec(t))) return 'needs a ' + (TARGET_NOUN[r[1]] || 'target');
+    if ((r = /^: (\w+) name (.+) must not contain /s.exec(t))) return `has the ${r[1]} name ${r[2]}, which looks like a path. Use only the name, without \\ / : or ..`;
+    if ((r = /^: submenu (.+) does not exist$/s.exec(t))) return `opens the submenu ${unq(r[1])}, which does not exist`;
+    if ((r = /^: submenu (.+) has no usable items$/s.exec(t))) return `opens ${titleOf(unq(r[1]))}, which has no usable items, so this slot is dropped`;
+    if ((r = /^: unknown setting (.+)$/s.exec(t))) return `has an unknown setting ${r[1].replace(/\s*\(did you mean .*$/s, '')}.` + didYouMean(r[1]);
+    if ((r = /^: tag (.+) does not exist; the slot stays empty$/s.exec(t))) return `uses the tag ${unq(r[1])}, which does not exist, so the slot stays empty`;
+    if ((r = /^: tag (.+) does not exist; the browser opens unfiltered$/s.exec(t))) return `filters by the tag ${unq(r[1])}, which does not exist, so the browser opens unfiltered`;
+    if (/^: icon .+ must be a plain file path/s.test(t)) return 'has an icon on a network path. Use a file on this PC';
+    return null;
+  };
   // "menu <id> item <n><rest>": the id is matched against the real menus first, so an id with spaces still resolves
   const ids = Object.keys(cfgMenus).sort((x, y) => y.length - x.length);
   const own = ids.find(id => raw.startsWith('menu ' + id + ' item ') || raw.startsWith('menu ' + id + ': '));
@@ -4324,8 +4475,8 @@ function describeProblem(raw) {
   if (mid !== null) {
     const rest = raw.slice(('menu ' + mid).length);
     if ((m = /^ item (\d+)(.*)$/s.exec(rest))) {
-      const n = +m[1];
-      return out(titleOf(mid) + ' item ' + n + m[2], known(mid) ? { kind: 'item', menuId: mid, index: n - 1 } : null);
+      const n = +m[1], why = itemReason(m[2]);
+      return out(titleOf(mid) + ' item ' + n + (why ? ' ' + why : m[2]), known(mid) ? { kind: 'item', menuId: mid, index: n - 1 } : null);
     }
     const tgt = field => (known(mid) ? { kind: 'menu', menuId: mid, field } : null);
     if (rest === ': no usable items') return out(titleOf(mid) + ' has no usable items', tgt());
@@ -4337,12 +4488,17 @@ function describeProblem(raw) {
     if (rest.startsWith(': ids starting with')) return out(`The id of ${titleOf(mid)} cannot start with “tag:”; those ids are reserved for tag submenus`, tgt('id'));
     if ((m = /^: hotkey (.+) not understood$/s.exec(rest))) return out(`The hotkey ${unq(m[1])} on ${titleOf(mid)} is not understood`, tgt('hotkey'));
     if ((m = /^: animation (.+) unknown; using ring\.animation$/s.exec(rest))) return out(`${titleOf(mid)} has an unknown animation (${unq(m[1])}); the one from Settings is used instead`, tgt('animation'));
+    if ((m = /^: unknown setting (.+)$/s.exec(rest))) return out(`${titleOf(mid)} has an unknown setting ${m[1].replace(/\s*\(did you mean .*$/s, '')}.` + didYouMean(m[1]), tgt());
+    if ((m = /^: (swallow|fan) (.+) must be true or false; using (true|false)$/s.exec(rest))) return out(`${titleOf(mid)}: ${m[1] === 'fan' ? 'Fan out' : 'Swallow hotkey'} must be on or off, not ${unq(m[2])}; it is ${m[3] === 'true' ? 'on' : 'off'} for now`, tgt());
     return out(titleOf(mid) + rest, tgt());
   }
   if ((m = /^ring\.colors\.(\w+): (.+) is not a #rrggbb colour$/s.exec(raw))) {
     const nm = COLOR_INFO[m[1]] ? COLOR_INFO[m[1]][0] : m[1];
     return out(`${nm} colour ${unq(m[2])} is not a #rrggbb value`, { kind: 'settings', card: 'set-colours', key: 'colors' });
   }
+  if ((m = /^ring\.colors\.(\w+): unknown colour(.*)$/s.exec(raw))) return out(`Ring colour “${m[1]}” is not one of the five colours.` + didYouMean(m[2]), { kind: 'settings', card: 'set-colours', key: 'colors' });
+  if (raw.startsWith('ring: must be an object')) return out('The ring section is not an object, so every ring setting uses its default', { kind: 'settings', card: 'set-ring-geometry', key: 'radius' });
+  if ((m = /^ring\.(\w+): unknown setting(.*)$/s.exec(raw))) return out(`The ring setting “${m[1]}” is not known.` + didYouMean(m[2]), null);
   if ((m = /^ring\.(\w+): (.*)$/s.exec(raw))) {
     const key = m[1], body = m[2], nm = RING_NAME[key] || key, card = RING_CARD[key];
     const target = card ? { kind: 'settings', card, key } : null;
@@ -4354,12 +4510,21 @@ function describeProblem(raw) {
   }
   const bridge = { kind: 'settings', card: 'set-zbrush-bridge' };
   if ((m = /^bridge\.mode (.+) unknown; using auto$/s.exec(raw))) return out(`Bridge mode ${unq(m[1])} is unknown; Auto is used instead`, bridge);
-  if ((m = /^bridge\.key (.+) not understood$/s.exec(raw))) return out(`The bridge key ${unq(m[1])} is not understood`, bridge);
+  if ((m = /^bridge\.key (.+) not understood(?:; using (.+))?$/s.exec(raw))) return out(`The bridge key ${unq(m[1])} is not understood` + (m[2] ? `; ${m[2]} is used instead` : ''), bridge);
+  if (raw.startsWith('bridge.key must not use Ctrl or Shift')) {
+    const using = /; using ([^;]+)$/.exec(raw);
+    return out('The bridge key cannot use Ctrl or Shift, because ZBrush reads them as mask and smooth. Use a bare F-key' + (using ? `; ${using[1]} is used instead` : ''), bridge);
+  }
+  if (raw.startsWith('bridge: must be an object')) return out('The bridge section is not an object, so the defaults are used', bridge);
+  if ((m = /^bridge\.(\w+): unknown setting(.*)$/s.exec(raw))) return out(`The bridge setting “${m[1]}” is not known.` + didYouMean(m[2]), bridge);
   if (raw.startsWith('bridge.key ')) return out('The bridge key ' + raw.slice('bridge.key '.length), bridge);
   const browserCard = { kind: 'settings', card: 'set-browser' };
   if ((m = /^browser\.hotkey (.+) not understood$/s.exec(raw))) return out(`The browser hotkey ${unq(m[1])} is not understood`, browserCard);
   if ((m = /^browser\.hotkey (.+) already used by menu (.+)$/s.exec(raw))) return out(`The browser hotkey ${unq(m[1])} is also used by ${titleOf(m[2])}; that menu wins, so the browser will not open with it`, browserCard);
+  if ((m = /^browser\.(\w+): unknown setting(.*)$/s.exec(raw))) return out(`The browser setting “${m[1]}” is not known.` + didYouMean(m[2]), browserCard);
   if (raw.startsWith('browser: ')) return out('The browser settings are not valid: ' + raw.slice('browser: '.length), browserCard);
+  if ((m = /^tags\.json could not be read: (.*); tag slots stay empty until it is fixed$/s.exec(raw))) return out(`The tags file could not be read (${m[1]}). Tag slots stay empty until it is fixed`, null);
+  if (raw.startsWith('config could not be read: ')) return out('The menus could not be checked: ' + raw.slice('config could not be read: '.length), null);
   if (raw.startsWith('menus: must be a non-empty object')) return out('There are no menus yet; add one', { kind: 'screen', screen: 'menus' });
   if (raw.startsWith('no menu has a hotkey')) {
     const first = Object.keys(cfgMenus).find(known);
@@ -4476,19 +4641,37 @@ function closeProblems(refocus) {
 /* True when `after` holds a problem that `before` did not. */
 const newProblems = (before, after) => { const had = new Set(before.map(String)); return after.some(p => !had.has(String(p))); };
 /* Takes a freshly loaded get_config result (boot, or "reload from disk") and makes it the current and saved config. */
+/* Makes a loaded config safe to draw: menus is an object, every menu has an items list. Returns a sentence about the first thing that
+   cannot be drawn at all (a menu that is not an object, items that are not a list of objects), else ''. The loader reports these as
+   problems and carries on, but the screens would throw on them. */
+function normaliseMenus(cfg) {
+  if (!cfg.menus || typeof cfg.menus !== 'object' || Array.isArray(cfg.menus)) cfg.menus = {};   // an array would lose menus on save
+  for (const [id, m] of Object.entries(cfg.menus)) {
+    if (!m || typeof m !== 'object' || Array.isArray(m)) return `The menu "${id}" is not an object.`;
+    if (m.items === undefined || m.items === null) m.items = [];
+    else if (!Array.isArray(m.items)) return `The items of the menu "${id}" are not a list.`;
+    const at = m.items.findIndex(it => !it || typeof it !== 'object' || Array.isArray(it));
+    if (at >= 0) return `Item ${at + 1} of the menu "${id}" is not an object.`;
+  }
+  return '';
+}
+/* Returns '' when the config was taken, else why it was not (see normaliseMenus); the current config is then left alone. */
 function adoptConfig(res) {
+  const bad = normaliseMenus(res.config);
+  if (bad) return bad;
   S.cfg = res.config;
-  if (!S.cfg.menus || typeof S.cfg.menus !== 'object' || Array.isArray(S.cfg.menus)) S.cfg.menus = {};   // an array would lose menus on save
   S.path = res.path || S.path || ''; S.problems = res.problems || [];
   S.mtimeNs = res.mtime_ns !== undefined ? res.mtime_ns : null;
   S.savedStr = JSON.stringify(S.cfg); resetHistory(S.savedStr);
+  return '';
 }
 async function reloadFromDisk() {
   let res;
   try { res = await call('get_config'); } catch (e) { toast('Could not reload: ' + (e.message || e), { tone: 'err' }); return false; }
   if (!res || !res.config) { toast('Could not reload: ' + ((res && res.error) || 'the file cannot be read'), { tone: 'err' }); return false; }
   validateSoon.cancel(); snapSoon.cancel();
-  adoptConfig(res);
+  const bad = adoptConfig(res);
+  if (bad) { toast('Could not reload: ' + bad, { tone: 'err' }); return false; }
   if (!S.cfg.menus[S.menuId]) S.menuId = Object.keys(S.cfg.menus)[0] || null;
   const m = curMenu();
   if (!m || S.itemIdx === null || S.itemIdx >= (m.items || []).length) S.itemIdx = null;
@@ -4524,14 +4707,18 @@ async function importSettings() {
   const counts = [];
   if (hasCfg) counts.push(n(info.menus, 'menu', 'menus'));
   if (hasTags) counts.push(n(info.tags, 'tag', 'tags') + (info.new_tags ? `, ${info.new_tags} not among yours yet` : ''));
+  // What an import replaces: the editor's own menus when it holds edits not saved yet, else what radial.json holds now.
+  const mine = Object.keys(S.cfg.menus).length, yourMenus = dirtyNow() ? mine : (+info.current_menus || mine), yourTags = +info.current_tags || 0;
   const probs = (info.problems || []).map(String), shown = probs.slice(0, 5);
   const merge = { text: 'Merge tags', value: 'merge', kind: 'primary', focus: true }, replace = { text: 'Replace tags', value: 'replace', kind: 'danger-ghost' };
   const mode = await modal({ title: `Import settings from ${name}?`,
     body: h('div', { class: 'changes' },
       h('p', { class: 'modal-path mono' }, info.path || name),
       h('p', null, counts.length ? 'The file holds ' + counts.join(' and ') + '.' : 'The file holds nothing to import.'),
-      hasCfg ? h('p', null, 'The menus and settings load into the editor. Save keeps them and Undo takes them back.') : h('p', null, 'The editor is not touched.'),
-      hasTags ? h('p', null, 'Tags are saved straight away and are not part of Undo. Merge adds the file’s tags to yours; Replace swaps yours for the file’s and keeps a copy of the old tags file.') : null,
+      hasCfg ? h('p', null, h('b', null, 'Menus and settings. '), `The file’s ${n(info.menus, 'menu', 'menus')} ${info.menus === 1 ? 'replaces' : 'replace'} your ${yourMenus}, and its ring settings replace yours. `,
+        'They load into the editor and nothing is written until you press Save. Undo brings yours back' + (dirtyNow() ? ', unsaved changes included.' : '.')) : h('p', null, 'The editor is not touched.'),
+      hasTags ? h('p', null, h('b', null, 'Tags. '), 'They are saved straight away, and Undo does not bring them back. ',
+        `Merge tags adds the file’s tags to your ${yourTags}. Replace tags swaps your ${yourTags} for the file’s and keeps a copy of the old tags file. Neither button touches the menus.`) : null,
       probs.length ? h('div', { class: 'changes-list' }, h('div', { class: 'chg-group' }, h('div', { class: 'micro' }, n(probs.length, 'problem', 'problems') + ' in the menus'),
         h('ul', null, shown.map(p => h('li', null, p)), probs.length > shown.length ? h('li', null, `and ${probs.length - shown.length} more`) : null))) : null),
     actions: hasTags ? [{ text: 'Cancel', value: null }, merge, replace] : [{ text: 'Cancel', value: null, focus: !hasCfg }, { text: 'Import', value: 'none', kind: 'primary', focus: hasCfg }] });
@@ -4541,10 +4728,11 @@ async function importSettings() {
   if (mode !== 'none') await loadTags(true);                     // the tags may have changed even when the call reports a problem
   if (!res || !res.ok) { toast((res && (res.message || res.error)) || 'The import did not work.', { tone: 'warn', ms: 5000 }); return; }
   if (res.config) {
+    const bad = normaliseMenus(res.config);
+    if (bad) { toast(`Nothing was loaded into the editor. ${bad}`, { tone: 'warn', ms: 6000 }); return; }
     snapSoon.cancel(); validateSoon.cancel(); pushSnap();       // files an edit still waiting, so Undo goes back to it; mtimeNs and savedStr stay as they were
     const priorProblems = S.problems.slice();
     S.cfg = res.config;
-    if (!S.cfg.menus || typeof S.cfg.menus !== 'object' || Array.isArray(S.cfg.menus)) S.cfg.menus = {};
     S.problems = res.problems || [];
     if (newProblems(priorProblems, S.problems)) S.problemsOpen = true;
     if (!S.cfg.menus[S.menuId]) S.menuId = Object.keys(S.cfg.menus)[0] || null;
@@ -4587,7 +4775,9 @@ async function doSave({ force = false, allowUnusable = false } = {}) {
       if (r.mtime_ns !== undefined) S.mtimeNs = r.mtime_ns;
       const t = r.time ? new Date(r.time * 1000).toLocaleTimeString() : '';
       const tail = S.appDown === false ? '. The app picks it up straight away.' : (S.appDown === true ? '. The app is not running: start it from Status.' : '');
-      toast(S.problems.length ? `Saved at ${t} with ${S.problems.length} problem${S.problems.length === 1 ? '' : 's'}` : `Saved at ${t}${tail}`, { tone: S.problems.length ? 'warn' : 'ok', ms: tail && S.appDown === true ? 4800 : 3800 });
+      let said = S.problems.length ? `Saved at ${t} with ${S.problems.length} problem${S.problems.length === 1 ? '' : 's'}` : `Saved at ${t}${tail}`;
+      if (r.kept_broken) said += (said.endsWith('.') ? ' ' : '. ') + 'The file it replaced was not valid JSON and is kept as radial.json.broken.';
+      toast(said, { tone: S.problems.length ? 'warn' : 'ok', ms: r.kept_broken ? 7000 : tail && S.appDown === true ? 4800 : 3800 });
       if (R.status) R.status(); else refreshAppDown();      // one quiet look, so the rail dot is right
       if (newProblems(prior, S.problems)) S.problemsOpen = true;     // the toast and the pill already count them; the panel opens for a new one only
       return 'saved';
@@ -4767,6 +4957,8 @@ async function setPref(key, value) {
   }
 }
 
+/* Alt+1 to Alt+5: the screen's index, read from the physical digit key so it works on AZERTY (where the row types & and é unshifted), or null. */
+const screenKey = e => { const m = /^Digit([1-5])$/.exec(e.code || ''); return m ? +m[1] - 1 : null; };
 const SCREENS = { menus: buildMenusScreen, library: buildLibraryScreen, settings: buildSettingsScreen, status: buildStatusScreen, setup: buildSetupScreen };
 // the element that scrolls on each screen (its position is remembered when you leave and put back when you return)
 const SCREEN_SCROLLER = { menus: '.ilist', library: '.b-scroll', settings: '.settings-scroll', status: '.settings-scroll', setup: '.settings-scroll' };
@@ -4815,7 +5007,10 @@ async function loadLibrary(kind = 'brush', refresh = false) {
   L.loaded = true; L.busy = false;
   if (refresh) Thumbs.forgetMisses(kind);
   if (R.libRefresh) R.libRefresh(kind);
-  if (S.screen === 'menus' && R.right && S.tab === 'item') R.right();     // the inspector resolves names against the library
+  if (S.screen === 'menus' && S.tab === 'item') {                          // the inspector resolves names against the library: repaint its hints, never rebuild it (the user may be typing in it)
+    if (R.itemHint) R.itemHint();
+    if (tagField && tagField.sel.isConnected) tagField.paint();
+  }
   paintRescan();
 }
 async function loadSuggestions() {
@@ -4847,10 +5042,15 @@ function recovery(res) {
   };
   const folderBtn = h('button', { class: 'btn', type: 'button', onclick: async () => { try { await call('open_folder', 'config'); } catch (e) { toast('Could not open the folder.', { tone: 'warn' }); } } }, icon('folder', 13), 'Open folder');
   const logsBtn = h('button', { class: 'btn', type: 'button', title: 'Where the logs are kept', onclick: async () => { try { await call('open_folder', 'data'); } catch (e) { toast('Could not open the folder.', { tone: 'warn' }); } } }, icon('folder', 13), 'Open logs folder');
-  const restoreBtn = backup ? h('button', { class: 'btn', type: 'button', onclick: () => run(restoreBtn, 'restore_backup') }, icon('undo', 13), 'Restore backup') : null;
+  const restoreBtn = backup ? h('button', { class: 'btn', type: 'button', onclick: async () => {
+    const ok = await modal({ title: 'Restore the backup?',
+      body: h('p', null, 'Replaces your menus file with the last saved backup. The current file is kept as radial.json.broken.'),
+      actions: [{ text: 'Cancel', value: false, focus: true }, { text: 'Restore backup', value: true, kind: 'danger' }] });
+    if (ok) run(restoreBtn, 'restore_backup');
+  } }, icon('undo', 13), 'Restore backup') : null;
   const resetBtn = h('button', { class: 'btn danger-ghost', type: 'button', onclick: async () => {
     const ok = await modal({ title: 'Start from defaults?',
-      body: h('p', null, 'This replaces your menus file with the built-in default menus. Anything in the current file is lost, so use Open folder first if you want to keep a copy.'),
+      body: h('p', null, 'This replaces your menus file with the built-in default menus. Your current file is kept as radial.json.broken next to it. An older radial.json.broken is replaced.'),
       actions: [{ text: 'Cancel', value: false, focus: true }, { text: 'Start from defaults', value: true, kind: 'danger' }] });
     if (ok) run(resetBtn, 'reset_config');
   } }, 'Start from defaults');
@@ -4869,7 +5069,8 @@ async function boot() {
   if (!cfgRes || !cfgRes.config || typeof cfgRes.config !== 'object' || Array.isArray(cfgRes.config)) { recovery(cfgRes || new Error('The backend returned no config.')); return; }
   const opts = optR.status === 'fulfilled' ? optR.value : null;     // a failed get_options just means the FALLBACK_* lists are used
   if (prefR.status === 'fulfilled' && prefR.value) S.prefs = Object.assign(S.prefs, prefR.value);
-  adoptConfig(cfgRes);
+  const badMenus = adoptConfig(cfgRes);
+  if (badMenus) { recovery(Object.assign({}, cfgRes, { config: null, error: badMenus + ' Studio cannot show a file like that.' })); return; }
   S.opts = opts; S.defaults = Object.assign({}, FALLBACK_DEFAULTS, cfgRes.defaults || (opts && opts.ring_defaults) || {});
   S.defaults.colors = Object.assign({}, FALLBACK_DEFAULTS.colors, S.defaults.colors || {});
   if (prefR.status === 'fulfilled' && prefR.value && S.prefs.mode !== 'simple' && S.prefs.mode !== 'full') {   // first start with this build: new installs get Simple, a config that needs Full gets Full
@@ -4956,7 +5157,7 @@ function init() {
   });
   window.addEventListener('resize', () => { if (S.problemsOpen) placeProblemsPanel(); });
   window.addEventListener('keydown', e => {
-    const ours = ((e.ctrlKey || e.metaKey) && !e.altKey && /^[szy]$/i.test(e.key)) || (e.altKey && !e.ctrlKey && !e.shiftKey && /^[1-5]$/.test(e.key));
+    const ours = ((e.ctrlKey || e.metaKey) && !e.altKey && /^[szy]$/i.test(e.key)) || (e.altKey && !e.ctrlKey && !e.shiftKey && screenKey(e) !== null);
     if ($('#overlay-root').firstElementChild) { if (ours) e.preventDefault(); return; }   // a dialog is open: our shortcuts stay quiet, and the web view must not get Ctrl+S either
     // a text box keeps its own undo; a slider, switch, select or colour swatch does not, so Ctrl+Z there undoes the config
     const edEl = e.target && e.target.closest && e.target.closest('input, textarea, [contenteditable]');
@@ -4970,7 +5171,7 @@ function init() {
       const b = card && Array.from(browsers.values()).find(x => x.el.contains(card));
       if (b) { e.preventDefault(); b.toggleFav(card.dataset.name); }
     }
-    else if (e.altKey && !e.ctrlKey && !e.shiftKey && /^[1-5]$/.test(e.key)) { e.preventDefault(); showScreen(['menus', 'library', 'settings', 'status', 'setup'][+e.key - 1]); }
+    else if (e.altKey && !e.ctrlKey && !e.shiftKey && screenKey(e) !== null) { e.preventDefault(); showScreen(['menus', 'library', 'settings', 'status', 'setup'][screenKey(e)]); }
   });
   window.addEventListener('focus', debounce(() => { if (S.ready && !S.fatal) { loadTags(); reloadUsage(); } }, 300));      // tags.json may have changed (the popout, a hand edit), and picks add to Recent
   window.addEventListener('focus', debounce(() => { if (S.ready && !S.fatal && S.screen !== 'setup') refreshSetupBadge(); }, 600));   // the Setup screen polls for itself
