@@ -761,11 +761,12 @@ class Api(webapi.LibraryApi, webapi.TagApi):
 
     # --- Studio preferences (not part of the menus; saved straight away) --------------------------
     # mode is "" until Studio decides it at first start (Simple for a fresh install, Full for an existing setup).
-    _PREFS_DEFAULTS = {"show_licence": True, "check_updates": True, "last_screen": "menus", "setup_done": False,
-                       "mode": ""}
+    _PREFS_DEFAULTS = {"check_updates": True, "last_screen": "menus", "setup_done": False, "mode": ""}
     # Keys an earlier Studio already wrote: a studio.json with any of them belongs to someone who has used the
     # Studio, so the Setup screen is not forced on them after an update.
-    _USED_KEYS = ("window", "last_screen", "show_licence", "check_updates", "zbrush_folders")
+    _USED_KEYS = ("window", "last_screen", "check_updates", "zbrush_folders")
+    # Keys a past Studio wrote that nothing reads now: dropped from studio.json the next time a preference is saved.
+    _RETIRED_KEYS = ("show_licence",)
 
     def get_prefs(self):
         with _studio_lock:
@@ -790,6 +791,8 @@ class Api(webapi.LibraryApi, webapi.TagApi):
             return self.get_prefs()
         with _studio_lock:                     # read, change and write as one step
             data = _read_studio_file()             # keeps the other keys (window placement)
+            for old in self._RETIRED_KEYS:
+                data.pop(old, None)
             data[key] = value
             _write_studio_file(data)
         return self.get_prefs()

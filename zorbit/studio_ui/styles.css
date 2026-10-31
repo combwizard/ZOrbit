@@ -824,34 +824,9 @@ body.dragging .irow:hover { background: transparent; }
   *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
 }
 
-/* Licence screen (a joke: free software, licensed forever) */
-.rail .rail-bottom { margin-top: auto; margin-bottom: 8px; }
-.lic-status { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
-.lic-badge { display: inline-flex; align-items: center; gap: 8px; padding: 5px 12px; border-radius: 99px; font-weight: 700;
-  color: var(--lime); background: rgba(168, 223, 35, .10); border: 1px solid rgba(168, 223, 35, .35); --c: var(--lime); }
-.lic-tier { color: var(--sub); font-size: 13px; }
-.lic-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px 24px; margin-bottom: 18px; }
-.lic-row { display: flex; flex-direction: column; gap: 6px; }
-.lic-val { color: var(--text); }
-.lic-key { color: var(--accent); letter-spacing: .06em; }
-.lic-activate { display: flex; gap: 10px; }
-.lic-activate .inp { flex: 1; letter-spacing: .08em; }
+/* Destructive buttons that stay quiet until hovered */
 .btn.danger-ghost { color: var(--danger); border-color: rgba(224, 85, 85, .35); }
 .btn.danger-ghost:hover { background: rgba(224, 85, 85, .10); }
-.lic-reveal { border-color: rgba(248, 107, 51, .35);
-  background: linear-gradient(135deg, rgba(248, 107, 51, .10), rgba(77, 200, 233, .05) 70%), var(--bg3);
-  animation: licin .5s ease-out both .15s; }
-.lic-reveal p { color: var(--text); max-width: 680px; margin: 0 0 10px; line-height: 1.55; }
-.lic-reveal-head { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
-.lic-reveal-head h2 { font-size: 22px; font-weight: 800; color: var(--accent); }
-.lic-wink { display: inline-block; font-weight: 800; font-size: 18px; color: #4dc8e9; transform: rotate(90deg); }
-.lic-big { font-size: 17px; font-weight: 800; margin-top: 14px !important; }
-@keyframes licin { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
-.lic-hide { text-align: center; margin-top: 26px; }
-.linkish { background: none; border: 0; padding: 4px 6px; color: var(--sub); font-size: 12px; text-decoration: underline;
-  text-underline-offset: 3px; text-decoration-color: rgba(255, 255, 255, .18); cursor: pointer; }
-.linkish:hover { color: var(--text); text-decoration-color: var(--accent); }
-.rail-btn[hidden] { display: none; }
 
 /* Settings: "On this page" contents column */
 .settings-layout { display: grid; grid-template-columns: 196px minmax(0, 940px); justify-content: center; column-gap: 8px; }

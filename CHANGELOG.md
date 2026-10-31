@@ -21,6 +21,8 @@ All notable changes to this project are listed here. The format follows
 
 ### Changed
 
+- Studio: **Setup** is Alt+5 (it was Alt+6). Alt+1 to Alt+4 are unchanged. **Settings > Studio** shows the version
+  with a link to the GPL-3.0 licence.
 - The installer's last page says what to do next for ZBrush 2026 and newer (restart it) and for ZBrush 2022 to
   2025 (install the plugin from Studio's Setup screen). The plugin's "app was not found" dialog covers the
   installer, the portable zip and running from source.
@@ -56,6 +58,12 @@ All notable changes to this project are listed here. The format follows
 - ZBrush 2021 and older are no longer offered the ZScript plugin; Studio refuses to install it and marks them as
   unsupported. The docs say the plugin binds F9 to Apply when Apply has no hotkey (verified in ZBrush 2022), not
   that it always does.
+
+### Removed
+
+- The Licence screen in Studio, its rail button and the **Show the Licence button** setting, and the fake
+  licence-key table in the README. ZOrbit is GPL-3.0 and the README and **Settings > Studio** say so plainly. An
+  old `show_licence` entry in `studio.json` is ignored and dropped the next time Studio saves a preference.
 
 ### Fixed
 

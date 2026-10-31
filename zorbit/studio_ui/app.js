@@ -188,7 +188,7 @@ const S = {
   dock: { kind: 'brush', cat: 'All', q: '' },
   pop: { kind: 'brush', cat: 'All', q: '', size: 96 }, popOnTop: true, popSide: 'left', popColumn: true,   // the popout's browser state, whether its window stays above others, and the side of its folders column
   status: null,
-  prefs: { show_licence: true, setup_done: true, mode: '' },   // setup_done: boot tests === false, so a failed get_prefs never sends anyone to Setup
+  prefs: { setup_done: true, mode: '' },   // setup_done: boot tests === false, so a failed get_prefs never sends anyone to Setup
   ready: false, fatal: false,                 // ready after the first screen is up; fatal when the recovery screen is showing
   saving: false, savePromise: null, mtimeNs: null,
   dirtySent: undefined, dirtySeq: 0, dirtyFlight: null,
@@ -1478,11 +1478,11 @@ function buildMenusScreen(root) {
       listEl._sig = null;                                       // the row holds the input: force a rebuild
       R.menuList();
     };
-    // Only Enter and Escape are ours; everything else (Ctrl+S, Alt+1..6) still reaches the window, after the new title is taken in
+    // Only Enter and Escape are ours; everything else (Ctrl+S, Alt+1..5) still reaches the window, after the new title is taken in
     inp.addEventListener('keydown', e => {
       if (e.key === 'Enter') { e.stopPropagation(); finish(true); }
       else if (e.key === 'Escape') { e.stopPropagation(); finish(false); }
-      else if (((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === 's') || (e.altKey && !e.ctrlKey && /^[1-6]$/.test(e.key))) finish(true);
+      else if (((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === 's') || (e.altKey && !e.ctrlKey && /^[1-5]$/.test(e.key))) finish(true);
     });
     inp.addEventListener('blur', () => finish(true));
     inp.addEventListener('click', e => e.stopPropagation());
@@ -3776,10 +3776,11 @@ function buildSettingsScreen(root) {
       if (u) paintUpdate(u); else updNote.textContent = '';
     };
     if (window.RadialUpdate && window.RadialUpdate.last) paintUpdate(window.RadialUpdate.last);
+    const verEl = h('span', { class: 'mono' }, '');
+    call('get_app_info').then(i => { if (i && i.version) verEl.textContent = 'v' + i.version; }).catch(() => {});
+    const gplLink = h('button', { class: 'link', type: 'button', onclick: async () => {
+      try { await call('open_url', 'https://www.gnu.org/licenses/gpl-3.0.html'); } catch (e) { toast('Could not open the link.', { tone: 'warn' }); } } }, 'GPL-3.0');
     page.append(card('Studio', 'Preferences for this window. Saved straight away.',
-      h('div', { class: 'field row' }, h('div', { class: 'grow' }, h('span', { class: 'flabel' }, 'Show the Licence button'),
-        h('div', { class: 'fhint' }, 'The Licence screen is a joke: ZOrbit is free software and needs no licence. Turn this off to hide its button.')),
-        toggleSwitch(licenceVisible(), async v => { const ok = await setPref('show_licence', v); if (ok) toast(v ? 'The Licence button is back. It missed you.' : 'Licence button hidden.', { ms: 2800 }); return ok; }, 'Show the Licence button')),
       h('div', { class: 'field row' }, h('div', { class: 'grow' }, h('span', { class: 'flabel' }, 'Check for updates'),
         h('div', { class: 'fhint' }, 'When Studio opens, it asks GitHub for the newest release and shows it next to the version at the top. Nothing about you or your menus is sent.'), updNote),
         toggleSwitch(S.prefs.check_updates !== false, async v => {
@@ -3787,7 +3788,9 @@ function buildSettingsScreen(root) {
           if (!ok) return false;
           if (v) checkNow(); else { updTok++; updNote.textContent = ''; if (window.RadialUpdate) window.RadialUpdate.check(); }
           return true;
-        }, 'Check for updates'))));
+        }, 'Check for updates')),
+      h('div', { class: 'field row' }, h('div', { class: 'grow' }, h('span', { class: 'flabel' }, 'Version'),
+        h('div', { class: 'fhint' }, 'ZOrbit Studio ', verEl, ', licensed under ', gplLink, '. Free to use, change and share.')))));
 
     /* --- import and export (one file with the menus, the ring settings and the tags) */
     const ioBtns = [
@@ -3994,7 +3997,7 @@ function setSetupBadge(d) {
   if (!rb) return;
   const bad = !!(d && d.hard_fail);
   rb.classList.toggle('has-badge', bad);
-  rb.title = 'Setup (Alt+6)' + (bad ? ' – Something needs attention' : '');
+  rb.title = 'Setup (Alt+5)' + (bad ? ' – Something needs attention' : '');
 }
 /* One quiet look for the rail dot, from outside the Setup screen. */
 async function refreshSetupBadge() {
@@ -4625,54 +4628,6 @@ async function revert() {
   toast('Reverted to the saved config.', { ms: 2200 });
 }
 
-// Licence: a perfectly serious licence-activation panel. Then the punchline.
-function buildLicenceScreen(root) {
-  root.replaceChildren();
-  const page = h('div', { class: 'settings licence' });
-  const key = 'FCKGW-RHQQ2-YXRKT-8TG6W-2B7Q8';
-  const quips = ['Already activated. Forever. You can stop typing.', 'Still activated. It was activated before you got here.',
-    'Activation status: extremely activated.', 'The key is not checked. Nothing is checked. Go sculpt.'];
-  let q = 0;
-  const input = h('input', { class: 'inp mono', type: 'text', placeholder: 'XXXX-XXXX-XXXX-XXXX-XXXX', spellcheck: 'false', 'aria-label': 'Licence key' });
-  const activate = h('button', { class: 'btn primary', type: 'button', onclick: () => { toast(quips[q++ % quips.length], { tone: 'ok', ms: 3500 }); input.value = ''; } }, icon('check', 13), 'Activate');
-  input.addEventListener('keydown', e => { if (e.key === 'Enter') activate.click(); });
-  const deactivate = h('button', { class: 'btn danger-ghost', type: 'button', onclick: () => toast('Nice try. You cannot un-free free software.', { tone: 'warn', ms: 3500 }) }, 'Deactivate this machine');
-  const copyKey = h('button', { class: 'btn', type: 'button', onclick: async () => {
-    try { await navigator.clipboard.writeText(key); toast('Copied. Share it with everyone. That is allowed.', { tone: 'ok', ms: 3000 }); }
-    catch (e) { toast('Copy failed, but you are still licensed.', { ms: 3000 }); } } }, icon('copy', 13), 'Copy key');
-  const link = (label, url) => h('button', { class: 'btn', type: 'button', onclick: async () => {
-    try { await call('open_url', url); } catch (e) { toast('Could not open the link.', { tone: 'warn' }); } } }, icon('external', 13), label);
-  const fine = (k, v) => h('div', { class: 'lic-row' }, h('span', { class: 'micro' }, k), h('span', { class: 'lic-val' }, v));
-
-  page.append(
-    h('div', { class: 'page-head' }, h('h1', null, 'Licence'), h('p', null, 'Manage your ZOrbit licence and activations.')),
-    card('Licence status', null,
-      h('div', { class: 'lic-status' },
-        h('span', { class: 'lic-badge' }, h('i', { class: 'sdot' }), 'Activated'),
-        h('span', { class: 'lic-tier' }, 'Lifetime licence')),
-      h('div', { class: 'lic-grid' },
-        fine('Licence key', h('span', { class: 'mono lic-key' }, key)),
-        fine('Issued to', 'You'), fine('Seats', 'All of them'),
-        fine('Expires', 'Never'), fine('Price paid', h('span', { class: 'mono' }, '0.00')), fine('Activations left', '\u221e')),
-      h('div', { class: 'btn-row' }, copyKey, deactivate)),
-    card('Activate a licence key', 'Got a key from somewhere?',
-      h('div', { class: 'lic-activate' }, input, activate)),
-    h('section', { class: 'card lic-reveal' },
-      h('div', { class: 'lic-reveal-head' }, h('span', { class: 'lic-wink', 'aria-hidden': 'true' }, ';)'), h('h2', null, 'Just kidding.')),
-      h('p', null, 'There is no licence key, no account, no trial and no expiry date. Nothing above checks anything.'),
-      h('p', null, 'ZOrbit is free software under the GNU General Public License, version 3. Use it on as many machines as you like, share it with anyone, read the code and change it. If you share a changed version, it stays free too.'),
-      h('p', { class: 'lic-big' }, 'You are licensed. Forever.'),
-      h('div', { class: 'btn-row' },
-        link('Read the GPL v3', 'https://www.gnu.org/licenses/gpl-3.0.html'),
-        link('Source code on GitHub', 'https://github.com/combwizard/zorbit'))),
-    h('div', { class: 'lic-hide' }, h('button', { class: 'linkish', type: 'button', onclick: () => {
-      setPref('show_licence', false);
-      toast('Fine. It is gone. Settings > Studio brings it back, if you ever miss it.', { ms: 4500 });
-      showScreen('settings');
-    } }, 'Hide this nonsense, it isn\u2019t funny\u2026')));
-  root.append(h('div', { class: 'settings-scroll' }, page));
-}
-
 /* ================================================================== close guard */
 // Lists what differs between the saved config and the current one, grouped by area.
 function describeChanges() {
@@ -4765,10 +4720,7 @@ async function openCloseDialog() {
 // Called by studio.py when the window is about to close and the page has unsaved changes.
 window.__studioRequestClose = () => { openCloseDialog(); return true; };
 
-function licenceVisible() { return S.prefs.show_licence !== false; }
 function applyPrefs() {
-  const btn = document.querySelector('.rail-btn[data-screen="licence"]');
-  if (btn) btn.hidden = !licenceVisible();
   const full = isFull();                                    // roving tabindex: the chosen button is the one Tab stop
   modeBtns().forEach(b => { const on = (b.dataset.mode === 'full') === full; b.classList.toggle('on', on); b.setAttribute('aria-checked', on ? 'true' : 'false'); b.tabIndex = on ? 0 : -1; });
 }
@@ -4815,14 +4767,14 @@ async function setPref(key, value) {
   }
 }
 
-const SCREENS = { menus: buildMenusScreen, library: buildLibraryScreen, settings: buildSettingsScreen, status: buildStatusScreen, setup: buildSetupScreen, licence: buildLicenceScreen };
+const SCREENS = { menus: buildMenusScreen, library: buildLibraryScreen, settings: buildSettingsScreen, status: buildStatusScreen, setup: buildSetupScreen };
 // the element that scrolls on each screen (its position is remembered when you leave and put back when you return)
-const SCREEN_SCROLLER = { menus: '.ilist', library: '.b-scroll', settings: '.settings-scroll', status: '.settings-scroll', setup: '.settings-scroll', licence: '.settings-scroll' };
+const SCREEN_SCROLLER = { menus: '.ilist', library: '.b-scroll', settings: '.settings-scroll', status: '.settings-scroll', setup: '.settings-scroll' };
 const scrollerOf = name => { const root = $('#screen-' + name); return root ? $(SCREEN_SCROLLER[name] || '.settings-scroll', root) : null; };
 let lastScreenChain = Promise.resolve();   // writes run one after another, so two quick switches cannot land out of order
 const saveLastScreen = name => { lastScreenChain = lastScreenChain.then(() => call('set_pref', 'last_screen', name)).catch(() => {}); };
 function showScreen(name, { fresh = false } = {}) {
-  if (!SCREENS[name] || (name === 'licence' && !licenceVisible())) name = 'menus';
+  if (!SCREENS[name]) name = 'menus';
   if (openPopover) openPopover();
   if (comboClose) comboClose();
   if (S.shown && name === S.screen) return;
@@ -4879,7 +4831,7 @@ function recovery(res) {
   const path = isErr ? '' : String((res && res.path) || '');
   const backup = !isErr && !!(res && res.backup_exists);
   const loading = $('#screens > .loading'); if (loading) loading.remove();
-  // The screens need the menus: the rail and Alt+1 to Alt+6 do nothing until the file is fixed, so the rail looks that way.
+  // The screens need the menus: the rail and Alt+1 to Alt+5 do nothing until the file is fixed, so the rail looks that way.
   $$('.rail-btn').forEach(b => { b.classList.remove('on'); b.setAttribute('aria-current', 'false'); b.setAttribute('aria-disabled', 'true'); b.title = 'Fix or reset the menus file first'; });
   $('#saveBtn').disabled = true; $('#revertBtn').disabled = true;
   modeBtns().forEach(b => { b.disabled = true; });
@@ -5004,7 +4956,7 @@ function init() {
   });
   window.addEventListener('resize', () => { if (S.problemsOpen) placeProblemsPanel(); });
   window.addEventListener('keydown', e => {
-    const ours = ((e.ctrlKey || e.metaKey) && !e.altKey && /^[szy]$/i.test(e.key)) || (e.altKey && !e.ctrlKey && !e.shiftKey && /^[1-6]$/.test(e.key));
+    const ours = ((e.ctrlKey || e.metaKey) && !e.altKey && /^[szy]$/i.test(e.key)) || (e.altKey && !e.ctrlKey && !e.shiftKey && /^[1-5]$/.test(e.key));
     if ($('#overlay-root').firstElementChild) { if (ours) e.preventDefault(); return; }   // a dialog is open: our shortcuts stay quiet, and the web view must not get Ctrl+S either
     // a text box keeps its own undo; a slider, switch, select or colour swatch does not, so Ctrl+Z there undoes the config
     const edEl = e.target && e.target.closest && e.target.closest('input, textarea, [contenteditable]');
@@ -5018,7 +4970,7 @@ function init() {
       const b = card && Array.from(browsers.values()).find(x => x.el.contains(card));
       if (b) { e.preventDefault(); b.toggleFav(card.dataset.name); }
     }
-    else if (e.altKey && !e.ctrlKey && !e.shiftKey && /^[1-6]$/.test(e.key)) { e.preventDefault(); const scr = ['menus', 'library', 'settings', 'status', 'licence', 'setup'][+e.key - 1]; if (scr !== 'licence' || licenceVisible()) showScreen(scr); }
+    else if (e.altKey && !e.ctrlKey && !e.shiftKey && /^[1-5]$/.test(e.key)) { e.preventDefault(); showScreen(['menus', 'library', 'settings', 'status', 'setup'][+e.key - 1]); }
   });
   window.addEventListener('focus', debounce(() => { if (S.ready && !S.fatal) { loadTags(); reloadUsage(); } }, 300));      // tags.json may have changed (the popout, a hand edit), and picks add to Recent
   window.addEventListener('focus', debounce(() => { if (S.ready && !S.fatal && S.screen !== 'setup') refreshSetupBadge(); }, 600));   // the Setup screen polls for itself
