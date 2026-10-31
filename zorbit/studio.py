@@ -28,6 +28,7 @@ import brushes              # noqa: E402
 import expand               # noqa: E402
 import fsutil               # noqa: E402
 import installs             # noqa: E402
+import menushare            # noqa: E402
 import onboarding           # noqa: E402
 import paths                # noqa: E402
 import radiald              # noqa: E402
@@ -146,6 +147,7 @@ class Api(webapi.LibraryApi, webapi.TagApi):
     def __init__(self):
         self._window = None    # underscore: pywebview must not expose (and crawl) it to JS
         self._pending_import = None    # the file pick_import read, until apply_import uses it
+        self._pending_menu_import = None    # the same for pick_menu_import and apply_menu_import
         self._dirty = False            # the page's last report of unsaved changes (set_dirty); informational
         self._allow_close = False      # set by close_now(): the next close goes through
         self._ask_sent = 0.0           # when we last asked the page to show the close dialog
@@ -704,6 +706,29 @@ class Api(webapi.LibraryApi, webapi.TagApi):
             return {"ok": False, "message": f"The settings could not be saved: {getattr(e, 'strerror', None) or e}"}
         return {"ok": True, "path": path, "message": f"Saved the settings to {path}.{note}"}
 
+    @staticmethod
+    def _read_import_file(path, what):
+        """Reads a file an import asked for: (raw, None), or (None, message) when it is too big, not text, not JSON
+        or not a JSON object. what names the kind of file in the messages ('ZOrbit settings file')."""
+        name = os.path.basename(path)
+        try:
+            if os.path.getsize(path) > IMPORT_MAX_BYTES:
+                return None, f"{name} is too big to be a {what} (over {IMPORT_MAX_BYTES // (1024 * 1024)} MB)."
+            with open(path, "rb") as f:
+                data = f.read(IMPORT_MAX_BYTES + 1)
+            if len(data) > IMPORT_MAX_BYTES:
+                return None, f"{name} is too big to be a {what}."
+            raw = json.loads(data.decode("utf-8-sig"))
+        except json.JSONDecodeError as e:
+            return None, f"{name} is not valid JSON: {e.msg} at line {e.lineno}, column {e.colno}."
+        except UnicodeDecodeError:
+            return None, f"{name} is not a text file."
+        except (OSError, ValueError, RecursionError) as e:
+            return None, f"{name} could not be read: {getattr(e, 'strerror', None) or e}"
+        if not isinstance(raw, dict):
+            return None, f"{name} is not a {what} (the top level is not a JSON object)."
+        return raw, None
+
     def pick_import(self):
         """Asks for a settings file (an export, or a plain radial.json or tags.json), reads and checks it and
         returns what it holds. Writes nothing; apply_import() does the work with what is read here."""
@@ -719,24 +744,13 @@ class Api(webapi.LibraryApi, webapi.TagApi):
             return {"ok": False, "cancelled": True}
         path = picked[0] if isinstance(picked, (list, tuple)) else picked
         name = os.path.basename(path)
-        try:
-            if os.path.getsize(path) > IMPORT_MAX_BYTES:
-                return refuse(f"{name} is too big to be a ZOrbit settings file (over "
-                              f"{IMPORT_MAX_BYTES // (1024 * 1024)} MB).")
-            with open(path, "rb") as f:
-                data = f.read(IMPORT_MAX_BYTES + 1)
-            if len(data) > IMPORT_MAX_BYTES:
-                return refuse(f"{name} is too big to be a ZOrbit settings file.")
-            raw = json.loads(data.decode("utf-8-sig"))
-        except json.JSONDecodeError as e:
-            return refuse(f"{name} is not valid JSON: {e.msg} at line {e.lineno}, column {e.colno}.")
-        except UnicodeDecodeError:
-            return refuse(f"{name} is not a text file.")
-        except (OSError, ValueError, RecursionError) as e:
-            return refuse(f"{name} could not be read: {getattr(e, 'strerror', None) or e}")
-        if not isinstance(raw, dict):
-            return refuse(f"{name} is not a ZOrbit settings file (the top level is not a JSON object).")
+        raw, error = self._read_import_file(path, "ZOrbit settings file")
+        if error:
+            return refuse(error)
 
+        if "zorbit_menu" in raw:            # a shared menu: its "menus" would otherwise replace all of yours
+            return refuse(f"{name} is a menu file, not a settings file. Import it with Import menu... under the "
+                          "Menus list.")
         if "zorbit_settings" in raw:
             kind, version = "bundle", raw.get("version")
             fmt = raw["zorbit_settings"]
@@ -831,6 +845,124 @@ class Api(webapi.LibraryApi, webapi.TagApi):
         self._pending_import = None
         return {"ok": True, "config": cfg, "problems": problems, "tags_message": tags_message,
                 "message": tags_message or "Loaded the menus and settings into the editor."}
+
+    # --- sharing one menu (the menu, its submenus and the tags they use, as a small file) ---------
+    def export_menu(self, cfg, menu_id):
+        """Saves one menu of the editor (cfg, unsaved edits included) and the submenus it opens as a menu file, to a
+        place the user picks. See menushare.build for what the file holds."""
+        import webview
+        menus = cfg.get("menus") if isinstance(cfg, dict) else None
+        if not isinstance(menus, dict) or not isinstance(menu_id, str) or menu_id.startswith("tag:") \
+                or not isinstance(menus.get(menu_id), dict):
+            return {"ok": False, "message": "There is no such menu to export."}
+        title = str(menus[menu_id].get("title") or menu_id)
+        fname = re.sub(r'[\\/:*?"<>|]', "_", f"{title} menu.json")
+        picked = self._window.create_file_dialog(
+            webview.FileDialog.SAVE, save_filename=fname, file_types=("ZOrbit menu (*.json)", "All files (*.*)"))
+        if not picked:
+            return {"ok": False, "cancelled": True, "message": "Export cancelled."}
+        path = picked[0] if isinstance(picked, (list, tuple)) else picked
+        if not os.path.splitext(path)[1]:
+            path += ".json"
+        store = tags.TagStore(radiald.tags_path()).load()
+        bundle = menushare.build(cfg, menu_id, None if store.error else store, VERSION)
+        note = f" The tags are not in it: {store.error}." if store.error else ""
+        subs = len(bundle["menus"]) - 1
+        what = f'"{title}"' + (f" and its {_plural(subs, 'submenu')}" if subs else "")
+        try:
+            fsutil.write_atomic(path, json.dumps(bundle, indent=2, ensure_ascii=False) + "\n")
+        except (OSError, TypeError, ValueError) as e:
+            return {"ok": False, "message": f"The menu could not be saved: {getattr(e, 'strerror', None) or e}"}
+        return {"ok": True, "path": path, "message": f"Saved {what} to {path}.{note}"}
+
+    def _menu_problems(self, cfg, store=None):
+        """The loader's problems for imported menus on their own. An imported menu has no hotkey, so the loader's
+        'no menu has a hotkey' is left out: it says nothing about the menus the user already has."""
+        _, problems = self._load_dict(cfg, store)
+        return [p for p in problems if not p.startswith("no menu has a hotkey")]
+
+    def pick_menu_import(self, cfg):
+        """Asks for a menu file, reads and checks it and returns what it holds and how it would come in next to the
+        menus of cfg. Writes nothing; apply_menu_import() does the work with what is read here."""
+        import webview
+        self._pending_menu_import = None
+        picked = self._window.create_file_dialog(
+            webview.FileDialog.OPEN, file_types=("ZOrbit menu (*.json)", "All files (*.*)"))
+        if not picked:
+            return {"ok": False, "cancelled": True}
+        path = picked[0] if isinstance(picked, (list, tuple)) else picked
+        name = os.path.basename(path)
+        raw, error = self._read_import_file(path, "ZOrbit menu file")
+        if error:
+            return {"ok": False, "message": error}
+        version = raw.get("version") if isinstance(raw.get("version"), str) else ""
+        if "zorbit_menu" not in raw:
+            if "zorbit_settings" in raw or isinstance(raw.get("menus"), dict):
+                return {"ok": False, "message": f"{name} is a settings file, not a menu. "
+                                                "Import it in Settings > Import and export."}
+            return {"ok": False, "message": f"{name} is not a ZOrbit menu file."}
+        fmt = raw["zorbit_menu"]
+        if isinstance(fmt, int) and not isinstance(fmt, bool) and fmt > menushare.MENU_FORMAT:
+            return {"ok": False, "message": f"{name} was made by a newer ZOrbit{f' ({version})' if version else ''}. "
+                                            "Update ZOrbit to import it."}
+        menus, root = raw.get("menus"), raw.get("menu")
+        if not isinstance(menus, dict) or not menus or not all(isinstance(m, dict) for m in menus.values()) \
+                or root not in menus:
+            return {"ok": False, "message": f"The menu in {name} is not valid."}
+        tags_raw = raw.get("tags") if isinstance(raw.get("tags"), dict) else None
+        if tags_raw is not None and not tags._parse(tags_raw)[0]:
+            tags_raw = None
+        menus_out, root_out, renames = menushare.plan_import(menus, root, cfg if isinstance(cfg, dict) else {})
+        store = tags.TagStore(radiald.tags_path()).load()
+        counts, known = {"tags": 0, "new_tags": 0, "items": 0}, store
+        if tags_raw is not None:
+            counts = store.import_preview(tags_raw)
+            merged = store.snapshot()
+            for k, t in tags._parse(tags_raw)[0].items():
+                merged["tags"].setdefault(k, t)
+            known = tags.TagStore.from_raw(merged)       # the user's tags plus the file's: none reads as unknown
+        problems = self._menu_problems({"menus": menus_out}, known)
+        self._pending_menu_import = {"path": path, "menus": menus, "root": root, "tags": tags_raw}
+        return {"ok": True, "path": path, "version": version, "root": root_out,
+                "title": menus_out[root_out].get("title") or root_out,
+                "menus": [{"id": mid, "title": m.get("title") or mid,
+                           "items": len(m["items"]) if isinstance(m.get("items"), list) else 0}
+                          for mid, m in menus_out.items()],
+                "renames": renames, "tags": counts["tags"], "new_tags": counts["new_tags"],
+                "tagged_items": counts["items"], "missing": menushare.missing_assets(menus_out),
+                "problems": problems}
+
+    def apply_menu_import(self, cfg):
+        """Does what pick_menu_import read: the plan is made again against cfg (the editor may have changed since).
+        The tags the file brings are merged and saved straight away; the menus come back for the editor to add
+        (radial.json is not written: Save does that)."""
+        pend = self._pending_menu_import
+        if not pend:
+            return {"ok": False, "message": "There is nothing to import. Pick the file again."}
+        menus_out, root_out, _ = menushare.plan_import(pend["menus"], pend["root"],
+                                                       cfg if isinstance(cfg, dict) else {})
+        renamed, tags_message = {}, ""
+        if pend["tags"] is not None:
+            res = webapi._STORE.import_tags(pend["tags"], "merge")
+            if res.get("ok"):
+                renamed = res["renamed"]
+                bits = []
+                if res["added"]:
+                    bits.append(f"Added {_plural(res['added'], 'tag')} to yours")
+                if renamed:
+                    n = len(renamed)
+                    bits.append(f"{n if bits else _plural(n, 'tag')} joined a tag of yours with the same name")
+                tags_message = ("; ".join(bits) + ".") if bits else "You already had the tags it uses."
+            else:
+                tags_message = f"The tags were not added: {res.get('error') or 'they could not be imported'}."
+            C.retag({"menus": menus_out}, renamed)
+        problems = self._menu_problems({"menus": menus_out})        # against the tags as they are now
+        self._pending_menu_import = None
+        title = menus_out[root_out].get("title") or root_out
+        subs = len(menus_out) - 1
+        message = f'Added "{title}"' + (f" and its {_plural(subs, 'submenu')}" if subs else "") + " to the editor."
+        return {"ok": True, "menus": menus_out, "root": root_out, "title": title, "problems": problems,
+                "tags_message": tags_message, "message": message}
 
     # --- Studio preferences (not part of the menus; saved straight away) --------------------------
     # mode is "" until Studio decides it at first start (Simple for a fresh install, Full for an existing setup).

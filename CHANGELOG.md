@@ -6,6 +6,10 @@ All notable changes to this project are listed here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Studio: **Export menu...** and **Import menu...** share one menu and its submenus as a small file, with the tags it uses (#67).
+
 ### Fixed
 
 - Studio: a menus file with a brush, alpha, material or texture name that is not text (`null` or a number, from a

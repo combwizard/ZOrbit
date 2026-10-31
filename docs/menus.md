@@ -27,6 +27,21 @@ A new menu's id comes from its title in Studio. **Sculpting** becomes `sculpting
 
 Starter menus ship with ZOrbit: **Brushes** (Q), with submenus **More Brushes** (its slot shows the ClayTubes picture) and **Tools** (masking, symmetry, PolyFrame, LazyMouse and other switches, a **Browser** slot that opens the [browser](browser.md), a **Favourites** slot, and a **SubDivide** submenu with a row of stroke subdivide sizes). **SubDivide** opens from **Tools**, not from **Brushes**. They use only brushes that come with ZBrush. **Swallow hotkey** is off for the starter **Brushes** menu, so ZBrush still sees **Q** and goes to Draw mode as the ring opens. New installs get the **Favourites** slot in **Tools**; existing menus are not changed.
 
+## Share a menu
+
+**Export menu...** in the **Manage** row of the **Menu** tab saves one menu as a small `.json` file you can send to someone. The file is named after the menu, such as `Sculpt menu.json`.
+
+The file holds:
+
+- the menu, every submenu it opens, and the submenus those open;
+- the tags its **Tag** and **Browser** items use, with their labels and colours, and the brushes, alphas, materials and textures that carry them, so a tag fan is not empty on the other PC.
+
+The hotkey, the ring settings and the bridge and browser settings stay behind, and so do the brush, alpha, material and texture files themselves. An icon that is a full path to a file on your PC shows as a problem on the other PC.
+
+**Import menu...**, under **Add menu** at the foot of the **Menus** list, asks for the file and shows what it holds before anything changes: the menu and its submenus, any title or id that is already taken, the tags it brings, and any brushes, alphas, materials or textures this PC does not have. Those still import, and show as missing until you install them.
+
+**Import** adds the menus after your current ones and overwrites nothing. A title that is taken gets a number, such as Sculpt 2, and a taken id gets one too, such as `sculpt_2`. The menus have no hotkey: give one in the **Menu** tab, or open the menu from another one. The menus are an unsaved change, so **Undo** takes them out and **Save** keeps them. The tags are saved straight away and merged with yours, as **Merge tags** does in [Import and export](files.md#import-and-export), and **Undo** leaves them.
+
 ## Item types
 
 Every item does exactly one thing. Besides the action, an item can have a `label` (the text under the slot; if you leave it out, one is made from the action) and an `icon`.

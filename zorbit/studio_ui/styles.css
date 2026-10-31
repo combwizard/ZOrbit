@@ -360,6 +360,7 @@ body.dragging, body.dragging * { cursor: grabbing !important; }
 
 .menus-col { background: var(--bg2); border-right: 1px solid var(--line); display: flex; flex-direction: column; }
 .menus-col .col-head .count { margin-right: auto; }
+.menus-col .import-menu { margin: 0 8px 8px; justify-content: center; }
 .mlist { flex: 1; overflow: auto; padding: 8px; display: flex; flex-direction: column; gap: 2px; }
 .mrow {
   --rowbg: var(--bg2); position: relative; display: flex; align-items: center; gap: 8px; padding: 9px 10px 9px 12px; border-radius: 6px; border-left: 2px solid transparent;

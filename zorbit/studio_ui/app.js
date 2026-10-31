@@ -1453,7 +1453,8 @@ function buildMenusScreen(root) {
   const left = h('aside', { class: 'col menus-col' },
     h('div', { class: 'col-head' }, h('span', { class: 'micro' }, 'Menus'), h('span', { class: 'count' }, '', ), iconBtn('plus', 'Add menu', () => addMenu(), 'accent')),
     listEl,
-    h('button', { class: 'dashed', type: 'button', onclick: () => addMenu() }, icon('plus', 14), 'Add menu'));
+    h('button', { class: 'dashed', type: 'button', onclick: () => addMenu() }, icon('plus', 14), 'Add menu'),
+    h('button', { class: 'btn small import-menu', type: 'button', title: 'Add a menu someone shared with you, from a menu file', onclick: e => ioRun([e.currentTarget], importMenu) }, icon('folder', 12), 'Import menu...'));
   const head = h('div', { class: 'center-head' });
   const stageBox = buildStage();
   const itemsEl = h('div', { class: 'ilist', role: 'listbox', 'aria-label': 'Items in this menu', title: 'Up and Down move through the items. Alt+Up/Down moves the selected item. M moves it to another menu.' });
@@ -2314,6 +2315,7 @@ function buildMenuProps() {
     toggleSwitch(m.fan === true, v => { if (v) m.fan = true; else delete m.fan; commit(); }, 'Fan out when opened from another menu')));
   box.append(sectionTitle('Manage'), h('div', { class: 'btn-row' },
     h('button', { class: 'btn', type: 'button', onclick: () => dupMenu(id) }, icon('copy', 13), 'Duplicate'),
+    h('button', { class: 'btn', type: 'button', title: 'Save this menu and the submenus it opens to a file you can share', onclick: e => ioRun([e.currentTarget], () => exportMenu(id)) }, icon('folder', 13), 'Export menu...'),
     h('button', { class: 'btn danger-o', type: 'button', onclick: () => deleteMenu(id) }, icon('trash', 13), 'Delete menu')));
   return box;
 }
@@ -4975,6 +4977,68 @@ async function importSettings() {
   if (res.config && (res.problems || []).length) bits.push(n(res.problems.length, 'problem', 'problems') + ' to look at.');
   const msg = bits.join(' ') || 'Imported.', tone = res.config && (res.problems || []).length ? 'warn' : 'ok';
   if (res.config) undoToast(msg, { tone, ms: 7000 }); else toast(msg, { tone, ms: 5000 });
+}
+/* ---- share one menu: Export menu... writes a menu and the submenus it opens to a small file, Import menu... adds them next to the current menus */
+async function exportMenu(id) {
+  if (!S.cfg || S.fatal || !S.ready || !S.cfg.menus[id]) return;
+  let res;
+  try { res = await call('export_menu', S.cfg, id); } catch (e) { toast('Could not export: ' + (e.message || e), { tone: 'err' }); return; }
+  if (!res || res.cancelled) return;
+  toast(res.message || (res.ok ? 'Exported the menu' + (res.path ? ' to ' + res.path : '.') : 'The export did not work.'), { tone: res.ok ? 'ok' : 'warn', ms: 5000 });
+}
+async function importMenu() {
+  if (!S.cfg || S.fatal || !S.ready) return;
+  let info;
+  try { info = await call('pick_menu_import', S.cfg); } catch (e) { toast('Could not read the file: ' + (e.message || e), { tone: 'err' }); return; }
+  if (!info || info.cancelled) return;
+  if (!info.ok) { toast(info.message || 'That file could not be imported.', { tone: 'warn', ms: 5000 }); return; }
+  const q = t => '“' + t + '”', n = (v, one, many) => { v = +v || 0; return v + ' ' + (v === 1 ? one : many); };
+  const list = info.menus || [], title = info.title || (list[0] && list[0].title) || 'menu';
+  const subs = list.filter(m => m.id !== info.root).map(m => m.title || m.id);
+  const lines = [];
+  for (const r of info.renames || []) {
+    if (r.title !== r.old_title) lines.push(`${q(r.old_title)} is taken, so it comes in as ${q(r.title)}.`);
+    else if (r.id !== r.old_id && isFull()) lines.push(`The id ${r.old_id} ${S.cfg.menus[r.old_id] ? 'is taken' : 'cannot be used here'}, so it comes in as ${r.id}.`);
+  }
+  const tags = +info.tags || 0, fresh = +info.new_tags || 0;
+  const miss = Object.entries(info.missing || {}).filter(([, v]) => v && v.length).map(([k, v]) => {
+    const names = v.slice(0, 6).join(', ') + (v.length > 6 ? ` and ${v.length - 6} more` : '');
+    return n(v.length, k, k === 'brush' ? 'brushes' : k + 's') + ': ' + names;
+  });
+  const probs = (info.problems || []).map(String), shown = probs.slice(0, 5);
+  const group = (head, items, more) => h('div', { class: 'changes-list' }, h('div', { class: 'chg-group' }, h('div', { class: 'micro' }, head),
+    h('ul', null, items.map(t => h('li', null, t)), more ? h('li', null, more) : null)));
+  const ok = await modal({ title: `Import the menu ${q(title)}?`,
+    body: h('div', { class: 'changes' },
+      h('p', { class: 'modal-path mono' }, info.path || ''),
+      h('p', null, `The file holds the menu ${q(title)}` + (subs.length ? ` and ${n(subs.length, 'submenu', 'submenus')}: ${subs.join(', ')}.` : '.')),
+      lines.length ? h('div', null, lines.map(t => h('p', null, t))) : null,
+      tags ? h('p', null, h('b', null, 'Tags. '), `It brings ${n(tags, 'tag', 'tags')}` + (fresh ? ` (${fresh} not among yours yet). They are added to your tags straight away, and Undo does not take them out.` : ' (you have them all already).')) : null,
+      miss.length ? group('Not found on this PC', miss) : null,
+      miss.length ? h('p', null, 'They still import and show as missing until you install them.') : null,
+      probs.length ? group(n(probs.length, 'problem', 'problems') + ' in the menus', shown.map(p => describeProblem(p).text), probs.length > shown.length ? `and ${probs.length - shown.length} more` : '') : null,
+      h('p', null, 'It comes in with no hotkey. Give it one in the Menu tab, or open it from another menu. Nothing is written until you press Save.')),
+    actions: [{ text: 'Cancel', value: false }, { text: 'Import', value: true, kind: 'primary', focus: true }] });
+  if (!ok) return;
+  let res;
+  try { res = await call('apply_menu_import', S.cfg); } catch (e) { res = { ok: false, message: 'Import failed: ' + (e.message || e) }; }
+  if (tags || (res && res.tags_message)) await loadTags(true);          // the tags may have changed even when the call reports a problem
+  if (!res || !res.ok) { toast((res && (res.message || res.error)) || 'The import did not work.', { tone: 'warn', ms: 5000 }); return; }
+  const add = res.menus || {}, ids = Object.keys(add);
+  if (!ids.length || !add[res.root]) { toast('The file held no menu to add.', { tone: 'warn', ms: 5000 }); return; }
+  const clash = ids.find(k => S.cfg.menus[k]);                          // the editor may have changed while the dialog was open
+  if (clash) { toast(`Nothing was added. The editor already has a menu with the id ${clash}. Try again.`, { tone: 'warn', ms: 6000 }); return; }
+  const bad = normaliseMenus({ menus: add });
+  if (bad) { toast(`Nothing was added. ${bad}`, { tone: 'warn', ms: 6000 }); return; }
+  snapSoon.cancel(); validateSoon.cancel(); pushSnap();                 // files an edit still waiting, so Undo goes back to the state before the import
+  for (const k of ids) S.cfg.menus[k] = add[k];
+  S.menuId = res.root; S.itemIdx = null; S.tab = 'menu';
+  const found = (res.problems || []).map(String);                       // for the new menus only; the validation that commit starts then replaces the list with the whole editor's
+  if (found.length) { const had = new Set(S.problems.map(String)); S.problems = S.problems.concat(found.filter(p => !had.has(p))); S.problemsOpen = true; }
+  commit({ inspector: true }); if (R.head) R.head(); if (R.preview) R.preview();
+  renderProblems();
+  const subN = ids.length - 1, name = (add[res.root].title || res.root);
+  undoToast(`Imported ${q(name)}` + (subN ? ` and ${n(subN, 'submenu', 'submenus')}` : '') + '. Save to keep ' + (ids.length === 1 ? 'it' : 'them') + '.' + (res.tags_message ? ' ' + res.tags_message : ''), { tone: found.length ? 'warn' : 'ok', ms: 7000 });
 }
 function save() {
   if (!S.cfg || S.fatal || !S.ready) return Promise.resolve('skipped');

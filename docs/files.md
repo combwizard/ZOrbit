@@ -16,6 +16,8 @@
   - **Replace tags** swaps your tags for the file's. Your old `tags.json` is kept as `tags.json.bak` first.
 - Tags save straight away, as tag edits always do, so they are not part of **Undo**.
 
+To share one menu, use **Export menu...** in the **Menu** tab. It writes the menu, its submenus and their tags to a small file, which **Import menu...** in the **Menus** list adds to someone else's setup. See [Share a menu](menus.md#share-a-menu).
+
 ## Files and logs
 
 | Path | What |

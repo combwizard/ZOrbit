@@ -23,6 +23,9 @@
    Import and export (Settings): ?importfail (the picked file is refused with a message), ?importcancel (the file dialog is closed),
    ?importtags (the file holds tags only), ?importnotags (the file holds no tags, so there is no Merge or Replace); pick_import reports menus,
    current_menus, tags, current_tags and has_tags like the backend; an import changes the ring accent to cyan so it can be seen.
+   Share one menu (Menu tab > Export menu..., Menus list > Import menu...): export_menu, pick_menu_import and apply_menu_import answer for a made-up
+   file holding "Sculpt" and its submenu "Brushes", placed against the cfg they are given (so a taken id or title is renamed), with 2 tags (1 new)
+   and two missing brushes; ?importcancel closes the dialog, ?importfail refuses the file.
    get_library/get_thumbs answer for every kind (brush, alpha, material, texture); the ?nozbrush/?nolib/?liberr switches apply to all of them.
    get_library gives a "signature" and, when called with the one the page holds, answers {unchanged: true, ...} without items (logged to the console);
    ?libsig=changing makes every call give a new signature, so the full list always comes back.
@@ -94,6 +97,23 @@
     "menu tools: swallow 'no' must be true or false; using true", "menu tools: fan 'yes' must be true or false; using false",
     'browser: must be an object like {"hotkey": "Alt+B"}', 'browser.hotkye: unknown setting (did you mean hotkey?)', "browser.hotkey 'Alt+B+B' not understood", "browser.hotkey 'Q' already used by menu brushes",
     'tags.json could not be read: Expecting value: line 1 column 1 (char 0); tag slots stay empty until it is fixed', 'config could not be read: boom', 'no menu has a hotkey, so nothing can open the ring', 'a message nobody has taught the page'];
+
+  // The sample menu file placed against cfg like the backend's plan_import: a free id and a free title for each menu, links repointed.
+  function menuImportPlan(cfg) {
+    var have = (cfg && cfg.menus) || {}, taken = {}, out = {}, ren = [], map = {}, root = 'sculpt';
+    var file = { sculpt: { title: 'Sculpt', items: [{ brush: 'ClayBuildup' }, { menu: 'brushes' }, { tag: 'rock' }] }, brushes: { title: 'Brushes', items: [{ brush: 'DamStandard' }] } };
+    var titles = Object.keys(have).map(function (k) { return String(have[k].title || '').trim().toLowerCase(); });
+    Object.keys(file).forEach(function (old) {
+      var id = old, n = 2, t = file[old].title, nt = t;
+      while (have[id] || taken[id]) id = old + '_' + n++;
+      n = 2; while (titles.indexOf(nt.toLowerCase()) >= 0) nt = t + ' ' + n++;
+      taken[id] = true; titles.push(nt.toLowerCase()); map[old] = id;
+      out[id] = { title: nt, items: clone(file[old].items) };
+      if (id !== old || nt !== t) ren.push({ old_id: old, id: id, old_title: t, title: nt });
+    });
+    Object.keys(out).forEach(function (id) { out[id].items.forEach(function (it) { if (it.menu) it.menu = map[it.menu]; }); });
+    return { menus: out, root: map[root], renames: ren };
+  }
 
   function validate(cfg) {
     var out = [];
@@ -527,6 +547,33 @@
         var cfg = clone(saved);                                   // a visible change: another accent colour
         cfg.ring = Object.assign({}, cfg.ring); cfg.ring.colors = Object.assign({}, cfg.ring.colors, { accent: '#4dc8e9', lines: '#4dc8e9' });
         return { ok: true, config: cfg, problems: q.has('problems') ? validate(cfg) : [], tags_message: msg };
+      });
+    },
+    // Share one menu: the made-up file holds "Sculpt" and its submenu "Brushes", which the recorded config has too, so the preview shows renames.
+    export_menu: function (cfg, menu_id) {
+      return sleep(150).then(function () {
+        if (q.has('importcancel')) return { ok: false, cancelled: true };
+        var m = cfg && cfg.menus && cfg.menus[menu_id];
+        if (!m) return { ok: false, message: 'There is no menu "' + menu_id + '" to export.' };
+        return { ok: true, path: 'C:\\Users\\you\\Documents\\' + (m.title || menu_id) + ' menu.json', message: 'Saved "' + (m.title || menu_id) + '" to ' + (m.title || menu_id) + ' menu.json (mock).' };
+      });
+    },
+    pick_menu_import: function (cfg) {
+      return sleep(150).then(function () {
+        if (q.has('importcancel')) return { ok: false, cancelled: true };
+        if (q.has('importfail')) return { ok: false, message: 'Sculpt menu.json is not a ZOrbit menu file.' };
+        var plan = menuImportPlan(cfg);
+        return { ok: true, path: 'C:\\Users\\you\\Documents\\Sculpt menu.json', version: '0.12.0', root: plan.root, title: plan.menus[plan.root].title,
+          menus: Object.keys(plan.menus).map(function (id) { return { id: id, title: plan.menus[id].title, items: plan.menus[id].items.length }; }), renames: plan.renames,
+          tags: 2, new_tags: 1, tagged_items: 3, missing: { brush: ['OrbCracks', 'TrimSmooth'] }, problems: [] };
+      });
+    },
+    apply_menu_import: function (cfg) {
+      return sleep(200).then(function () {
+        var plan = menuImportPlan(cfg), st = tagState();
+        if (!hasTag(st, 'rock')) { st.tags.push({ key: 'rock', label: 'Rock', color: tagNextColor(st) }); tagSave(); }
+        return { ok: true, menus: plan.menus, root: plan.root, title: plan.menus[plan.root].title, problems: [], tags_message: 'Added 1 tag to yours; 1 matched a tag you have by name.',
+          message: 'Imported the menu.' };
       });
     },
     preview_tags: function () {                                   // the backend's sample ring; the recorded data has it once regenerated
