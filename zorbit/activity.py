@@ -3,6 +3,7 @@
 %LOCALAPPDATA%\\ZOrbit\\activity.json (written by the app only, rewritten whole on every event):
 {"v": 1, "pid": 4242, "started": 1761800000.1,          # the app that wrote it, and when it started
  "opens": 7, "picks": 3,                                 # counts since that start
+ "elevated_zbrush": false,                               # a ZBrush running as administrator was seen
  "ring": {"at": 1761800123.4, "menu": "brushes"},        # the last root ring opened (submenus do not count)
  "pick": {"at": 1761800125.0, "seq": 3, "menu": "brushes", "kind": "brush", "label": "ClayBuildup",
           "route": "listener", "sent": true, "reason": null,      # route: listener | key | zscript | none
@@ -24,7 +25,7 @@ class Activity:
         self._log = log
         self._warned = False
         self.data = {"v": VERSION, "pid": os.getpid(), "started": time.time(), "opens": 0, "picks": 0,
-                     "ring": None, "pick": None}
+                     "elevated_zbrush": False, "ring": None, "pick": None}
         # Nothing is written until the first event: the Studio builds a radiald.App for its ring previews too,
         # and a fresh record from there must not wipe what the real app has recorded.
 
@@ -45,6 +46,12 @@ class Activity:
                              "kind": getattr(item, "kind", None), "label": getattr(item, "label", None),
                              "route": route, "sent": bool(sent), "reason": reason, "source": source, "ack": None}
         self._write()
+
+    def note_elevated(self, elevated: bool) -> None:
+        """A ZBrush running as administrator was seen (or no longer is): the app cannot read it or its keys."""
+        if bool(elevated) != self.data["elevated_zbrush"]:
+            self.data["elevated_zbrush"] = bool(elevated)
+            self._write()
 
     def note_ack(self, seq: int, result: str) -> None:
         """The message route's outcome for pick seq: 'picked_up' (request.json vanished) or 'timeout'."""

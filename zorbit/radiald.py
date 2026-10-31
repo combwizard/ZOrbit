@@ -74,6 +74,7 @@ COPYDATA_PICK, COPYDATA_SHOW, COPYDATA_QUIT = 1, 10, 12   # WM_COPYDATA ids: pop
 POPOUT_CLASS = "ZOrbitPopoutCtl"      # the popout's message-only control window
 POPOUT_START_S = 15                   # a popout asked to show gets this long to appear before we ask again
 THUMB_PX = 128                        # thumbnail cache size, shared with the Studio
+STUCK_KEY_S = 30                      # a swallowed hotkey the hook never saw go up is let go after this long
 
 
 def tags_path():
@@ -133,6 +134,10 @@ class App:
         self._config_error = None       # why the last load of radial.json failed, else None
         self._have_cfg = False          # self.cfg came from a radial.json that loaded (not the empty stand-in)
         self._unreadable = set()        # pids of foreground windows whose process could not be read, logged
+        self._elevated = {}             # pid of a running ZBrush -> True when it looks elevated (checked every 3 s)
+        self._token_check = None        # whether process_elevated() can be trusted here (tested on our own process)
+        self._listener_skipped = set()  # pids whose mismatch with listener.json was logged
+        self._stuck = {}                # "held" / "browser" -> when the tick first saw that key held with no ring
         self._legacy_scan = (0.0, False)    # (when, whether a ZBrush 2022-2025 is installed)
         self._target_misses = 0
         self.usage = usage.Usage()
@@ -193,7 +198,25 @@ class App:
             + f"; bridge mode={cfg.bridge_mode} key={cfg.bridge_key.text if cfg.bridge_key else None}"
             + f"; browser hotkey={cfg.browser_key.text if cfg.browser_key else None}")
         self._prefetch()
+        self._prune_icons()
         self._schedule_prewarm()
+
+    def _prune_icons(self):
+        """Drops cached icons of items no menu uses any more (best effort: one missed only costs a rebuild)."""
+        if assets is None or not self._icons:
+            return
+        used = set()
+        for m in self.cfg.menus.values():
+            for it in m.items:
+                used.add(self._icon_id(it))
+                if it.kind == "tag":
+                    tm = self.expander.tag_menu(it.data["tag"])
+                    if tm is not None:
+                        used.update(self._icon_id(i) for i in tm.items)
+            if usage.auto_count(m):
+                used.update(("brush", n) for n in self.usage.slots(m) if n)
+        for key in [k for k in self._icons if k[:2] not in used]:
+            del self._icons[key]
 
     def _prefetch(self):
         if assets is None:
@@ -228,40 +251,58 @@ class App:
             return "texture"
         return "alpha" if ext in assets.EXTS["alpha"] else "brush"
 
-    def icon_for(self, item):
-        if assets is None:
-            return None
-        size = THUMB_PX
+    def _icon_id(self, item):
+        """(kind, src) of the picture an item shows: its icon path, else the asset it picks. None for neither."""
         src = item.icon
         kind = self._icon_kind(src) if src else "brush"
         if not src:
             acts = item.data["steps"] if item.kind == "steps" else [item.data]
             kind, src = next((g for g in map(C.asset_of, acts) if g), ("brush", ""))
-        if not src:
+        return (kind, src) if src else None
+
+    def icon_for(self, item):
+        if assets is None:
             return None
-        key = (kind, src, size)
-        if key not in self._icons:
-            im = None
+        ident = self._icon_id(item)
+        if ident is None:
+            return None
+        kind, src = ident
+        size = THUMB_PX
+        try:
+            mtime = os.stat(src).st_mtime_ns if os.path.isfile(src) else None   # a replaced file shows anew
+        except OSError:
+            mtime = None
+        key = (kind, src, size, assets.generation, mtime)     # a rebuilt asset index shows anew too
+        im = self._icons.get(key)
+        if im is None:
             if src.lower().endswith(".png") and os.path.isfile(src):
                 from PIL import Image
                 im = Image.open(src).convert("RGBA")
             else:
                 im = assets.thumbnail(kind, src, size)
-            self._icons[key] = im
-        return self._icons[key]
+            if im is not None:                 # a miss is not kept: the file may turn up later
+                for old in [k for k in self._icons if k[:3] == key[:3]]:
+                    del self._icons[old]       # the older versions of this picture
+                self._icons[key] = im
+        return im
 
     # --- target detection ------------------------------------------------------------------------
-    def target_in_front(self) -> bool:
-        fg = W.GetForegroundWindow()
-        if not fg:
-            return False
-        pid = W.window_pid(fg)
+    def _exe_of(self, pid):
+        """Lowercased exe name of a process ('' when it cannot be read), cached."""
         exe = self._pid_exe.get(pid)
         if exe is None:
             exe = os.path.basename(W.process_image(pid)).lower()
             if len(self._pid_exe) > 256:
                 self._pid_exe.clear()
             self._pid_exe[pid] = exe
+        return exe
+
+    def target_in_front(self) -> bool:
+        fg = W.GetForegroundWindow()
+        if not fg:
+            return False
+        pid = W.window_pid(fg)
+        exe = self._exe_of(pid)
         if not exe and pid not in self._unreadable and len(self._unreadable) < 20:
             self._unreadable.add(pid)
             log(f"foreground window's process could not be read (is ZBrush running as administrator?); "
@@ -351,6 +392,36 @@ class App:
                 return True
         return False
 
+    def _held_down(self) -> bool:
+        return self.held_vk is not None and W.key_down(self.held_vk)
+
+    def _check_stuck_keys(self):
+        """The hook is what clears held_vk and _browser_vk. If it missed a key-up (Windows dropped it, or another
+        program ate the key) the hotkey would stay dead, so this tick covers for it. A key the hook swallows never
+        shows in GetAsyncKeyState, so those can only be let go after STUCK_KEY_S with no ring open."""
+        vk = self.held_vk
+        if vk is not None and not self.held_swallow and not W.key_down(vk):
+            self._stuck["up"] = self._stuck.get("up", 0) + 1     # twice in a row: the key state may lag the hook
+            if self._stuck["up"] >= 2:
+                self.held_vk = None
+                log(f"hotkey (vk {vk:#x}) is up but the hook never saw it; released")
+                W.PostMessageW(self.ctrl, WM_APP_KEYUP, vk, 0)
+        else:
+            self._stuck.pop("up", None)
+        now = time.monotonic()
+        for name, on in (("held", self.held_vk is not None and self.ring is None),
+                         ("browser", self._browser_vk is not None)):
+            if not on:
+                self._stuck.pop(name, None)
+            elif now - self._stuck.setdefault(name, now) >= STUCK_KEY_S:
+                del self._stuck[name]
+                log(f"{name} hotkey still down after {STUCK_KEY_S} s and the hook never saw it go up; released")
+                if name == "held":
+                    vk, self.held_vk = self.held_vk, None
+                    W.PostMessageW(self.ctrl, WM_APP_KEYUP, vk, 0)
+                else:
+                    self._browser_vk = None
+
     def install_hook(self):
         if self.hook:
             W.UnhookWindowsHookEx(self.hook)
@@ -393,9 +464,11 @@ class App:
                     self._watch_target()
                 elif wparam == TIMER_ACK:
                     self._check_ack()
-                elif wparam == TIMER_REHOOK and self.ring is None and self.held_vk is None:
+                elif wparam == TIMER_REHOOK and self.ring is None and not self._held_down():
+                    log("hook re-installed")
                     self.install_hook()         # Windows silently drops hooks that ever timed out
                 elif wparam == TIMER_CONFIG:
+                    self._check_stuck_keys()
                     self.load_config()          # a new or changed hotkey must work before any ring opens
                 elif wparam == TIMER_BROWSER_PICK:
                     self._browser_pick_tick()
@@ -692,7 +765,7 @@ class App:
         ins = self._popout_zb[1] if self._popout_zb else None
         legacy = ins is not None and not ins["python"]
         in_front = self.target_in_front()
-        if not (in_front or (not legacy and self._listener() is not None)
+        if not (in_front or (not legacy and self._listener(self._browser_zb_pid()) is not None)
                 or time.time() >= self._browser_pick_deadline):
             return
         W.KillTimer(self.ctrl, TIMER_BROWSER_PICK)
@@ -749,32 +822,76 @@ class App:
             self._legacy_scan = (time.monotonic(), found)
         return found
 
-    def _listener(self):
+    def _listener(self, pid):
+        """The verified listener window of the ZBrush with process id pid (the one the pick is for), else None.
+        listener.json holds whichever ZBrush wrote it last, so with two running it can be the wrong one."""
         try:
             with open(LISTENER_FILE, encoding="utf-8") as f:
                 info = json.load(f)
             hwnd = W.w.HWND(int(info["hwnd"]))
-            if info.get("verified") and W.IsWindow(hwnd):
-                return hwnd
+            owner = int(info["pid"])
+            if not (info.get("verified") and W.IsWindow(hwnd)):
+                return None
         except (OSError, ValueError, KeyError, TypeError):
-            pass
+            return None
+        if owner == pid and self._exe_of(owner) == self.target_exe:
+            return hwnd
+        if pid not in self._listener_skipped and len(self._listener_skipped) < 20:
+            self._listener_skipped.add(pid)
+            if owner != pid:
+                log(f"listener.json is from pid {owner}, not the ZBrush this pick is for (pid {pid}); "
+                    f"using the bridge key")
+            else:
+                log(f"listener.json's process (pid {owner}) is {self._exe_of(owner) or 'unreadable'}, "
+                    f"not {self.target_exe}; using the bridge key")
         return None
+
+    @staticmethod
+    def _front_pid():
+        fg = W.GetForegroundWindow()
+        return W.window_pid(fg) if fg else 0
+
+    def _browser_zb_pid(self):
+        """Process id of the ZBrush the browser was opened from (0 when unknown or gone)."""
+        zb = self._popout_zb[0] if self._popout_zb else 0
+        return W.window_pid(zb) if zb and W.IsWindow(W.w.HWND(zb)) else 0
+
+    def _drop_request(self, seq):
+        """A pick nobody will carry out must not wait for the Apply button or the bridge key press that comes
+        later: that would apply it long after the user asked."""
+        for p in (REQUEST_FILE, zscript_bridge.REQUEST_TXT):
+            try:
+                os.remove(p)
+            except FileNotFoundError:
+                pass
+            except OSError as e:
+                log(f"pick #{seq}: could not remove {os.path.basename(p)}: {e!r}")
+        log(f"pick #{seq} not delivered; request removed")
 
     def send(self, item, install=None, source="ring"):
         """install: the ZBrush installation to hand off to, when it is not the one in front right now (a pick
         from the browser arrives after the focus has moved). source: "ring" or "browser", for activity.json."""
         ins = install if install is not None else self.target_install()
         legacy = ins if ins is not None and not ins["python"] else None
-        seq = self._write_request(item, legacy)
+        try:
+            seq = self._write_request(item, legacy)
+        except OSError as e:
+            reason = "could not write the request file"
+            log(f"pick #{self._seq} '{item.label}': {reason}: {e!r}; nothing sent")
+            self.activity.note_pick(self._seq, item, "none", False, source, self._activity_menu, reason)
+            return
         mode = self.cfg.bridge_mode
         if legacy is not None:
             # A listener can only be a ZBrush 2026+ (perhaps running as well), never the one in front.
             log(f"pick #{seq} '{item.label}': {legacy['name']} in front, so the ZScript bridge (bridge key)")
             sent, reason = self.press_bridge_key(seq)
             self.activity.note_pick(seq, item, "zscript", sent, source, self._activity_menu, reason)
+            if not sent:
+                self._drop_request(seq)
             W.nudge_mouse()
             return
-        listener = self._listener() if mode in ("auto", "message") else None
+        zb_pid = self._browser_zb_pid() if source == "browser" else self._front_pid()
+        listener = self._listener(zb_pid) if mode in ("auto", "message") else None
         if listener is not None:
             ok = W.PostMessageW(listener, WM_APP_PICK, seq, 0)
             log(f"pick #{seq} '{item.label}' -> listener {int(listener.value)} (posted={bool(ok)})")
@@ -789,9 +906,12 @@ class App:
             log(f"pick #{seq}: no live listener in ZBrush and bridge mode is 'message'; nothing sent")
             self.activity.note_pick(seq, item, "none", False, source, self._activity_menu,
                                     "no live listener in ZBrush and bridge mode is 'message'")
+            self._drop_request(seq)
             return
         sent, reason = self.press_bridge_key(seq)
         self.activity.note_pick(seq, item, "key", sent, source, self._activity_menu, reason)
+        if not sent:
+            self._drop_request(seq)
         W.nudge_mouse()
 
     def _check_ack(self):
@@ -808,7 +928,7 @@ class App:
         now = time.time()
         if now < deadline:
             return
-        if W.key_down(W.VK_LBUTTON) and now < give_up:
+        if W.primary_down() and now < give_up:
             # The listener holds a pick back while the left button is down, and a bridge key pressed now would apply
             # it mid-stroke: wait until the button is up, then give the listener ACK_WAIT_S more.
             self._ack[1] = now + ACK_WAIT_S
@@ -823,6 +943,8 @@ class App:
             log(f"pick #{seq}: listener did not pick it up in 0.5 s; falling back to the bridge key")
             sent, reason = self.press_bridge_key(seq)
             self.activity.note_route(seq, "key", sent, reason)
+            if not sent:
+                self._drop_request(seq)
         else:
             log(f"pick #{seq}: listener did not pick it up in 0.5 s")
 
@@ -847,7 +969,28 @@ class App:
         return True, None
 
     # --- lifetime --------------------------------------------------------------------------------
+    def _check_elevated(self):
+        """A ZBrush running as administrator hides its process and its keys from this (normal) app, so hotkeys
+        cannot work there. Looks at every ZBrush process, logs each once, and tells activity.json."""
+        pids = W.pids_named(self.target_exe)
+        if self._token_check is None:
+            # Our own token must read as "not elevated": if even that fails, the token call cannot be trusted and
+            # only an unreadable process image counts, so a normal ZBrush is never reported by mistake.
+            self._token_check = W.process_elevated(os.getpid()) is False
+        for pid in pids:
+            if pid not in self._elevated:
+                # unreadable image or token: a normal process of this user answers both, an elevated one does not
+                elevated = W.process_elevated(pid) if self._token_check else False
+                self._elevated[pid] = not W.process_image(pid) or elevated is not False
+                if self._elevated[pid]:
+                    log(f"{self.target_exe} (pid {pid}) could not be read, so it is probably running as "
+                        f"administrator; hotkeys ignored in it (start ZBrush without 'Run as administrator')")
+        for pid in [p for p in self._elevated if p not in pids]:
+            del self._elevated[pid]
+        self.activity.note_elevated(any(self._elevated.values()))
+
     def _watch_target(self):
+        self._check_elevated()
         if not self.exit_with_target:
             return
         if self.target_exe in W.running_exe_names():
@@ -862,9 +1005,10 @@ class App:
         os.makedirs(DATA_DIR, exist_ok=True)
         _trim_log()
         mutex = W.CreateMutexW(None, False, MUTEX_NAME)
+        already = ctypes.get_last_error() == W.ERROR_ALREADY_EXISTS     # read now: later calls overwrite it
         created = W.process_created(os.getpid())
         started = f"{time.time() - created:.2f} s after its process was created" if created else "?"
-        if ctypes.get_last_error() == W.ERROR_ALREADY_EXISTS:
+        if already:
             log(f"another instance is already running; exiting ({started}; started by {W.launch_chain()})")
             return 0
         W.make_dpi_aware()

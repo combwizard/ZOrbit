@@ -11,6 +11,7 @@ import os
 user32 = ctypes.WinDLL("user32", use_last_error=True)
 gdi32 = ctypes.WinDLL("gdi32", use_last_error=True)
 kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+advapi32 = ctypes.WinDLL("advapi32", use_last_error=True)
 try:
     shcore = ctypes.WinDLL("shcore", use_last_error=True)
 except OSError:
@@ -111,6 +112,7 @@ SetWindowsHookExW = _sig(user32, "SetWindowsHookExW", w.HHOOK, ctypes.c_int, HOO
 UnhookWindowsHookEx = _sig(user32, "UnhookWindowsHookEx", w.BOOL, w.HHOOK)
 CallNextHookEx = _sig(user32, "CallNextHookEx", LRESULT, w.HHOOK, ctypes.c_int, w.WPARAM, w.LPARAM)
 GetAsyncKeyState = _sig(user32, "GetAsyncKeyState", ctypes.c_short, ctypes.c_int)
+GetSystemMetrics = _sig(user32, "GetSystemMetrics", ctypes.c_int, ctypes.c_int)
 GetCursorPos = _sig(user32, "GetCursorPos", w.BOOL, ctypes.POINTER(w.POINT))
 GetForegroundWindow = _sig(user32, "GetForegroundWindow", w.HWND)
 GetWindowThreadProcessId = _sig(user32, "GetWindowThreadProcessId", w.DWORD, w.HWND, ctypes.POINTER(w.DWORD))
@@ -149,6 +151,11 @@ Process32NextW = _sig(kernel32, "Process32NextW", w.BOOL, w.HANDLE, ctypes.POINT
 GetCurrentThreadId = _sig(kernel32, "GetCurrentThreadId", w.DWORD)
 GetProcessTimes = _sig(kernel32, "GetProcessTimes", w.BOOL, w.HANDLE, *[ctypes.POINTER(w.FILETIME)] * 4)
 
+# --- advapi32 ------------------------------------------------------------------------------------
+OpenProcessToken = _sig(advapi32, "OpenProcessToken", w.BOOL, w.HANDLE, w.DWORD, ctypes.POINTER(w.HANDLE))
+GetTokenInformation = _sig(advapi32, "GetTokenInformation", w.BOOL, w.HANDLE, ctypes.c_int, ctypes.c_void_p,
+                           w.DWORD, ctypes.POINTER(w.DWORD))
+
 if shcore is not None:
     GetDpiForMonitor = _sig(shcore, "GetDpiForMonitor", ctypes.c_long, w.HMONITOR, ctypes.c_int,
                             ctypes.POINTER(w.UINT), ctypes.POINTER(w.UINT))
@@ -182,10 +189,13 @@ KEYEVENTF_KEYUP = 0x2
 MOUSEEVENTF_MOVE = 0x1
 ERROR_ALREADY_EXISTS = 183
 PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+TOKEN_QUERY = 0x8
+TokenElevation = 20
+SM_SWAPBUTTON = 23
 TH32CS_SNAPPROCESS = 0x2
 INVALID_HANDLE_VALUE = ctypes.c_void_p(-1).value
 
-VK_SHIFT, VK_CONTROL, VK_MENU, VK_ESCAPE, VK_LBUTTON = 0x10, 0x11, 0x12, 0x1B, 0x01
+VK_SHIFT, VK_CONTROL, VK_MENU, VK_ESCAPE, VK_LBUTTON, VK_RBUTTON = 0x10, 0x11, 0x12, 0x1B, 0x01, 0x02
 VK_LWIN, VK_RWIN = 0x5B, 0x5C
 VK_MENU_MASK = 0xE8        # unassigned vk: injected to stop a swallowed Alt combo opening the window menu
 MODIFIER_SIDES = {VK_SHIFT: (0xA0, 0xA1), VK_CONTROL: (0xA2, 0xA3), VK_MENU: (0xA4, 0xA5)}
@@ -195,6 +205,12 @@ MODIFIER_VKS = {0x10, 0x11, 0x12, 0xA0, 0xA1, 0xA2, 0xA3, 0xA4, 0xA5, VK_LWIN, V
 # --- helpers -------------------------------------------------------------------------------------
 def key_down(vk: int) -> bool:
     return bool(GetAsyncKeyState(vk) & 0x8000)
+
+
+def primary_down() -> bool:
+    """The primary mouse button (the one that strokes) is down. GetAsyncKeyState reads the physical buttons, so
+    with the buttons swapped in Windows' mouse settings the primary one is VK_RBUTTON."""
+    return key_down(VK_RBUTTON if GetSystemMetrics(SM_SWAPBUTTON) else VK_LBUTTON)
 
 
 def modifier_down(vk: int) -> bool:
@@ -235,6 +251,28 @@ def process_image(pid: int) -> str:
         buf = ctypes.create_unicode_buffer(1024)
         n = w.DWORD(1024)
         return buf.value if QueryFullProcessImageNameW(h, 0, buf, ctypes.byref(n)) else ""
+    finally:
+        CloseHandle(h)
+
+
+def process_elevated(pid: int) -> bool | None:
+    """Whether the process runs elevated (as administrator): True or False, or None when that cannot be read.
+    From a normal process the token of an elevated one cannot be opened, so None is the likely answer for it."""
+    h = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
+    if not h:
+        return None
+    try:
+        tok = w.HANDLE()
+        if not OpenProcessToken(h, TOKEN_QUERY, ctypes.byref(tok)):
+            return None
+        try:
+            elevated, n = w.DWORD(), w.DWORD()
+            if not GetTokenInformation(tok, TokenElevation, ctypes.byref(elevated), ctypes.sizeof(elevated),
+                                       ctypes.byref(n)):
+                return None
+            return bool(elevated.value)
+        finally:
+            CloseHandle(tok)
     finally:
         CloseHandle(h)
 

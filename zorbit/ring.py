@@ -39,6 +39,7 @@ import ctypes
 import math
 import os
 import time
+import traceback
 
 from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageFont
 
@@ -232,8 +233,8 @@ def _wndproc(hwnd, msg, wparam, lparam):
             r = ring._on_message(msg, wparam, lparam)
             if r is not None:
                 return r
-        except Exception as e:                    # never let an exception unwind into Windows
-            ring._log(f"ring error: {e!r}")
+        except Exception:                         # never let an exception unwind into Windows
+            ring._log("ring error:\n" + traceback.format_exc())
             ring._finish(None, "error")
             return 0
     return W.DefWindowProcW(hwnd, msg, wparam, lparam)
@@ -365,13 +366,25 @@ class Ring:
         if not self.hwnd:
             raise ctypes.WinError(ctypes.get_last_error())
         _instances[int(self.hwnd)] = self
-        if _winmm is not None:
-            _winmm.timeBeginPeriod(1)              # 10 ms timer ticks really are 10 ms while open
-        self._render(self.t0)
-        W.ShowWindow(self.hwnd, W.SW_SHOWNOACTIVATE)
-        W.SetWindowPos(self.hwnd, W.HWND_TOPMOST, 0, 0, 0, 0,
-                       W.SWP_NOMOVE | W.SWP_NOSIZE | W.SWP_NOACTIVATE | W.SWP_SHOWWINDOW)
-        W.SetTimer(self.hwnd, TIMER_TICK, 10, None)
+        period = False
+        try:
+            if _winmm is not None:
+                _winmm.timeBeginPeriod(1)          # 10 ms timer ticks really are 10 ms while open
+                period = True
+            self._render(self.t0)
+            W.ShowWindow(self.hwnd, W.SW_SHOWNOACTIVATE)
+            W.SetWindowPos(self.hwnd, W.HWND_TOPMOST, 0, 0, 0, 0,
+                           W.SWP_NOMOVE | W.SWP_NOSIZE | W.SWP_NOACTIVATE | W.SWP_SHOWWINDOW)
+            W.SetTimer(self.hwnd, TIMER_TICK, 10, None)
+        except Exception:                          # no half-shown ring left on screen, and no leaked handles
+            self.done = True
+            hwnd, self.hwnd = self.hwnd, None
+            _instances.pop(int(hwnd), None)
+            W.DestroyWindow(hwnd)
+            if period:
+                _winmm.timeEndPeriod(1)
+            self._free_dib()
+            raise
         moved = f", centred at {self.cs} to fit the screen" if self.cs != (x, y) else ""
         self._log(f"ring '{self.menu.id}' shown at ({x},{y}) mode={self.mode} anim={self.anim_name} "
                   f"scale={scale:.2f}{moved}")
@@ -390,8 +403,8 @@ class Ring:
             self._stay_open("released inside a fan")
         elif self.nested and node is None:
             self._stay_open("released in the centre of a submenu")
-        elif not self.nested and (time.time() - self.t0) * 1000 < self.cfg["tap_ms"]:
-            self._stay_open("tap")
+        elif not self.nested and node is None and (time.time() - self.t0) * 1000 < self.cfg["tap_ms"]:
+            self._stay_open("tap")                 # a release over a slot picks it, however fast
         else:
             self._finish(node, "released")
 
@@ -957,7 +970,8 @@ class Ring:
                 _rgba(self.c_hi, 0.35) if it.kind == "menu" else _rgba(self.c_lines, 0.30))
             d.line((cx + ux * r0, cy + uy * r0, cx + ux * r1, cy + uy * r1), fill=colr, width=lw)
         title = " ".join(self.menu.title.upper())                 # letter-spaced caps
-        hint = "release to pick" if self.mode == "hold" else "click to cancel"
+        hint = ("move into the ring" if not self._armed
+                else "release to pick" if self.mode == "hold" else "click to cancel")
         for text, dy, colr in ((title, 18, _rgba(self.c_accent, 0.85)), (hint, 30, (255, 255, 255, 56))):
             l, t, r_, b = d.textbbox((0, 0), text, font=self.f_title)
             d.text((cx - (r_ - l) / 2 - l, cy + dy * self.scale * s - (b - t) / 2 - t), text, font=self.f_title,
@@ -991,7 +1005,7 @@ class Ring:
         """A fresh canvas holding the invisible hit surface of the open fans and the ring's static layer
         (which fades in over the first 100 ms)."""
         fading = self.anim["dur"] > 0 and el < 100
-        key = (self.mode, tuple(self.open), self.size)
+        key = (self.mode, tuple(self.open), self.size, self._armed)
         if not fading and self._base_cache is not None and self._base_cache[0] == key:
             return self._base_cache[1].copy()
         canvas = Image.new("RGBA", self.size, (0, 0, 0, 0))
@@ -1249,7 +1263,7 @@ class Ring:
         path, how = self._hit(lx, ly)
         over = how in ("disc", "wedge") or math.hypot(lx - self.centre[0], ly - self.centre[1]) <= (
             self.R + self.slot * 0.62 + 6 * self.scale)
-        if self.mode == "click" and not over and (W.key_down(W.VK_LBUTTON) or W.key_down(0x02)):
+        if self.mode == "click" and not over and (W.key_down(W.VK_LBUTTON) or W.key_down(W.VK_RBUTTON)):
             self._finish(None, "clicked outside")
             return
         if not self._armed:
@@ -1258,14 +1272,17 @@ class Ring:
             # every slot.
             self._armed = how not in ("disc", "wedge") and math.hypot(
                 lx - self.centre[0], ly - self.centre[1]) < self.flick_r
+            if self._armed:
+                self._static_cache = None          # the hint changes
         if self._armed and self._flick_or_hand_off(lx, ly, path, how):
             return
-        self._update_open(path, how, now)
+        if self._armed:
+            self._update_open(path, how, now)
         hover = path if how in ("disc", "sector") else None
         if hover != self.hover:
             self.hover = hover
             self._apply_hover(now)
-        key = (self.mode, self.hover, tuple(self.open))
+        key = (self.mode, self.hover, tuple(self.open), self._armed)
         if self._animating(now) or key != self._last_key:
             self._last_key = key
             self._render(now)

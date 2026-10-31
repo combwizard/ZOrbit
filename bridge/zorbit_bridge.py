@@ -48,7 +48,9 @@ SELECT_TRIES = 25                 # an asset just loaded: look for its button ev
 # plugin selects and loads alphas, materials and textures the same way.
 ASSETS = {"brush": ("Brush", "Brush:Load Brush"), "alpha": ("Alpha", "Alpha:Import"),
           "material": ("Material", "Material:Load"), "texture": ("Texture", "Texture:Import")}
-VK_LBUTTON = 0x01
+VK_LBUTTON, VK_RBUTTON = 0x01, 0x02
+SM_SWAPBUTTON = 23
+REQUEST_MAX_AGE_S = 10            # a request older than this is stale (its pick never went out): not carried out
 
 
 def log(msg: str) -> None:
@@ -99,11 +101,18 @@ IsWindow = _sig(user32, "IsWindow", w.BOOL, w.HWND)
 SetTimer = _sig(user32, "SetTimer", ctypes.c_size_t, w.HWND, ctypes.c_size_t, w.UINT, ctypes.c_void_p)
 KillTimer = _sig(user32, "KillTimer", w.BOOL, w.HWND, ctypes.c_size_t)
 GetAsyncKeyState = _sig(user32, "GetAsyncKeyState", ctypes.c_short, ctypes.c_int)
+GetSystemMetrics = _sig(user32, "GetSystemMetrics", ctypes.c_int, ctypes.c_int)
 GetModuleHandleW = _sig(kernel32, "GetModuleHandleW", w.HMODULE, w.LPCWSTR)
 GetCurrentThreadId = _sig(kernel32, "GetCurrentThreadId", w.DWORD)
 OpenMutexW = _sig(kernel32, "OpenMutexW", w.HANDLE, w.DWORD, w.BOOL, w.LPCWSTR)
 CloseHandle = _sig(kernel32, "CloseHandle", w.BOOL, w.HANDLE)
 HWND_MESSAGE = w.HWND(-3)
+
+
+def primary_down() -> bool:
+    """The primary mouse button (the one that strokes) is down. GetAsyncKeyState reads the physical buttons, so
+    with the buttons swapped in Windows' mouse settings the primary one is VK_RBUTTON."""
+    return bool(GetAsyncKeyState(VK_RBUTTON if GetSystemMetrics(SM_SWAPBUTTON) else VK_LBUTTON) & 0x8000)
 
 
 # --- carrying out a pick -------------------------------------------------------------------------
@@ -156,7 +165,7 @@ def _do_action(a: dict) -> str:
 
 def apply_request(sender: str = "") -> None:
     """Button callback and listener entry point: carry out request.json, then delete it."""
-    if (not str(sender or "").startswith("listener") and GetAsyncKeyState(VK_LBUTTON) & 0x8000
+    if (not str(sender or "").startswith("listener") and primary_down()
             and S.hwnd and IsWindow(S.hwnd)):
         SetTimer(S.hwnd, TIMER_RETRY, 40, None)           # the bridge key mid-stroke: wait like a listener pick does
         log(f"apply ({sender or 'button'}): the left mouse button is down; waiting for the stroke to end")
@@ -178,6 +187,13 @@ def apply_request(sender: str = "") -> None:
             os.remove(REQUEST_FILE)
         except OSError:
             pass
+        return
+    try:
+        age = time.time() - float(req.get("time"))
+    except (TypeError, ValueError):
+        age = 0.0                                         # no time in it: carry it out
+    if age > REQUEST_MAX_AGE_S:
+        log(f"apply ({sender or 'button'}): request #{req.get('id')} is {age:.0f} s old; ignored")
         return
     S.select_pending = None                               # a newer pick wins over an item still waiting to be selected
     if S.hwnd and IsWindow(S.hwnd):
@@ -214,7 +230,7 @@ def _select_pending(hwnd):
         KillTimer(hwnd, TIMER_SELECT)
         return
     path, tries = pend
-    if GetAsyncKeyState(VK_LBUTTON) & 0x8000:
+    if primary_down():
         return                                            # a stroke: wait, without using up a try
     if zbc.exists(path):
         try:
@@ -239,13 +255,13 @@ def _select_pending(hwnd):
 def _wndproc(hwnd, msg, wparam, lparam):
     try:
         if msg == WM_APP_PICK:
-            if GetAsyncKeyState(VK_LBUTTON) & 0x8000:      # never switch tools in the middle of a stroke
+            if primary_down():                             # never switch tools in the middle of a stroke
                 SetTimer(hwnd, TIMER_RETRY, 40, None)
             else:
                 apply_request("listener")
             return 0
         if msg == WM_TIMER and wparam == TIMER_RETRY:
-            if not GetAsyncKeyState(VK_LBUTTON) & 0x8000:
+            if not primary_down():
                 KillTimer(hwnd, TIMER_RETRY)
                 apply_request("listener, after stroke")
             return 0

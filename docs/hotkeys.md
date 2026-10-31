@@ -24,7 +24,7 @@ There are two ways to pick, and the same hotkey does both.
 
 **Hold and release.** Hold the hotkey, move the cursor toward a slot, and release. The slot under the cursor is picked. If the cursor is in the middle (the dead zone) when you release, nothing is picked and the ring closes.
 
-**Tap and click.** Tap the hotkey quickly (shorter than the **tap time**, 250 ms by default). The ring stays open. Move to a slot and click it. The middle of the ring, a right-click, **Esc**, a click outside the ring, or the auto-close timer all cancel without picking.
+**Tap and click.** Tap the hotkey quickly (shorter than the **tap time**, 250 ms by default) with the cursor still in the middle of the ring. The ring stays open. Move to a slot and click it. If the cursor is already over a slot when you let go, that slot is picked, however fast the tap. The middle of the ring, a right-click, **Esc**, a click outside the ring, or the auto-close timer all cancel without picking.
 
 **Flick.** In either mode, move the cursor out past a slot's outer edge and that slot is picked straight away. You don't have to release the hotkey or click. Press the hotkey, flick toward a slot, and it's done. Turn this off with **Flick to pick** in Settings (`"flick": false`). With flicking on, moving out of the ring always picks something, so a click outside the ring can no longer cancel. Use the middle of the ring, a right-click or **Esc** instead.
 
@@ -50,6 +50,6 @@ Notes:
 - A slot is chosen by the *direction* of the cursor from the centre, not by hitting the icon. You can point toward a slot and release without moving far. Within the **dead zone** radius no slot is chosen. Each slot covers at most a quarter of the circle, so in a ring with one to three slots, pointing away from all of them chooses nothing.
 - The slot under the cursor grows slightly, gets an accent ring, and its label changes colour.
 - The ring never takes keyboard focus, so ZBrush keeps working normally behind it.
-- If the cursor is near a screen edge, the ring is moved to stay fully on screen.
+- If the cursor is near a screen edge, the ring is moved to stay fully on screen. Until the cursor has moved into the ring, nothing is picked or opened and the hint says so.
 - With **Flick to pick** off, a click outside the ring cancels it, but that click also reaches ZBrush underneath, so it can land a stroke or press a button. **Esc** or a right-click is the safer way to cancel.
 - A menu hotkey is swallowed in ZBrush's own text fields too, so a plain letter such as **Q** cannot be typed there while a menu uses it. Pick a key you do not type in ZBrush (see [Pressing the hotkey does nothing](troubleshooting.md#pressing-the-hotkey-does-nothing)).

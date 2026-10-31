@@ -4,6 +4,33 @@ All notable changes to this project are listed here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+
+- App: a second ZOrbit instance is detected reliably again (the check could be lost to another Windows call).
+- App: a hotkey whose key-up the app missed (after Windows dropped the keyboard hook, say) no longer stays dead: a
+  key that is no longer down is let go, a swallowed one after 30 seconds, and the hook is re-installed whenever no
+  ring is open.
+- App: a pick that waits for a stroke to end follows your primary mouse button, so it works with the buttons
+  swapped in Windows. The plugin does the same.
+- Bridge: with more than one ZBrush running, a pick goes to the listener of the ZBrush you are picking in, not to
+  whichever one started last; otherwise the bridge key is used.
+- Bridge: a pick that could not be handed to ZBrush is deleted instead of staying in the request file, and the
+  plugin ignores a request more than 10 seconds old, so an old pick is never applied later by accident.
+- App: a ZBrush running as administrator is reported in `radiald.log` and in `activity.json` (`elevated_zbrush`)
+  within a few seconds, instead of the hotkeys doing nothing without a word.
+- Ring: a quick tap of the hotkey with the cursor already over a slot picks that slot. Only a tap with the cursor in
+  the middle keeps the ring open for a click.
+- Ring: after a ring is moved in from a screen edge, nothing is picked or opened until the cursor has moved into
+  it, and the hint says "move into the ring" until then.
+- Ring: an error inside the ring is logged with a full traceback, and a ring that fails while opening takes its
+  window down instead of leaving it on screen.
+- App: a pick whose request file cannot be written is reported ("could not write the request file") instead of
+  failing quietly.
+- Ring: slot pictures refresh when the picture file is replaced or the library is rescanned, and a slot whose
+  picture was missing is looked up again instead of showing the placeholder until ZBrush restarts.
+
 ## [0.11.0] - 2026-10-30
 
 ### Added
