@@ -54,6 +54,19 @@ def test_default_menus_submenu_targets_exist():
     assert all(t in cfg.menus for t in targets)
 
 
+def test_default_more_brushes_slot_has_a_picture():
+    with open(paths.DEFAULT_MENUS, encoding="utf-8") as f:
+        raw = json.load(f)
+    slot = next(it for it in raw["menus"]["brushes"]["items"] if it.get("menu") == "more")
+    assert slot.get("icon")
+
+
+def test_starter_tag_colours_differ_from_the_ring_accent_and_highlight():
+    ring = {c.lower() for c in (config.DEFAULT_RING["colors"]["accent"], config.DEFAULT_RING["colors"]["highlight"])}
+    assert not {c.lower() for _, _, c in tags.STARTERS[1:]} & ring
+    assert not {c.lower() for c in tags.PALETTE[:6]} & ring
+
+
 def test_default_menus_hotkeys_parse():
     with open(paths.DEFAULT_MENUS, encoding="utf-8") as f:
         raw = json.load(f)

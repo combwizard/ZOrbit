@@ -99,8 +99,8 @@ def test_a_missing_file_stays_missing_after_loading(fresh):
 
 
 def test_the_starter_tags_are_the_documented_ones():
-    assert tags.STARTERS == (("favourite", "Favourites", "#FFD166"), ("blocking", "Blocking", "#F86B33"),
-                             ("detailing", "Detailing", "#4DC8E9"))
+    assert tags.STARTERS == (("favourite", "Favourites", "#FFD166"), ("blocking", "Blocking", "#A8DF23"),
+                             ("detailing", "Detailing", "#C77DFF"))
 
 
 def test_loading_a_file_with_a_bom(tags_file, write_json):
@@ -225,7 +225,7 @@ def test_color_of_item_is_its_first_tag_other_than_favourites(tags_file):
 
 
 def test_next_color_is_the_first_unused_palette_colour(fresh):
-    assert fresh.next_color() == "#A8DF23"            # the starters use #FFD166, #F86B33 and #4DC8E9
+    assert fresh.next_color() == "#5EEAD4"            # the starters use #FFD166, #A8DF23 and #C77DFF
 
 
 def test_next_color_cycles_when_the_palette_is_used_up(tags_file):
@@ -280,8 +280,8 @@ def test_create_tag_makes_a_key_from_the_label_and_writes_the_file(fresh):
 def test_create_tag_takes_the_next_palette_colour(fresh):
     fresh.create_tag("One")
     fresh.create_tag("Two")
-    assert fresh.color("one") == "#A8DF23"
-    assert fresh.color("two") == "#E8413C"
+    assert fresh.color("one") == "#5EEAD4"
+    assert fresh.color("two") == "#F472B6"
 
 
 def test_create_tag_takes_a_given_colour_upper_cased(fresh):

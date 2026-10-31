@@ -23,6 +23,10 @@ All notable changes to this project are listed here. The format follows
   Windows dialogs (such as Save As) and Windows text boxes.
 - Keys sent by a tablet driver, a macro tool or a key remapper open the ring like the real key. Only ZOrbit's own
   key presses are ignored. The hidden `--accept-injected` option is gone.
+- Starter menus (new installs only): the **More Brushes** slot shows the ClayTubes picture instead of a letter
+  placeholder, and the starter tags are recoloured, **Blocking** lime green and **Detailing** violet, so they no
+  longer look like the ring's hover and submenu colours. The tag colour presets start with lime and violet. A saved
+  `tags.json` keeps its own colours.
 - Ring: the ring radius is now a minimum. A menu with many items makes the ring wider so neighbouring slots keep a
   gap (from 10 items at the default slot size); the Studio preview does the same.
 - Ring: slot names sit on a soft dark pill, and every disc is drawn before any name, so a neighbouring slot no

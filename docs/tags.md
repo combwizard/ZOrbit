@@ -1,9 +1,9 @@
 # Tags
 
 
-A tag is a coloured label for items, like **Blocking** in orange or **Detailing** in blue. Brushes, alphas, materials and textures
+A tag is a coloured label for items, like **Blocking** in lime green or **Detailing** in violet. Brushes, alphas, materials and textures
 can all carry tags, and one item can have several. There is one set of tags for all of them. An item's first tag is the one
-that colours its slot on the ring and comes first in the Library. New installs start with those two tags; rename, recolour
+that colours its slot on the ring and comes first in the Library. New installs start with those two tags, plus **Favourites** in gold; rename, recolour
 or delete them as you like.
 
 Tags let you do three things: filter the Library, colour slots on the ring (see [Tag colours](appearance.md#tag-colours)), and open all
@@ -52,8 +52,8 @@ Tags are in `%APPDATA%\ZOrbit\tags.json`, apart from your menus. The file does n
 
 ```json
 {"version": 1,
- "tags":  {"blocking":  {"label": "Blocking",  "color": "#F86B33"},
-           "detailing": {"label": "Detailing", "color": "#4DC8E9"}},
+ "tags":  {"blocking":  {"label": "Blocking",  "color": "#A8DF23"},
+           "detailing": {"label": "Detailing", "color": "#C77DFF"}},
  "items": {"brush:claybuildup": ["blocking"],
            "brush:dam_standard": ["detailing", "blocking"],
            "alpha:alpha058": ["blocking"]}}

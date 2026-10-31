@@ -16,7 +16,7 @@
         {"brush": "TrimDynamic"},
         {"brush": "hPolish"},
         {"brush": "Inflat", "label": "Inflate"},
-        {"menu": "more", "label": "More Brushes"},
+        {"menu": "more", "label": "More Brushes", "icon": "ClayTubes"},
         {"menu": "tools", "label": "Tools"}
       ]
     },

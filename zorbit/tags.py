@@ -34,12 +34,12 @@ import threading
 import fsutil
 import paths
 
-PALETTE = ("#F86B33", "#4DC8E9", "#A8DF23", "#E8413C", "#C77DFF", "#FFD166", "#5EEAD4", "#F472B6")
+PALETTE = ("#A8DF23", "#C77DFF", "#FFD166", "#5EEAD4", "#F472B6", "#E8413C", "#F86B33", "#4DC8E9")
 FAVOURITE = "favourite"                # the built-in tag; the Studio and the browser star items with it
 FAVOURITE_LABEL = "Favourites"
 FAVOURITE_COLOR = "#FFD166"
 STARTERS = ((FAVOURITE, FAVOURITE_LABEL, FAVOURITE_COLOR),
-            ("blocking", "Blocking", "#F86B33"), ("detailing", "Detailing", "#4DC8E9"))
+            ("blocking", "Blocking", "#A8DF23"), ("detailing", "Detailing", "#C77DFF"))
 MUTEX_NAME = "Local\\ZOrbitTags"
 MUTEX_WAIT_MS = 2000
 LABEL_MAX = 40
