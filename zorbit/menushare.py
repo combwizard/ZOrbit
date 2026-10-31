@@ -112,7 +112,7 @@ def plan_import(bundle_menus, root, cfg):
     A taken id gets _2, _3...; an id that is not valid is made from the title; a taken title gets 2, 3....
     Returns (menus_out, root_out, renames): the menus under their new ids (same order), the root's new id, and a
     list of {"old_id", "id", "old_title", "title"} for the menus whose id or title changed. {"menu": old} items are
-    pointed at the new ids; hotkey and swallow are removed."""
+    pointed at the new ids, and a label that was the old title becomes the new one; hotkey and swallow are removed."""
     taken = set(_menus(cfg))
     titles = {_title_key(m.get("title")) for m in _menus(cfg).values() if isinstance(m, dict)}
     new_id, new_title, renames = {}, {}, []
@@ -143,7 +143,11 @@ def plan_import(bundle_menus, root, cfg):
         if isinstance(m.get("items"), list):
             for it in m["items"]:
                 if isinstance(it, dict) and isinstance(it.get("menu"), str) and it["menu"] in new_id:
-                    it["menu"] = new_id[it["menu"]]
+                    target = it["menu"]
+                    it["menu"] = new_id[target]
+                    old_title = (bundle_menus[target] or {}).get("title") if isinstance(bundle_menus[target], dict) else None
+                    if old_title and it.get("label") == old_title:      # a label that showed the title follows it
+                        it["label"] = new_title[target]
         out[new_id[old]] = m
     return out, new_id.get(root, root), renames
 

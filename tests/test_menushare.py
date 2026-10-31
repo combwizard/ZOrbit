@@ -402,3 +402,12 @@ def test_apply_menu_import_says_so_when_every_tag_is_already_there(api, tmp_path
     cfg = {"menus": {}}
     assert _pick(api, monkeypatch, _file(tmp_path, b), cfg)["ok"]
     assert api.apply_menu_import(cfg)["tags_message"] == "You already had the tags it uses."
+
+
+def test_plan_import_a_submenu_label_that_showed_the_title_follows_the_rename():
+    menus = {"a": {"title": "Main", "items": [{"menu": "b", "label": "Tools"}, {"menu": "b", "label": "Mine"},
+                                             {"menu": "b"}]},
+             "b": {"title": "Tools", "items": []}}
+    out, _, _ = menushare.plan_import(menus, "a", {"menus": {"tools": {"title": "Tools"}}})
+    assert out["a"]["items"] == [{"menu": "b", "label": "Tools 2"}, {"menu": "b", "label": "Mine"}, {"menu": "b"}]
+    assert menus["a"]["items"][0]["label"] == "Tools"     # the input is left alone
