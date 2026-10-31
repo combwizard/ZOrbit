@@ -18,7 +18,7 @@ def main():
     cfg = a.get_config()
     lib = a.get_library()
     used = sorted({it["brush"] for m in cfg["config"]["menus"].values() for it in m["items"] if "brush" in it})
-    names = used + [b["name"] for b in lib["brushes"][:70]]
+    names = used + [b["name"] for b in lib["brushes"]]          # every brush: the browser picture shows letters for any left out
     first = next(iter(cfg["config"]["menus"]))
     kinds = {}                          # the alpha, material and texture tabs: library + first 30 thumbnails
     for kind in ("alpha", "material", "texture"):

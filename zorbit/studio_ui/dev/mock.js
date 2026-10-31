@@ -187,7 +187,7 @@
       names.slice(0, 40).forEach(function (n, i) { st.items[key(n)] = [st.tags[1 + i % 30].key].concat(i % 4 === 0 ? [st.tags[1 + (i + 7) % 30].key] : []); });
       return st;
     }
-    st.tags.push({ key: 'blocking', label: 'Blocking', color: '#F86B33' }, { key: 'detailing', label: 'Detailing', color: '#4DC8E9' });
+    st.tags.push({ key: 'blocking', label: 'Blocking', color: '#A8DF23' }, { key: 'detailing', label: 'Detailing', color: '#C77DFF' });
     names.slice(0, 12).forEach(function (n, i) {
       if (i % 6 === 5) return;
       st.items[key(n)] = i % 5 === 4 ? ['blocking', 'detailing'] : [i % 2 ? 'detailing' : 'blocking'];
