@@ -8,6 +8,11 @@ All notable changes to this project are listed here. The format follows
 
 ### Added
 
+- Studio: a **Simple** / **Full** mode switch in the top bar. Simple shows the controls most people use (brush,
+  alpha, material, texture and submenu items; menu title and hotkey; one ring-size slider, open animation, labels,
+  flick, the browser hotkey, Studio preferences, import and export) and hides the rest. A fresh install starts in
+  Simple; an existing setup that uses something Simple hides opens in Full. The mode only changes what Studio
+  shows and is kept in `studio.json` as `mode`.
 - Studio: **Alt+Up/Down** moves a menu in the Menus list, and **Move to menu...** (a button on the Item tab, or
   **M** on an item row) moves an item to another menu without dragging. The Setup checks show their state as an
   icon and a word (OK, Needs attention, Not working, Not checked yet), not only as a colour.
@@ -200,11 +205,6 @@ All notable changes to this project are listed here. The format follows
   in the ANSI code page.
 - Tag fans look again for a brush, alpha, material or texture saved after the app first scanned, without waiting.
 - Docs: `~` for the backtick key and `Control` for `Ctrl` are accepted in hotkeys and now documented.
-- Studio: a **Simple** / **Full** mode switch in the top bar. Simple shows the controls most people use (brush,
-  alpha, material, texture and submenu items; menu title and hotkey; one ring-size slider, open animation, labels,
-  flick, the browser hotkey, Studio preferences, import and export) and hides the rest. A fresh install starts in
-  Simple; an existing setup that uses something Simple hides opens in Full. The mode only changes what Studio
-  shows and is kept in `studio.json` as `mode`.
 
 ## [0.11.0] - 2026-10-30
 
