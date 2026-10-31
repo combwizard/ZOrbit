@@ -41,9 +41,9 @@ The **bridge key** is the fallback for the message route, and the only route in 
 2. Press the key you want, such as **F9**.
 3. Open **Preferences > Hotkeys** and click **Store**.
 
-Rules for the bridge key: use a bare F-key if you can (`Alt` combinations are allowed). `Ctrl` and `Shift` are rejected, because ZBrush reads them as mask and smooth. The app only presses the key while ZBrush is the front window, and releases any modifiers you are holding first.
+Rules for the bridge key: use a bare F-key other than **F10**, such as **F9** (the default), **F11** or **F12**. `Ctrl` and `Shift` are rejected, because ZBrush reads them as mask and smooth. `Alt` combinations and **F10** are rejected too: Windows sends them as system keys, and ZBrush does not run **Apply** for them when ZOrbit sends them (tested in ZBrush 2022 and 2025 with the key stored in ZBrush). The app only presses the key while ZBrush is the front window, and releases any modifiers you are holding first.
 
-If `radial.json` has no `bridge.key`, or an empty one, the key is **F9**. A key ZOrbit cannot use (one with `Ctrl` or `Shift`, or one it does not understand) is listed as a problem and F9 is used instead.
+If `radial.json` has no `bridge.key`, or an empty one, the key is **F9**. A key ZOrbit cannot use (one with `Ctrl`, `Shift` or `Alt`, **F10**, or one it does not understand) is listed as a problem and F9 is used instead.
 
 In ZBrush 2026 and newer, a pick that arrives while you are in the middle of a stroke (mouse button down) waits until you lift. The button is your primary one, so this also works when you have swapped the mouse buttons in Windows. That holds for both routes: the plugin holds a message back until the button is up, the app does not fall back to the bridge key while the button is down, and **Apply** waits the same way if it is run mid-stroke. The bridge key is pressed half a second after you lift, if the message still has not been picked up. ZBrush 2022 to 2025 cannot wait: the ZScript plugin applies a pick the moment the key arrives, even in the middle of a stroke. Right after a pick the app also makes a zero-distance mouse move, which wakes ZBrush's cursor and pen tracking.
 
@@ -57,7 +57,7 @@ These versions have no Python API, so they get a ZScript plugin with the same pa
 
 Differences from ZBrush 2026 and newer:
 
-- There is no listener, so **every pick uses the bridge key**, whatever the mode. When ZBrush loads the plugin it binds **F9** to **Apply** if **Apply** has no hotkey yet (checked in ZBrush 2022; in the other versions look at **Zplugin > ZOrbit > Apply** and bind F9 yourself if it is empty). If you choose another bridge key, bind and store it in each of these versions (the steps in [How picks reach ZBrush](#how-picks-reach-zbrush-bridge-modes)); each version keeps its own hotkeys.
+- There is no listener, so **every pick uses the bridge key**, whatever the mode. When ZBrush loads the plugin it binds **F9** to **Apply** if **Apply** has no hotkey yet (checked in ZBrush 2022, 2023 and 2025; in 2024 look at **Zplugin > ZOrbit > Apply** and bind F9 yourself if it is empty). A key you stored for **Apply** yourself is kept. If you choose another bridge key, bind and store it in each of these versions (the steps in [How picks reach ZBrush](#how-picks-reach-zbrush-bridge-modes)); each version keeps its own hotkeys.
 - A pick does not wait for the end of a stroke (see above).
 - Brushes load from that version's own `.zbp` files, because an older ZBrush cannot always read a newer version's brushes.
 - Status shows where picks arrive, whether one is waiting, and the last pick. The plugin also writes that last pick to `zscript_bridge.log`, which Studio's Status screen shows. Pressing **Apply** when no pick is waiting changes nothing, so it does not replace that last pick.

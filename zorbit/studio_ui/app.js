@@ -1072,7 +1072,8 @@ function keyFromEvent(e) {
   }
   return { key: null };
 }
-function hotkeyField({ value, mods = { ctrl: true, alt: true, shift: true }, onChange, placeholder = 'Not set', noMessage, what = 'Hotkey' }) {
+/* refuse(key): a sentence when this field must not take that key (after the modifier checks), else ''. */
+function hotkeyField({ value, mods = { ctrl: true, alt: true, shift: true }, onChange, placeholder = 'Not set', noMessage, what = 'Hotkey', refuse = null, altMessage = 'Alt is not allowed here.' }) {
   let rec = false;
   const field = h('div', { class: 'hk-field', role: 'button', tabindex: '0', title: 'Press Enter to record a new one', dataset: { fk: 'hk:' + what } });
   const msg = h('div', { class: 'hk-msg', 'aria-live': 'polite' });
@@ -1104,10 +1105,12 @@ function hotkeyField({ value, mods = { ctrl: true, alt: true, shift: true }, onC
     if (!key) { say('That key is not supported. Use a letter, digit, F1-F24, space, tab, enter, backspace, insert, delete, home, end, pageup, pagedown or one of ` - = [ ] \\ ; \' , . /'); return; }
     for (const m of ['ctrl', 'alt', 'shift']) {
       if (e[m + 'Key'] && !mods[m]) {
-        say(m === 'alt' ? 'Alt is not allowed here.' : (m === 'ctrl' ? 'Ctrl' : 'Shift') + ' cannot be used here: ZBrush reads it as ' + (m === 'ctrl' ? 'mask' : 'smooth') + '. Use a bare F-key or Alt.');
+        say(m === 'alt' ? altMessage : (m === 'ctrl' ? 'Ctrl' : 'Shift') + ' cannot be used here: ZBrush reads it as ' + (m === 'ctrl' ? 'mask' : 'smooth') + '. Use a bare F-key.');
         return;
       }
     }
+    const no = refuse ? refuse(key) : '';
+    if (no) { say(no); return; }
     const str = [e.ctrlKey && 'Ctrl', e.altKey && 'Alt', e.shiftKey && 'Shift', key].filter(Boolean).join('+');
     value = str; say(''); stop(); onChange(str);
   };
@@ -3931,9 +3934,11 @@ function buildSettingsScreen(root) {
       const paintKey = () => {
         const mode = (S.cfg.bridge && S.cfg.bridge.mode) || 'auto';
         keyWrap.classList.toggle('dim', mode === 'message');
-        keyWrap.replaceChildren(field('Bridge key', hotkeyField({ what: 'Bridge key', value: (S.cfg.bridge && S.cfg.bridge.key) || '', mods: { ctrl: false, alt: true, shift: false }, placeholder: 'F9 (the default)',
+        keyWrap.replaceChildren(field('Bridge key', hotkeyField({ what: 'Bridge key', value: (S.cfg.bridge && S.cfg.bridge.key) || '', mods: { ctrl: false, alt: false, shift: false }, placeholder: 'F9 (the default)',
+          altMessage: 'Alt cannot be used here: ZBrush does not act on an Alt key that ZOrbit sends. Use a bare F-key.',
+          refuse: k => k === 'F10' ? 'F10 cannot be used here: Windows keeps it for the menu bar, so ZBrush never acts on it. Use F9, F11 or another F-key.' : '',
           onChange: v => { if (v) bridge().key = v; else { delete bridge().key; dropIfEmpty('bridge'); } commit(); paintZNote(); } }),
-          mode === 'message' ? 'Not used in Message mode, but kept in case you switch back.' : 'Must be bound in ZBrush to Zplugin > ZOrbit > Apply. Ctrl and Shift are rejected because ZBrush reads them as mask and smooth. A bare F-key is best.'));
+          mode === 'message' ? 'Not used in Message mode, but kept in case you switch back.' : 'Must be bound in ZBrush to Zplugin > ZOrbit > Apply. Use a bare F-key other than F10: ZBrush reads Ctrl and Shift as mask and smooth, and does not act on Alt combinations or F10 when ZOrbit sends them.'));
       };
       page.append(card('ZBrush bridge', 'How a pick reaches ZBrush',
         choiceCards(['auto', 'message', 'key'].map(m => [m, BRIDGE_INFO[m][0], BRIDGE_INFO[m][1]]), bmode, v => { bridge().mode = v; commit(); paintKey(); }, 'bridge-cards', 'How a pick reaches ZBrush'),
@@ -4704,6 +4709,7 @@ function describeProblem(raw) {
     const using = /; using ([^;]+)$/.exec(raw);
     return out('The bridge key cannot use Ctrl or Shift, because ZBrush reads them as mask and smooth. Use a bare F-key' + (using ? `; ${using[1]} is used instead` : ''), bridge);
   }
+  if ((m = /^bridge\.key (.+) does not reach ZBrush:.*?(?:; using ([^;]+))?$/s.exec(raw))) return out(`The bridge key ${unq(m[1])} cannot be used: ZBrush does not act on Alt combinations or F10 when ZOrbit sends them. Use a bare F-key such as F9 or F11` + (m[2] ? `; ${m[2]} is used instead` : ''), bridge);
   if (raw.startsWith('bridge: must be an object')) return out('The bridge section is not an object, so the defaults are used', bridge);
   if ((m = /^bridge\.(\w+): unknown setting(.*)$/s.exec(raw))) return out(`The bridge setting “${m[1]}” is not known.` + didYouMean(m[2]), bridge);
   if (raw.startsWith('bridge.key ')) return out('The bridge key ' + raw.slice('bridge.key '.length), bridge);

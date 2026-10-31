@@ -206,9 +206,18 @@ def test_bridge_key_with_ctrl_or_shift_is_rejected_and_f9_used(load_menus, key):
     assert problems(cfg, "bridge.key must not use Ctrl or Shift")
 
 
-def test_bridge_key_with_alt_is_accepted(load_menus):
-    cfg = load_menus(GOOD_MENUS, bridge={"key": "Alt+F10"})
-    assert (cfg.bridge_key.vk, cfg.bridge_key.alt) == (0x79, True)
+@pytest.mark.parametrize("key", ["Alt+F9", "Alt+F11", "F10", "Alt+F10"])
+def test_bridge_key_with_alt_or_f10_is_rejected_and_f9_used(load_menus, key):
+    # ZBrush 2022 and 2025 ran no Apply for these when ZOrbit sent them (tested with the key stored in ZBrush).
+    cfg = load_menus(GOOD_MENUS, bridge={"key": key})
+    assert cfg.bridge_key == config.parse_hotkey("F9")
+    assert problems(cfg, f"bridge.key {key!r} does not reach ZBrush")
+
+
+@pytest.mark.parametrize("key", ["F11", "F12", "F8"])
+def test_bridge_key_bare_f_keys_other_than_f10_are_accepted(load_menus, key):
+    cfg = load_menus(GOOD_MENUS, bridge={"key": key})
+    assert cfg.bridge_key == config.parse_hotkey(key)
     assert cfg.errors == []
 
 

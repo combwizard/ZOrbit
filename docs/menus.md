@@ -137,6 +137,8 @@ Spell the names the way ZBrush spells them, spaces included. In Studio, the targ
 
 A path that does not exist in your ZBrush does nothing in ZBrush. `bridge.log` has a line such as `press Tool:Masking:Cler: no such interface item`, and the app shows a short message near the cursor (see [Troubleshooting](troubleshooting.md#the-ring-opens-but-picks-do-nothing)).
 
+Some buttons only exist while a 3D model is in Edit mode, such as everything under **Tool:Masking** and **Transform:Activate Symmetry**. With only a 2.5D tool on the canvas (ZBrush opens on one), a pick of those gives the same "no such interface item", even though the path is right.
+
 ### Steps
 
 ```json

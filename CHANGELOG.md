@@ -8,6 +8,9 @@ All notable changes to this project are listed here. The format follows
 
 ### Fixed
 
+- The bridge key can no longer be an `Alt` combination or **F10**. ZBrush 2022 and 2025 run no **Apply** for those
+  when ZOrbit sends them, so every pick through the bridge key was lost. Studio's recorder refuses them, and a
+  `radial.json` that names one is listed as a problem and uses F9.
 - Browser: merging two tags points the ring's Tag and Browser slots that used the merged tag at the kept one in
   `radial.json` (the old file is kept as `radial.json.bak`), instead of leaving them empty or unfiltered.
 - An `icon` that looks like a path but is not a full path, or a full path to a file that is not there, is listed as

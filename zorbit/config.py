@@ -99,6 +99,7 @@ BRIDGE_KEYS = ("mode", "key")
 BROWSER_KEYS = ("hotkey",)
 ITEM_KEYS = ACTION_KEYS + ("label", "icon", "value", "kind")
 DEFAULT_BRIDGE_KEY = "F9"          # used when radial.json has no usable bridge.key
+VK_F10 = 0x79                       # Windows' menu-bar key: never usable as the bridge key
 _MODS = {"ctrl": "ctrl", "control": "ctrl", "alt": "alt", "shift": "shift"}
 
 
@@ -320,6 +321,11 @@ def load(path: str, tags=None) -> Config:
         elif key.ctrl or key.shift:
             errors.append("bridge.key must not use Ctrl or Shift (ZBrush reads them as mask/smooth); "
                           f"use a bare F-key; using {DEFAULT_BRIDGE_KEY}")
+        elif key.alt or key.vk == VK_F10:
+            # Both arrive as Windows system keys, and ZBrush (checked in 2022 and 2025) runs no hotkey for them when
+            # ZOrbit sends them, so every pick through the bridge key would be lost.
+            errors.append(f"bridge.key {bridge['key']!r} does not reach ZBrush: it does not act on Alt combinations "
+                          f"or F10 sent by ZOrbit; use a bare F-key such as F9 or F11; using {DEFAULT_BRIDGE_KEY}")
         else:
             cfg.bridge_key = key
     ring = raw.get("ring")
