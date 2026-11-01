@@ -1,6 +1,8 @@
-"""Draws the ring pictures in docs/images (ring.png, ring-light.png, ring-zbrush.png, slot-shapes.png, fan.png, tag-colours.png, animations.png and the two GIFs) with
-the real renderer, zorbit/ring.py, so they follow the ring's look whenever it changes. No window is opened and no
-ZBrush is needed, but the brush pictures come from the installed ZBrush's presets, so a ZBrush has to be installed.
+"""Draws the ring pictures in docs/images (ring.png, ring-light.png, ring-zbrush.png, fan.png, tag-colours.png,
+animations.png, the look pictures slot-shapes.png, hub-styles.png, slot-styles.png, looks.png, second-ring.png and
+more-slot.png, and the two GIFs) with the real renderer, zorbit/ring.py, so they follow the ring's look whenever it
+changes. No window is opened and no ZBrush is needed, but the brush pictures come from the installed ZBrush's
+presets, so a ZBrush has to be installed.
 
 The pictures show a fresh install, not the developer's own setup: the script points %APPDATA%, %LOCALAPPDATA% and
 the tags file at a throw-away folder before it imports anything from zorbit, so it gets the starter menus and the
@@ -15,6 +17,7 @@ Run: python tools/ring_shots.py                         (every picture)
      python tools/ring_shots.py --out DIR ...           (somewhere else than docs/images, to look first)
 """
 import atexit
+import dataclasses
 import glob
 import os
 import shutil
@@ -46,6 +49,7 @@ assert os.path.commonpath([paths.DATA_DIR, SANDBOX]) == SANDBOX, "the data folde
 import config as C  # noqa: E402
 import expand  # noqa: E402
 import installs  # noqa: E402
+import looks  # noqa: E402
 import radiald  # noqa: E402
 import tags  # noqa: E402
 import zbrush_colors  # noqa: E402
@@ -66,6 +70,7 @@ ANIMATIONS = [("spiral", 340), ("fancy", 160), ("ripple", 140), ("breath", 220),
 PANEL = (260, 320)                             # one animation panel, and where its ring centre sits in it
 PANEL_CENTRE = (130, 137)
 PANEL_SCALE = 0.6
+PANEL_BIG, PANEL_BIG_CENTRE, PANEL_BIG_SCALE = (340, 390), (170, 176), 0.78   # a larger panel, for the hub pictures
 RING_SCALE = 1.342                             # makes the ring pictures 600 pixels square
 FAN_SCALE = 0.95                               # the fan picture is a little smaller, about 594 pixels wide
 
@@ -95,9 +100,36 @@ class World:
         for m in self.fan_menus:
             m.fan = on
 
-    def preview(self, menu_id, animation="", tagged=False, ring=None, **kw):
+    def define(self, menu_id, brushes, look=None, title="Brushes"):
+        """A menu of brushes (names, or (name, label) pairs) added to the loaded config, so the Expander can page it
+        and resolve its more: menu. look: a preset name or a dict of look keys, as for preview()."""
+        items = [C.Item(label=b[1] if isinstance(b, tuple) else b, kind="brush",
+                        data={"brush": b[0] if isinstance(b, tuple) else b}) for b in brushes]
+        menu = C.Menu(id=menu_id, title=title, items=items)
+        if look is not None:
+            menu.look = self.resolve_look(look)
+        self.cfg.menus[menu_id] = menu
+        return menu
+
+    def resolve_look(self, look):
+        """The complete look of a menu with this look: a preset name, or a dict of look keys (it may name a
+        "preset" too), laid over the ring's, the way the config does for a menu's look."""
+        return self.cfg.looks.menu_look({"preset": look} if isinstance(look, str) else dict(look))
+
+    def preview(self, menu_id, animation="", tagged=False, ring=None, look=None, styles=None, fields=None, **kw):
+        """The ring picture of a menu. look: a preset name or a dict of look keys for this menu only (menu.look).
+        styles: {item index: style dict} for single slots (item.style). fields: other Menu fields to set (icon)."""
         ex = self.ex[tagged]
-        menu = ex.menu(self.cfg.menus[menu_id])
+        base = self.cfg.menus[menu_id]
+        changes = dict(fields or {})
+        if look is not None:
+            changes["look"] = self.resolve_look(look)
+        if styles:
+            changes["items"] = [dataclasses.replace(it, style=dict(styles[i])) if i in styles else it
+                                for i, it in enumerate(base.items)]
+        if changes:
+            base = dataclasses.replace(base, **changes)
+        menu = ex.menu(base)
         if animation:
             menu.animation = animation
         return Ring.preview(menu, ring or self.cfg.ring, self.app.icon_for, submenus=ex.resolve, **kw)
@@ -154,13 +186,6 @@ def shot_ring_light(w):
     return with_cursor(on_background(im, bg=BG_LIGHT), *hovered(im))
 
 
-def shot_slot_shapes(w):
-    """The same ring as shot_ring with the Rounded square slot shape."""
-    w.fans(False)
-    im = w.preview("brushes", hover=1, held=True, scale=RING_SCALE, ring=dict(w.cfg.ring, slot_shape="rounded"))
-    return with_cursor(on_background(im), *hovered(im))
-
-
 def stock_scheme():
     """ZBrush's stock colours as a zbrush_colors.Scheme, read from the newest installed ZBrush that ships
     ZStartup/UserInterfaceColors/Z4R8_default.cfg, or None (with a message) when there is none. Nothing from
@@ -214,6 +239,125 @@ def shot_animations(w):
     canvas = Image.new("RGBA", (PANEL[0] * len(ANIMATIONS), PANEL[1]), BG + (255,))
     for i, (name, ms) in enumerate(ANIMATIONS):
         canvas.alpha_composite(animation_panel(w, name, ms), (i * PANEL[0], 0))
+    return canvas
+
+
+# --- the look pictures -------------------------------------------------------------------------------
+BRUSHES_14 = ["Standard", "ClayBuildup", "Move", "DamStandard", "TrimDynamic", "hPolish", ("Inflat", "Inflate"),
+              "Pinch", "Clay", "ClayTubes", "Move Topological", "SnakeHook", "Flatten", "Layer"]
+HUB_BIG = 40                                   # a hub big enough to see its style
+HUB_ICON = "ClayBuildup"                       # the icon of the hub in the "icon" style
+SHAPE_NAMES = {"circle": "Circle", "rounded": "Rounded square", "squircle": "Squircle", "hexagon": "Hexagon",
+               "octagon": "Octagon", "diamond": "Diamond"}
+HUB_NAMES = {"dot": "Dot", "disc": "Disc", "ring": "Ring", "icon": "Menu icon"}
+
+
+def caption(panel, lines):
+    """Centred lines of text on a panel: (text, font, y of the middle, colour)."""
+    d = ImageDraw.Draw(panel)
+    for text, f, y, colour in lines:
+        box = d.textbbox((0, 0), text, font=f)
+        d.text(((panel.width - (box[2] - box[0])) / 2 - box[0], y - (box[3] - box[1]) / 2 - box[1]), text, font=f,
+               fill=colour)
+
+
+def look_panel(w, title, sub, hover=1, big=False, **kw):
+    """A panel like the animation ones: the Brushes ring settled, a slot hovered with the cursor on it, a bold
+    title and a muted line under it. big: a larger panel and ring, for a picture with fewer panels. kw goes to
+    World.preview (look, styles, fields)."""
+    size, centre, scale, ys = (PANEL_BIG, PANEL_BIG_CENTRE, PANEL_BIG_SCALE, (348, 374)) if big else (
+        PANEL, PANEL_CENTRE, PANEL_SCALE, (276, 302))
+    im = w.preview("brushes", hover=hover, held=True, scale=scale, **kw)
+    cx, cy = im.info["centre"]
+    panel = Image.new("RGBA", size, BG + (255,))
+    panel.alpha_composite(im, (int(round(centre[0] - cx)), int(round(centre[1] - cy))))
+    hx, hy = hovered(im)
+    with_cursor(panel, centre[0] + hx - cx, centre[1] + hy - cy, 0.75 if not big else 0.9)
+    caption(panel, ((title, font("segoeuib.ttf", 17), ys[0], TEXT), (sub, font("segoeui.ttf", 14), ys[1], MUTED)))
+    return panel
+
+
+def gallery(panels, columns):
+    """The panels in rows of `columns`, each row centred."""
+    w, h = panels[0].size
+    rows = [panels[i:i + columns] for i in range(0, len(panels), columns)]
+    canvas = Image.new("RGBA", (w * columns, h * len(rows)), BG + (255,))
+    for r, row in enumerate(rows):
+        left = (columns - len(row)) * w // 2
+        for c, panel in enumerate(row):
+            canvas.alpha_composite(panel, (left + c * w, r * h))
+    return canvas
+
+
+def shot_slot_shapes(w):
+    w.fans(False)
+    return gallery([look_panel(w, SHAPE_NAMES[s], f"slot_shape: {s}",
+                               look={"slot_shape": s}) for s in looks.SLOT_SHAPES], 3)
+
+
+def shot_hub_styles(w):
+    w.fans(False)
+    return gallery([look_panel(w, HUB_NAMES[s], f"hub_style: {s}", look={"hub_style": s, "hub": HUB_BIG},
+                               fields={"icon": HUB_ICON}, big=True) for s in looks.HUB_STYLES], 2)
+
+
+def shot_slot_styles(w):
+    """One ring, eight slots styled one way each (the table in docs/appearance.md names them)."""
+    w.fans(False)
+    styles = {0: {"size": 1.25},                                   # Standard: a bigger slot
+              1: {"label_color": "highlight"},                     # ClayBuildup: another label colour
+              2: {"border_color": "#7bd88f"},                      # Move: a rim colour
+              3: {"slot_shape": "rounded", "slot_corner": 0.42},   # DamStandard: a rounder square
+              4: {"border_width": 6, "border_color": "highlight"},  # TrimDynamic: a thick rim
+              5: {"glow_color": "#7bd88f"},                        # hPolish: a glow colour (hovered below)
+              6: {"icon_scale": 0.6},                              # Inflate: a smaller icon
+              8: {"fill_color": "#5b4a9a"}}                        # Tools: a fill colour (no picture covers it)
+    im = w.preview("brushes", hover=5, held=True, scale=RING_SCALE, styles=styles)
+    return with_cursor(on_background(im), *hovered(im))
+
+
+def shot_looks(w):
+    w.fans(False)
+    panels = [look_panel(w, b["label"], f'ring.look: "{name}"', look=name) for name, b in looks.BUILTIN.items()]
+    return gallery(panels, 4)
+
+
+def shot_second_ring(w):
+    """14 brushes with when_full "rings": nine on the inner ring, five on an outer ring, one of them hovered."""
+    w.fans(False)
+    w.define("full14", BRUSHES_14, look={"when_full": "rings"})
+    im = w.preview("full14", hover=11, held=True, scale=0.95)
+    return with_cursor(on_background(im), *hovered(im))
+
+
+def shot_more_slot(w):
+    """14 brushes with when_full "more": the ring with More hovered, and the ring More opens beside it."""
+    w.fans(False)
+    w.define("full14", BRUSHES_14, look={"when_full": "more"})
+    first = w.preview("full14", hover=8, held=True, scale=0.95)
+    rest = w.ex[False].resolve("more:full14")
+    assert rest is not None and len(rest.items) == 14 - 8, "the More slot should hold the last six brushes"
+    second = Ring.preview(rest, w.cfg.menus["full14"].look, w.app.icon_for, submenus=w.ex[False].resolve,
+                          hover=None, held=True, scale=0.95)
+    gap, pad = 70, 20
+    height = max(first.height, second.height) + 2 * pad + 40
+    canvas = Image.new("RGBA", (first.width + second.width + gap + 2 * pad, height), BG + (255,))
+    ring_y = pad
+    for im, x in ((first, pad), (second, pad + first.width + gap)):
+        canvas.alpha_composite(im, (x, ring_y + (max(first.height, second.height) - im.height) // 2))
+    with_cursor(canvas, pad + hovered(first)[0], ring_y + (max(first.height, second.height) - first.height) // 2
+                + hovered(first)[1])
+    d = ImageDraw.Draw(canvas)                                      # an arrow from the first ring to the second
+    y = ring_y + max(first.height, second.height) // 2
+    x0, x1 = pad + first.width + 12, pad + first.width + gap - 12
+    d.line([(x0, y), (x1, y)], fill=MUTED, width=3)
+    d.polygon([(x1 + 8, y), (x1 - 4, y - 8), (x1 - 4, y + 8)], fill=MUTED)
+    base = ring_y + max(first.height, second.height) + 14
+    for x, wide, title, sub in ((pad, first.width, "More slot", 'when_full: "more", the first eight brushes'),
+                                (pad + first.width + gap, second.width, "More opens the rest", "the other six brushes")):
+        strip = Image.new("RGBA", (wide, 56), BG + (255,))
+        caption(strip, ((title, font("segoeuib.ttf", 17), 14, TEXT), (sub, font("segoeui.ttf", 14), 40, MUTED)))
+        canvas.alpha_composite(strip, (x, base - 14))
     return canvas
 
 
@@ -393,7 +537,17 @@ SHOTS = {
     "ring-zbrush": ("ring-zbrush.png", shot_ring_zbrush,
                     "the same ring as ring.png in the theme a stock ZBrush scheme gives (Match ZBrush), over a dark grey"),
     "slot-shapes": ("slot-shapes.png", shot_slot_shapes,
-                    "the same ring as ring.png with the Rounded square slot shape"),
+                    "the Brushes ring in each of the six slot shapes, one panel each, the shape named under it"),
+    "hub-styles": ("hub-styles.png", shot_hub_styles,
+                   "the Brushes ring with a 40 px hub in each of the four hub styles, one panel each"),
+    "slot-styles": ("slot-styles.png", shot_slot_styles,
+                    "one Brushes ring with a style on eight slots: size, label colour, rim colour, rounder corners, "
+                    "thick rim, glow colour (hovered), smaller icon, fill colour"),
+    "looks": ("looks.png", shot_looks, "the Brushes ring in each of the seven built-in looks, one panel each"),
+    "second-ring": ("second-ring.png", shot_second_ring,
+                    "14 brushes with when_full rings: nine on the inner ring, five on an outer ring"),
+    "more-slot": ("more-slot.png", shot_more_slot,
+                  "14 brushes with when_full more: the ring with More hovered, and the ring More opens beside it"),
     "fan": ("fan.png", shot_fan, "More Brushes fanned out to the left, ClayTubes in the fan hovered, cursor on it"),
     "tag-colours": ("tag-colours.png", shot_tags, "eight brushes in two tags and two untagged, ClayBuildup hovered"),
     "animations": ("animations.png", shot_animations, "the five open animations part way through opening"),
