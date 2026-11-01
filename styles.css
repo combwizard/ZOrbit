@@ -603,7 +603,9 @@ kbd {
   box-shadow: 0 24px 60px rgba(0, 0, 0, .45), 0 0 60px rgba(248, 107, 51, .07);
 }
 .feature-media img { width: 100%; }
-/* Theme demo: a Dark / Light switch and a picture that crossfades between the two. */
+/* Theme demo: a Dark / Light / ZBrush switch and a picture that crossfades between the looks. Every look is an
+   image stacked in the same spot (the grid area). The one that is on sits on top and fades in over the old one,
+   which stays until the fade is done and then goes. The fade only runs once site.js sets html.shots-fade. */
 .theme-switch { display: flex; align-items: center; gap: 12px; margin-top: 16px; }
 .theme-switch-l { font: 700 11px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--sub); }
 .theme-seg {
@@ -623,10 +625,13 @@ kbd {
 .theme-note { color: var(--sub); font-size: 13.5px; margin-top: 12px; }
 .theme-swap { display: grid; }
 .theme-swap > img { grid-area: 1 / 1; }
-.theme-swap > .theme-alt { opacity: 0; transition: opacity .35s ease; }
-html[data-shots="light"] .theme-swap > .theme-alt { opacity: 1; }
+.theme-swap > .theme-alt { opacity: 0; z-index: 0; }
+.theme-swap > .theme-alt.on { opacity: 1; z-index: 1; }
+html.shots-fade .theme-swap > .theme-alt { transition: opacity 0s .35s; }
+html.shots-fade .theme-swap > .theme-alt.on { transition: opacity .35s ease; }
 @media (prefers-reduced-motion: reduce) {
-  .theme-swap > .theme-alt { transition: none; }
+  html.shots-fade .theme-swap > .theme-alt,
+  html.shots-fade .theme-swap > .theme-alt.on { transition: none; }
 }
 .tilt {
   transform: perspective(900px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));

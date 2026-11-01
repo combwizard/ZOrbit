@@ -371,45 +371,73 @@
     groups.forEach(function (g) { io.observe(g); });
   }
 
-  // Theme demo: the Dark / Light switches flip the ring and Studio pictures together. The light picture is a
-  // second image stacked over the dark one and faded in by CSS (html[data-shots]); the choice is remembered.
+  // Theme demo: the Dark / Light / ZBrush switches flip every themed picture together. A picture is the dark
+  // image plus data-shot-<variant> (and data-shot-<variant>-alt) for each other look. Each look is one image
+  // stacked in the same spot and faded in by CSS (html[data-shots]); a picture without a variant stays as it is.
+  // The choice is remembered.
   var SHOTS_KEY = 'zorbit.shots.v1';
+  var SHOT_VARIANTS = ['dark', 'light', 'zbrush'];
 
   function themeDemo() {
-    var imgs = document.querySelectorAll('img[data-light]');
+    var imgs = document.querySelectorAll('img[data-shot-light], img[data-shot-zbrush]');
     var buttons = document.querySelectorAll('[data-theme-set]');
     if (!imgs.length || !buttons.length) return;
 
-    var layers = [];
+    var layers = [];   // one entry per picture: { dark: img, light: img, zbrush: img }, each with its alt text
     imgs.forEach(function (base) {
       var wrap = document.createElement('span');
       wrap.className = 'theme-swap';
       base.parentNode.insertBefore(wrap, base);
       wrap.appendChild(base);
-      var top = base.cloneNode(false);
-      top.removeAttribute('data-light');
-      top.removeAttribute('data-light-alt');
-      top.className = 'theme-alt';
-      top.src = base.dataset.light;
-      wrap.appendChild(top);
-      layers.push({ base: base, top: top, darkAlt: base.alt, lightAlt: base.dataset.lightAlt || base.alt });
+      var entry = {};
+      var darkAlt = base.alt;
+      base.classList.add('theme-alt');
+      base.dataset.shot = 'dark';
+      entry.dark = { el: base, alt: darkAlt };
+      SHOT_VARIANTS.slice(1).forEach(function (v) {
+        var src = base.dataset['shot' + v.charAt(0).toUpperCase() + v.slice(1)];
+        if (!src) return;
+        var alt = base.dataset['shot' + v.charAt(0).toUpperCase() + v.slice(1) + 'Alt'] || darkAlt;
+        var img = base.cloneNode(false);
+        SHOT_VARIANTS.slice(1).forEach(function (w) {
+          var k = 'shot' + w.charAt(0).toUpperCase() + w.slice(1);
+          delete img.dataset[k];
+          delete img.dataset[k + 'Alt'];
+        });
+        img.dataset.shot = v;
+        img.className = 'theme-alt';
+        img.src = src;
+        wrap.appendChild(img);
+        entry[v] = { el: img, alt: alt };
+      });
+      layers.push(entry);
     });
 
     function apply(mode) {
-      var light = mode === 'light';
-      document.documentElement.setAttribute('data-shots', light ? 'light' : 'dark');
-      layers.forEach(function (l) {
-        l.base.alt = light ? '' : l.darkAlt;
-        l.top.alt = light ? l.lightAlt : '';
-        if (light) { l.base.setAttribute('aria-hidden', 'true'); l.top.removeAttribute('aria-hidden'); }
-        else { l.top.setAttribute('aria-hidden', 'true'); l.base.removeAttribute('aria-hidden'); }
+      if (SHOT_VARIANTS.indexOf(mode) < 0) mode = 'dark';
+      document.documentElement.setAttribute('data-shots', mode);
+      layers.forEach(function (entry) {
+        // A picture with no image for this look keeps its dark one.
+        var show = entry[mode] ? mode : 'dark';
+        SHOT_VARIANTS.forEach(function (v) {
+          var l = entry[v];
+          if (!l) return;
+          l.el.classList.toggle('on', v === show);
+          l.el.alt = v === show ? l.alt : '';
+          if (v === show) l.el.removeAttribute('aria-hidden');
+          else l.el.setAttribute('aria-hidden', 'true');
+        });
       });
-      buttons.forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.themeSet === (light ? 'light' : 'dark'))); });
+      buttons.forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.themeSet === mode)); });
     }
 
     var saved = null;
     try { saved = localStorage.getItem(SHOTS_KEY); } catch (e) {}
-    apply(saved === 'light' ? 'light' : 'dark');
+    apply(saved);
+    // The fade is switched on after the first look is set, so a remembered choice does not fade in on load.
+    requestAnimationFrame(function () { requestAnimationFrame(function () {
+      document.documentElement.classList.add('shots-fade');
+    }); });
 
     buttons.forEach(function (b) {
       b.addEventListener('click', function () {

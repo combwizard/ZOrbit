@@ -146,17 +146,9 @@
         <h3>More than brushes.</h3>
         <p>A slot can select a brush, an alpha, a material or a texture, press any ZBrush button, set a slider, flip a switch, run several of those in a row, or open another ring. Hover a submenu and one stroke reaches an item two rings deep.</p>
         <p class="feature-sub">If ZBrush does not have the alpha, material or texture yet, ZOrbit loads it from its file first.</p>
-        <div class="theme-switch">
-          <span class="theme-switch-l">Theme</span>
-          <div class="theme-seg" role="group" aria-label="Theme">
-            <button type="button" data-theme-set="dark" aria-pressed="true">Dark</button>
-            <button type="button" data-theme-set="light" aria-pressed="false">Light</button>
-          </div>
-        </div>
-        <p class="theme-note">The ring in the Dark and Light themes. The Studio picture below follows the same switch.</p>
       </div>
       <figure class="feature-media">
-        <img src="images/ring.png" alt="Brushes menu with ClayBuildup hovered, in the Dark theme" width="600" height="600" loading="lazy" data-light="images/ring-light.png" data-light-alt="Brushes menu with ClayBuildup hovered, in the Light theme">
+        <img src="images/ring.png" alt="Brushes menu with ClayBuildup hovered" width="600" height="600" loading="lazy">
       </figure>
     </article>
 
@@ -240,20 +232,41 @@
 
     <article class="feature">
       <div class="feature-copy">
-        <h3>Edit it in Studio.</h3>
-        <p>ZOrbit Studio shows a live preview of the real ring. Drag brushes in from a searchable library, record hotkeys, change colours, size and animation. Twelve open animations, from instant to a swirling spiral.</p>
-        <p class="feature-sub">The first time Studio opens, a Setup screen walks you through the install. It finds ZBrush, says whether to restart it, and has you try the ring once.</p>
+        <h3>Dark, light, or ZBrush’s own.</h3>
+        <p>The Theme setting in Studio has four choices. Dark is the default. Light is for ZBrush or Windows set to a light theme. Follow Windows changes with Windows’ app colour mode. Match ZBrush uses the interface colours you stored in ZBrush with Preferences &gt; Config &gt; Store Config. ZOrbit only reads that file and never writes it, and without a stored scheme it shows Dark. The theme applies to the ring, the browser and Studio together.</p>
+        <p class="feature-sub">Themes are experimental, and the colours will change as they are tuned. If something reads badly, say so on <a href="https://github.com/combwizard/zorbit/issues/32">issue #32</a>. More in the <a href="https://zorbit.lol/docs/appearance/#theme">docs</a>.</p>
         <div class="theme-switch">
           <span class="theme-switch-l">Theme</span>
           <div class="theme-seg" role="group" aria-label="Theme">
             <button type="button" data-theme-set="dark" aria-pressed="true">Dark</button>
             <button type="button" data-theme-set="light" aria-pressed="false">Light</button>
+            <button type="button" data-theme-set="zbrush" aria-pressed="false">ZBrush</button>
           </div>
         </div>
-        <p class="theme-note">ZOrbit has Dark, Light and <a href="https://zorbit.lol/docs/appearance/#theme">Follow Windows</a> themes for the ring, the browser and Studio. This switch shows the first two on the pictures here. The Light picture of Studio is its Settings screen, where the choice lives.</p>
+        <p class="theme-note">The ring in Dark, Light and Match ZBrush, the last with ZBrush’s stock colours. The Studio picture below follows the same switch.</p>
       </div>
       <figure class="feature-media">
-        <img src="images/studio.png" alt="ZOrbit Studio in the Dark theme: the menu list, the ring preview and the brush library" width="1360" height="860" loading="lazy" data-light="images/studio-light.png" data-light-alt="ZOrbit Studio in the Light theme, on the Settings screen: the Theme setting with Dark, Light and Follow Windows above the ring geometry and a ring preview">
+        <img src="images/ring.png" alt="Brushes menu with ClayBuildup hovered, in the Dark theme: dark slots with white labels and an orange highlight" width="600" height="600" loading="lazy" data-shot-light="images/ring-light.png" data-shot-light-alt="Brushes menu with ClayBuildup hovered, in the Light theme: pale slots with dark labels on white pills" data-shot-zbrush="images/ring-zbrush.png" data-shot-zbrush-alt="Brushes menu with ClayBuildup hovered, in the Match ZBrush theme with ZBrush’s stock colours: grey slots with white labels and an orange centre, lines and hovered slot">
+      </figure>
+    </article>
+
+    <article class="feature">
+      <div class="feature-copy">
+        <h3>Edit it in Studio.</h3>
+        <p>ZOrbit Studio shows a live preview of the real ring. Drag brushes in from a searchable library, record hotkeys, change colours, size and animation. Twelve open animations, from instant to a swirling spiral. Keep profiles, say one for sculpting and one for hard-surface work, and switch between them without a restart.</p>
+        <p class="feature-sub">The first time Studio opens, a Setup screen walks you through the install. It finds ZBrush, says whether to restart it, and has you try the ring once. After that Studio offers a short tour, nine stops, once. You can take it again from Settings &gt; Studio.</p>
+        <div class="theme-switch">
+          <span class="theme-switch-l">Theme</span>
+          <div class="theme-seg" role="group" aria-label="Theme">
+            <button type="button" data-theme-set="dark" aria-pressed="true">Dark</button>
+            <button type="button" data-theme-set="light" aria-pressed="false">Light</button>
+            <button type="button" data-theme-set="zbrush" aria-pressed="false">ZBrush</button>
+          </div>
+        </div>
+        <p class="theme-note">The same switch as above, here on Studio’s Menus screen.</p>
+      </div>
+      <figure class="feature-media">
+        <img src="images/studio.png" alt="ZOrbit Studio in the Dark theme, on the Menus screen: the menu list, the ring preview and the menu settings" width="1360" height="860" loading="lazy" data-shot-light="images/studio-light.png" data-shot-light-alt="ZOrbit Studio in the Light theme, on the Menus screen: a pale window with the menu list, the ring preview and the menu settings" data-shot-zbrush="images/studio-zbrush.png" data-shot-zbrush-alt="ZOrbit Studio in the Match ZBrush theme with ZBrush’s stock colours, on the Menus screen: grey panels with orange accents around the menu list, the ring preview and the menu settings">
       </figure>
     </article>
 
@@ -964,7 +977,11 @@
           </details>
           <details class="faq-q" id="q-colours">
             <summary>Can I change the colours, or hide the names?</summary>
-            <div class="faq-a"><p>Yes. There are five colours: slot fill, accent, highlight, text and lines. Any you leave alone keep their default, and Reset all colours puts them back. To show icons only, set Labels to none. Tags have colours of their own, see <a href="#q-tag-colours">tag colours</a>.</p></div>
+            <div class="faq-a"><p>Yes. There are five colours: slot fill, accent, highlight, text and lines. Any you leave alone keep the default of your <a href="#q-theme">theme</a>, and Reset all colours puts them back. To show icons only, set Labels to none. Tags have colours of their own, see <a href="#q-tag-colours">tag colours</a>.</p></div>
+          </details>
+          <details class="faq-q" id="q-theme">
+            <summary>Is there a light look, or can it match ZBrush’s colours?</summary>
+            <div class="faq-a"><p>Yes. Settings &gt; Theme has Dark, which is the default, Light, Follow Windows and Match ZBrush. Follow Windows changes with Windows’ app colour mode. Match ZBrush uses the interface colours you stored in ZBrush with Preferences &gt; Config &gt; Store Config. ZOrbit only reads that file and never writes it, and without a stored scheme you get Dark. The theme applies to the ring, the browser and Studio together, and a colour you set under Colours still wins. Themes are experimental and their colours will change. If something reads badly, say so on <a href="https://github.com/combwizard/zorbit/issues/32">issue #32</a>. See the <a href="https://zorbit.lol/docs/appearance/#theme">docs</a>.</p></div>
           </details>
           <details class="faq-q" id="q-tag-colours">
             <summary>How do I colour slots by tag?</summary>
@@ -977,6 +994,14 @@
           <details class="faq-q" id="q-studio">
             <summary>What does Studio do?</summary>
             <div class="faq-a"><p>It edits your menus. The Menus screen has a live preview drawn by the same code as the real ring. The Library lets you search every brush, alpha, material and texture ZBrush can load, tag them and drag them in. Setup walks a new install through its first steps. Settings covers size, animation, labels, colours, timing and the ZBrush bridge. Status shows whether ZBrush, the app and the bridge are running.</p></div>
+          </details>
+          <details class="faq-q" id="q-tour">
+            <summary>Is there a tour of Studio?</summary>
+            <div class="faq-a"><p>Yes. Studio offers a short guided tour once, after you finish or skip Setup. It lights up one part of the window at a time, nine stops in all, and ends with Save, Revert, Status and Setup. It changes no menu and no setting. If you used Studio before the tour existed, it does not ask, but you can take it from Settings &gt; Studio, next to What’s new.</p></div>
+          </details>
+          <details class="faq-q" id="q-profiles">
+            <summary>Can I keep more than one setup?</summary>
+            <div class="faq-a"><p>Yes. A profile is a whole setup: menus and settings, tags, and the usage that fills the auto slots and Recent. Keep one for sculpting and one for hard-surface work, say. The button next to the Studio wordmark switches or makes one, and so does the Profile menu on the tray icon. Nothing restarts, and the ring follows within half a second. Each profile is a folder under <code>%APPDATA%\ZOrbit\profiles</code>.</p></div>
           </details>
           <details class="faq-q" id="q-studio-open">
             <summary>Does Studio need to stay open?</summary>
@@ -992,7 +1017,7 @@
           </details>
           <details class="faq-q" id="q-file">
             <summary>Where are my menus, and can I edit the file by hand?</summary>
-            <div class="faq-a"><p>They are in <code>%APPDATA%\ZOrbit\radial.json</code>, a plain JSON file. Edit it in any text editor and the app picks up the change within about half a second. If you then save in Studio, it notices the file changed on disk and asks whether to overwrite it or reload.</p></div>
+            <div class="faq-a"><p>They are in <code>radial.json</code>, a plain JSON file in your profile’s folder under <code>%APPDATA%\ZOrbit\profiles</code>, <code>Default</code> unless you made others. Edit it in any text editor and the app picks up the change within about half a second. If you then save in Studio, it notices the file changed on disk and asks whether to overwrite it or reload.</p></div>
           </details>
           <details class="faq-q" id="q-broken">
             <summary>What happens if I break the JSON?</summary>
@@ -1004,15 +1029,15 @@
           </details>
           <details class="faq-q" id="q-backup">
             <summary>How do I back up my menus or keep them in version control?</summary>
-            <div class="faq-a"><p>Settings &gt; Import and export has an Export button that saves your menus, settings and tags to one <code>.json</code> file. Or copy <code>radial.json</code> and <code>tags.json</code> from <code>%APPDATA%\ZOrbit</code> yourself. Studio also keeps the version before your last save as <code>radial.json.bak</code>. Both files are plain JSON, so they diff cleanly in git.</p></div>
+            <div class="faq-a"><p>Settings &gt; Import and export has an Export button that saves your menus, settings and tags to one <code>.json</code> file. Or copy <code>radial.json</code> and <code>tags.json</code> from your profile’s folder in <code>%APPDATA%\ZOrbit\profiles</code> yourself. Studio also keeps the version before your last save as <code>radial.json.bak</code>. Both files are plain JSON, so they diff cleanly in git.</p></div>
           </details>
           <details class="faq-q" id="q-share">
             <summary>How do I share my menus with someone?</summary>
-            <div class="faq-a"><p>Export from Settings &gt; Import and export and send them the <code>.json</code> file. They press Import, which shows what the file holds before anything changes. Menus and settings load as an unsaved change, so Undo takes them back. For tags they choose Merge or Replace, and Replace keeps their old tags as <code>tags.json.bak</code>. They need the same brushes, alphas, materials and textures, and any button paths must exist in their ZBrush. Icons that point at <code>.png</code> files on your disk do not travel with it. Your tags live in <code>%APPDATA%\ZOrbit\tags.json</code>.</p></div>
+            <div class="faq-a"><p>Export from Settings &gt; Import and export and send them the <code>.json</code> file. They press Import, which shows what the file holds before anything changes. Menus and settings load as an unsaved change, so Undo takes them back. For tags they choose Merge or Replace, and Replace keeps their old tags as <code>tags.json.bak</code>. They need the same brushes, alphas, materials and textures, and any button paths must exist in their ZBrush. Icons that point at <code>.png</code> files on your disk do not travel with it. Your tags live in <code>tags.json</code> in your profile’s folder.</p></div>
           </details>
           <details class="faq-q" id="q-reset">
             <summary>How do I go back to the starter menus?</summary>
-            <div class="faq-a"><p>Delete <code>radial.json</code> (or move it somewhere safe). The app or Studio writes a fresh one from the starter menus the next time it starts. Single settings have their own reset arrows in Settings.</p></div>
+            <div class="faq-a"><p>Delete <code>radial.json</code> from your profile’s folder (or move it somewhere safe), or make a new profile from the starter menus. The app or Studio writes a fresh one from the starter menus the next time it starts. Single settings have their own reset arrows in Settings.</p></div>
           </details>
         </div>
 
@@ -1070,7 +1095,7 @@
           </details>
           <details class="faq-q" id="q-data">
             <summary>Does ZOrbit send any data?</summary>
-            <div class="faq-a"><p>No. There is no account, no tracking and no telemetry. The only network request is Studio’s update check, which asks GitHub for the latest release and sends nothing about you or your menus. The app that draws the ring and the ZBrush plugin make no network requests. On your own PC, the app keeps a count of which brushes you pick, and your recent picks, in <code>usage.json</code>, and that file never leaves it.</p></div>
+            <div class="faq-a"><p>No. There is no account, no tracking and no telemetry. The only network request is Studio’s update check, which asks GitHub for the latest release and sends nothing about you or your menus. The app that draws the ring and the ZBrush plugin make no network requests. On your own PC, the app keeps a count of which brushes you pick, and your recent picks, in <code>usage.json</code> in your profile’s folder, and that file never leaves it.</p></div>
           </details>
           <details class="faq-q" id="q-offline">
             <summary>Does it need an internet connection?</summary>
