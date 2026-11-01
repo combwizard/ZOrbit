@@ -1,0 +1,63 @@
+{
+  "bridge": {"mode": "auto", "key": "F9"},
+  "ring": {"radius": 145, "slot": 72, "dead_zone": 38, "tap_ms": 250, "timeout_s": 20,
+           "animation": "smooth", "labels": "name"},
+  "menus": {
+    "brushes": {
+      "title": "Brushes",
+      "hotkey": "Q",
+      "swallow": true,
+      "items": [
+        {"brush": "Standard"},
+        {"brush": "ClayBuildup"},
+        {"brush": "Move"},
+        {"brush": "DamStandard"},
+        {"brush": "TrimDynamic"},
+        {"brush": "hPolish"},
+        {"brush": "Inflat", "label": "Inflate"},
+        {"menu": "more", "label": "More Brushes"},
+        {"menu": "tools", "label": "Tools"}
+      ]
+    },
+    "more": {
+      "title": "More Brushes",
+      "items": [
+        {"brush": "Pinch"},
+        {"brush": "Clay"},
+        {"brush": "ClayTubes"},
+        {"brush": "Move Topological"},
+        {"brush": "SnakeHook"},
+        {"brush": "Flatten"},
+        {"brush": "Layer"},
+        {"brush": "Slash3"}
+      ]
+    },
+    "tools": {
+      "title": "Tools",
+      "items": [
+        {"press": "Tool:Masking:Clear", "label": "Clear Mask"},
+        {"press": "Tool:Masking:Inverse", "label": "Invert Mask"},
+        {"toggle": "Tool:Masking:ViewMask", "label": "View Mask"},
+        {"toggle": "Transform:Activate Symmetry", "label": "Symmetry"},
+        {"toggle": "Transform:PolyF", "label": "PolyFrame"},
+        {"toggle": "Stroke:LazyMouse", "label": "LazyMouse"},
+        {"toggle": "Brush:Auto Masking:BackfaceMask", "label": "Backface"},
+        {"menu": "subdiv", "label": "SubDivide"},
+        {"steps": [{"press": "Tool:Masking:Clear"}, {"brush": "Standard"}], "label": "Fresh Start", "icon": "Standard"}
+      ]
+    },
+    "subdiv": {
+      "title": "SubDivide",
+      "items": [
+        {"set": "Stroke:SubDivide Size", "value": 0.25, "label": "0.25"},
+        {"set": "Stroke:SubDivide Size", "value": 0.5, "label": "0.50"},
+        {"set": "Stroke:SubDivide Size", "value": 0.75, "label": "0.75"},
+        {"set": "Stroke:SubDivide Size", "value": 1.0, "label": "1.00"},
+        {"set": "Stroke:SubDivide Size", "value": 1.25, "label": "1.25"},
+        {"set": "Stroke:SubDivide Size", "value": 1.5, "label": "1.50"},
+        {"set": "Stroke:SubDivide Size", "value": 1.75, "label": "1.75"},
+        {"set": "Stroke:SubDivide Size", "value": 2.0, "label": "2.00"}
+      ]
+    }
+  }
+}

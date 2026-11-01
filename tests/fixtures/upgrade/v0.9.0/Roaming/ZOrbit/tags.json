@@ -1,0 +1,22 @@
+{
+ "version": 1,
+ "tags": {
+  "blocking": {
+   "label": "Blocking",
+   "color": "#F86B33"
+  },
+  "detailing": {
+   "label": "Detailing",
+   "color": "#4DC8E9"
+  },
+  "upgrade-tag": {
+   "label": "Upgrade tag",
+   "color": "#A8DF23"
+  }
+ },
+ "items": {
+  "brush:claybuildup": [
+   "upgrade-tag"
+  ]
+ }
+}

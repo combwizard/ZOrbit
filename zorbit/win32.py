@@ -7,6 +7,7 @@ truncated to 32 bits.
 import ctypes
 import ctypes.wintypes as w
 import os
+import re
 
 user32 = ctypes.WinDLL("user32", use_last_error=True)
 gdi32 = ctypes.WinDLL("gdi32", use_last_error=True)
@@ -127,6 +128,9 @@ GetWindowThreadProcessId = _sig(user32, "GetWindowThreadProcessId", w.DWORD, w.H
 GetClassNameW = _sig(user32, "GetClassNameW", ctypes.c_int, w.HWND, w.LPWSTR, ctypes.c_int)
 GetGUIThreadInfo = _sig(user32, "GetGUIThreadInfo", w.BOOL, w.DWORD, ctypes.POINTER(GUITHREADINFO))
 FindWindowExW = _sig(user32, "FindWindowExW", w.HWND, w.HWND, w.HWND, w.LPCWSTR, w.LPCWSTR)
+FindWindowW = _sig(user32, "FindWindowW", w.HWND, w.LPCWSTR, w.LPCWSTR)
+GetWindowTextW = _sig(user32, "GetWindowTextW", ctypes.c_int, w.HWND, w.LPWSTR, ctypes.c_int)
+MessageBoxW = _sig(user32, "MessageBoxW", ctypes.c_int, w.HWND, w.LPCWSTR, w.LPCWSTR, w.UINT)
 SendMessageTimeoutW = _sig(user32, "SendMessageTimeoutW", LRESULT, w.HWND, w.UINT, w.WPARAM, w.LPARAM, w.UINT,
                            w.UINT, ctypes.POINTER(ULONG_PTR))
 SendInput = _sig(user32, "SendInput", w.UINT, w.UINT, ctypes.POINTER(INPUT), ctypes.c_int)
@@ -151,6 +155,8 @@ DeleteObject = _sig(gdi32, "DeleteObject", w.BOOL, w.HGDIOBJ)
 # --- kernel32 ------------------------------------------------------------------------------------
 GetModuleHandleW = _sig(kernel32, "GetModuleHandleW", w.HMODULE, w.LPCWSTR)
 CreateMutexW = _sig(kernel32, "CreateMutexW", w.HANDLE, ctypes.c_void_p, w.BOOL, w.LPCWSTR)
+OpenMutexW = _sig(kernel32, "OpenMutexW", w.HANDLE, w.DWORD, w.BOOL, w.LPCWSTR)
+WaitForSingleObject = _sig(kernel32, "WaitForSingleObject", w.DWORD, w.HANDLE, w.DWORD)
 OpenProcess = _sig(kernel32, "OpenProcess", w.HANDLE, w.DWORD, w.BOOL, w.DWORD)
 CloseHandle = _sig(kernel32, "CloseHandle", w.BOOL, w.HANDLE)
 QueryFullProcessImageNameW = _sig(kernel32, "QueryFullProcessImageNameW", w.BOOL, w.HANDLE, w.DWORD,
@@ -200,6 +206,10 @@ INPUT_MOUSE, INPUT_KEYBOARD = 0, 1
 KEYEVENTF_KEYUP = 0x2
 MOUSEEVENTF_MOVE = 0x1
 ERROR_ALREADY_EXISTS = 183
+SYNCHRONIZE = 0x100000
+WAIT_OBJECT_0 = 0
+MB_OK, MB_ICONERROR, MB_SETFOREGROUND = 0x0, 0x10, 0x10000
+TRAY_CLASS = "ZOrbitTray"          # the app's hidden tray window (tray.CLASS_NAME), titled "ZOrbit <version>"
 PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
 TOKEN_QUERY = 0x8
 TokenElevation = 20
@@ -295,6 +305,22 @@ def window_pid(hwnd) -> int:
     return pid.value
 
 
+def create_mutex(name: str) -> tuple:
+    """(handle, existed): a named mutex, and whether another process had made it already. The handle is 0 when
+    it could not be made."""
+    h = CreateMutexW(None, False, name)
+    existed = ctypes.get_last_error() == ERROR_ALREADY_EXISTS       # read now: later calls overwrite it
+    return h, existed
+
+
+def mutex_exists(name: str) -> bool:
+    """Whether some process holds a mutex of that name open (it is only opened to look, then closed)."""
+    h = OpenMutexW(SYNCHRONIZE, False, name)
+    if h:
+        CloseHandle(h)
+    return bool(h)
+
+
 def class_name(hwnd) -> str:
     """Window class name of hwnd ('' when it cannot be read)."""
     if not hwnd:
@@ -320,6 +346,41 @@ def find_message_window(cls: str) -> int:
     """A message-only window of the given class, as an int hwnd (0 when there is none). FindWindowW cannot see
     message-only windows; they hang off HWND_MESSAGE."""
     return int(FindWindowExW(HWND_MESSAGE, None, cls, None) or 0)
+
+
+def running_app() -> tuple | None:
+    """(pid, thread id, version) of the ZOrbit app running in this session, found by its hidden tray window
+    (class ZOrbitTray, title 'ZOrbit <version>'); None when there is none or the title does not read so (an app
+    started with --no-tray has no such window). The title is read with GetWindowTextW, which answers from the
+    window's stored text: a stuck process cannot hang this."""
+    hwnd = FindWindowW(TRAY_CLASS, None)
+    if not hwnd:
+        return None
+    buf = ctypes.create_unicode_buffer(128)
+    GetWindowTextW(hwnd, buf, 128)
+    m = re.fullmatch(r"ZOrbit (\d+\.\d+\.\d+)", buf.value.strip())
+    if not m:
+        return None
+    pid = w.DWORD()
+    tid = GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+    if not tid or not pid.value:
+        return None
+    return int(pid.value), int(tid), m.group(1)
+
+
+def ask_to_quit(pid: int, tid: int, wait_s: float) -> bool:
+    """Posts WM_QUIT to the thread that runs the app's message loop (so the app takes its normal way out: tray icon
+    removed, hook stopped) and waits up to wait_s seconds for the process to end. True when it did. False on access
+    denied (an app running as administrator), on a failed post or on a timeout. Nothing is ever terminated."""
+    h = OpenProcess(SYNCHRONIZE, False, pid)
+    if not h:
+        return False
+    try:
+        if not PostThreadMessageW(tid, WM_QUIT, 0, 0):
+            return False
+        return WaitForSingleObject(h, int(wait_s * 1000)) == WAIT_OBJECT_0
+    finally:
+        CloseHandle(h)
 
 
 def send_copydata(hwnd, dw: int, payload: bytes, timeout_ms: int = 500) -> int | None:

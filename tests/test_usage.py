@@ -608,3 +608,66 @@ def test_write_atomic_does_not_retry_other_errors(tmp_path, monkeypatch):
     with pytest.raises(OSError):
         fsutil.write_atomic(str(tmp_path / "x.json"), "hello")
     assert len(calls) == 1
+
+
+# --- _parse and absorb ---------------------------------------------------------------------------
+
+
+def test_parse_merges_spellings_and_skips_bad_entries():
+    raw = {"brushes": {"Clay Buildup": {"name": "Clay Buildup", "score": 1.0, "t": T0},
+                       "claybuildup": {"name": "ClayBuildup", "score": 3.0, "t": T0},
+                       "bad": {"name": "Bad", "score": "x", "t": T0}, "worse": 5},
+           "menus": {"main": {"slots": ["A", 3], "pending": ["B", None]}, "odd": 4},
+           "picks": {"alpha:Alpha 01": {"name": "Alpha 01", "count": 2, "t": T0},
+                     "alpha:alpha01": {"name": "Alpha01", "count": 3, "t": T0 + 5}}}
+    brushes, menus, picks = usage._parse(raw, T0)
+    assert brushes == {"claybuildup": {"name": "ClayBuildup", "score": 3.0, "t": T0}}
+    assert menus == {"main": {"slots": ["A", None], "pending": ["B"]}}
+    assert picks == {"alpha:alpha01": {"name": "Alpha01", "count": 5, "t": T0 + 5}}
+
+
+def test_absorb_sums_the_faded_scores_and_stamps_them_now(u):
+    u.record("ClayBuildup", T0)
+    taken = u.absorb({"brushes": {"claybuildup": {"name": "Clay Buildup", "score": 4.0, "t": T0 - HALF_LIFE_S},
+                                  "pinch": {"name": "Pinch", "score": 1.0, "t": T0}}}, T0)
+    assert taken == 2
+    assert u.score("claybuildup", T0) == pytest.approx(1.0 + 2.0)
+    assert u.brushes["claybuildup"]["name"] == "ClayBuildup"           # the name here stays
+    assert u.brushes["claybuildup"]["t"] == T0
+    assert u.brushes["pinch"] == {"name": "Pinch", "score": 1.0, "t": T0}
+
+
+def test_absorb_sums_pick_counts_keeps_the_newest_time_and_this_name(u):
+    u.record_pick("alpha", "Alpha 01", T0)
+    u.absorb({"picks": {"alpha:alpha01": {"name": "ALPHA", "count": 4, "t": T0 + 100},
+                        "brush:pinch": {"name": "Pinch", "count": 2, "t": T0 - 5}}}, T0)
+    assert u.picks["alpha:alpha01"] == {"name": "Alpha 01", "count": 5, "t": T0 + 100}
+    assert u.picks["brush:pinch"] == {"name": "Pinch", "count": 2, "t": T0 - 5}
+    u.absorb({"picks": {"alpha:alpha01": {"name": "x", "count": 1, "t": T0 - 100}}}, T0)
+    assert u.picks["alpha:alpha01"]["t"] == T0 + 100
+
+
+def test_absorb_leaves_the_menus_alone_and_counts_a_change(u):
+    u.slots(make_menu("main", auto=2), T0)
+    menus, version = json.loads(json.dumps(u.menus)), u.version
+    u.absorb({"menus": {"main": {"slots": ["Other"], "pending": []}},
+              "brushes": {"pinch": {"name": "Pinch", "score": 1.0, "t": T0}}}, T0)
+    assert u.menus == menus
+    assert u.version == version + 1
+
+
+def test_absorbed_brushes_that_have_faded_away_are_pruned_by_save(u):
+    u.absorb({"brushes": {"old": {"name": "Old", "score": 1.0, "t": T0 - 20 * HALF_LIFE_S}}}, T0)
+    assert "old" in u.brushes
+    u.save()
+    assert u.brushes == {}
+
+
+@pytest.mark.parametrize("raw", [None, [], "x", 5, {}, {"brushes": 3, "picks": [1]}, {"brushes": {"a": 1, "b": {}}},
+                                 {"brushes": {"a": {"name": "A", "score": float("nan"), "t": T0}}},
+                                 {"brushes": {"a": {"name": "A", "score": "1", "t": None}}}])
+def test_absorb_ignores_malformed_input(u, raw):
+    u.record("Keep", T0)
+    before = json.dumps([u.brushes, u.menus, u.picks], sort_keys=True)
+    assert u.absorb(raw, T0) == 0
+    assert json.dumps([u.brushes, u.menus, u.picks], sort_keys=True) == before

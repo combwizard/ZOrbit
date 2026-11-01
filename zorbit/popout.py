@@ -777,6 +777,10 @@ def main(args) -> int:
         profiles.ensure()                                # the first profile, when this is the first process to start
     except OSError as e:                                 # the window still opens: tags and usage just read nothing
         _log(f"profiles could not be set up: {e!r}")
+    too_new = profiles.too_new()
+    if too_new:                                          # files of a newer ZOrbit: the app says so; no window here
+        _log(f"fatal: {too_new}")
+        return 1
     mutex = kernel32.CreateMutexW(None, False, MUTEX)
     if ctypes.get_last_error() == W.ERROR_ALREADY_EXISTS:
         return _forward(opts)

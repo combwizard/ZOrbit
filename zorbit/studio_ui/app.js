@@ -4056,13 +4056,20 @@ function buildSettingsScreen(root) {
       if (u) paintUpdate(u); else updNote.textContent = '';
     };
     if (window.RadialUpdate && window.RadialUpdate.last) paintUpdate(window.RadialUpdate.last);
+    const wnBtn = h('button', { class: 'btn small', type: 'button', title: 'The release notes up to this version', onclick: async e => {
+      const b = e.currentTarget; b.disabled = true;
+      try { if (!(await showWhatsNew({ all: true, remember: false }))) toast('There is nothing to show yet.', { ms: 2500 }); }
+      catch (err) { toast('Could not load the release notes.', { tone: 'warn' }); }
+      b.disabled = false;
+    } }, "What's new");
     const verEl = h('span', { class: 'mono' }, '');
     call('get_app_info').then(i => { if (i && i.version) verEl.textContent = 'v' + i.version; }).catch(() => {});
     const gplLink = h('button', { class: 'link', type: 'button', onclick: async () => {
       try { await call('open_url', 'https://www.gnu.org/licenses/gpl-3.0.html'); } catch (e) { toast('Could not open the link.', { tone: 'warn' }); } } }, 'GPL-3.0');
     page.append(card('Studio', 'Preferences for this window. Saved straight away.',
       h('div', { class: 'field row' }, h('div', { class: 'grow' }, h('span', { class: 'flabel' }, 'Check for updates'),
-        h('div', { class: 'fhint' }, 'When Studio opens, it asks GitHub for the newest release and shows it next to the version at the top. Nothing about you or your menus is sent.'), updNote),
+        h('div', { class: 'fhint' }, 'When Studio opens, it asks GitHub for the newest release and shows it next to the version at the top. Nothing about you or your menus is sent.'), updNote,
+          h('div', { class: 'btn-row', style: { marginTop: '8px' } }, wnBtn)),
         toggleSwitch(S.prefs.check_updates !== false, async v => {
           const ok = await setPref('check_updates', v);
           if (!ok) return false;
@@ -4137,7 +4144,7 @@ function noteStatus(st) {
 }
 /* One quiet look at the status for the rail dot, from outside the Status screen. */
 async function refreshAppDown() {
-  try { noteStatus(await call('get_status')); } catch (e) { /* no dot */ }
+  try { const st = await call('get_status'); noteStatus(st); return st; } catch (e) { return null; }     // no dot
 }
 
 /* The label of a Start app button: the call can block for ten seconds, so after a few it says it is still going. */
@@ -4156,7 +4163,9 @@ async function startAppFlow({ paint }) {
   clearTimeout(slow);
   appStarting = false; appSlow = false; paint();
   const out = { log: [], starting: false };
-  if (r && r.ok) toast('Started.', { tone: 'ok', ms: 3000 });
+  if (r && r.ok && r.restarted) toast(r.was ? `Restarted the app. It was ZOrbit ${r.was}.` : 'Restarted the app.', { tone: 'ok', ms: 4500 });
+  else if (r && r.ok) toast('Started.', { tone: 'ok', ms: 3000 });
+  else if (r && r.reason === 'older') toast(r.message || `The app running is ZOrbit ${r.was || 'older'}, older than this Studio, and could not be restarted.`, { tone: 'warn', ms: 6000 });
   else if (r && r.starting) { out.starting = true; toast(r.message || 'The app is still starting.', { ms: 6500 }); }
   else if (r && r.reason === 'failed') {
     out.log = (Array.isArray(r.lines) ? r.lines : Array.isArray(r.log) ? r.log : []).map(String);
@@ -4191,12 +4200,13 @@ function buildStatusScreen(root) {
   const startBtn = h('button', { class: 'btn small primary start-btn', type: 'button', onclick: () => startApp() });
   const paintStart = st => {
     const running = !!(st && st.app_running);
+    const older = running && !!st.app_older;                       // it runs, but it is an older ZOrbit than this Studio: the button restarts it
     const noZ = !!st && !st.zbrush_running && st.zbrush_check_ok !== false;
-    const off = appStarting || running || noZ || !st;
+    const off = appStarting || (running && !older) || noZ || !st;
     startBtn.disabled = off;
-    startBtn.replaceChildren(...(appStarting ? [h('span', { class: 'spin' }), startLabel()] : [icon('play', 12), running ? 'Running' : 'Start app']));
+    startBtn.replaceChildren(...(appStarting ? [h('span', { class: 'spin' }), startLabel()] : [icon(older ? 'refresh' : 'play', 12), older ? 'Restart app' : running ? 'Running' : 'Start app']));
     startBtn.classList.toggle('running', appStarting);
-    startBtn.title = appStarting ? (appSlow ? 'Still waiting for the app. This can take up to ten seconds.' : 'Starting the app...') : running ? 'The app is already running' : noZ ? 'ZBrush must be running first'
+    startBtn.title = appStarting ? (appSlow ? 'Still waiting for the app. This can take up to ten seconds.' : 'Starting the app...') : older ? 'Stop the app and start this version' : running ? 'The app is already running' : noZ ? 'ZBrush must be running first'
       : (st && st.zbrush_check_ok === false ? 'Could not check for ZBrush. Try anyway.' : 'Start the ZOrbit app');
     if (appStarting) startBtn.setAttribute('aria-busy', 'true'); else startBtn.removeAttribute('aria-busy');
   };
@@ -4254,7 +4264,7 @@ function buildStatusScreen(root) {
       unsure ? stat('ZBrush', false, 'Could not check', 'Studio could not tell whether ZBrush is running.', 'neutral')
         : stat('ZBrush', st.zbrush_running, st.zbrush_running ? 'Running' : 'Not running', st.zbrush_running ? null : 'The app starts together with ZBrush.'),
       stat('ZOrbit app',st.app_running, st.app_running ? 'Running' : 'Not running',
-        st.app_running ? 'Listening for your hotkeys.' : (st.zbrush_running || unsure ? 'Press Start app to launch it.' : 'Open ZBrush first; the app starts with it.'), null, startBtn),
+        st.app_running ? (st.app_older ? `The app running is ZOrbit ${st.app_version || 'older'}, older than this Studio.` : 'Listening for your hotkeys.') : (st.zbrush_running || unsure ? 'Press Start app to launch it.' : 'Open ZBrush first; the app starts with it.'), st.app_running && st.app_older ? 'warn' : null, startBtn),
       stat('Bridge listener', ltone === 'ok', ltext, lsub, ltone),
       h('div', { class: 'scard last' }, h('div', { class: 'micro' }, 'Last pick'), h('div', { class: 'sval mono small' }, st.last_pick || 'Nothing picked yet'), h('div', { class: 'ssub' }, 'The most recent item sent to ZBrush.')));
     if (hadFocus && !startBtn.disabled) startBtn.focus();
@@ -5638,7 +5648,8 @@ function recovery(res) {
   const isErr = res instanceof Error;
   const msg = isErr ? (res.message || String(res)) : ((res && res.error) || 'The file could not be read.');
   const path = isErr ? '' : String((res && res.path) || '');
-  const backup = !isErr && !!(res && res.backup_exists);
+  const tooNew = !isErr && !!(res && res.too_new);              // made by a newer ZOrbit: nothing here may touch the files, so only Open folder is offered
+  const backup = !isErr && !tooNew && !!(res && res.backup_exists);
   const loading = $('#screens > .loading'); if (loading) loading.remove();
   // The screens need the menus: the rail and Alt+1 to Alt+5 do nothing until the file is fixed, so the rail looks that way.
   $$('.rail-btn').forEach(b => { b.classList.remove('on'); b.setAttribute('aria-current', 'false'); b.setAttribute('aria-disabled', 'true'); b.title = 'Fix or reset the menus file first'; });
@@ -5670,17 +5681,111 @@ function recovery(res) {
     if (ok) run(resetBtn, 'reset_config');
   } }, 'Start from defaults');
   $$('.screen').forEach(sc => { sc.hidden = sc.id !== 'screen-menus'; });
-  $('#screen-menus').replaceChildren(h('div', { class: 'fatal' }, icon('alert', 36), h('h2', null, 'Could not read your menus file'),
+  $('#screen-menus').replaceChildren(h('div', { class: 'fatal' }, icon('alert', 36), h('h2', null, tooNew ? 'These files are from a newer ZOrbit' : 'Could not read your menus file'),
     path ? h('p', { class: 'fatal-path mono' }, path) : null,
     h('pre', { class: 'fatal-err mono' }, msg),
-    h('p', { class: 'fatal-lead' }, backup ? 'Nothing has been changed. You can fix the file yourself, restore the last good backup, or start again from the defaults.' : 'Nothing has been changed. You can fix the file yourself or start again from the defaults.'),
-    h('div', { class: 'btn-row' }, folderBtn, logsBtn, restoreBtn, resetBtn, h('button', { class: 'btn primary', type: 'button', onclick: () => location.reload() }, 'Try again'))));
+    h('p', { class: 'fatal-lead' }, tooNew ? 'Nothing has been changed, and Studio will not change these files.' : backup ? 'Nothing has been changed. You can fix the file yourself, restore the last good backup, or start again from the defaults.' : 'Nothing has been changed. You can fix the file yourself or start again from the defaults.'),
+    h('div', { class: 'btn-row' }, ...(tooNew ? [folderBtn] : [folderBtn, logsBtn, restoreBtn, resetBtn, h('button', { class: 'btn primary', type: 'button', onclick: () => location.reload() }, 'Try again')]))));
+}
+
+/* ================================================================== after the first screen: what's new, old files, an old app */
+const openLink = async url => { try { await call('open_url', url); } catch (e) { toast('Could not open the link.', { tone: 'warn' }); } };
+/* Text with `code`, **bold** and #123 (a GitHub issue of ZOrbit) in it, as nodes. Never innerHTML. */
+function mdInline(text) {
+  return String(text == null ? '' : text).split(/(`[^`]+`|\*\*[^*]+\*\*|(?<![\w/#&])#\d+)/).filter(Boolean).map(part => {
+    let m;
+    if ((m = /^`([^`]+)`$/.exec(part))) return h('code', null, m[1]);
+    if ((m = /^\*\*([^*]+)\*\*$/.exec(part))) return h('b', null, m[1]);
+    if (/^#\d+$/.test(part)) return h('button', { class: 'link', type: 'button', title: 'Open issue ' + part + ' on GitHub', onclick: () => openLink('https://github.com/combwizard/zorbit/issues/' + part.slice(1)) }, part);
+    return part;
+  });
+}
+function whatsNewBody(sections) {
+  return sections.map(s => h('section', { class: 'wn-sec' },
+    h('h3', null, /^unreleased$/i.test(s.version) ? 'Not released yet' : String(s.version) + (s.date ? ' (' + s.date + ')' : '')),
+    (s.summary || []).map(p => h('p', null, mdInline(p))),
+    s.items && s.items.length ? h('ul', null, s.items.map(i => h('li', null, mdInline(i)))) : null,
+    s.url ? h('button', { class: 'link', type: 'button', onclick: () => openLink(s.url) }, 'Full release notes') : null));
+}
+/* The release notes dialog. all: every section up to this version (the Settings button), else only what is new since the last one seen.
+   Resolves false when there was nothing to show. Closing it, however it closes, records this version as seen (remember). */
+async function showWhatsNew({ all = false, remember = true } = {}) {
+  const d = await call('get_whats_new', all);
+  const secs = d && Array.isArray(d.sections) ? d.sections : [];
+  if (!secs.length) return false;
+  const cur = String(d.current || '');
+  await modal({ title: `What's new in ZOrbit ${cur}`.trim(), body: h('div', { class: 'wn' }, whatsNewBody(secs)), actions: [{ text: 'Close', value: true, kind: 'primary', focus: true }] });
+  if (remember && cur) setPref('seen_version', cur);
+  return true;
+}
+/* Menus or tags an older ZOrbit left where this one does not look (get_strays). Add them as a profile or set them aside; Escape asks again next start. */
+async function offerStrays() {
+  if (S.fatal || !S.profilesOn) return;
+  const d = await call('get_strays');
+  if (!d || !d.found) return;
+  const n = (v, one, many) => v + ' ' + (v === 1 ? one : many);
+  const what = [d.menus ? n(d.menus, 'menu', 'menus') : '', d.tags ? n(d.tags, 'tag', 'tags') : ''].filter(Boolean).join(' and ') || 'menus and tags';
+  const when = typeof d.when === 'number' ? ' on ' + localDate(new Date(d.when * 1000)) : '';
+  const inp = h('input', { class: 'inp', type: 'text', value: d.name || 'From an older version', spellcheck: 'false', autocomplete: 'off' });
+  const msg = h('p', { class: 'warn-text', role: 'alert', hidden: true });
+  const say = t => { msg.textContent = t || ''; msg.hidden = !t; };
+  inp.addEventListener('input', () => say(''));
+  inp.addEventListener('keydown', e => {
+    if (e.key !== 'Enter' || e.isComposing) return;
+    e.preventDefault();
+    const box = inp.closest('.modal'), ok = box && $('.btn.primary', box);
+    if (ok) ok.click();
+  });
+  let res = null;
+  const run = async (fn, fail) => {
+    let r;
+    try { r = await fn(); } catch (e) { r = { ok: false, message: fail + ((e && e.message) || e) }; }
+    if (r && r.ok) { res = r; return true; }
+    say((r && r.message) || fail);
+    return false;
+  };
+  const v = await modal({ title: 'Files from an older ZOrbit',
+    body: [h('p', null, `An older version of ZOrbit saved ${what}${when} in a place this version no longer reads.`),
+      h('p', null, 'You can add them as a profile, or set them aside in the pre-profiles folder.'),
+      h('label', { class: 'modal-field' }, 'Profile name', inp), msg],
+    actions: [
+      { text: 'Set aside', value: 'aside', check: () => run(() => call('adopt_strays', 'aside'), 'Could not set the files aside: ') },
+      { text: 'Add as a profile', value: 'profile', kind: 'primary', focus: true, check: () => {
+        const t = inp.value.trim();
+        if (!t) { say('Type a name first.'); inp.focus(); return Promise.resolve(false); }
+        return run(() => call('adopt_strays', 'profile', t), 'Could not add the profile: ');
+      } }] });
+  if (v === 'profile' && res) {
+    takeNames(res); renderProfile();
+    toast(`Made the profile ${res.name}.`, { tone: 'ok', ms: 7000, action: { text: 'Switch', fn: () => switchProfile(res.name) } });
+  } else if (v === 'aside') {
+    toast('Set aside in the pre-profiles folder.', { tone: 'ok', ms: 7000, action: { text: 'Open folder', fn: async () => { try { await call('open_folder', 'pre-profiles'); } catch (e) { toast('Could not open the folder.', { tone: 'warn' }); } } } });
+  }
+}
+/* The running app is older than this Studio (an upgrade while ZBrush was open): say so, with a way to restart it. */
+async function warnOlderApp() {
+  if (S.fatal) return;
+  const st = await refreshAppDown();
+  if (!st || !st.app_older || !st.app_running) return;
+  toast(`The app running is ZOrbit ${st.app_version || 'older'}, older than this Studio.`, { tone: 'warn', ms: 9000, action: { text: 'Restart app', fn: async () => {
+    await startAppFlow({ paint: () => {} });
+    await refreshAppDown();
+    if (S.screen === 'status' && R.status) R.status();
+  } } });
+}
+/* Skipped on the Setup screen, the recovery screen and a ?screen= page. A failed call only skips its own step. */
+async function afterBoot() {
+  if (S.fatal || S.screen === 'setup' || S.prefs.setup_done === false || params.has('screen')) return;
+  try { await showWhatsNew(); } catch (e) { /* no release notes this time */ }
+  try { await offerStrays(); } catch (e) { /* asks again next start */ }
+  try { await warnOlderApp(); } catch (e) { /* no toast */ }
 }
 
 async function boot() {
   const [cfgR, optR, prefR] = await Promise.allSettled([call('get_config'), call('get_options'), call('get_prefs')]);
   if (cfgR.status === 'rejected') { recovery(cfgR.reason instanceof Error ? cfgR.reason : new Error(String(cfgR.reason))); return; }
   const cfgRes = cfgR.value;
+  if (cfgRes && cfgRes.too_new) { recovery(Object.assign({}, cfgRes, { config: null })); return; }
   if (!cfgRes || !cfgRes.config || typeof cfgRes.config !== 'object' || Array.isArray(cfgRes.config)) { recovery(cfgRes || new Error('Studio got no menus file from the app.')); return; }
   const opts = optR.status === 'fulfilled' ? optR.value : null;     // a failed get_options just means the FALLBACK_* lists are used
   if (prefR.status === 'fulfilled' && prefR.value) S.prefs = Object.assign(S.prefs, prefR.value);
@@ -5715,6 +5820,7 @@ async function boot() {
   if (S.screen !== 'status') refreshAppDown();
   if (params.has('hover')) { /* debug aid */ }
   document.documentElement.classList.add('ready');
+  afterBoot();
 }
 
 /* The path in the top bar, with its Copy path button (hidden while there is no path). */

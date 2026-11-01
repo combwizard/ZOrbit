@@ -1,6 +1,7 @@
 """profiles.py: the profile folders, the pointer, the first-run migration, and fsutil.named_lock."""
 import json
 import os
+import shutil
 import subprocess
 import sys
 import threading
@@ -645,7 +646,7 @@ def test_two_processes_starting_together_make_one_default(tmp_path):
     results = [p.communicate(timeout=60) for p in procs]
     assert [p.returncode for p in procs] == [0, 0], results
     default = cfg_dir / "profiles" / "Default"
-    assert sorted(os.listdir(cfg_dir / "profiles")) == ["Default"]
+    assert sorted(os.listdir(cfg_dir / "profiles")) == ["Default", "format.json"]
     assert (default / "radial.json").read_bytes() == b"original menus"
     assert (default / "tags.json").read_bytes() == b"original tags"
     assert json.loads((cfg_dir / "profile.json").read_text()) == {"active": "Default"}
@@ -680,3 +681,573 @@ def test_named_lock_gives_up_while_another_thread_holds_it():
     release.set()
     t.join()
     assert result == [False]
+
+
+# --- the format stamp ----------------------------------------------------------------------------
+
+
+def stamp(cfg_dir):
+    return cfg_dir / "profiles" / "format.json"
+
+
+def write_stamp(cfg_dir, fmt=2, version="9.9.9"):
+    data = {"format": fmt}
+    if version is not None:
+        data["version"] = version
+    put(stamp(cfg_dir), json.dumps(data))
+
+
+def test_ensure_stamps_a_fresh_install(profile_env):
+    cfg_dir, _ = profile_env
+    profiles.ensure()
+    assert read(stamp(cfg_dir)) == {"format": profiles.FORMAT, "version": paths.VERSION}
+
+
+def test_ensure_stamps_a_migration_and_the_stamp_is_not_a_profile(profile_env):
+    cfg_dir, data_dir = profile_env
+    put(cfg_dir / "radial.json", "menus")
+    put(data_dir / "usage.json", "usage")
+    profiles.ensure()
+    assert read(stamp(cfg_dir))["format"] == 1
+    assert profiles.names() == ["Default"]
+
+
+def test_ensure_stamps_profiles_from_before_the_stamp_once(profile_env):
+    cfg_dir, data_dir = profile_env
+    make_profile(cfg_dir, "Default")
+    put(cfg_dir / "profile.json", '{"active": "Default"}')
+    assert not stamp(cfg_dir).exists()
+    profiles.ensure()
+    assert read(stamp(cfg_dir)) == {"format": 1, "version": paths.VERSION}
+    before = (snapshot(cfg_dir), snapshot(data_dir))
+    time.sleep(0.02)
+    profiles.ensure()
+    assert (snapshot(cfg_dir), snapshot(data_dir)) == before
+
+
+def test_ensure_stamps_when_it_repairs_a_lost_pointer(profile_env):
+    cfg_dir, _ = profile_env
+    make_profile(cfg_dir, "Alpha")
+    profiles.ensure()
+    assert read(cfg_dir / "profile.json") == {"active": "Alpha"}
+    assert read(stamp(cfg_dir))["format"] == 1
+
+
+def test_a_newer_format_makes_ensure_touch_nothing(active_profile):
+    cfg_dir, folder = active_profile
+    write_stamp(cfg_dir)
+    before = snapshot(cfg_dir)
+    time.sleep(0.02)
+    assert profiles.ensure() == str(folder / "radial.json")
+    assert snapshot(cfg_dir) == before
+
+
+def test_a_newer_format_does_not_migrate_or_repair(profile_env):
+    cfg_dir, _ = profile_env
+    put(cfg_dir / "radial.json", "menus")
+    write_stamp(cfg_dir)
+    profiles.ensure()
+    assert profiles.names() == []
+    assert (cfg_dir / "radial.json").exists()
+    make_profile(cfg_dir, "Alpha")
+    put(cfg_dir / "profile.json", "{nope")
+    profiles.ensure()
+    assert (cfg_dir / "profile.json").read_text() == "{nope"
+
+
+def test_too_new_names_the_version_that_wrote_the_files(active_profile):
+    assert profiles.too_new() == ""
+    write_stamp(active_profile[0], 2, "9.9.9")
+    assert profiles.too_new() == ("These files were made by ZOrbit 9.9.9, which is newer than this one "
+                                  f"({paths.VERSION}). Install ZOrbit 9.9.9 or newer.")
+
+
+def test_too_new_without_a_usable_version(active_profile):
+    for version in (None, "", "  ", 7):
+        write_stamp(active_profile[0], 2, version)
+        profiles._forget()
+        assert "a newer ZOrbit" in profiles.too_new()
+        assert profiles.too_new().endswith("Install the newest ZOrbit.")
+
+
+def test_too_new_follows_the_stamp_file(active_profile):
+    cfg_dir, _ = active_profile
+    write_stamp(cfg_dir, 2, "9.9.9")
+    assert profiles.too_new()
+    write_stamp(cfg_dir, profiles.FORMAT, "0.1.0")
+    assert profiles.too_new() == ""
+
+
+@pytest.mark.parametrize("text", ["{nope", "[]", '{"format": "2"}', '{"format": true}', '{"format": 2.5}',
+                                  '{"format": 1}', '{"format": 0}', "{}"])
+def test_an_unreadable_or_current_stamp_is_not_too_new(active_profile, text):
+    put(stamp(active_profile[0]), text)
+    assert profiles.too_new() == ""
+    assert profiles.ensure()
+
+
+def test_a_missing_stamp_is_not_too_new(profile_env):
+    assert profiles.too_new() == ""
+
+
+def test_the_changing_functions_refuse_when_the_files_are_too_new(active_profile):
+    cfg_dir, _ = active_profile
+    make_profile(cfg_dir, "Other")
+    write_stamp(cfg_dir)
+    before = snapshot(cfg_dir)
+    time.sleep(0.02)
+    calls = (lambda: profiles.create("New", "starter"), lambda: profiles.rename("Other", "Renamed"),
+             lambda: profiles.delete("Other"), lambda: profiles.set_active("Other"),
+             lambda: profiles._write_pointer("Other"))
+    for call in calls:
+        with pytest.raises(ProfileError, match="9.9.9"):
+            call()
+    assert snapshot(cfg_dir) == before
+
+
+def test_repairing_the_pointer_leaves_the_stamp_alone(profile_env):
+    cfg_dir, _ = profile_env
+    profiles.ensure()
+    before = (stamp(cfg_dir).read_bytes(), os.stat(stamp(cfg_dir)).st_mtime_ns)
+    time.sleep(0.02)
+    put(cfg_dir / "profile.json", "{nope")
+    profiles.ensure()
+    assert read(cfg_dir / "profile.json") == {"active": "Default"}
+    assert (stamp(cfg_dir).read_bytes(), os.stat(stamp(cfg_dir)).st_mtime_ns) == before
+
+
+def test_too_new_is_empty_while_a_menus_file_is_pinned(active_profile, monkeypatch):
+    write_stamp(active_profile[0])
+    monkeypatch.setenv("ZORBIT_CONFIG_FILE", "x.json")
+    assert profiles.too_new() == ""
+
+
+# --- leftovers -----------------------------------------------------------------------------------
+
+STRAY_MENUS = {"menus": {"main": {"title": "Edited", "hotkey": "Q", "items": [{"brush": "Standard"}]}}}
+
+
+def refuse_radial(monkeypatch):
+    """shutil.move fails for radial.json, as when something holds the file during the first run."""
+    real = shutil.move
+
+    def flaky(src, dst, *a, **k):
+        if os.path.basename(src) == "radial.json":
+            raise PermissionError("held")
+        return real(src, dst, *a, **k)
+    monkeypatch.setattr(profiles.shutil, "move", flaky)
+    return real
+
+
+def test_a_file_that_could_not_be_moved_is_recorded_as_a_leftover(profile_env, monkeypatch):
+    cfg_dir, _ = profile_env
+    put(cfg_dir / "radial.json", json.dumps(STRAY_MENUS))
+    put(cfg_dir / "tags.json", "{}")
+    refuse_radial(monkeypatch)
+    profiles.ensure()
+    st = os.stat(cfg_dir / "radial.json")
+    assert read(cfg_dir / "profiles" / "leftovers.json") == {
+        "radial.json": {"folder": "config", "size": st.st_size, "mtime_ns": st.st_mtime_ns}}
+    assert (cfg_dir / "pre-profiles" / "tags.json").exists()
+    assert profiles.names() == ["Default"]
+
+
+def test_no_leftovers_file_when_everything_moved(profile_env):
+    cfg_dir, _ = profile_env
+    put(cfg_dir / "radial.json", json.dumps(STRAY_MENUS))
+    profiles.ensure()
+    assert not (cfg_dir / "profiles" / "leftovers.json").exists()
+
+
+def test_a_leftover_is_not_a_stray_and_is_moved_by_tidy_leftovers(profile_env, monkeypatch):
+    cfg_dir, _ = profile_env
+    put(cfg_dir / "radial.json", json.dumps(STRAY_MENUS))
+    with monkeypatch.context() as m:
+        refuse_radial(m)
+        profiles.ensure()
+        assert profiles.strays()["menus"] is None
+        profiles.tidy_leftovers()                          # still held: stays listed
+        assert (cfg_dir / "radial.json").exists()
+        assert "radial.json" in read(cfg_dir / "profiles" / "leftovers.json")
+    profiles.tidy_leftovers()
+    assert not (cfg_dir / "radial.json").exists()
+    assert read(cfg_dir / "pre-profiles" / "radial.json") == STRAY_MENUS
+    assert not (cfg_dir / "profiles" / "leftovers.json").exists()
+    assert profiles.strays()["menus"] is None
+
+
+def test_a_leftover_that_changed_afterwards_is_a_stray(profile_env, monkeypatch):
+    cfg_dir, _ = profile_env
+    put(cfg_dir / "radial.json", json.dumps(STRAY_MENUS))
+    refuse_radial(monkeypatch)
+    profiles.ensure()
+    assert profiles.strays()["menus"] is None
+    later = dict(STRAY_MENUS, ring={"radius": 150})
+    put(cfg_dir / "radial.json", json.dumps(later))
+    os.utime(cfg_dir / "radial.json", (1_000_000_000, 1_000_000_000))
+    assert profiles.strays()["menus"] == str(cfg_dir / "radial.json")
+    profiles.tidy_leftovers()                              # a changed file is not moved, and its entry goes
+    assert (cfg_dir / "radial.json").exists()
+    assert not (cfg_dir / "profiles" / "leftovers.json").exists()
+
+
+def test_tidy_leftovers_drops_entries_whose_file_is_gone_and_never_raises(profile_env):
+    cfg_dir, _ = profile_env
+    profiles.ensure()
+    profiles.tidy_leftovers()                              # no leftovers.json
+    put(cfg_dir / "profiles" / "leftovers.json",
+        json.dumps({"radial.json": {"folder": "config", "size": 1, "mtime_ns": 1}, "junk": 5}))
+    profiles.tidy_leftovers()
+    assert not (cfg_dir / "profiles" / "leftovers.json").exists()
+    put(cfg_dir / "profiles" / "leftovers.json", "{nope")
+    profiles.tidy_leftovers()
+
+
+# --- strays --------------------------------------------------------------------------------------
+
+
+def starter_raw():
+    return json.loads(default_bytes().decode("utf-8-sig"))
+
+
+def starter_tags_raw():
+    return {"version": 1, "tags": {"favourite": {"label": "Favourites", "color": "#FFD166"},
+                                   "blocking": {"label": "Blocking", "color": "#A8DF23"},
+                                   "detailing": {"label": "Detailing", "color": "#C77DFF"}}, "items": {}}
+
+
+@pytest.fixture
+def migrated(profile_env):
+    """profile_env after the first run, so the root files that appear now are what an older ZOrbit wrote."""
+    profiles.ensure()
+    return profile_env
+
+
+def test_a_fresh_migrated_sandbox_has_no_strays(migrated):
+    assert profiles.strays() == {"menus": None, "tags": None, "usage": None, "when": None}
+
+
+def test_strays_reports_nothing_before_the_first_profile(profile_env):
+    cfg_dir, data_dir = profile_env
+    put(cfg_dir / "radial.json", json.dumps(STRAY_MENUS))
+    put(cfg_dir / "tags.json", json.dumps(starter_tags_raw() | {"items": {"brush:a": ["blocking"]}}))
+    put(data_dir / "usage.json", '{"brushes": {}}')
+    assert profiles.strays() == {"menus": None, "tags": None, "usage": None, "when": None}
+
+
+def test_strays_reports_nothing_while_a_menus_file_is_pinned(migrated, monkeypatch):
+    put(migrated[0] / "radial.json", json.dumps(STRAY_MENUS))
+    monkeypatch.setenv("ZORBIT_CONFIG_FILE", "x.json")
+    assert profiles.strays()["menus"] is None
+
+
+def test_the_shipped_starter_menus_are_not_a_stray(migrated):
+    put(migrated[0] / "radial.json", default_bytes())
+    assert profiles.strays()["menus"] is None
+
+
+def test_starter_menus_with_only_bridge_and_browser_changed_are_not_a_stray(migrated):
+    raw = starter_raw()
+    raw["bridge"] = {"mode": "key", "key": "F9"}
+    raw["browser"] = {"hotkey": "Alt+B"}
+    put(migrated[0] / "radial.json", json.dumps(raw, indent=2))
+    assert profiles.strays()["menus"] is None
+
+
+def test_starter_menus_with_other_line_endings_or_indentation_are_not_a_stray(migrated):
+    cfg_dir, _ = migrated
+    put(cfg_dir / "radial.json", default_bytes().replace(b"\r\n", b"\n").replace(b"\n", b"\r\n"))
+    assert profiles.strays()["menus"] is None
+    put(cfg_dir / "radial.json", json.dumps(starter_raw(), indent=4, ensure_ascii=False).encode("utf-8-sig"))
+    assert profiles.strays()["menus"] is None
+    put(cfg_dir / "radial.json", json.dumps(starter_raw(), separators=(",", ":")))
+    assert profiles.strays()["menus"] is None
+
+
+def test_menus_with_an_edited_title_are_a_stray(migrated):
+    cfg_dir, _ = migrated
+    raw = starter_raw()
+    raw["menus"]["brushes"]["title"] = "My brushes"
+    path = put(cfg_dir / "radial.json", json.dumps(raw))
+    found = profiles.strays()
+    assert found["menus"] == path
+    assert found["tags"] is None and found["usage"] is None
+    assert found["when"] == pytest.approx(os.stat(path).st_mtime)
+
+
+def test_a_radial_menu_copy_at_the_root_is_not_a_stray(migrated):
+    cfg_dir, _ = migrated
+    old = cfg_dir.parent / "RadialMenu"
+    text = json.dumps(STRAY_MENUS)
+    put(old / "radial.json", text)
+    put(cfg_dir / "radial.json", text)
+    assert profiles.strays()["menus"] is None
+    put(cfg_dir / "radial.json", text + " ")                  # edited since: no longer the same file
+    assert profiles.strays()["menus"] == str(cfg_dir / "radial.json")
+
+
+def test_starter_tags_are_not_a_stray_and_tagged_items_are(migrated):
+    cfg_dir, _ = migrated
+    put(cfg_dir / "tags.json", json.dumps(starter_tags_raw()))
+    assert profiles.strays()["tags"] is None
+    raw = starter_tags_raw()
+    raw["items"] = {"brush:claybuildup": ["blocking"]}
+    path = put(cfg_dir / "tags.json", json.dumps(raw))
+    assert profiles.strays()["tags"] == path
+
+
+def test_changed_tags_are_a_stray(migrated):
+    cfg_dir, _ = migrated
+    raw = starter_tags_raw()
+    raw["tags"]["sculpt"] = {"label": "Sculpt", "color": "#4DC8E9"}
+    put(cfg_dir / "tags.json", json.dumps(raw))
+    assert profiles.strays()["tags"] == str(cfg_dir / "tags.json")
+    raw = starter_tags_raw()
+    raw["tags"]["blocking"]["color"] = "#112233"
+    put(cfg_dir / "tags.json", json.dumps(raw))
+    assert profiles.strays()["tags"] == str(cfg_dir / "tags.json")
+
+
+def test_usage_at_the_data_root_is_a_stray_unless_it_is_the_radial_menu_one(migrated):
+    cfg_dir, data_dir = migrated
+    text = json.dumps({"brushes": {"pinch": {"name": "Pinch", "score": 1.0, "t": 1000.0}}})
+    put(data_dir.parent / "RadialMenu" / "usage.json", text)
+    put(data_dir / "usage.json", text)
+    assert profiles.strays()["usage"] is None
+    path = put(data_dir / "usage.json", text.replace("1.0", "2.0"))
+    assert profiles.strays()["usage"] == path
+
+
+def test_siblings_and_temp_files_are_never_strays(migrated):
+    cfg_dir, data_dir = migrated
+    for n in ("radial.json.bak", "radial.json.broken", "tags.json.bak", "radial.json.1234.tmp"):
+        put(cfg_dir / n, json.dumps(STRAY_MENUS))
+    for n in ("usage.json.bad", "usage.json.1234.tmp"):
+        put(data_dir / n, '{"brushes": {}}')
+    assert profiles.strays() == {"menus": None, "tags": None, "usage": None, "when": None}
+
+
+@pytest.mark.parametrize("text", ["{nope", "[]", "5", ""])
+def test_a_root_file_that_is_not_a_json_object_is_ignored(migrated, text):
+    cfg_dir, data_dir = migrated
+    put(cfg_dir / "radial.json", text)
+    put(cfg_dir / "tags.json", text)
+    put(data_dir / "usage.json", text)
+    assert profiles.strays() == {"menus": None, "tags": None, "usage": None, "when": None}
+
+
+def test_when_is_the_newest_stray(migrated):
+    cfg_dir, data_dir = migrated
+    a = put(cfg_dir / "radial.json", json.dumps(STRAY_MENUS))
+    b = put(data_dir / "usage.json", '{"brushes": {}}')
+    os.utime(a, (1_700_000_000, 1_700_000_000))
+    os.utime(b, (1_700_000_500, 1_700_000_500))
+    found = profiles.strays()
+    assert (found["menus"], found["usage"]) == (a, b)
+    assert found["when"] == 1_700_000_500
+
+
+def test_strays_reports_nothing_when_the_files_are_too_new(migrated):
+    put(migrated[0] / "radial.json", json.dumps(STRAY_MENUS))
+    write_stamp(migrated[0])
+    assert profiles.strays()["menus"] is None
+
+
+# --- set_aside -----------------------------------------------------------------------------------
+
+
+def aside_folders(cfg_dir):
+    return sorted(n for n in os.listdir(cfg_dir / "pre-profiles") if os.path.isdir(cfg_dir / "pre-profiles" / n))
+
+
+def test_set_aside_moves_a_file_and_its_siblings_into_a_stamped_folder(migrated):
+    cfg_dir, data_dir = migrated
+    for n in ("radial.json", "radial.json.bak", "radial.json.broken", "radial.json.bad"):
+        put(cfg_dir / n, n)
+    put(cfg_dir / "tags.json", "tags")
+    put(cfg_dir / "tags.json.bak", "tags bak")
+    put(data_dir / "usage.json", "usage")
+    put(data_dir / "usage.json.bad", "usage bad")
+    put(cfg_dir / "other.json", "stays")
+    folder = profiles.set_aside([str(cfg_dir / "radial.json"), str(cfg_dir / "tags.json"),
+                                 str(data_dir / "usage.json")])
+    assert os.path.dirname(folder) == str(cfg_dir / "pre-profiles")
+    assert len(os.path.basename(folder)) == len("20260101-120000")
+    assert sorted(os.listdir(folder)) == ["radial.json", "radial.json.bad", "radial.json.bak", "radial.json.broken",
+                                          "tags.json", "tags.json.bak", "usage.json", "usage.json.bad"]
+    assert (cfg_dir / "other.json").exists()
+    assert not any((cfg_dir / n).exists() for n in ("radial.json", "radial.json.bak", "tags.json"))
+    assert not (data_dir / "usage.json").exists()
+    with open(os.path.join(folder, "usage.json"), encoding="utf-8") as f:
+        assert f.read() == "usage"
+
+
+def test_two_set_asides_in_one_second_get_distinct_folders(migrated, monkeypatch):
+    cfg_dir, _ = migrated
+    monkeypatch.setattr(profiles.time, "strftime", lambda fmt: "20260101-120000")
+    put(cfg_dir / "radial.json", "one")
+    first = profiles.set_aside([str(cfg_dir / "radial.json")])
+    put(cfg_dir / "radial.json", "two")
+    second = profiles.set_aside([str(cfg_dir / "radial.json")])
+    put(cfg_dir / "radial.json", "three")
+    third = profiles.set_aside([str(cfg_dir / "radial.json")])
+    assert [os.path.basename(f) for f in (first, second, third)] == ["20260101-120000", "20260101-120000-2",
+                                                                      "20260101-120000-3"]
+    assert (cfg_dir / "pre-profiles" / "20260101-120000-2" / "radial.json").read_text() == "two"
+
+
+def test_set_aside_with_nothing_to_move_returns_none_and_makes_no_folder(migrated):
+    cfg_dir, _ = migrated
+    assert profiles.set_aside([str(cfg_dir / "radial.json")]) is None
+    assert profiles.set_aside([]) is None
+    assert not (cfg_dir / "pre-profiles").exists() or aside_folders(cfg_dir) == []
+
+
+def test_set_aside_leaves_a_file_it_cannot_move(migrated, monkeypatch):
+    cfg_dir, _ = migrated
+    put(cfg_dir / "radial.json", "menus")
+    put(cfg_dir / "tags.json", "tags")
+
+    def refuse(src, dst, *a, **k):
+        if os.path.basename(src) == "radial.json":
+            raise PermissionError("held")
+        return real(src, dst, *a, **k)
+    real = shutil.move
+    monkeypatch.setattr(profiles.shutil, "move", refuse)
+    folder = profiles.set_aside([str(cfg_dir / "radial.json"), str(cfg_dir / "tags.json")])
+    assert os.listdir(folder) == ["tags.json"]
+    assert (cfg_dir / "radial.json").exists()
+    assert profiles.set_aside([str(cfg_dir / "radial.json")]) is None
+    assert aside_folders(cfg_dir) == [os.path.basename(folder)]
+
+
+# --- create from strays --------------------------------------------------------------------------
+
+
+def test_create_strays_takes_the_old_menus_and_tags(active_profile):
+    cfg_dir, folder = active_profile
+    stray_menus = dict(STRAY_MENUS, bridge={"mode": "old"}, browser={"hotkey": "Alt+Z"})
+    tags = starter_tags_raw()
+    tags["items"] = {"brush:standard": ["blocking"]}
+    put(cfg_dir / "radial.json", json.dumps(stray_menus))
+    put(cfg_dir / "radial.json.bak", "bak")
+    put(cfg_dir / "tags.json", json.dumps(tags))
+    assert profiles.create("Older", "strays") == "Older"
+    made = cfg_dir / "profiles" / "Older"
+    raw = read(made / "radial.json")
+    assert raw["menus"]["main"]["title"] == "Edited"
+    assert raw["bridge"] == BRIDGE and raw["browser"] == BROWSER       # this PC's, not the old file's
+    assert read(made / "tags.json") == tags
+    assert not (made / "usage.json").exists()
+    assert profiles.active() == "Default"
+    assert not (cfg_dir / "radial.json").exists() and not (cfg_dir / "tags.json").exists()
+    assert not (cfg_dir / "radial.json.bak").exists()
+    [stamped] = aside_folders(cfg_dir)
+    assert sorted(os.listdir(cfg_dir / "pre-profiles" / stamped)) == ["radial.json", "radial.json.bak", "tags.json"]
+    assert profiles.strays()["menus"] is None
+    assert staging(cfg_dir) == []
+
+
+def test_create_strays_with_only_tags_uses_the_starter_menus(active_profile):
+    cfg_dir, _ = active_profile
+    tags = starter_tags_raw()
+    tags["items"] = {"brush:standard": ["detailing"]}
+    put(cfg_dir / "tags.json", json.dumps(tags))
+    profiles.create("Tags only", "strays")
+    made = cfg_dir / "profiles" / "Tags only"
+    expected = starter_raw()
+    expected.update(bridge=BRIDGE, browser=BROWSER)
+    assert read(made / "radial.json") == expected
+    assert read(made / "tags.json") == tags
+    assert not (cfg_dir / "tags.json").exists()
+
+
+def test_create_strays_with_only_menus_has_no_tags_file(active_profile):
+    cfg_dir, _ = active_profile
+    put(cfg_dir / "radial.json", json.dumps(STRAY_MENUS))
+    profiles.create("Menus only", "strays")
+    assert not (cfg_dir / "profiles" / "Menus only" / "tags.json").exists()
+
+
+def test_create_strays_leaves_the_usage_stray_for_absorb_stray_usage(active_profile):
+    cfg_dir, folder = active_profile
+    data_dir = cfg_dir.parent.parent / "Local" / "ZOrbit"
+    put(cfg_dir / "radial.json", json.dumps(STRAY_MENUS))
+    put(data_dir / "usage.json", '{"brushes": {}}')
+    profiles.create("Older", "strays")
+    assert (data_dir / "usage.json").exists()
+
+
+def test_create_strays_with_no_strays_is_refused(active_profile):
+    cfg_dir, _ = active_profile
+    put(cfg_dir / "radial.json", default_bytes())              # an untouched starter is no stray
+    put(cfg_dir / "tags.json", json.dumps(starter_tags_raw()))
+    with pytest.raises(ProfileError, match="There are no files from an older version to bring in."):
+        profiles.create("Older", "strays")
+    assert profiles.names() == ["Default"]
+    assert staging(cfg_dir) == []
+    assert (cfg_dir / "radial.json").exists()
+
+
+def test_create_strays_that_fails_to_build_sets_nothing_aside(active_profile, monkeypatch):
+    import config
+    cfg_dir, _ = active_profile
+    put(cfg_dir / "radial.json", json.dumps(STRAY_MENUS))
+
+    def refuse(path, *a, **k):
+        raise ValueError("no")
+    monkeypatch.setattr(config, "load", refuse)
+    with pytest.raises(ProfileError, match="The menus could not be read"):
+        profiles.create("Older", "strays")
+    assert profiles.names() == ["Default"]
+    assert (cfg_dir / "radial.json").exists()
+    assert not (cfg_dir / "pre-profiles").exists() or aside_folders(cfg_dir) == []
+    assert staging(cfg_dir) == []
+
+
+# --- absorb_stray_usage --------------------------------------------------------------------------
+
+T = 1_800_000_000.0
+
+
+def test_absorb_stray_usage_adds_the_old_scores_and_counts_once(active_profile):
+    import usage
+    cfg_dir, folder = active_profile
+    data_dir = cfg_dir.parent.parent / "Local" / "ZOrbit"
+    mine = usage.Usage(str(folder / "usage.json"))
+    mine.record("ClayBuildup", T)
+    mine.record_pick("brush", "ClayBuildup", T)
+    mine.save()
+    stray = {"brushes": {"claybuildup": {"name": "ClayBuildup", "score": 2.0, "t": T},
+                         "pinch": {"name": "Pinch", "score": 4.0, "t": T}},
+             "picks": {"brush:claybuildup": {"name": "ClayBuildup", "count": 5, "t": T + 10}}}
+    put(data_dir / "usage.json", json.dumps(stray))
+    put(data_dir / "usage.json.bad", "old bad")
+    assert profiles.absorb_stray_usage(now=T) == 2
+    after = usage.Usage(str(folder / "usage.json")).load()
+    assert after.score("claybuildup", T) == pytest.approx(3.0)
+    assert after.score("pinch", T) == pytest.approx(4.0)
+    assert after.picks["brush:claybuildup"]["count"] == 6
+    assert not (data_dir / "usage.json").exists() and not (data_dir / "usage.json.bad").exists()
+    [stamped] = aside_folders(cfg_dir)
+    assert read(cfg_dir / "pre-profiles" / stamped / "usage.json") == stray
+    assert profiles.absorb_stray_usage(now=T) == 0
+    assert usage.Usage(str(folder / "usage.json")).load().score("claybuildup", T) == pytest.approx(3.0)
+
+
+def test_absorb_stray_usage_with_nothing_to_absorb_is_zero(active_profile):
+    cfg_dir, _ = active_profile
+    assert profiles.absorb_stray_usage() == 0
+    assert not (cfg_dir / "pre-profiles").exists()
+
+
+def test_absorb_stray_usage_goes_into_the_active_profile(active_profile):
+    import usage
+    cfg_dir, _ = active_profile
+    data_dir = cfg_dir.parent.parent / "Local" / "ZOrbit"
+    make_profile(cfg_dir, "Other")
+    profiles.set_active("Other")
+    put(data_dir / "usage.json", json.dumps({"brushes": {"pinch": {"name": "Pinch", "score": 1.0, "t": T}}}))
+    assert profiles.absorb_stray_usage(now=T) == 1
+    assert usage.Usage(str(cfg_dir / "profiles" / "Other" / "usage.json")).load().score("pinch", T) == 1.0
+    assert usage.Usage(str(cfg_dir / "profiles" / "Default" / "usage.json")).load().brushes == {}

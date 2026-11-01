@@ -59,6 +59,7 @@ window.card = n => { const c = document.getElementById('set-' + n.toLowerCase().
 # name -> page (default index.html), URL switches (see dev/mock.js; Studio itself reads screen, menu, item, tab,
 # kind, q), window size, JS steps to run once the page is ready (each may return a promise), and clip: a JS
 # expression for the element to crop to. Crops are taken at 2x, whole windows at 1x.
+# studio-strays waits for the dialog Studio opens on its own after start (?strays) and crops to it.
 # studio-profiles crops the top-left of the window (the brand, the profile button and its open picker) with an object
 # that answers getBoundingClientRect like an element, since the picker is not inside the top bar.
 SHOTS = {
@@ -78,6 +79,9 @@ SHOTS = {
     "settings-bridge": dict(q="screen=settings", clip="card('ZBrush bridge')"),
     "settings-older-zbrush": dict(q="screen=settings&zb=both", clip="card('Older ZBrush')"),
     "settings-import-export": dict(q="screen=settings", clip="card('Import and export')"),
+    "studio-strays": dict(q="strays", steps=["new Promise(r => { const t0 = Date.now(); (function w() {"
+                                           " if (document.querySelector('.modal') || Date.now() - t0 > 5000) r(); else setTimeout(w, 100); })(); })"],
+                          clip="document.querySelector('.modal')"),
     "studio-profiles": dict(q="screen=menus&profiles=3", steps=["document.getElementById('profileBtn').click()"],
                             clip="({getBoundingClientRect: () => { const p = document.querySelector('.popover').getBoundingClientRect();"
                                  " return {left: 0, top: 0, right: Math.max(p.right + 24, 520), bottom: p.bottom + 12}; }})"),

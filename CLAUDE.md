@@ -33,7 +33,7 @@ Where each part is documented:
 | `studio.py`, `webapi.py`, `studio_ui/` (Studio screens and settings) | `studio.md`, plus the page for the feature |
 | `config.py`, `expand.py`, `default_menus.json` (menus, item types, submenus, fans) | `menus.md` |
 | `usage.py` (auto slots, recent picks) | `menus.md`, `browser.md`, `profiles.md` |
-| `profiles.py` (profiles, the profile in use, switching) | `profiles.md` |
+| `profiles.py` (profiles, the profile in use, switching, files from an older version, `format.json`) | `profiles.md`, `files.md` |
 | `tags.py`, tag colours in `ring.py` | `tags.md`, `appearance.md` |
 | `popout.py`, `studio_ui/popout.html`, `assets.py`, `brushes.py` (browser, libraries) | `browser.md` |
 | `radiald.py` (hotkeys, pick modes, picks mid-stroke) | `hotkeys.md` |
@@ -46,6 +46,7 @@ Where each part is documented:
 | `tray.py` (the notification-area icon and its menu) | `studio.md`, `getting-started.md` |
 | `winframe.py` (window frame, placement and drag regions of Studio and the browser) | `studio.md`, `browser.md` |
 | `zbp.py` (brush pictures read from `.zbp` files) | `browser.md`, `troubleshooting.md` (slots that show letters) |
+| `changelog.py`, `CHANGELOG.md` (Studio's What's new) | `studio.md`; the summary paragraph rule in `building.md` |
 | `selftest.py` (`--selftest`) | `building.md` |
 | `tests/` | `building.md`, `CONTRIBUTING.md` |
 | `tools/ring_shots.py` (the ring pictures and GIFs) | `appearance.md`, `menus.md`, and the picture rules above |

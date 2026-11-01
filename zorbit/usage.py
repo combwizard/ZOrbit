@@ -24,6 +24,7 @@ write it only to forget a recent):
  "picks": {"alpha:alpha_01": {"name": "Alpha_01", "count": 4, "t": 1761550000.0}}}       # key: kind:norm(name)
 """
 import json
+import math
 import os
 import shutil
 import time
@@ -45,6 +46,44 @@ def _entries(raw: dict, section: str) -> list:
     """The (key, entry) pairs of a section of the file; a section of the wrong type has none."""
     part = raw.get(section)
     return list(part.items()) if isinstance(part, dict) else []
+
+
+def _parse(raw: dict, now: float | None = None) -> tuple:
+    """(brushes, menus, picks) from a usage.json-shaped dict. A bad entry is skipped, not the entries after it;
+    two spellings of one name are merged (brushes: the higher faded score; picks: both counts, the newer pick)."""
+    now = time.time() if now is None else now
+    brushes, menus, picks = {}, {}, {}
+    for k, e in _entries(raw, "brushes"):
+        try:
+            if isinstance(e, dict) and isinstance(e.get("name"), str):
+                new = {"name": e["name"], "score": float(e["score"]), "t": float(e["t"])}
+                k = norm(k)
+                old = brushes.get(k)
+                if old is None or Usage._faded(new, now) > Usage._faded(old, now):   # two spellings: higher score
+                    brushes[k] = new
+        except (ValueError, TypeError, KeyError, AttributeError, OverflowError):
+            continue
+    for mid, st in _entries(raw, "menus"):
+        try:
+            if isinstance(st, dict):
+                menus[mid] = {"slots": [s if isinstance(s, str) else None for s in st.get("slots") or []],
+                              "pending": [s for s in st.get("pending") or [] if isinstance(s, str)]}
+        except (ValueError, TypeError, KeyError, AttributeError):
+            continue
+    for k, e in _entries(raw, "picks"):
+        try:
+            if isinstance(e, dict) and isinstance(e.get("name"), str):
+                new = {"name": e["name"], "count": int(e["count"]), "t": float(e["t"])}
+                kind, _, name = k.partition(":")
+                k = f"{kind}:{norm(name)}"
+                old = picks.get(k)
+                if old is not None:                    # two spellings: the newer pick, with both counts
+                    count = old["count"] + new["count"]
+                    new = dict(new if new["t"] >= old["t"] else old, count=count)
+                picks[k] = new
+        except (ValueError, TypeError, KeyError, AttributeError, OverflowError):
+            continue
+    return brushes, menus, picks
 
 
 def auto_count(menu) -> int:
@@ -91,38 +130,7 @@ class Usage:
             self._keep_bad()
             self.mtime = mtime
             return self
-        now = time.time()
-        brushes, menus, picks = {}, {}, {}
-        for k, e in _entries(raw, "brushes"):
-            try:
-                if isinstance(e, dict) and isinstance(e.get("name"), str):
-                    new = {"name": e["name"], "score": float(e["score"]), "t": float(e["t"])}
-                    k = norm(k)
-                    old = brushes.get(k)
-                    if old is None or self._faded(new, now) > self._faded(old, now):   # two spellings: higher score
-                        brushes[k] = new
-            except (ValueError, TypeError, KeyError, AttributeError, OverflowError):
-                continue
-        for mid, st in _entries(raw, "menus"):
-            try:
-                if isinstance(st, dict):
-                    menus[mid] = {"slots": [s if isinstance(s, str) else None for s in st.get("slots") or []],
-                                  "pending": [s for s in st.get("pending") or [] if isinstance(s, str)]}
-            except (ValueError, TypeError, KeyError, AttributeError):
-                continue
-        for k, e in _entries(raw, "picks"):
-            try:
-                if isinstance(e, dict) and isinstance(e.get("name"), str):
-                    new = {"name": e["name"], "count": int(e["count"]), "t": float(e["t"])}
-                    kind, _, name = k.partition(":")
-                    k = f"{kind}:{norm(name)}"
-                    old = picks.get(k)
-                    if old is not None:                    # two spellings: the newer pick, with both counts
-                        count = old["count"] + new["count"]
-                        new = dict(new if new["t"] >= old["t"] else old, count=count)
-                    picks[k] = new
-            except (ValueError, TypeError, KeyError, AttributeError, OverflowError):
-                continue
+        brushes, menus, picks = _parse(raw, time.time())
         self.mtime, self.brushes, self.menus, self.picks = mtime, brushes, menus, picks
         self.version += 1
         return self
@@ -143,6 +151,33 @@ class Usage:
         fsutil.write_atomic(self.path, json.dumps({"brushes": self.brushes, "menus": self.menus, "picks": self.picks},
                                                   indent=1))    # a temp file per process: the Studio may write too
         self.mtime = os.stat(self.path).st_mtime
+
+    def absorb(self, raw: dict, now: float | None = None) -> int:
+        """Adds another usage dict (a usage.json an older ZOrbit wrote) into this one, in memory; save() keeps it.
+        Brush scores are faded to now and summed, picks have their counts summed and keep the newer time. Names
+        already here stay as they are, and so do the menus' slot states. Returns how many brushes were taken;
+        anything malformed is skipped."""
+        if not isinstance(raw, dict):
+            return 0
+        now = time.time() if now is None else now
+        brushes, _, picks = _parse(raw, now)
+        taken = 0
+        for k, e in brushes.items():
+            add = self._faded(e, now)
+            if not math.isfinite(add) or add < 0:
+                continue
+            old = self.brushes.get(k)
+            self.brushes[k] = {"name": old["name"] if old else e["name"], "score": self.score(k, now) + add, "t": now}
+            taken += 1
+        for k, e in picks.items():
+            old = self.picks.get(k)
+            if old is None:
+                self.picks[k] = dict(e)
+            else:
+                self.picks[k] = {"name": old["name"], "count": old["count"] + e["count"], "t": max(old["t"], e["t"])}
+        if brushes or picks:
+            self.version += 1
+        return taken
 
     # --- scores ----------------------------------------------------------------------------------
     @staticmethod

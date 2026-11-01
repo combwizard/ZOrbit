@@ -339,6 +339,15 @@ body.dragging, body.dragging * { cursor: grabbing !important; }
 .modal h2 { font-size: 16px; font-weight: 600; margin-bottom: 10px; }
 .modal-body { display: flex; flex-direction: column; gap: 10px; color: #d6d7db; line-height: 1.5; }
 .modal-path { font-size: 12px; color: var(--sub); word-break: break-all; }
+/* the What's new dialog: a long body scrolls inside the box */
+.modal-body:has(> .wn) { max-height: 60vh; overflow: auto; }
+.wn { display: flex; flex-direction: column; gap: 16px; }
+.wn-sec { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+.wn-sec h3 { font-size: 12px; font-weight: 600; color: var(--sub); letter-spacing: .02em; }
+.wn-sec p, .wn-sec li { font-size: 13px; line-height: 1.5; }
+.wn-sec ul { margin: 0; padding-left: 18px; }
+.wn-sec code { font-family: var(--mono); font-size: 12px; padding: 1px 5px; border-radius: 4px; background: var(--bg0); border: 1px solid var(--line); }
+.wn-sec .link { font-size: inherit; }
 .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
 /* a dialog with one text box (promptModal), and the radio list of the New profile dialog */
 .modal-field, .modal-cap { display: flex; flex-direction: column; gap: 6px; font-size: 12px; color: var(--sub); }

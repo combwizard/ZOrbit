@@ -25,6 +25,7 @@ sys.path.insert(0, HERE)
 
 import config as C          # noqa: E402
 import brushes              # noqa: E402
+import changelog            # noqa: E402
 import expand               # noqa: E402
 import fsutil               # noqa: E402
 import installs             # noqa: E402
@@ -50,7 +51,7 @@ APP_ID = "ZOrbit.Studio"           # taskbar identity, so the Studio groups unde
 STUDIO_FILE = os.path.join(paths.CONFIG_DIR, "studio.json")   # Studio preferences and window placement
 DEFAULT_SIZE = (1320, 860)  # the first window, in logical pixels, when it fits the screen (see _fit_size)
 MIN_SIZE = (980, 560)       # the smallest the window can be made
-START_WAIT = 10.0          # seconds start_app waits for the app's mutex
+START_WAIT = 10.0          # seconds start_app waits for the app's mutex (or, for an older app, its new version)
 SAMPLE_SLOTS = 8           # brushes on the tag colours sample ring (preview_tags)
 SETTINGS_FORMAT = 1         # the "zorbit_settings" number of an exported settings file
 IMPORT_MAX_BYTES = 5 * 1024 * 1024    # a settings file is a few hundred KB at most; refuse anything bigger
@@ -115,12 +116,6 @@ def _zbrush_running():
         return False, False
 
 
-def _version_key(v):
-    """'v0.5.1' or '0.5.1' -> (0, 5, 1); None for anything else."""
-    m = re.fullmatch(r"v?(\d+)\.(\d+)\.(\d+)", str(v or "").strip())
-    return tuple(int(x) for x in m.groups()) if m else None
-
-
 def _png_data_url(im) -> str:
     buf = io.BytesIO()
     im.save(buf, format="PNG", optimize=False)
@@ -183,6 +178,13 @@ class Api(webapi.LibraryApi, webapi.TagApi):
         made = self._prof(name)
         return profiles.config_file(made) if made else os.path.join(profiles.root(), ".missing", "radial.json")
 
+    @staticmethod
+    def _too_new(**extra):
+        """None normally. When the profile files were made by a newer ZOrbit: {"ok": False, "message", "too_new":
+        True} plus extra, which every writing call answers with before it touches anything."""
+        msg = profiles.too_new()
+        return dict(extra, ok=False, message=msg, too_new=True) if msg else None
+
     def _tags_path(self):
         return profiles.tags_file(self._prof() if profiles.enabled() else None)
 
@@ -219,12 +221,17 @@ class Api(webapi.LibraryApi, webapi.TagApi):
         """radial.json as the page edits it, with the loader's problems. When the file cannot be read or is
         not a JSON object, config is None and error says why (with line and column when the parser knows),
         so the page can offer to restore the backup or start again instead of failing to open. profile: the one to
-        load (the editor's own, else the active one, when not given); it becomes the one saves go back to."""
+        load (the editor's own, else the active one, when not given); it becomes the one saves go back to. Files
+        made by a newer ZOrbit are not read: config is None, error is the message and too_new is True."""
         name = self._prof(profile)
         path = profiles.config_file(name if profiles.enabled() else None)
         out = {"config": None, "problems": [], "path": path, "defaults": C.DEFAULT_RING, "mtime_ns": None,
                "backup_exists": os.path.isfile(path + ".bak"), "profile": name, "active": profiles.active(),
                "profiles": profiles.names(), "enabled": profiles.enabled()}
+        newer = profiles.too_new()
+        if newer:                                  # files of a newer ZOrbit: read nothing, pin nothing
+            out.update(error=newer, too_new=True)
+            return out
         if name is None or (profiles.enabled() and not os.path.isfile(path)):
             out["error"] = f"Profile {name or profile} no longer exists."
             return out
@@ -276,7 +283,11 @@ class Api(webapi.LibraryApi, webapi.TagApi):
         when it was valid JSON and differs, so a corrupt or unchanged file never replaces a good backup. A file
         that is not valid JSON is kept as radial.json.broken instead (kept_broken in the result).
         profile: the profile the editor loaded cfg from; it is saved there even if another one is active now. A
-        profile that has been deleted since answers profile_missing and nothing is written."""
+        profile that has been deleted since answers profile_missing and nothing is written. Files made by a newer
+        ZOrbit are never written: saved is False and too_new is True."""
+        newer = self._too_new()
+        if newer:
+            return {"saved": False, "message": newer["message"], "too_new": True}
         path = self._cfg_path(profile)
         gone = self._missing_profile(path, profile)
         if gone:
@@ -337,6 +348,9 @@ class Api(webapi.LibraryApi, webapi.TagApi):
         """Puts radial.json.bak back as radial.json, if the backup is readable JSON. The backup stays, and the
         radial.json it replaces is first kept as radial.json.broken (unless it is missing or the same). profile: as
         for save_config; the recovery screen gives none and gets the profile the editor holds."""
+        newer = self._too_new()
+        if newer:
+            return newer
         path = self._cfg_path(profile)
         if self._missing_profile(path, profile):
             return {"ok": False, "message": "That profile no longer exists. Switch to another profile."}
@@ -374,6 +388,9 @@ class Api(webapi.LibraryApi, webapi.TagApi):
     def reset_config(self, profile=None):
         """Starts again from the shipped default menus. The file being replaced is first kept as
         radial.json.broken (a previous .broken is overwritten), so nothing is lost. profile: as for restore_backup."""
+        newer = self._too_new()
+        if newer:
+            return newer
         path = self._cfg_path(profile)
         if self._missing_profile(path, profile):
             return {"ok": False, "message": "That profile no longer exists. Switch to another profile."}
@@ -488,6 +505,77 @@ class Api(webapi.LibraryApi, webapi.TagApi):
             webapi.pin(None)
         return self._profile_list(ok=True, reload=reload,
                                   message=f"Deleted {name}. It is kept under profiles\\.deleted for 30 days.")
+
+    # --- files an older ZOrbit left at the old places -----------------------------------------------
+    STRAYS_NAME = "From an older version"
+
+    def get_strays(self):
+        """What an older ZOrbit left at the old root places, for the page to offer: {"found", "menus", "tags",
+        "when", "name"}. menus is the number of menus in the old radial.json and tags the number of tags of its own
+        in the old tags.json (Favourites not counted); each is None when that file is not there. found is True when
+        either is. name is a profile name to offer. Only reads."""
+        found = profiles.strays()
+        menus = tag_count = None
+        if found["menus"]:
+            raw = profiles._read_object(found["menus"]) or {}
+            menus = len(raw["menus"]) if isinstance(raw.get("menus"), dict) else 0
+        if found["tags"]:
+            raw = profiles._read_object(found["tags"]) or {}
+            tag_count = len([k for k in tags._parse(raw)[0] if k != tags.FAVOURITE])
+        return {"found": menus is not None or tag_count is not None, "menus": menus, "tags": tag_count,
+                "when": found["when"], "name": profiles.unique_name(self.STRAYS_NAME)}
+
+    def adopt_strays(self, action, name=""):
+        """Deals with the files get_strays reported. action "profile": makes a profile from them (named name, else
+        the offered name; it does not switch to it) and sets the files aside; the answer is a profile answer, as
+        create_profile gives. action "aside": moves them to pre-profiles\\<time>\\ without making a profile; {"ok",
+        "folder"}. Anything that goes wrong is {"ok": False, "message"}."""
+        newer = self._too_new()
+        if newer:
+            return newer
+        if action == "profile":
+            bad = self._need_name(name) if name else None
+            if bad:
+                return bad
+            try:
+                made = profiles.create(name or profiles.unique_name(self.STRAYS_NAME), "strays")
+            except profiles.ProfileError as e:
+                return {"ok": False, "message": str(e)}
+            return self._profile_list(ok=True, name=made, message=f"Made the profile {made}.")
+        if action == "aside":
+            found = profiles.strays()
+            files = [p for p in (found["menus"], found["tags"]) if p]
+            if not files:
+                return {"ok": False, "message": "There are no files from an older version to set aside."}
+            folder = profiles.set_aside(files)
+            if not folder:
+                return {"ok": False, "message": "The files could not be moved. Close anything that has them open."}
+            return {"ok": True, "folder": folder}
+        return {"ok": False, "message": "Choose to make a profile or to set the files aside."}
+
+    # --- tags: the store writes tags.json, so Studio refuses first when the files are from a newer ZOrbit.
+    # merge_tags stays the plain mixin one (a test pins that); the Studio page cannot reach it past the recovery screen.
+    def _tag_refusal(self):
+        newer = self._too_new()
+        return self._tag_result({"ok": False, "error": newer["message"], "too_new": True}) if newer else None
+
+    def create_tag(self, label, color=None):
+        return self._tag_refusal() or super().create_tag(label, color)
+
+    def rename_tag(self, key, label):
+        return self._tag_refusal() or super().rename_tag(key, label)
+
+    def recolor_tag(self, key, color):
+        return self._tag_refusal() or super().recolor_tag(key, color)
+
+    def delete_tag(self, key):
+        return self._tag_refusal() or super().delete_tag(key)
+
+    def set_item_tags(self, item_key, tag_keys):
+        return self._tag_refusal() or super().set_item_tags(item_key, tag_keys)
+
+    def tag_items(self, item_keys, add=None, remove=None):
+        return self._tag_refusal() or super().tag_items(item_keys, add, remove)
 
     # --- ring preview ----------------------------------------------------------------------------
     def preview_ring(self, cfg, menu_id, hover=None, scale=1.0, open_path=None):
@@ -675,6 +763,23 @@ class Api(webapi.LibraryApi, webapi.TagApi):
         ok = not any(bad in text for bad in ("FAILED", "NOT loaded", "no such interface item"))
         return {"text": text, "at": at, "seq": int(m.group(1)) if m else None, "ok": ok, "source": source}
 
+    @staticmethod
+    def _running_version():
+        """The version of the app running now, as a string, or None when none runs or it cannot be told."""
+        try:
+            found = W.running_app()
+        except Exception as e:                     # a window that vanishes mid-read must not break Status
+            _startup(f"running_app failed: {e!r}")
+            return None
+        ver = found[2] if found else None
+        return ver if isinstance(ver, str) and paths.version_key(ver) else None
+
+    @staticmethod
+    def _older_than_studio(ver) -> bool:
+        """True when ver is a version older than this Studio. False when either is unknown."""
+        theirs, mine = paths.version_key(ver), paths.version_key(VERSION)
+        return theirs is not None and mine is not None and theirs < mine
+
     def get_status(self):
         info = self._listener_info()
         listener = {"verified": bool(info["verified"]), "alive": info["alive"]} if info else None
@@ -682,14 +787,22 @@ class Api(webapi.LibraryApi, webapi.TagApi):
         app_log = _tail(os.path.join(DATA_DIR, "radiald.log"), 40)
         zbrush_running, check_ok = _zbrush_running()
         bridge_mode, legacy_only = self._status_extras()
+        app_version = self._running_version()
         return {"app_running": _mutex_exists(APP_MUTEX), "zbrush_running": zbrush_running,
+                "app_version": app_version, "app_older": self._older_than_studio(app_version),
                 "listener": listener, "last_pick": pick["text"] if pick else None, "app_log": app_log,
                 "data_dir": DATA_DIR, "bridge_mode": bridge_mode, "legacy_only": legacy_only,
                 "checked_at": time.time(), "zbrush_check_ok": check_ok}
 
     def start_app(self):
+        """Starts the app. One that runs already is left alone, unless it is older than this Studio: then the
+        new one is started anyway (it takes the place of the old one itself) and this waits for the running version
+        to become this one. {"ok", "running", "message"}, plus restarted and was when an older app made way."""
+        was = None
         if _mutex_exists(APP_MUTEX):
-            return {"ok": True, "running": True, "message": "The app is already running."}
+            was = self._running_version()
+            if not self._older_than_studio(was):
+                return {"ok": True, "running": True, "message": "The app is already running."}
         zb_running, zb_checked = _zbrush_running()
         if zb_checked and not zb_running:                  # a failed check is not "not running": let the launch try
             return {"ok": False, "running": False, "reason": "zbrush",
@@ -703,6 +816,17 @@ class Api(webapi.LibraryApi, webapi.TagApi):
                              env=paths.clean_env(), creationflags=0x00000008 | 0x00000200, close_fds=True,
                              stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         deadline = time.monotonic() + START_WAIT
+        if was:
+            while time.monotonic() < deadline and self._running_version() != VERSION:
+                if p.poll() is not None:
+                    break
+                time.sleep(0.2)
+            if self._running_version() == VERSION:
+                return {"ok": True, "running": True, "restarted": True, "was": was,
+                        "message": f"Started the new app. It took the place of version {was}."}
+            return {"ok": False, "running": True, "reason": "older", "was": was,
+                    "message": "The older app did not make way. Quit it from its tray icon and press Start app "
+                               "again."}
         while time.monotonic() < deadline:
             if _mutex_exists(APP_MUTEX):
                 return {"ok": True, "running": True, "message": "Started."}
@@ -1004,6 +1128,9 @@ class Api(webapi.LibraryApi, webapi.TagApi):
         The tags are saved straight away; the menus and settings come back as config for the editor to load
         (radial.json is not written: Save does that). Slots that point at a tag which joined a local tag of the
         same name are pointed at the local one."""
+        newer = self._too_new(config=None, problems=[], tags_message="")
+        if newer:
+            return newer
         pend = self._pending_import
         if not pend:
             return {"ok": False, "config": None, "problems": [], "tags_message": "",
@@ -1133,6 +1260,9 @@ class Api(webapi.LibraryApi, webapi.TagApi):
         """Does what pick_menu_import read: the plan is made again against cfg (the editor may have changed since).
         The tags the file brings are merged and saved straight away; the menus come back for the editor to add
         (radial.json is not written: Save does that)."""
+        newer = self._too_new()
+        if newer:
+            return newer
         pend = self._pending_menu_import
         if not pend:
             return {"ok": False, "message": "There is nothing to import. Pick the file again."}
@@ -1165,7 +1295,9 @@ class Api(webapi.LibraryApi, webapi.TagApi):
 
     # --- Studio preferences (not part of the menus; saved straight away) --------------------------
     # mode is "" until Studio decides it at first start (Simple for a fresh install, Full for an existing setup).
-    _PREFS_DEFAULTS = {"check_updates": True, "last_screen": "menus", "setup_done": False, "mode": ""}
+    # seen_version is the version whose "What's new" was closed last ("" until it has been shown once).
+    _PREFS_DEFAULTS = {"check_updates": True, "last_screen": "menus", "setup_done": False, "mode": "",
+                       "seen_version": ""}
     # Keys an earlier Studio already wrote: a studio.json with any of them belongs to someone who has used the
     # Studio, so the Setup screen is not forced on them after an update.
     _USED_KEYS = ("window", "last_screen", "check_updates", "zbrush_folders")
@@ -1177,8 +1309,16 @@ class Api(webapi.LibraryApi, webapi.TagApi):
             data = _read_studio_file()
             # once: existing users skip Setup, a fresh install gets it. (An unreadable file reads as {}: it is
             # left alone rather than overwritten with just this key.)
+            changed = False
             if "setup_done" not in data and (data or not os.path.exists(STUDIO_FILE)):
                 data["setup_done"] = any(k in data for k in self._USED_KEYS)
+                changed = True
+            # the same for "What's new": a fresh install has nothing to tell, an existing user sees this
+            # version's section once
+            if "seen_version" not in data and (data or not os.path.exists(STUDIO_FILE)):
+                data["seen_version"] = VERSION if data.get("setup_done") is False else ""
+                changed = True
+            if changed:
                 try:
                     _write_studio_file(data)
                 except OSError:
@@ -1219,7 +1359,7 @@ class Api(webapi.LibraryApi, webapi.TagApi):
             _startup(f"update check failed: {e!r}")
             return out
         tag = data.get("tag_name") if isinstance(data, dict) else None
-        latest, current = _version_key(tag), _version_key(VERSION)
+        latest, current = paths.version_key(tag), paths.version_key(VERSION)
         if latest is None:
             return out
         out["latest"] = "%d.%d.%d" % latest
@@ -1227,6 +1367,20 @@ class Api(webapi.LibraryApi, webapi.TagApi):
         if out["newer"]:
             out["url"] = f"{RELEASES_URL}/tag/{tag}"
         return out
+
+    def get_whats_new(self, all_current=False):
+        """The "What's new" sections: every version after seen_version (the one the user last closed the
+        dialog for), up to this one, newest first. all_current: only this version's section, whatever was
+        seen (the Settings button). {"current", "sections": [{"version", "date", "summary", "items", "url"}],
+        "url"}. The page sets seen_version itself when the dialog closes."""
+        seen = "" if all_current else self.get_prefs()["seen_version"]
+        sections = []
+        for s in changelog.since(changelog.read(), seen, VERSION):
+            shown = changelog.summary_of(s)
+            url = RELEASES_URL if s["version"] == "Unreleased" else f"{RELEASES_URL}/tag/v{s['version']}"
+            sections.append({"version": s["version"], "date": s["date"], "summary": shown["text"],
+                             "items": shown["items"], "url": url})
+        return {"current": VERSION, "sections": sections, "url": f"{RELEASES_URL}/tag/v{VERSION}"}
 
     def open_url(self, url):
         """Opens one of the project's own links in the default browser (nothing else is allowed)."""
@@ -1239,12 +1393,15 @@ class Api(webapi.LibraryApi, webapi.TagApi):
         return False
 
     def open_folder(self, which="data"):
-        """'data' opens the logs folder; 'profiles' the folder holding every profile; 'config' (and the older name
-        'app') and anything else open the folder of the profile the editor holds, where radial.json is."""
+        """'data' opens the logs folder; 'profiles' the folder holding every profile; 'pre-profiles' the folder
+        where files of an older version are set aside; 'config' (and the older name 'app') and anything else open
+        the folder of the profile the editor holds, where radial.json is."""
         if which == "data":
             folder = DATA_DIR
         elif which == "profiles":
             folder = profiles.root()
+        elif which == "pre-profiles":
+            folder = os.path.join(paths.CONFIG_DIR, "pre-profiles")
         else:
             folder = os.path.dirname(self._cfg_path())
         os.makedirs(folder, exist_ok=True)

@@ -27,6 +27,7 @@ Started through main.py (ZOrbit.exe), normally by the ZBrush bridge when ZBrush 
 the last ZBrush process has gone. Only one instance runs at a time.
 """
 import argparse
+import contextlib
 import ctypes
 import json
 import os
@@ -44,6 +45,7 @@ sys.path.insert(0, HERE)
 import activity             # noqa: E402
 import config as C          # noqa: E402
 import expand               # noqa: E402
+import fsutil               # noqa: E402
 import installs             # noqa: E402
 import paths                # noqa: E402
 import profiles             # noqa: E402
@@ -63,6 +65,11 @@ REQUEST_FILE = os.path.join(DATA_DIR, "request.json")
 LISTENER_FILE = os.path.join(DATA_DIR, "listener.json")
 BRIDGE_LOG = os.path.join(DATA_DIR, "bridge.log")      # written by the plugin inside ZBrush
 MUTEX_NAME = "Local\\ZOrbit"
+TAKEOVER_MUTEX = "Local\\ZOrbitTakeover"      # held while a new app replaces an older one
+POPOUT_MUTEX = "Local\\ZOrbitPopout"          # the browser's (popout.MUTEX)
+TAKEOVER_LOCK_MS = 10000       # how long a second new app waits for the first one to finish taking over
+TAKEOVER_QUIT_S = 8            # how long the old app gets to end after the quit message
+TAKEOVER_BROWSER_S = 3         # ... and its hidden browser to end after that
 
 WM_APP_PICK = W.WM_APP + 1            # to the bridge listener inside ZBrush
 WM_APP_OPEN = W.WM_APP + 10           # hook -> control window: open menu (wparam = menu slot)
@@ -121,6 +128,7 @@ MSG_NO_KEY = "No bridge key is set. Choose one in Studio under Settings > ZBrush
 MSG_EMPTY_SLOT = "This slot is empty"
 MSG_EMPTY_MENU = "That menu has nothing usable in it"
 MSG_PICK_FAILED = "ZBrush could not carry out that pick. See bridge.log."
+TIP_FROZEN = f"ZOrbit {paths.VERSION}: your files were changed by a newer ZOrbit"
 
 # A line of bridge.log: "2026-10-31 12:00:00 #7 'Clay' via listener: brush Clay: ...; press Tool:X: ..."
 _PLUGIN_LINE = re.compile(r"^([0-9]{4}-[0-9]{2}-[0-9]{2} [0-9:]{8}) #([0-9]+) '(.*)' via ([^:]*): (.*)$")
@@ -295,6 +303,7 @@ class App:
         self.cfg_path = cfg_path or profiles.config_file(self.profile)
         self._profile_sig = profiles.signature()
         self._profile_wait = 0          # ticks spent waiting for a pointer's folder to appear
+        self._frozen = False            # the files were made by a newer ZOrbit: no switching, nothing written
         self.target_exe = target_exe.lower()
         self.exit_with_target = exit_with_target
         self.no_tray = no_tray
@@ -401,6 +410,10 @@ class App:
         """Follows the profile pointer: when Studio or the tray has pointed it at another profile, switches to it."""
         if self._pinned:
             return
+        if not self._frozen and profiles.too_new():
+            self._freeze()
+        if self._frozen:
+            return
         sig = profiles.signature()
         if sig == self._profile_sig:
             return
@@ -424,6 +437,19 @@ class App:
         self._profile_wait = 0
         self._switch_profile(want, notify)
         self._profile_sig = sig
+
+    def _freeze(self):
+        """The files were made by a newer ZOrbit (it was installed over this running app, or a second copy ran).
+        The app keeps working on what it has loaded, but never switches profile and never writes usage."""
+        self._frozen = True
+        msg = profiles.too_new()
+        log(f"profiles: {msg} Nothing will be written or switched until ZOrbit is restarted.")
+        if self.tray is not None:
+            try:
+                self.tray.set_tip(TIP_FROZEN)
+                self.tray.notify("ZOrbit", msg)
+            except Exception:
+                log("tray notice failed:\n" + traceback.format_exc())
 
     def _switch_profile(self, name, notify=False):
         """Loads another profile's menus, tags and usage. The icons, the popout and the activity stay as they are."""
@@ -458,6 +484,9 @@ class App:
         if self.tray is None:
             return
         try:
+            if self._frozen:
+                self.tray.set_tip(TIP_FROZEN)
+                return
             if clear:
                 self.tray.set_tip(None)
                 return
@@ -899,6 +928,8 @@ class App:
                 if after != before:
                     log(f"auto slots of '{m.id}': {before} -> {after}")
             self.usage.menus = {m.id: self.usage.menus[m.id] for m in autos}
+        if self._frozen:                          # files of a newer ZOrbit: never written
+            return
         try:
             self.usage.save()
         except OSError as e:
@@ -1358,16 +1389,19 @@ class App:
             log(f"{self.target_exe} is no longer running; exiting")
             W.PostQuitMessage(0)
 
-    def run(self) -> int:
+    def run(self, mutex=None, hold=None) -> int:
+        """mutex: the handle claim_instance() returned. Without one the app claims it here. hold: the ExitStack that
+        still holds the takeover lock; it is released once the tray window exists."""
+        if mutex is None:
+            with contextlib.ExitStack() as hold:
+                mutex = claim_instance(hold=hold)
+                return 0 if mutex is None else self._serve(mutex, hold)
+        return self._serve(mutex, hold)
+
+    def _serve(self, mutex, hold) -> int:
         os.makedirs(DATA_DIR, exist_ok=True)
-        _trim_log()
-        mutex = W.CreateMutexW(None, False, MUTEX_NAME)
-        already = ctypes.get_last_error() == W.ERROR_ALREADY_EXISTS     # read now: later calls overwrite it
         created = W.process_created(os.getpid())
         started = f"{time.time() - created:.2f} s after its process was created" if created else "?"
-        if already:
-            log(f"another instance is already running; exiting ({started}; started by {W.launch_chain()})")
-            return 0
         W.make_dpi_aware()
         log(f"ZOrbit starting (pid {os.getpid()}, python {sys.version.split()[0]}, "
             f"thumbnails={'on' if assets else 'off'}; {started}; started by {W.launch_chain()})")
@@ -1383,6 +1417,8 @@ class App:
         W.SetTimer(self.ctrl, TIMER_REHOOK, 120000, None)
         W.SetTimer(self.ctrl, TIMER_CONFIG, 500, None)
         self._create_tray()
+        if hold is not None:
+            hold.close()            # the takeover is over: a new app that waited now finds this one's tray window
         if self._config_error:                      # the file was already broken when the app started
             self._menus_problem(announce=True)
         msg = W.w.MSG()
@@ -1399,6 +1435,80 @@ class App:
         W.CloseHandle(mutex)
         log("ZOrbit stopped")
         return 0
+
+
+def takeover_plan(running, mine) -> tuple:
+    """What a starting app does when another one holds the mutex. running: W.running_app() (pid, tid, version) or
+    None; mine: this app's version. ('take', reason) when the running app is older, else ('exit', reason)."""
+    if not running:
+        return "exit", "version unknown"
+    theirs, ours = paths.version_key(running[2]), paths.version_key(mine)
+    if theirs is None or ours is None:
+        return "exit", "version unknown"
+    if theirs < ours:
+        return "take", f"older version {running[2]}"
+    if theirs == ours:
+        return "exit", "same version"
+    return "exit", f"newer version {running[2]}"
+
+
+def _wait_browser_gone(log) -> None:
+    """The old app tells a hidden browser to quit as it ends. Waits briefly for that; a browser window that is open
+    stays (it is a separate process the user can see) and is left alone."""
+    deadline = time.monotonic() + TAKEOVER_BROWSER_S
+    while W.mutex_exists(POPOUT_MUTEX):
+        if time.monotonic() >= deadline:
+            log("the old browser window is still open; it stays until it is closed")
+            return
+        time.sleep(0.1)
+
+
+def claim_instance(log=log, hold=None):
+    """Claims the single-instance mutex and returns its handle, or None when another ZOrbit keeps it (the caller
+    then exits). An older app that holds it is asked to quit first (takeover_plan). During a takeover the lock
+    Local\\ZOrbitTakeover is entered into hold (an ExitStack the caller owns), so a second new app started at the
+    same moment waits and then finds a current version; the caller closes hold once its tray window exists. Without
+    hold the lock is released before this returns."""
+    os.makedirs(DATA_DIR, exist_ok=True)
+    _trim_log()
+    mutex, already = W.create_mutex(MUTEX_NAME)
+    if not already:
+        return mutex
+    created = W.process_created(os.getpid())
+    started = f"{time.time() - created:.2f} s after its process was created" if created else "?"
+    own = hold is None
+    stack = contextlib.ExitStack() if own else hold
+    try:
+        if not stack.enter_context(fsutil.named_lock(TAKEOVER_MUTEX, TAKEOVER_LOCK_MS)):
+            log("another ZOrbit is still taking over; going ahead without its lock")
+        running = W.running_app()
+        action, why = takeover_plan(running, paths.VERSION)
+        if action == "take":
+            pid, tid, version = running
+            log(f"taking over from ZOrbit {version} (pid {pid})")
+            if W.ask_to_quit(pid, tid, TAKEOVER_QUIT_S):
+                log(f"ZOrbit {version} has quit")
+                _wait_browser_gone(log)
+                return mutex
+            try:
+                denied = W.process_elevated(pid) is not False       # the token of an elevated app cannot be read
+            except Exception:
+                denied = False
+            why = "access denied" if denied else "it did not quit in time"
+        log(f"another instance is already running; exiting ({why}; {started}; started by {W.launch_chain()})")
+        W.CloseHandle(mutex)
+        return None
+    finally:
+        if own:
+            stack.close()
+
+
+def _show_fatal(text) -> None:
+    """The app has no window and no message loop yet, so a start that cannot go on says why in a message box."""
+    try:
+        W.MessageBoxW(None, text, "ZOrbit", W.MB_OK | W.MB_ICONERROR | W.MB_SETFOREGROUND)
+    except Exception as e:
+        log(f"could not show the message: {e!r}")
 
 
 def check(cfg_path) -> int:
@@ -1441,15 +1551,36 @@ def main(argv=None) -> int:
     ap.add_argument("--check", action="store_true", help="validate the config and exit")
     a = ap.parse_args(argv)
     try:
-        if a.config is None:
-            try:
-                profiles.ensure()
-            except OSError as e:                  # an unwritable %APPDATA%: say so plainly, not with a traceback
-                log(f"fatal: cannot create the first profile in {profiles.root()}: {e}")
-                return 1
-        if a.check:
-            return check(a.config or profiles.config_file())
-        return App(a.config, a.target_exe, a.exit_with_zbrush, a.no_tray).run()
+        with contextlib.ExitStack() as hold:
+            mutex = None
+            if not a.check:
+                mutex = claim_instance(hold=hold)       # before ensure(): a failed takeover leaves the files alone
+                if mutex is None:
+                    return 0
+            if a.config is None:
+                try:
+                    profiles.ensure()
+                except OSError as e:              # an unwritable %APPDATA%: say so plainly, not with a traceback
+                    log(f"fatal: cannot create the first profile in {profiles.root()}: {e}")
+                    return 1
+                msg = profiles.too_new()
+                if msg:
+                    if a.check:
+                        print(msg)
+                        return 1
+                    log(f"fatal: {msg}")
+                    W.CloseHandle(mutex)
+                    hold.close()
+                    _show_fatal(msg)
+                    return 1
+                if not a.check and profiles.enabled():
+                    profiles.tidy_leftovers()
+                    n = profiles.absorb_stray_usage()
+                    if n:
+                        log(f"usage: added {n} brushes from an older version")
+            if a.check:
+                return check(a.config or profiles.config_file())
+            return App(a.config, a.target_exe, a.exit_with_zbrush, a.no_tray).run(mutex, hold)
     except Exception:
         log("fatal:\n" + traceback.format_exc())
         return 1

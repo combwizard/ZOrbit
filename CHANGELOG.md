@@ -6,17 +6,26 @@ All notable changes to this project are listed here. The format follows
 
 ## [Unreleased]
 
+Profiles: a whole set of menus, settings, tags and usage for each kind of work, switched without a restart. Your files moved into the **Default** profile, and the old ones are kept in `%APPDATA%\ZOrbit\pre-profiles`. Going back to an older version and updating again no longer loses what you changed on it.
+
 ### Added
 
 - Studio: **Export menu...** and **Import menu...** share one menu and its submenus as a small file, with the tags it uses (#67).
 - Profiles: a whole set of menus, settings, tags and usage per kind of work, switched from Studio's top bar or the
   tray icon without a restart. New, rename, duplicate, delete, or make one from a settings file (#19).
+- Profiles: files an older ZOrbit wrote to the old places after an update (after going back to 0.12.0, say) are offered in
+  Studio as a new profile, or set aside. The brush usage in them is added to the profile in use when the app starts.
+- A newer ZOrbit takes the place of an older one that is still running (a portable copy, say). **Studio > Status** offers
+  **Restart app** when the app running is older than Studio.
+- Studio shows **What's new** once after an update, with a summary of each release since the one you last saw.
+  **Settings > Studio** has a **What's new** button to show it again.
+- Files made by a newer ZOrbit are left alone. The app shows a message that says which version to install, and Studio
+  shows a screen with only **Open folder**.
 
 ### Changed
 
 - Your files moved into `%APPDATA%\ZOrbit\profiles\Default\`. The old ones are kept in `%APPDATA%\ZOrbit\pre-profiles\`,
-  which you can delete. `usage.json` is per profile now, inside the profile folder. An app left running from an older
-  version keeps its old menus until it is restarted.
+  which you can delete. `usage.json` is per profile now, inside the profile folder.
 
 ### Fixed
 

@@ -57,6 +57,7 @@ for dirpath, dirnames, filenames in os.walk(UI):
     for name in filenames:
         datas.append((os.path.join(dirpath, name), rel))
 datas.append((os.path.join(SRC, "default_menus.json"), "."))
+datas.append((os.path.join(ROOT, "CHANGELOG.md"), "."))   # "What's new" text (paths.CHANGELOG)
 datas.append((ICON, "."))                          # bundle root: paths.ICON = RESOURCE_DIR\icon.ico
 BROWSER_ICON = os.path.join(os.path.dirname(ICON), "browser.ico")      # the popout's own mark
 if os.path.isfile(BROWSER_ICON):
@@ -89,7 +90,7 @@ hiddenimports = [h for h in hiddenimports if not h.startswith(("webview.platform
 
 # The app modules import each other as top-level modules; some are imported inside functions.
 for mod in ("config", "win32", "ring", "radiald", "studio", "brushes", "assets", "zbp", "paths", "profiles", "tray",
-            "installs", "zscript_bridge", "winframe", "popout"):
+            "installs", "zscript_bridge", "winframe", "popout", "changelog"):
     if os.path.isfile(os.path.join(SRC, mod + ".py")):
         hiddenimports.append(mod)
 

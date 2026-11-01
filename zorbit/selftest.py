@@ -15,7 +15,8 @@ import paths
 
 LIBRARIES = ("webview", "clr")
 MODULES = ("radiald", "ring", "popout", "studio", "webapi", "assets", "brushes", "zbp", "config", "tags", "usage",
-           "expand", "installs", "onboarding", "zscript_bridge", "winframe", "webview2", "profiles")
+           "expand", "installs", "onboarding", "zscript_bridge", "winframe", "webview2", "profiles",
+           "changelog")
 
 
 def _import(name: str) -> str | None:
@@ -34,6 +35,7 @@ def _files() -> list[tuple[str, str]]:
         ("ui/styles.css", os.path.join(paths.UI_DIR, "styles.css")),
         ("ui/popout.html", os.path.join(paths.UI_DIR, "popout.html")),
         ("default menus", paths.DEFAULT_MENUS),
+        ("CHANGELOG.md", paths.CHANGELOG),
         ("icon", paths.ICON),
         ("browser icon", paths.BROWSER_ICON),
     ]
@@ -78,6 +80,15 @@ def run() -> int:
         report("zscript bridge", f"{type(exc).__name__}: {exc}")
     else:
         report("zscript bridge", None if bridge else f"not bundled (looked in {paths.ZSCRIPT_DIR})")
+
+    try:
+        import changelog
+        sections = len(changelog.sections(changelog.read()))
+    except Exception as exc:
+        report("changelog sections", f"{type(exc).__name__}: {exc}")
+    else:
+        report("changelog sections", None if sections else "no ## [version] section in CHANGELOG.md",
+               f"{sections} found")
 
     loader = _webview2_loader()
     report("webview2 loader dll", None if loader else "WebView2Loader.dll not found in the webview package")

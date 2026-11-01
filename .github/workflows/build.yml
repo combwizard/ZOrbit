@@ -16,6 +16,8 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.1
+        with:
+          fetch-depth: 0   # tests/test_starters.py reads the history of default_menus.json
 
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5.6.0
         with:
@@ -78,6 +80,11 @@ jobs:
             Get-Content "$name.out", "$name.err"
             if ($p.ExitCode -ne 0) { throw "ZOrbit.exe $flag exited with $($p.ExitCode)" }
           }
+
+      - name: Upgrade older installs with the built exe
+        timeout-minutes: 10
+        shell: pwsh
+        run: python tools/upgrade_check.py dist\ZOrbit\ZOrbit.exe
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
         with:

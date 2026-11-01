@@ -12,6 +12,20 @@ The installer is not code-signed yet. Click **More info**, then **Run anyway**. 
 
 Windows marked the unzipped files as downloaded, and ZOrbit could not remove the mark, usually because it is in a folder it cannot write to. Close ZOrbit, right-click the zip, choose **Properties**, tick **Unblock**, and unzip it again into a folder of your own, such as one under `Documents`.
 
+### A newer ZOrbit takes over from an older one
+
+A newer ZOrbit started while an older one was running, such as a portable copy. The new one asks the old one to quit, waits for it, and starts in its place. `radiald.log` shows `taking over from ZOrbit <version> (pid <n>)`, then `ZOrbit <version> has quit`. This is normal, and nothing needs doing. A browser window of the old version stays open until you close it. On Studio's **Status** screen, **Restart app** does the same job when the app running is older than Studio. See [Profiles](profiles.md#older-versions).
+
+### A second copy of ZOrbit exits at startup
+
+Only one copy of the app runs at a time. A second copy that starts looks at the first one and then exits. `radiald.log` gives the reason in brackets, in a line that starts `another instance is already running; exiting`:
+
+- **`same version`**: the same version is already running. Nothing needs doing.
+- **`newer version <v>`**: a newer ZOrbit is already running, and it keeps going. Start that one instead.
+- **`version unknown`**: the running copy was started with `--no-tray`, which does not report its version. It is left alone.
+- **`it did not quit in time`**: the older copy was asked to quit and did not. Quit it from its tray icon with **Quit ZOrbit**, or end it in Task Manager, then start again.
+- **`access denied`**: the older copy runs as administrator, so this one cannot ask it to quit. Quit it from its tray icon, or end it in Task Manager as administrator.
+
 ### I upgraded from Radial Menu for ZBrush and F9 stopped working
 
 The palette was renamed, so a hotkey you bound by hand to the old **Apply** does not carry over in ZBrush 2026. Ctrl+Alt+click **Zplugin > ZOrbit > Apply**, press **F9**, then click **Preferences > Hotkeys > Store**. ZBrush 2022 to 2025: update the plugin in **Studio > Setup** step 1 (or **Settings > Older ZBrush** in Full mode); it binds F9 if **Apply** has no hotkey. Your menus were copied from `%APPDATA%\RadialMenu` to `%APPDATA%\ZOrbit` on the first start (into the **Default** [profile](profiles.md)), and learned auto slots from `%LOCALAPPDATA%\RadialMenu` to the same profile. The old folders are left in place; you can delete them.
@@ -126,6 +140,10 @@ Check **Settings > Tag colours** (Full mode): the **Icon tint**, **Glow** and **
 
 Letters mean ZOrbit could not read a picture for the slot: the file was not found, or its picture is in a format ZOrbit does not know. The pick still works when ZBrush already has the item loaded, such as a brush that comes with ZBrush. When it does not, and ZOrbit has no file for it, `bridge.log` says "NOT loaded in ZBrush and no file known". A brush with no `.zbp` found for its name shows letters. So do a material with no icon in its `.zmt` file (some old MatCap files) and an EXR texture, and those still pick fine. For other items the letters are the normal placeholder; set an `icon` to change it.
 
+### Brush usage from an older version is added
+
+The `usage.json` an older ZOrbit kept, which holds the brushes that fill the auto slots and Recent, is added to the profile in use when the app starts. The file is set aside in `%APPDATA%\ZOrbit\pre-profiles\<date and time>\`, and `radiald.log` says `usage: added <n> brushes from an older version`. Nothing needs doing. See [Files from an older version](profiles.md#files-from-an-older-version).
+
 ## Studio
 
 ### Studio does not open, opens blank, or does nothing on a second click
@@ -157,6 +175,18 @@ A section of the wrong type, for example `"ring": "big"`, is reported with the s
 If the file cannot be read when the app starts, the app still starts: the tray icon appears, no ring opens, and `radiald.log` says "cannot load radial.json" with the reason. Fix the file in Studio or by hand; the app reads it again as soon as it changes. **Reload menus** in the tray menu logs "tray: reload failed" with the reason when the file is still unreadable.
 
 A setting name ZOrbit does not know, such as `raduis` for `radius` in `ring` or `itmes` in a menu, is listed as a problem and ignored, with a "did you mean" when a known name is close. A `swallow` that is not `true` or `false` is a problem too, and counts as `true`. A submenu slot that points at a menu with no usable items is listed and skipped.
+
+### These files were made by a newer ZOrbit
+
+The app does not start, and Studio shows **These files are from a newer ZOrbit**. The message box at startup says:
+
+**These files were made by ZOrbit `<v>`, which is newer than this one (`<this version>`). Install ZOrbit `<v>` or newer.**
+
+ZOrbit changed how it keeps the profiles folder, and wrote a number to `profiles\format.json` to say so. This version knows only an older layout, so it changes nothing and does not start. Studio shows the screen with only an **Open folder** button, and the browser does not open. `radiald.log` has a `fatal:` line with the same message.
+
+Install the version the message names, or a newer one, and start ZOrbit again. The files are not changed in the meantime.
+
+If a newer ZOrbit changes the files while an older one is already running, that app stops saving usage and switching profiles. Its tray tooltip says your files were changed by a newer ZOrbit.
 
 ### Checking a file from a source checkout
 

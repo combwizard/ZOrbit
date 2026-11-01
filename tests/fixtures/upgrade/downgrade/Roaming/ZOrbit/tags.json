@@ -1,0 +1,26 @@
+{
+ "version": 1,
+ "tags": {
+  "favourite": {
+   "label": "Favourites",
+   "color": "#FFD166"
+  },
+  "blocking": {
+   "label": "Blocking",
+   "color": "#A8DF23"
+  },
+  "detailing": {
+   "label": "Detailing",
+   "color": "#C77DFF"
+  },
+  "downgrade-tag": {
+   "label": "Downgrade tag",
+   "color": "#5EEAD4"
+  }
+ },
+ "items": {
+  "brush:claybuildup": [
+   "downgrade-tag"
+  ]
+ }
+}

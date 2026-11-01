@@ -17,6 +17,7 @@ its files in RadialMenu folders; the first run copies them over.
 """
 import json
 import os
+import re
 import shutil
 import sys
 
@@ -30,6 +31,8 @@ UI_DIR = os.path.join(RESOURCE_DIR, "studio_ui")
 ZSCRIPT_DIR = (os.path.join(RESOURCE_DIR, "zscript") if FROZEN
                else os.path.join(os.path.dirname(PKG_DIR), "bridge", "zscript"))
 DEFAULT_MENUS = os.path.join(RESOURCE_DIR, "default_menus.json")
+CHANGELOG = (os.path.join(RESOURCE_DIR, "CHANGELOG.md") if FROZEN
+             else os.path.join(os.path.dirname(PKG_DIR), "CHANGELOG.md"))
 ICON = os.path.join(RESOURCE_DIR, "icon.ico") if FROZEN else os.path.join(os.path.dirname(PKG_DIR), "assets", "icon.ico")
 BROWSER_ICON = (os.path.join(RESOURCE_DIR, "browser.ico") if FROZEN
                 else os.path.join(os.path.dirname(PKG_DIR), "assets", "browser.ico"))
@@ -114,3 +117,9 @@ def write_launch_file() -> None:
 def clean_env() -> dict:
     """Environment for child processes, without PYTHON* variables (ZBrush sets them for its own Python)."""
     return {k: v for k, v in os.environ.items() if not k.upper().startswith("PYTHON")}
+
+
+def version_key(v) -> tuple | None:
+    """'v0.5.1' or '0.5.1' -> (0, 5, 1); None for anything else."""
+    m = re.fullmatch(r"v?(\d+)\.(\d+)\.(\d+)", str(v or "").strip())
+    return tuple(int(x) for x in m.groups()) if m else None

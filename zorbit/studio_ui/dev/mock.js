@@ -48,13 +48,18 @@
    ?elevated (the ZBrush is running as administrator and cannot be matched to an install; ?elevated=loaded: its listener answers, so the plugin counts as loaded), ?appoff (the app is not running), ?otherbridge (another ZOrbit
    folder is registered too, one of them missing), ?bridgemode=key (picks go through the bridge key), ?ringtried=open|sent|done (step 3 starts part
    way, measured from when Setup is first shown), ?ringauto (once step 3 opens, the ring opens after 2 s, a pick follows after 4 s and ZBrush answers
-   after 6 s; with ?bridgemode=key ZBrush never answers, so the hint shows). In the console, __mock.ring('open'), ('pick') and ('ack') do the same by hand. */
+   after 6 s; with ?bridgemode=key ZBrush never answers, so the hint shows). In the console, __mock.ring('open'), ('pick') and ('ack') do the same by hand.
+   Upgrades: ?whatsnew (get_whats_new answers two sections, 0.13.0 with a summary and 0.12.0 with five items, so Studio opens the What's new dialog; without it the list is empty
+   unless the Settings button asks for all of them), ?strays (get_strays finds 3 menus and 5 tags from an older version, so Studio asks to add them as a profile or set them
+   aside; adopt_strays works in this page only), ?appolder (the app runs as ZOrbit 0.12.0, older than this Studio: a toast and a Restart app button on Status; Start app
+   answers restarted and the app is current), ?toonew (get_config answers config null with too_new: the recovery screen with only Open folder). */
 (function () {
   var M = window.__RADIAL_MOCK__ || {};
   var q = new URLSearchParams(location.search);
   var lag = +(q.get('lag') || 0);
   var sleep = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
   var clone = function (o) { return JSON.parse(JSON.stringify(o)); };
+  var straysFound = q.has('strays'), appRestarted = false;
   var libSeq = {}, ticks = 0, thumbCalls = 0, alreadyDone = false, appStarted = false, setupCalls = 0, modernAdded = false, keptDone = false;
   var saved = clone(M.get_config.config);
   var TAG_DEFAULTS = { tag_colors: 'tint', tag_band: 'medium', tag_band_opacity: 0.45, tag_glow_opacity: 0.4, tag_tint_opacity: 0.3, tag_tint_style: 'gradient', tag_tint_blend: 'multiply' };
@@ -510,6 +515,7 @@
   var api = {
     get_config: function (profile) {
       return sleep(40).then(function () {
+        if (q.has('toonew')) return Object.assign({ config: null, too_new: true, error: 'These files were made by ZOrbit 9.9.9, which is newer than this one (0.12.0). Install ZOrbit 9.9.9 or newer.', path: 'C:\\Users\\you\\AppData\\Roaming\\ZOrbit\\radial.json', backup_exists: false, problems: [], mtime_ns: null }, profInfo());
         if (typeof profile === 'string' && profile) {              // like the backend: asking for a profile makes it the one the editor holds
           var want = profFind(profile);
           if (want === null) return Object.assign({ config: null, error: 'There is no profile called ' + profile + '.', path: '', backup_exists: false, problems: [], mtime_ns: null }, profInfo());
@@ -900,7 +906,9 @@
       return sleep(40).then(function () {
         var s = clone(M.get_status), down = q.get('status') === 'down';
         s.zbrush_running = zbRunning();
-        s.app_running = appRunning();
+        s.app_running = appRunning() || (q.has('appolder') && zbRunning());
+        s.app_version = q.has('appolder') ? (appRestarted ? '0.13.0' : '0.12.0') : null;
+        s.app_older = q.has('appolder') && !appRestarted && s.app_running;
         s.listener = down ? null : { verified: true, alive: true };
         if (down) s.last_pick = null;
         s.bridge_mode = bridgeMode();
@@ -924,6 +932,7 @@
         setTimeout(function () { appStarted = true; }, 6000);
         return { ok: false, running: false, starting: true, message: 'The app is still starting (a first start can take a few seconds while Windows scans it). Status turns green when it is up.' };
       });
+      if (q.has('appolder') && !appRestarted) return sleep(1500).then(function () { appRestarted = true; return { ok: true, running: true, restarted: true, was: '0.12.0', message: 'Restarted the app. It was ZOrbit 0.12.0.' }; });
       return sleep(q.has('startslow') ? 7000 : 1000).then(function () { appStarted = true; return { ok: true, running: true, message: 'Started.' }; });
     },
     open_folder: function (which) { console.log('[mock] open_folder', which); return Promise.resolve(true); },
@@ -970,8 +979,8 @@
       return sleep(100).then(function () { return { ok: true, message: 'Forgot ' + path + '. The folder itself was not touched.' }; });
     },
     // ?firstrun answers setup_done false until Finish or Skip, so a reload goes back to Setup
-    get_prefs: function () { var p = Object.assign({ check_updates: true, last_screen: 'menus', setup_done: true, mode: 'full' }, JSON.parse(localStorage.getItem('rm_prefs') || '{}')); if (firstRun()) p.setup_done = false; return Promise.resolve(modeOf(p)); },
-    set_pref: function (k, v) { if (q.has('prefsfail') && k !== 'last_screen') return sleep(80).then(function () { throw new Error('disk full (mock)'); }); var p = Object.assign({ check_updates: true, last_screen: 'menus', setup_done: true, mode: 'full' }, JSON.parse(localStorage.getItem('rm_prefs') || '{}')); p[k] = v; var pageOnly = k === 'mode' && (q.has('firstrun') || q.get('mode')); if (pageOnly) pageMode = v; else try { localStorage.setItem('rm_prefs', JSON.stringify(p)); } catch (e) {} if (k === 'setup_done' && v === true) firstDone = true; if (firstRun()) p.setup_done = false; return Promise.resolve(modeOf(p)); },
+    get_prefs: function () { var p = Object.assign({ check_updates: true, last_screen: 'menus', setup_done: true, mode: 'full', seen_version: '' }, JSON.parse(localStorage.getItem('rm_prefs') || '{}')); if (firstRun()) p.setup_done = false; return Promise.resolve(modeOf(p)); },
+    set_pref: function (k, v) { if (q.has('prefsfail') && k !== 'last_screen') return sleep(80).then(function () { throw new Error('disk full (mock)'); }); var p = Object.assign({ check_updates: true, last_screen: 'menus', setup_done: true, mode: 'full', seen_version: '' }, JSON.parse(localStorage.getItem('rm_prefs') || '{}')); p[k] = v; var pageOnly = k === 'mode' && (q.has('firstrun') || q.get('mode')); if (pageOnly) pageMode = v; else try { localStorage.setItem('rm_prefs', JSON.stringify(p)); } catch (e) {} if (k === 'setup_done' && v === true) firstDone = true; if (firstRun()) p.setup_done = false; return Promise.resolve(modeOf(p)); },
     set_dirty: function () { return Promise.resolve(true); },
     close_now: function () { console.log('[mock] close_now'); return Promise.resolve(true); },
     win_minimize: function () { return Promise.resolve(); },
@@ -980,6 +989,31 @@
     win_is_maximized: function () { return Promise.resolve(false); },
     get_app_info: function () { return Promise.resolve({ version: '0.12.0' }); },
     check_update: function () { var p = JSON.parse(localStorage.getItem('rm_prefs') || '{}'); if (p.check_updates === false) return Promise.resolve({ newer: false, current: '0.12.0', latest: null, url: 'https://github.com/combwizard/zorbit/releases' }); return sleep(300).then(function () { if (q.has('unreach')) return { newer: false, current: '0.12.0', latest: null, url: 'https://github.com/combwizard/zorbit/releases' }; return q.has('update') ? { newer: true, current: '0.12.0', latest: '0.12.0', url: 'https://github.com/combwizard/zorbit/releases' } : { newer: false, current: '0.12.0', latest: '0.12.0', url: 'https://github.com/combwizard/zorbit/releases' }; }); },
+    get_whats_new: function (all) {
+      return sleep(60).then(function () {
+        if (!q.has('whatsnew') && all !== true) return { current: '0.13.0', url: 'https://github.com/combwizard/zorbit/releases', sections: [] };
+        return { current: '0.13.0', url: 'https://github.com/combwizard/zorbit/releases', sections: [
+          { version: '0.13.0', date: '2026-11-01', url: 'https://github.com/combwizard/zorbit/releases/tag/v0.13.0',
+            summary: ['Profiles keep a whole set of menus, settings and tags for each kind of work (#19). The `radial.json` file of your first profile stays where it was, and **nothing you made is lost** on the way in.'], items: [] },
+          { version: '0.12.0', date: '2026-10-12', url: 'https://github.com/combwizard/zorbit/releases/tag/v0.12.0', summary: [],
+            items: ['Studio opens in **Simple** mode on a new install.', 'The browser remembers its size and side.', 'A pick during a stroke waits for the stroke to end.',
+              'Tag colours can be a band, a glow or a tint.', 'Fixed the ring flicker with reduced motion (#92).'] }] };
+      });
+    },
+    get_strays: function () {
+      return sleep(60).then(function () { return straysFound ? { found: true, menus: 3, tags: 5, when: Date.now() / 1000 - 86400 * 20, name: 'From an older version' } : { found: false, menus: null, tags: null, when: null, name: 'From an older version' }; });
+    },
+    adopt_strays: function (how, name) {
+      return sleep(150).then(function () {
+        if (how === 'aside') { straysFound = false; return { ok: true, folder: 'C:\\Users\\you\\AppData\\Roaming\\ZOrbit\\pre-profiles' }; }
+        var bad = profNameProblem(name, null);
+        if (bad) return { ok: false, message: bad };
+        var n = name.trim();
+        profiles.names.push(n); profSort(); profiles.saved[n] = clone(M.get_config.config);
+        straysFound = false;
+        return { ok: true, name: n, names: profiles.names.slice(), active: profiles.active, editing: profiles.editing, message: 'Created the profile ' + n + '.' };
+      });
+    },
     open_url: function (url) { console.log('[mock] open_url', url); return Promise.resolve(true); },
     open_browser: function () { console.log('[mock] open_browser'); return Promise.resolve({ ok: true, started: false }); },
     // The browser popout (popout.html?mock). A pick only logs; ?nopick answers like a popout whose app is gone.

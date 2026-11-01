@@ -31,7 +31,11 @@ dist\ZOrbit\ZOrbit.exe --selftest     # the same checks on the built app
 
 The tests import the Windows modules, so they run on Windows only. `--selftest` imports pywebview, pythonnet and every app module, and looks for the Studio interface files, the icons, the default menus, the ZScript bridge and the WebView2 loader DLL. It prints one line per check and exits with 1 if any fails. Run it on the built exe to catch a file that PyInstaller left out.
 
-GitHub Actions runs the tests on every push and pull request. A build only starts when they pass. After the build, the workflow runs `--check` and `--selftest` on the built exe. When you push a tag that starts with `v`, it also creates the release, and the release notes list the SHA256 hash of the installer and the portable zip.
+`tests\test_upgrade.py` runs the profile migration over data that real past releases wrote. The data is in `tests\fixtures\upgrade\<tag>\`: one folder each for v0.7.0, v0.7.1, v0.9.0 and v0.12.0, and a `downgrade` folder for 0.12.0 run again after the move. `python tools\make_upgrade_fixtures.py` makes them. It runs each release's own code from `git archive`, with a fresh `APPDATA` and `LOCALAPPDATA`. CI does not run the generator.
+
+`tests\test_starters.py` checks that `profiles.KNOWN_STARTERS` lists the hash of every `default_menus.json` in the git history. It needs the full history, which CI gets with `fetch-depth: 0`. When `default_menus.json` changes, add its new hash to `KNOWN_STARTERS`.
+
+GitHub Actions runs the tests on every push and pull request. A build only starts when they pass. After the build, the workflow runs `--check` and `--selftest` on the built exe, and `python tools\upgrade_check.py dist\ZOrbit\ZOrbit.exe`, which runs the exe's `--check` over each upgrade fixture. When you push a tag that starts with `v`, it also creates the release, and the release notes list the SHA256 hash of the installer and the portable zip.
 
 To run straight from a checkout while you work on the code, use `tools\dev-install.ps1`. It registers the checkout's `bridge` folder in `ZBRUSH_PLUGIN_PATH` and adds the Start menu shortcut, and `-Uninstall` takes both away again. Add `-WhatIf` to see what it would do first.
 

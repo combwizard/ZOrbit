@@ -10,7 +10,7 @@ In Studio, the button right after the **ZOrbit Studio** wordmark in the top bar 
 
 From the tray icon's right-click menu, the **Profile** submenu lists the profiles, with a tick on the one in use. **Manage profiles...** opens Studio. The tooltip on the tray icon names the profile in use, and a switch from the tray shows a balloon, "Profile: X".
 
-The ring follows a switch within half a second. The browser's tags and Recent follow within about five seconds. No restart is needed, with one exception: see [Older versions](#older-versions).
+The ring follows a switch within half a second. The browser's tags and Recent follow within about five seconds. No restart is needed.
 
 If you have unsaved edits in Studio, switching asks what to do: **Keep editing**, **Switch without saving** or **Save and switch**.
 
@@ -62,5 +62,19 @@ On the first start after the update, the old `radial.json` (with its `.bak` and 
 
 ## Older versions
 
-- An app left running from an older version keeps its old menus in memory until it is restarted. Quit ZOrbit from the tray icon and press **Start app** on **Studio > Status**, or restart ZBrush.
+- A newer ZOrbit takes the place of an older one that is still running, such as a portable copy. It asks the old one to quit, waits for it, and then starts in its place. `radiald.log` says `taking over from ZOrbit <version> (pid <n>)`, and then `ZOrbit <version> has quit`. A browser window of the old version stays open until you close it. The installer already closes running copies before it updates, so this matters mostly for the portable zip. If the old copy is the same version or a newer one, or it will not quit (one running as administrator, say), the new one exits instead. [Troubleshooting](troubleshooting.md#a-second-copy-of-zorbit-exits-at-startup) gives the reasons.
+- On **Studio > Status**, the **ZOrbit app** card turns amber and says the app running is older than Studio when that is the case. **Restart app** starts this version in its place. Studio also shows this as a message when it opens.
 - Starting the app with `--config <file>` pins one menus file. Profiles are off in that app, so its tray menu has no **Profile** submenu. `--check` prints the profile name on its first line.
+
+Going back to 0.12.0 works, but 0.12.0 does not know profiles. It finds no menus at the old place, so it starts with the starter menus, the three starter tags and no usage. Your real files are safe in `%APPDATA%\ZOrbit\profiles\Default\`. When you update again, what you changed on 0.12.0 is offered back, as described in [Files from an older version](#files-from-an-older-version).
+
+### Files from an older version
+
+After the update has moved your files, an older ZOrbit can write to the old places again. That happens after you go back to 0.12.0, or when an old copy is still running. The new version does not read those places, so it looks for them and offers what it finds:
+
+![The Files from an older ZOrbit dialog: when the files were saved, a profile name box, and the Set aside and Add as a profile buttons](images/studio-strays.png)
+
+- **Studio** opens **Files from an older ZOrbit** when it finds an old `radial.json` or `tags.json` that an older ZOrbit saved. The dialog shows when they were saved. Type a name in the profile name box (it starts as "From an older version") and press **Add as a profile**. The menus and tags become a new profile. It takes the bridge key and browser hotkey from the profile in use, as every new profile does, and Studio then offers **Switch**. Press **Set aside** instead to move the files into `%APPDATA%\ZOrbit\pre-profiles\<date and time>\`. Studio then offers **Open folder**. If you close the dialog without choosing, it asks again the next time Studio opens.
+- **The brush usage** an older version recorded (`usage.json`) is added to the profile in use when the app starts, with no question asked. The file is set aside in `pre-profiles\<date and time>\`, and `radiald.log` says `usage: added <n> brushes from an older version`.
+
+Not offered: an untouched copy of the starter menus (0.12.0 writes one on its first start when it finds none), the starter tags with nothing tagged, and a copy of the old Radial Menu files that 0.12.0 copies back. Files the update could not move away at first are not offered either. They are listed in `profiles\leftovers.json`, and the update moves them later.

@@ -161,3 +161,48 @@ def test_a_broken_profile_runs_without_menus_and_the_tray_says_so(two):
     assert app.profile == "B" and app.slots == [] and not app._have_cfg
     assert any(c[0] == "notify" and c[1] == "ZOrbit cannot read the menus file" and "Profile B" in c[2]
                for c in app.tray.calls)
+
+
+def stamp_newer():
+    """format.json as a newer ZOrbit leaves it."""
+    with open(profiles.stamp_file(), "w", encoding="utf-8") as f:
+        json.dump({"format": 2, "version": "9.9.9"}, f)
+
+
+def a_brush():
+    return radiald.C.Item("Move", "brush", {"brush": "Move"})
+
+
+def test_files_of_a_newer_zorbit_freeze_the_app_and_it_writes_no_usage(two):
+    app = make_app()
+    app.tray = FakeTray()
+    assert not app._frozen
+    app._record_pick(a_brush())                         # the control: before the stamp a pick is saved
+    assert os.path.isfile(app.usage.path)
+    os.remove(app.usage.path)
+    stamp_newer()
+    app._check_profile()
+    assert app._frozen
+    assert ("set_tip", radiald.TIP_FROZEN) in app.tray.calls
+    assert any(c[0] == "notify" and "9.9.9" in c[2] for c in app.tray.calls)
+    app._record_pick(a_brush())
+    assert not os.path.exists(app.usage.path)
+
+
+def test_a_frozen_app_stays_on_its_profile(two):
+    app = make_app()
+    profiles.set_active("B")
+    stamp_newer()
+    app._check_profile()
+    assert app._frozen and app.profile == "Default"
+    app._check_profile()
+    assert app.profile == "Default"
+
+
+def test_a_frozen_app_keeps_the_notice_in_the_tray_tip(two):
+    app = make_app()
+    app.tray = FakeTray()
+    stamp_newer()
+    app._check_profile()
+    app._menus_problem(clear=True)
+    assert app.tray.calls[-1] == ("set_tip", radiald.TIP_FROZEN)

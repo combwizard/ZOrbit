@@ -301,3 +301,69 @@ def test_the_browser_state_is_not_saved_over_an_unreadable_file(tmp_path, monkey
     f.write_text('{"side": "right"}', encoding="utf-8")
     popout._update_state(kind="alpha")
     assert json.loads(f.read_text(encoding="utf-8")) == {"side": "right", "kind": "alpha"}
+
+
+# --- What's new: seen_version and the sections the dialog shows ----------------------------------------
+
+def _studio_json(tmp_path):
+    return json.loads((tmp_path / "studio.json").read_text(encoding="utf-8"))
+
+
+def test_seen_version_is_this_version_on_a_fresh_install(api, tmp_path):
+    prefs = api.get_prefs()
+    assert prefs["setup_done"] is False
+    assert prefs["seen_version"] == paths.VERSION
+    assert _studio_json(tmp_path)["seen_version"] == paths.VERSION
+
+
+def test_seen_version_is_empty_for_an_existing_user(api, tmp_path):
+    (tmp_path / "studio.json").write_text('{"last_screen": "library"}', encoding="utf-8")
+    assert api.get_prefs()["seen_version"] == ""
+    assert _studio_json(tmp_path)["seen_version"] == ""
+
+
+def test_set_pref_takes_a_string_seen_version(api):
+    api.set_pref("seen_version", "0.11.0")
+    assert api.get_prefs()["seen_version"] == "0.11.0"
+    api.set_pref("seen_version", 12)                      # not a string: ignored
+    assert api.get_prefs()["seen_version"] == "0.11.0"
+
+
+def _whats_new_log(tmp_path, monkeypatch):
+    f = tmp_path / "CHANGELOG.md"
+    f.write_text(f"## [Unreleased]\n\nSoon.\n\n## [{paths.VERSION}] - 2026-10-31\n\n### Added\n\n- Now one.\n\n"
+                 "## [0.11.0] - 2026-09-01\n\n- Then one.\n\n## [0.10.0] - 2026-08-01\n\n- Earlier.\n",
+                 encoding="utf-8")
+    monkeypatch.setattr(paths, "CHANGELOG", str(f))
+
+
+def test_whats_new_for_an_existing_user_shows_the_current_section(api, tmp_path, monkeypatch):
+    _whats_new_log(tmp_path, monkeypatch)
+    (tmp_path / "studio.json").write_text('{"last_screen": "menus"}', encoding="utf-8")
+    res = api.get_whats_new()
+    assert res["current"] == paths.VERSION
+    assert [s["version"] for s in res["sections"]] == [paths.VERSION]
+    assert res["sections"][0] == {"version": paths.VERSION, "date": "2026-10-31", "summary": [],
+                                  "items": ["Now one."], "url": f"{studio.RELEASES_URL}/tag/v{paths.VERSION}"}
+
+
+def test_whats_new_lists_the_versions_after_the_one_seen(api, tmp_path, monkeypatch):
+    _whats_new_log(tmp_path, monkeypatch)
+    api.set_pref("seen_version", "0.10.0")
+    res = api.get_whats_new()
+    assert [s["version"] for s in res["sections"]] == [paths.VERSION, "0.11.0"]
+    assert res["sections"][1]["url"] == f"{studio.RELEASES_URL}/tag/v0.11.0"
+
+
+def test_whats_new_is_empty_once_this_version_was_seen(api, tmp_path, monkeypatch):
+    _whats_new_log(tmp_path, monkeypatch)
+    api.set_pref("seen_version", paths.VERSION)
+    assert api.get_whats_new()["sections"] == []
+
+
+def test_whats_new_all_current_ignores_what_was_seen(api, tmp_path, monkeypatch):
+    _whats_new_log(tmp_path, monkeypatch)
+    api.set_pref("seen_version", paths.VERSION)
+    res = api.get_whats_new(all_current=True)
+    assert [s["version"] for s in res["sections"]] == [paths.VERSION]
+    assert api.get_prefs()["seen_version"] == paths.VERSION      # asking does not mark it as seen

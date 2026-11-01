@@ -98,6 +98,18 @@ After a change to installing or removing the plugin, run `python tools\test_uac_
 terminal. It tests the install into a ZBrush under Program Files, where ZOrbit needs administrator rights; see
 [Build from source](docs/building.md#test-the-plugin-install-under-program-files).
 
+### Changing what ZOrbit keeps on disk
+
+If a change to what ZOrbit keeps on disk would make an older version misread or overwrite the new layout, it needs a format step:
+
+1. Raise `profiles.FORMAT` by one. An older version then leaves the files alone and says so, as [These files were made by a newer ZOrbit](docs/troubleshooting.md#these-files-were-made-by-a-newer-zorbit) describes.
+2. Add the migration step to `zorbit\profiles.py`.
+3. Add an upgrade fixture made by the last release: add its tag to `tools\make_upgrade_fixtures.py` and run it. `tests\test_upgrade.py` then checks the migration over it. See [Build from source](docs/building.md#tests-and-checks).
+
+### Release notes
+
+At release time, add a short plain summary of two to four sentences under the `## [x.y.z]` heading in `CHANGELOG.md`, before the `###` groups. Studio's **What's new** shows it, and the GitHub release notes include it. Without one, **What's new** shows the first five bullets.
+
 ### Working on Studio's interface in a browser
 
 Run `python tools\make_mock.py`, then open `zorbit\studio_ui\index.html?mock` in a browser. This
