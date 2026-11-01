@@ -8,10 +8,12 @@ Studio is where you edit everything. Open it from the Start menu (**ZOrbit Studi
 | Menus | Alt+1 | Create and edit menus and their items, with a live ring preview. |
 | Library | Alt+2 | Browse the brushes, alphas, materials and textures ZBrush can load, on four tabs, with search, folders and thumbnails. Click an item and press **Add to <menu>**, or drag it onto a menu, the ring or the item list. **Rescan** picks up items saved since Studio opened. Tag items and filter by tag (see [Tags](tags.md)). Star favourites; Recent lists what you have picked in ZBrush (see [Favourites and Recent](browser.md#favourites-and-recent)). |
 | Settings | Alt+3 | Ring size, animation, labels, flick, the browser hotkey, Studio's own preferences, and Import and export (see [Import and export](files.md#import-and-export)). [Full mode](#simple-and-full-mode) adds separate radius, slot and dead zone sliders, tag colours, colours, hover submenus, tap time, auto-close, tags, the bridge and Older ZBrush. |
-| Status | Alt+4 | Four cards: **ZBrush** (running or not), **ZOrbit app** (running or not, with **Start app** when ZBrush is running), **Bridge listener** (the small window the plugin keeps inside ZBrush: **Connected**, **Found, unverified**, **Stale** or **Not found**; **ZBrush closed** in grey when ZBrush is not running, since there is nothing to listen in; and **Not needed (key bridge)** when the bridge mode is `key` or only a ZBrush 2022 to 2025 is installed) and **Last pick** (the most recent item sent to ZBrush). Below them the last 40 lines of the app log, with **Copy log**, **Open logs folder** and **Open menus folder** (the folder of `radial.json`, your menus file). The screen refreshes every 3 seconds. A dot on this button in the rail means the app is not running while ZBrush is. |
+| Status | Alt+4 | Four cards: **ZBrush** (running or not), **ZOrbit app** (running or not, with **Start app** when ZBrush is running), **Bridge listener** (the small window the plugin keeps inside ZBrush: **Connected**, **Found, unverified**, **Stale** or **Not found**; **ZBrush closed** in grey when ZBrush is not running, since there is nothing to listen in; and **Not needed (key bridge)** when the bridge mode is `key` or only a ZBrush 2022 to 2025 is installed) and **Last pick** (the most recent item sent to ZBrush). Below them the last 40 lines of the app log, with **Copy log**, **Open logs folder** and **Open menus folder** (the folder of the profile you are editing, which holds its `radial.json`). The screen refreshes every 3 seconds. A dot on this button in the rail means the app is not running while ZBrush is. |
 | Setup | Alt+5 | A checklist of five steps: ZBrush found (with the plugin set up for it), plugin loaded in ZBrush, try the ring, your brushes, and what's where. It shows live state and offers one action per step. An amber dot on this button in the rail means no ZBrush that Studio found has the plugin set up, or a running ZBrush does not. Finding no ZBrush at all does not count. |
 
 ![The Library screen on the Brushes tab: folders and tags on the left, a grid of brush thumbnails, and the Add to Brushes panel on the right](images/studio-library.png)
+
+The top bar has a profile button right after the **ZOrbit Studio** wordmark. It shows the profile you are editing. Click it to switch to another profile, or to make, rename, duplicate or delete one. See [Profiles](profiles.md).
 
 ## Simple and Full mode
 
@@ -47,10 +49,12 @@ The choice is kept in `studio.json` as `mode` (`simple` or `full`). It is a Stud
 
 ## The tray icon
 
-While the app runs, ZOrbit has an icon in the notification area. Left-click it to open Studio. If the app cannot read `radial.json`, it shows a balloon once and puts "menus file cannot be read" in the icon's tooltip until the file loads again. Right-click it for these commands:
+While the app runs, ZOrbit has an icon in the notification area. Left-click it to open Studio. Its tooltip names the profile in use. If the app cannot read `radial.json`, it shows a balloon once and puts "menus file cannot be read" in the icon's tooltip until the file loads again. Right-click it for these commands:
 
 - **Browser** opens the [browser](browser.md).
 - **Open Studio** opens this window.
+- **Profile** lists your profiles, with a tick on the one in use. Pick one to switch; the ring follows within half a second, with no restart. A switch shows a balloon, "Profile: X". See [Profiles](profiles.md#switching).
+- **Manage profiles...** opens Studio.
 - **Reload menus** reads `radial.json` again and shows the result as a balloon from the tray icon: **Menus reloaded**, or the reason the file cannot be read. It is also logged in `radiald.log`: "tray: menus reloaded", or "tray: reload failed" with the reason.
 - **Open logs folder** opens `%LOCALAPPDATA%\ZOrbit`.
 - **Quit ZOrbit** stops the app. The ring stays off until ZBrush is restarted or **Start app** is pressed on **Status**.

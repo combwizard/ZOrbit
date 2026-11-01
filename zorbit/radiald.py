@@ -46,6 +46,7 @@ import config as C          # noqa: E402
 import expand               # noqa: E402
 import installs             # noqa: E402
 import paths                # noqa: E402
+import profiles             # noqa: E402
 import tags                 # noqa: E402
 import usage                # noqa: E402
 import win32 as W           # noqa: E402
@@ -91,8 +92,9 @@ STUCK_KEY_S = 30                      # a swallowed hotkey the hook never saw go
 
 
 def tags_path():
-    """tags.json; the environment variable ZORBIT_TAGS_FILE points tests and --check at another file."""
-    return os.environ.get("ZORBIT_TAGS_FILE") or paths.TAGS_FILE
+    """tags.json of the active profile; the environment variable ZORBIT_TAGS_FILE points tests and --check
+    at another file."""
+    return profiles.tags_file()
 
 
 def log(msg: str) -> None:
@@ -285,8 +287,14 @@ class HookThread(threading.Thread):
 
 
 class App:
-    def __init__(self, cfg_path, target_exe="zbrush.exe", exit_with_target=False, no_tray=False):
-        self.cfg_path = cfg_path
+    def __init__(self, cfg_path=None, target_exe="zbrush.exe", exit_with_target=False, no_tray=False, profile=None):
+        # An explicit path (--config, tests, tools/ring_shots.py) or profile= (a Studio preview) pins the app to it:
+        # it never follows the profile pointer.
+        self._pinned = cfg_path is not None or profile is not None or not profiles.enabled()
+        self.profile = None if cfg_path is not None else (profile or profiles.active())
+        self.cfg_path = cfg_path or profiles.config_file(self.profile)
+        self._profile_sig = profiles.signature()
+        self._profile_wait = 0          # ticks spent waiting for a pointer's folder to appear
         self.target_exe = target_exe.lower()
         self.exit_with_target = exit_with_target
         self.no_tray = no_tray
@@ -326,10 +334,10 @@ class App:
         self._stuck = {}                # "held" / "browser" -> when the tick first saw that key held with no ring
         self._legacy_scan = (0.0, False)    # (when, whether a ZBrush 2022-2025 is installed)
         self._target_misses = 0
-        self.usage = usage.Usage()
+        self.usage = usage.Usage(None if cfg_path is not None else profiles.usage_file(self.profile))
         self.activity = activity.Activity(os.path.join(DATA_DIR, "activity.json"), log)   # for the Studio's Setup screen
         self._activity_menu = None      # id of the root ring last opened, so a pick can say which ring it came from
-        self.tags = tags.TagStore(tags_path())
+        self.tags = tags.TagStore(tags_path() if cfg_path is not None else profiles.tags_file(self.profile))
         self.expander = None            # expand.Expander of the current config, tags and usage
         self._browser_vk = None         # the browser hotkey while it is down (its repeats and key-up are ours); hook thread writes
         self._popout_proc = None        # subprocess.Popen of the popout we last started
@@ -388,6 +396,56 @@ class App:
         self._prefetch()
         self._prune_icons()
         self._schedule_prewarm()
+
+    def _check_profile(self, notify=False):
+        """Follows the profile pointer: when Studio or the tray has pointed it at another profile, switches to it."""
+        if self._pinned:
+            return
+        sig = profiles.signature()
+        if sig == self._profile_sig:
+            return
+        want = profiles.pointer()
+        if not want or want == self.profile:
+            self._profile_sig = sig
+            return
+        if not os.path.isfile(profiles.config_file(want)):     # a create or rename still in progress
+            self._profile_wait += 1
+            if self._profile_wait < 20:                        # about 10 s of ticks
+                return
+            log(f"profile: {want!r} never appeared; falling back")
+            want = profiles.active()
+            if want == self.profile:
+                self._profile_sig = sig
+                self._profile_wait = 0
+                return
+        if self.ring is not None or self._browser_pick is not None:
+            return          # never under an open ring or a pending pick: the ring holds expander.resolve and the
+                            # pick records into usage
+        self._profile_wait = 0
+        self._switch_profile(want, notify)
+        self._profile_sig = sig
+
+    def _switch_profile(self, name, notify=False):
+        """Loads another profile's menus, tags and usage. The icons, the popout and the activity stay as they are."""
+        try:
+            log(f"profile: {self.profile} -> {name}")
+            self.profile = name
+            self.cfg_path = profiles.config_file(name)
+            self.tags = tags.TagStore(profiles.tags_file(name))
+            self.usage = usage.Usage(profiles.usage_file(name))     # new: its cache and picks must not carry over
+            self._bad_mtime = None
+            self._config_error = None
+            self._have_cfg = False      # a broken file then runs with no menus, not the old profile's ring
+            self._activity_menu = None
+            self.load_config(force=True, balloon=False)
+            if self.tray is not None:
+                self.tray.set_profile(name)
+                if self._config_error:
+                    self.tray.notify("ZOrbit cannot read the menus file", f"Profile {name}: {self._config_error}")
+                elif notify:
+                    self.tray.notify("ZOrbit", f"Profile: {name}")
+        except Exception:
+            log("profile switch failed:\n" + traceback.format_exc())
 
     def _set_slots(self, menus, browser_key):
         """Sets the menus that have hotkeys and hands the hook thread the matching snapshot in one assignment."""
@@ -714,6 +772,7 @@ class App:
                     self._hook_post(WM_HOOK_REHOOK)     # Windows silently drops hooks that ever timed out
                 elif wparam == TIMER_CONFIG:
                     self._check_stuck_keys()
+                    self._check_profile()       # before load_config, so a renamed-away path is never read first
                     self.load_config()          # a new or changed hotkey must work before any ring opens
                 elif wparam == TIMER_BROWSER_PICK:
                     self._browser_pick_tick()
@@ -749,9 +808,12 @@ class App:
             return
         try:
             from tray import Tray
-            tray = Tray(f"ZOrbit {paths.VERSION}", paths.ICON, self._tray_command, log)
+            source = None if self._pinned else (lambda: (profiles.names(), self.profile))
+            tray = Tray(f"ZOrbit {paths.VERSION}", paths.ICON, self._tray_command, log, profile_source=source)
             self.tray = tray
             ok = tray.create()
+            if not self._pinned:
+                tray.set_profile(self.profile)
             log(f"tray icon {'added' if ok else 'not added yet (will retry)'}")
         except Exception:
             log("tray unavailable:\n" + traceback.format_exc())
@@ -786,6 +848,15 @@ class App:
                     log("tray: menus reloaded")
                     if self.tray is not None:
                         self.tray.notify("ZOrbit", "Menus reloaded")
+            elif name.startswith("profile:"):
+                try:
+                    profiles.set_active(name[len("profile:"):])
+                except profiles.ProfileError as e:
+                    log(f"tray: {e}")
+                    if self.tray is not None:
+                        self.tray.notify("ZOrbit", str(e))
+                else:
+                    self._check_profile(notify=True)
             elif name == "logs":
                 os.makedirs(paths.DATA_DIR, exist_ok=True)
                 os.startfile(paths.DATA_DIR)
@@ -799,6 +870,7 @@ class App:
     def open_slot(self, slot, held=True):
         """held: the hotkey was down when the hook saw it (the hook says so in the message, because by the time
         this runs the key may be up already)."""
+        self._check_profile()
         self.load_config()                         # picks up edits to radial.json on every open
         if slot >= len(self.slots):
             return
@@ -1299,6 +1371,8 @@ class App:
         W.make_dpi_aware()
         log(f"ZOrbit starting (pid {os.getpid()}, python {sys.version.split()[0]}, "
             f"thumbnails={'on' if assets else 'off'}; {started}; started by {W.launch_chain()})")
+        if not self._pinned:
+            log(f"profile: {self.profile} ({len(profiles.names())} profiles)")
         self.load_config(force=True)
         if self.cfg is None:
             return 1
@@ -1330,6 +1404,8 @@ class App:
 def check(cfg_path) -> int:
     store = tags.TagStore(tags_path()).load()
     cfg = C.load(cfg_path, store)
+    if profiles.enabled() and cfg_path == profiles.config_file():
+        print(f"profile: {profiles.active()}")
     print(f"{cfg_path}: {len(cfg.menus)} menus, bridge mode={cfg.bridge_mode} "
           f"key={cfg.bridge_key.text if cfg.bridge_key else None}, "
           f"browser hotkey={cfg.browser_key.text if cfg.browser_key else None}")
@@ -1358,7 +1434,7 @@ def check(cfg_path) -> int:
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("--config", default=None, help="menus file (default: %%APPDATA%%\\ZOrbit\\radial.json)")
+    ap.add_argument("--config", default=None, help="pinned menus file (profiles off; tags and usage come from the active profile)")
     ap.add_argument("--exit-with-zbrush", action="store_true", help="quit when ZBrush.exe has exited")
     ap.add_argument("--target-exe", default="ZBrush.exe", help=argparse.SUPPRESS)
     ap.add_argument("--no-tray", action="store_true", help="do not show the notification-area icon")
@@ -1367,12 +1443,12 @@ def main(argv=None) -> int:
     try:
         if a.config is None:
             try:
-                a.config = paths.ensure_config()
+                profiles.ensure()
             except OSError as e:                  # an unwritable %APPDATA%: say so plainly, not with a traceback
-                log(f"fatal: cannot create the menus file in {paths.CONFIG_DIR}: {e}")
+                log(f"fatal: cannot create the first profile in {profiles.root()}: {e}")
                 return 1
         if a.check:
-            return check(a.config)
+            return check(a.config or profiles.config_file())
         return App(a.config, a.target_exe, a.exit_with_zbrush, a.no_tray).run()
     except Exception:
         log("fatal:\n" + traceback.format_exc())

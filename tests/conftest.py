@@ -16,6 +16,7 @@ _SANDBOX = tempfile.mkdtemp(prefix="zorbit-tests-")
 os.environ["APPDATA"] = os.path.join(_SANDBOX, "Roaming")
 os.environ["LOCALAPPDATA"] = os.path.join(_SANDBOX, "Local")
 os.environ["ZORBIT_TAGS_FILE"] = os.path.join(_SANDBOX, "Roaming", "ZOrbit", "tags.json")
+os.environ["ZORBIT_USAGE_FILE"] = os.path.join(_SANDBOX, "Local", "ZOrbit", "usage.json")
 atexit.register(shutil.rmtree, _SANDBOX, ignore_errors=True)
 
 
@@ -61,3 +62,22 @@ def usage_file(write_json):
     def write(raw):
         return write_json(raw, "usage.json")
     return write
+
+
+@pytest.fixture
+def profile_env(tmp_path, monkeypatch):
+    """A fresh pair of config and data folders with profiles on: the three path overrides are unset and
+    paths.CONFIG_DIR and paths.DATA_DIR point into tmp_path. Returns (config_dir, data_dir)."""
+    import paths
+    import profiles
+    for var in ("ZORBIT_CONFIG_FILE", "ZORBIT_TAGS_FILE", "ZORBIT_USAGE_FILE"):
+        monkeypatch.delenv(var, raising=False)
+    config_dir = tmp_path / "Roaming" / "ZOrbit"
+    data_dir = tmp_path / "Local" / "ZOrbit"
+    config_dir.mkdir(parents=True)
+    data_dir.mkdir(parents=True)
+    monkeypatch.setattr(paths, "CONFIG_DIR", str(config_dir))
+    monkeypatch.setattr(paths, "DATA_DIR", str(data_dir))
+    profiles._forget()
+    yield config_dir, data_dir
+    profiles._forget()

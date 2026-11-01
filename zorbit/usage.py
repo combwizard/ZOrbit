@@ -17,7 +17,8 @@ browser lists them newest first, and "most used" for anything but brushes is the
 A name is keyed in lower case without spaces (norm(), as tags.json does): "Clay Buildup" and "ClayBuildup" are
 one brush. Keys written with spaces by an earlier version are merged when the file is read.
 
-%LOCALAPPDATA%\\ZOrbit\\usage.json (written by the app; the Studio and the browser write it only to forget a recent):
+%APPDATA%\\ZOrbit\\profiles\\<profile>\\usage.json (one per profile; written by the app; the Studio and the browser
+write it only to forget a recent):
 {"brushes": {"claybuildup": {"name": "ClayBuildup", "score": 3.2, "t": 1761550000.0}},   # score as of t
  "menus": {"<menu id>": {"slots": ["ClayBuildup", null], "pending": ["Pinch"]}},
  "picks": {"alpha:alpha_01": {"name": "Alpha_01", "count": 4, "t": 1761550000.0}}}       # key: kind:norm(name)
@@ -28,9 +29,8 @@ import shutil
 import time
 
 import fsutil
-import paths
+import profiles
 
-USAGE_FILE = os.path.join(paths.DATA_DIR, "usage.json")
 HALF_LIFE_S = 14 * 86400
 FORGET_BELOW = 0.01                    # a single pick drops out after about 3 months
 PICKS_KEPT = 200                       # recent picks across all kinds; the oldest go on save
@@ -56,8 +56,8 @@ def _pinned(menu) -> set:
 
 
 class Usage:
-    def __init__(self, path=USAGE_FILE):
-        self.path = path
+    def __init__(self, path=None):
+        self.path = path or profiles.usage_file()
         self.mtime = None
         self.version = 0               # counts changes in memory too, for caches keyed on the ranking
         self.brushes = {}

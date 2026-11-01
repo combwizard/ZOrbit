@@ -48,7 +48,7 @@ Tags save as you make them. They are not part of **Save**, **Revert**, **Undo** 
 
 ## Where tags live
 
-Tags are in `%APPDATA%\ZOrbit\tags.json`, apart from your menus. The file does not exist until you change a tag; before that, the starter set (Favourites, Blocking and Detailing) is only held in memory. It looks like this:
+Tags are in `%APPDATA%\ZOrbit\profiles\<profile>\tags.json`, one file per [profile](profiles.md), apart from your menus. The file does not exist until you change a tag; before that, the starter set (Favourites, Blocking and Detailing) is only held in memory. It looks like this:
 
 ```json
 {"version": 1,

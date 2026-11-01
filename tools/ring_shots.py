@@ -32,6 +32,7 @@ for _f in glob.glob(os.path.expandvars(r"%APPDATA%\Maxon\*\installpath.txt")):  
 os.environ["APPDATA"] = os.path.join(SANDBOX, "Roaming")
 os.environ["LOCALAPPDATA"] = os.path.join(SANDBOX, "Local")
 os.environ["ZORBIT_TAGS_FILE"] = os.path.join(SANDBOX, "Roaming", "ZOrbit", "tags.json")
+os.environ["ZORBIT_USAGE_FILE"] = os.path.join(SANDBOX, "Local", "ZOrbit", "usage.json")
 atexit.register(shutil.rmtree, SANDBOX, ignore_errors=True)
 sys.path.insert(0, os.path.join(ROOT, "zorbit"))
 
@@ -76,7 +77,7 @@ class World:
             if tag:
                 store.set_tags(tags.item_key("brush", brush), [tag])
         plain = tags.TagStore(os.path.join(SANDBOX, "untagged.json")).load()   # the starter tags, nothing tagged
-        cfg = C.load(paths.CONFIG_FILE, store)
+        cfg = C.load(self.app.cfg_path, store)
         assert not cfg.errors, cfg.errors
         self.fan_menus = [cfg.menus[m] for m in ("more", "tools", "subdiv")]
         cfg.menus["tags"] = C.Menu(id="tags", title="Tags", items=[

@@ -31,6 +31,7 @@ import installs             # noqa: E402
 import menushare            # noqa: E402
 import onboarding           # noqa: E402
 import paths                # noqa: E402
+import profiles           # noqa: E402
 import radiald              # noqa: E402
 import tags                 # noqa: E402
 import webapi               # noqa: E402
@@ -40,7 +41,6 @@ import winframe             # noqa: E402
 import zscript_bridge       # noqa: E402
 
 DATA_DIR = paths.DATA_DIR
-CONFIG_FILE = paths.ensure_config()
 UI_INDEX = os.path.join(paths.UI_DIR, "index.html")
 APP_MUTEX = "Local\\ZOrbit"
 STUDIO_MUTEX = "Local\\ZOrbitStudio"
@@ -143,6 +143,15 @@ def _plural(n: int, word: str) -> str:
     return f"{n} {word}" + ("" if n == 1 else "s")
 
 
+def _name_from_file(file_name: str) -> str:
+    """A profile name to offer for a settings file: its name without the extension, with what a profile name cannot
+    hold turned into spaces and cut to fit. "Imported" when nothing usable is left."""
+    stem = os.path.splitext(file_name)[0]
+    stem = re.sub(r'[\\/:*?"<>|\x00-\x1f]', " ", stem)
+    stem = re.sub(r" {2,}", " ", stem).strip(" .")[:profiles.NAME_MAX].strip(" .")
+    return stem if not profiles.valid_name(stem, ()) else "Imported"
+
+
 class Api(webapi.LibraryApi, webapi.TagApi):
     def __init__(self):
         self._window = None    # underscore: pywebview must not expose (and crawl) it to JS
@@ -153,6 +162,38 @@ class Api(webapi.LibraryApi, webapi.TagApi):
         self._ask_sent = 0.0           # when we last asked the page to show the close dialog
         self._ask_acked = True         # whether the page answered that request
         self._session_ending = False   # Windows is shutting down, restarting or signing out: never veto the close
+        self._profile = None           # the profile get_config last served, which saves go back to; None before that
+        self._pending_profile_file = None    # the file pick_profile_file read, until create_profile uses it
+        try:
+            profiles.ensure()
+        except OSError as e:
+            _startup(f"profiles could not be set up: {e!r}")
+
+    # --- profiles: which files an editor call works on ----------------------------------------------
+    def _prof(self, name=None):
+        """The profile a call is about: name (as it is spelt on disk), else the one the editor holds, else the
+        active one. None for a name that is no profile."""
+        return profiles.canonical(name) if name else (self._profile or profiles.active())
+
+    def _cfg_path(self, name=None):
+        """radial.json of that profile. Profiles off (a pinned file): that file, whatever the name. A name that is no
+        profile gives a path in a folder that never exists, never the active profile's file."""
+        if not profiles.enabled():
+            return profiles.config_file()
+        made = self._prof(name)
+        return profiles.config_file(made) if made else os.path.join(profiles.root(), ".missing", "radial.json")
+
+    def _tags_path(self):
+        return profiles.tags_file(self._prof() if profiles.enabled() else None)
+
+    def _usage_path(self):
+        return profiles.usage_file(self._prof() if profiles.enabled() else None)
+
+    def _preview_app(self):
+        """An App for the previews, on the files of the profile the editor holds, not of the active one."""
+        if profiles.enabled():
+            return radiald.App(self._cfg_path(), profile=self._prof())
+        return radiald.App(self._cfg_path())
 
     # --- config ----------------------------------------------------------------------------------
     def _load_dict(self, cfg: dict, store=None):
@@ -163,7 +204,8 @@ class Api(webapi.LibraryApi, webapi.TagApi):
         try:
             with os.fdopen(fd, "w", encoding="utf-8") as f:
                 json.dump(cfg, f)
-            loaded = C.load(tmp, store or tags.TagStore(radiald.tags_path()).load())   # tag names checked like the app does
+            # tag names are checked like the app does
+            loaded = C.load(tmp, store or tags.TagStore(self._tags_path()).load())
             return loaded, loaded.errors
         except Exception as e:
             return None, [f"config could not be read: {e}"]
@@ -173,15 +215,26 @@ class Api(webapi.LibraryApi, webapi.TagApi):
             except OSError:
                 pass
 
-    def get_config(self):
+    def get_config(self, profile=None):
         """radial.json as the page edits it, with the loader's problems. When the file cannot be read or is
         not a JSON object, config is None and error says why (with line and column when the parser knows),
-        so the page can offer to restore the backup or start again instead of failing to open."""
-        out = {"config": None, "problems": [], "path": CONFIG_FILE, "defaults": C.DEFAULT_RING,
-               "mtime_ns": None, "backup_exists": os.path.isfile(CONFIG_FILE + ".bak")}
+        so the page can offer to restore the backup or start again instead of failing to open. profile: the one to
+        load (the editor's own, else the active one, when not given); it becomes the one saves go back to."""
+        name = self._prof(profile)
+        path = profiles.config_file(name if profiles.enabled() else None)
+        out = {"config": None, "problems": [], "path": path, "defaults": C.DEFAULT_RING, "mtime_ns": None,
+               "backup_exists": os.path.isfile(path + ".bak"), "profile": name, "active": profiles.active(),
+               "profiles": profiles.names(), "enabled": profiles.enabled()}
+        if name is None or (profiles.enabled() and not os.path.isfile(path)):
+            out["error"] = f"Profile {name or profile} no longer exists."
+            return out
+        if name != self._profile:                  # another profile: what was read for the last one is stale
+            self._pending_import = self._pending_menu_import = self._pending_profile_file = None
+        self._profile = name
+        webapi.pin(name if profiles.enabled() else None)
         try:
-            mtime_ns = os.stat(CONFIG_FILE).st_mtime_ns       # before reading: a later change shows as a conflict
-            with open(CONFIG_FILE, encoding="utf-8-sig") as f:
+            mtime_ns = os.stat(path).st_mtime_ns       # before reading: a later change shows as a conflict
+            with open(path, encoding="utf-8-sig") as f:
                 raw = json.load(f)
         except json.JSONDecodeError as e:
             out["error"] = f"{e.msg} at line {e.lineno}, column {e.colno}"
@@ -206,20 +259,34 @@ class Api(webapi.LibraryApi, webapi.TagApi):
         _, problems = self._load_dict(cfg)
         return {"problems": problems}
 
-    def save_config(self, cfg, mtime_ns=None, force=False, allow_unusable=False):
+    def _missing_profile(self, path, profile):
+        """The save_config answer when the profile's folder has gone (deleted from another window), else None."""
+        if profiles.enabled() and not os.path.isdir(os.path.dirname(path)):
+            name = self._prof(profile) or profile or self._profile
+            return {"saved": False, "profile_missing": True,
+                    "message": f"Profile {name} no longer exists. Switch to another profile, or make it again."}
+        return None
+
+    def save_config(self, cfg, mtime_ns=None, force=False, allow_unusable=False, profile=None):
         """Writes radial.json. The app notices the change within half a second. Saves even with problems (the
         loader skips bad items) and reports them, but refuses a config no ring can open from unless allow_unusable.
         mtime_ns is the file's time when the page loaded it: if the file has changed since, nothing is written
         (conflict) unless force. allow_unusable saves a config no ring can open from. The two flags are separate
         so confirming one warning never skips the other. The previous version is kept as radial.json.bak, only
         when it was valid JSON and differs, so a corrupt or unchanged file never replaces a good backup. A file
-        that is not valid JSON is kept as radial.json.broken instead (kept_broken in the result)."""
+        that is not valid JSON is kept as radial.json.broken instead (kept_broken in the result).
+        profile: the profile the editor loaded cfg from; it is saved there even if another one is active now. A
+        profile that has been deleted since answers profile_missing and nothing is written."""
+        path = self._cfg_path(profile)
+        gone = self._missing_profile(path, profile)
+        if gone:
+            return gone
         if not isinstance(cfg, dict) or not isinstance(cfg.get("menus"), dict):
             return {"saved": False, "message": "The config is not an object with a menus section."}
-        exists = os.path.isfile(CONFIG_FILE)
+        exists = os.path.isfile(path)
         if mtime_ns is not None and exists and not force:
             try:
-                now_ns = os.stat(CONFIG_FILE).st_mtime_ns
+                now_ns = os.stat(path).st_mtime_ns
             except OSError:
                 now_ns = None
             try:
@@ -244,20 +311,20 @@ class Api(webapi.LibraryApi, webapi.TagApi):
         kept_broken = False
         try:
             if exists:
-                with open(CONFIG_FILE, "rb") as f:
+                with open(path, "rb") as f:
                     old_bytes = f.read()
                 try:
                     old = old_bytes.decode("utf-8-sig")
                     json.loads(old)
                     if old.replace("\r\n", "\n") != text:
-                        fsutil.write_atomic(CONFIG_FILE + ".bak", old_bytes)
+                        fsutil.write_atomic(path + ".bak", old_bytes)
                 except (ValueError, RecursionError):
                     # Not valid JSON: it never becomes the backup (that stays the last good version), but it is
                     # not lost either. Saved over, it is kept as radial.json.broken.
-                    fsutil.write_atomic(CONFIG_FILE + ".broken", old_bytes)
+                    fsutil.write_atomic(path + ".broken", old_bytes)
                     kept_broken = True
-            fsutil.write_atomic(CONFIG_FILE, data)
-            st = os.stat(CONFIG_FILE)
+            fsutil.write_atomic(path, data)
+            st = os.stat(path)
         except OSError as e:
             return {"saved": False, "message": f"radial.json could not be written: {e.strerror or e}"}
         except (UnicodeEncodeError, TypeError, ValueError) as e:
@@ -266,10 +333,14 @@ class Api(webapi.LibraryApi, webapi.TagApi):
         return {"saved": True, "problems": problems, "time": time.time(), "mtime_ns": st.st_mtime_ns,
                 "kept_broken": kept_broken}
 
-    def restore_backup(self):
+    def restore_backup(self, profile=None):
         """Puts radial.json.bak back as radial.json, if the backup is readable JSON. The backup stays, and the
-        radial.json it replaces is first kept as radial.json.broken (unless it is missing or the same)."""
-        bak = CONFIG_FILE + ".bak"
+        radial.json it replaces is first kept as radial.json.broken (unless it is missing or the same). profile: as
+        for save_config; the recovery screen gives none and gets the profile the editor holds."""
+        path = self._cfg_path(profile)
+        if self._missing_profile(path, profile):
+            return {"ok": False, "message": "That profile no longer exists. Switch to another profile."}
+        bak = path + ".bak"
         try:
             with open(bak, "rb") as f:
                 data = f.read()
@@ -285,14 +356,14 @@ class Api(webapi.LibraryApi, webapi.TagApi):
         kept = False
         try:
             try:
-                with open(CONFIG_FILE, "rb") as f:
+                with open(path, "rb") as f:
                     current = f.read()
             except FileNotFoundError:
                 current = None
             if current is not None and current != data:       # what is being replaced is kept, as reset_config does
-                fsutil.write_atomic(CONFIG_FILE + ".broken", current)
+                fsutil.write_atomic(path + ".broken", current)
                 kept = True
-            fsutil.write_atomic(CONFIG_FILE, data)
+            fsutil.write_atomic(path, data)
         except OSError as e:
             return {"ok": False, "message": f"radial.json could not be written: {e.strerror or e}"}
         self._extras = (0.0, "auto", False)
@@ -300,24 +371,123 @@ class Api(webapi.LibraryApi, webapi.TagApi):
                 "message": "Restored radial.json from radial.json.bak."
                            + (" The file it replaced is kept as radial.json.broken." if kept else "")}
 
-    def reset_config(self):
+    def reset_config(self, profile=None):
         """Starts again from the shipped default menus. The file being replaced is first kept as
-        radial.json.broken (a previous .broken is overwritten), so nothing is lost."""
+        radial.json.broken (a previous .broken is overwritten), so nothing is lost. profile: as for restore_backup."""
+        path = self._cfg_path(profile)
+        if self._missing_profile(path, profile):
+            return {"ok": False, "message": "That profile no longer exists. Switch to another profile."}
         try:
             with open(paths.DEFAULT_MENUS, "rb") as f:
                 default = f.read()
-            if os.path.isfile(CONFIG_FILE):
-                with open(CONFIG_FILE, "rb") as f:
+            if os.path.isfile(path):
+                with open(path, "rb") as f:
                     current = f.read()
                 if current != default:
-                    fsutil.write_atomic(CONFIG_FILE + ".broken", current)
+                    fsutil.write_atomic(path + ".broken", current)
             else:
-                os.makedirs(paths.CONFIG_DIR, exist_ok=True)
-            fsutil.write_atomic(CONFIG_FILE, default)
+                os.makedirs(os.path.dirname(path), exist_ok=True)
+            fsutil.write_atomic(path, default)
         except OSError as e:
             return {"ok": False, "message": f"Could not start again from the defaults: {e.strerror or e}"}
         return {"ok": True, "message": "Started again from the default menus. The old file is kept as "
                                        "radial.json.broken."}
+
+    # --- profiles --------------------------------------------------------------------------------
+    def _profile_list(self, **extra):
+        """What every profile answer carries, so the page can redraw its list from any of them."""
+        return dict(extra, names=profiles.names(), active=profiles.active(), editing=self._profile)
+
+    @staticmethod
+    def _need_name(name):
+        """An error answer for a name argument that is not a string, else None."""
+        if isinstance(name, str):
+            return None
+        return {"ok": False, "message": "Give the profile a name."}
+
+    def get_profiles(self):
+        """The profiles, which one is active and which one the editor holds. Cheap: the page asks on every focus."""
+        return self._profile_list(ok=True, enabled=profiles.enabled())
+
+    def switch_profile(self, name):
+        """Makes a profile the active one (the app follows within half a second) and returns its config, as
+        get_config does, for the editor to load."""
+        bad = self._need_name(name)
+        if bad:
+            return bad
+        try:
+            profiles.set_active(name)
+        except profiles.ProfileError as e:
+            return {"ok": False, "message": str(e)}
+        self._extras = (0.0, "auto", False)            # Status reads the bridge mode again
+        return dict(self.get_config(name), ok=True)
+
+    def pick_profile_file(self):
+        """Asks for a settings file to make a profile from, reads and checks it. Writes nothing; create_profile
+        with the source "file" makes the profile from what is read here."""
+        self._pending_profile_file = None
+        found, answer = self._ask_settings_file(need_menus=True)
+        if answer:
+            return answer
+        snap = found["info"].snapshot() if found["info"] is not None else None
+        self._pending_profile_file = {"path": found["path"], "config": found["cfg"], "tags": snap}
+        return {"ok": True, "path": found["path"], "name": profiles.unique_name(_name_from_file(found["name"])),
+                "menus": len(found["cfg"]["menus"]), "has_tags": snap is not None,
+                "tags": len(snap["tags"]) if snap else 0, "problems": found["problems"],
+                "version": found["version"]}
+
+    def create_profile(self, name, source):
+        """Makes a profile. source: "starter", "empty", "copy" (of the active profile) or "file" (the one
+        pick_profile_file read). It does not switch to it: the page calls switch_profile."""
+        bad = self._need_name(name)
+        if bad:
+            return bad
+        bundle = None
+        if source == "file":
+            pend = self._pending_profile_file
+            if not pend:
+                return {"ok": False, "message": "Pick the file first."}
+            bundle = {"config": pend["config"], "tags": pend["tags"]}
+        try:
+            made = profiles.create(name, source, bundle)
+        except profiles.ProfileError as e:
+            return {"ok": False, "message": str(e)}
+        if source == "file":
+            self._pending_profile_file = None
+        return self._profile_list(ok=True, name=made, message=f"Made the profile {made}.")
+
+    def rename_profile(self, old, new):
+        """Renames a profile. The editor follows when it holds that profile."""
+        bad = self._need_name(old) or self._need_name(new)
+        if bad:
+            return bad
+        was = profiles.canonical(old)
+        try:
+            made = profiles.rename(old, new)
+        except profiles.ProfileError as e:
+            return {"ok": False, "message": str(e)}
+        if was is not None and was == self._profile:
+            self._profile = made
+            webapi.pin(made)
+        return self._profile_list(ok=True, name=made, message=f"Renamed {old} to {made}.")
+
+    def delete_profile(self, name):
+        """Moves a profile to profiles\\.deleted, where it is kept for 30 days. When the editor held it, reload is
+        True: the page then calls get_config() and takes up the active profile."""
+        bad = self._need_name(name)
+        if bad:
+            return bad
+        was = profiles.canonical(name)
+        try:
+            profiles.delete(name)
+        except profiles.ProfileError as e:
+            return {"ok": False, "message": str(e)}
+        reload = was is not None and was == self._profile
+        if reload:
+            self._profile = None
+            webapi.pin(None)
+        return self._profile_list(ok=True, reload=reload,
+                                  message=f"Deleted {name}. It is kept under profiles\\.deleted for 30 days.")
 
     # --- ring preview ----------------------------------------------------------------------------
     def preview_ring(self, cfg, menu_id, hover=None, scale=1.0, open_path=None):
@@ -328,7 +498,7 @@ class Api(webapi.LibraryApi, webapi.TagApi):
         if loaded is None or menu_id not in loaded.menus:
             return {"image": None, "problems": problems or [f"menu {menu_id!r} has no usable items"]}
         from ring import Ring
-        app = radiald.App(CONFIG_FILE)
+        app = self._preview_app()
         app.cfg = loaded
         ex = expand.Expander(loaded, app.usage, app.tags.load())
         menu = ex.menu(loaded.menus[menu_id])             # as the app would fill it now; nothing is saved
@@ -347,7 +517,7 @@ class Api(webapi.LibraryApi, webapi.TagApi):
         if loaded is None:
             return {"image": None, "problems": problems}
         from ring import Ring
-        app = radiald.App(CONFIG_FILE)
+        app = self._preview_app()
         app.cfg = loaded
         store = app.tags.load()
         index = {k.replace(" ", ""): p for k, p in brushes.brush_index().items()}
@@ -384,7 +554,7 @@ class Api(webapi.LibraryApi, webapi.TagApi):
             return {"frames": [], "interval_ms": 33, "problems": problems}
         import dataclasses
         from ring import Ring
-        app = radiald.App(CONFIG_FILE)
+        app = self._preview_app()
         app.cfg = loaded
         ex = expand.Expander(loaded, app.usage, app.tags.load())
         menu = ex.menu(loaded.menus[menu_id])
@@ -400,7 +570,7 @@ class Api(webapi.LibraryApi, webapi.TagApi):
         if loaded is None or menu_id not in loaded.menus:
             return {"slots": []}
         import usage
-        return {"slots": usage.Usage().load().slots(loaded.menus[menu_id])}
+        return {"slots": usage.Usage(self._usage_path()).load().slots(loaded.menus[menu_id])}
 
     def get_options(self):
         """Choices the UI offers: animation modes, label modes, action kinds, defaults."""
@@ -443,7 +613,7 @@ class Api(webapi.LibraryApi, webapi.TagApi):
         if time.monotonic() - at < 30:
             return mode, legacy
         try:
-            mode = C.load(CONFIG_FILE).bridge_mode
+            mode = C.load(profiles.config_file()).bridge_mode
         except Exception:
             mode = "auto"
         if mode not in ("auto", "message", "key"):
@@ -678,21 +848,28 @@ class Api(webapi.LibraryApi, webapi.TagApi):
         return {"ok": True, "message": f"Forgot {e['name'] if e else os.path.basename(os.path.normpath(str(path)))}."}
 
     # --- import / export (menus, settings and tags in one file) -----------------------------------
+    def _export_name(self):
+        """The file name export_settings offers: the profile's name in it, so exports of two profiles differ."""
+        day = time.strftime("%Y-%m-%d")
+        if not profiles.enabled():
+            return f"ZOrbit settings {day}.json"
+        return f"ZOrbit {self._prof()} {day}.json"          # a profile name is a valid file name already
+
     def export_settings(self, cfg):
         """Saves what the editor shows (cfg, unsaved edits included) and the tags as one settings file, to a
-        place the user picks. studio.json and usage.json are left out: they belong to this PC."""
+        place the user picks: this profile's menus, settings and tags. studio.json and usage.json are left out."""
         import webview
         if not isinstance(cfg, dict) or not isinstance(cfg.get("menus"), dict):
             return {"ok": False, "message": "There are no menus to export."}
         picked = self._window.create_file_dialog(
-            webview.FileDialog.SAVE, save_filename=f"ZOrbit settings {time.strftime('%Y-%m-%d')}.json",
+            webview.FileDialog.SAVE, save_filename=self._export_name(),
             file_types=("ZOrbit settings (*.json)", "All files (*.*)"))
         if not picked:
             return {"ok": False, "cancelled": True, "message": "Export cancelled."}
         path = picked[0] if isinstance(picked, (list, tuple)) else picked
         if not os.path.splitext(path)[1]:
             path += ".json"
-        store = tags.TagStore(radiald.tags_path()).load()
+        store = tags.TagStore(self._tags_path()).load()
         bundle = {"zorbit_settings": SETTINGS_FORMAT, "version": VERSION,
                   "exported": time.strftime("%Y-%m-%dT%H:%M:%S"), "config": cfg}
         note = ""
@@ -704,7 +881,8 @@ class Api(webapi.LibraryApi, webapi.TagApi):
             fsutil.write_atomic(path, json.dumps(bundle, indent=2, ensure_ascii=False) + "\n")
         except (OSError, TypeError, ValueError) as e:
             return {"ok": False, "message": f"The settings could not be saved: {getattr(e, 'strerror', None) or e}"}
-        return {"ok": True, "path": path, "message": f"Saved the settings to {path}.{note}"}
+        return {"ok": True, "path": path,
+                "message": f"Saved this profile's menus, settings and tags to {path}.{note}"}
 
     @staticmethod
     def _read_import_file(path, what):
@@ -729,19 +907,21 @@ class Api(webapi.LibraryApi, webapi.TagApi):
             return None, f"{name} is not a {what} (the top level is not a JSON object)."
         return raw, None
 
-    def pick_import(self):
-        """Asks for a settings file (an export, or a plain radial.json or tags.json), reads and checks it and
-        returns what it holds. Writes nothing; apply_import() does the work with what is read here."""
+    def _ask_settings_file(self, need_menus=False):
+        """Asks for a settings file (an export, or a plain radial.json or tags.json), reads it and sorts out what it
+        holds. Returns (found, None), or (None, answer) where answer is the cancel or refusal to give the page.
+        found: path, name, kind ("bundle", "config" or "tags"), version, cfg (or None), tags (the raw tags the file
+        really holds, else None), info (those tags as a TagStore, else None), problems (the loader's, for cfg).
+        need_menus: a file with no menus is refused (a profile cannot be made from tags alone)."""
         import webview
-        self._pending_import = None
 
         def refuse(msg):
-            return {"ok": False, "message": msg}
+            return None, {"ok": False, "message": msg}
 
         picked = self._window.create_file_dialog(
             webview.FileDialog.OPEN, file_types=("ZOrbit settings (*.json)", "All files (*.*)"))
         if not picked:
-            return {"ok": False, "cancelled": True}
+            return None, {"ok": False, "cancelled": True}
         path = picked[0] if isinstance(picked, (list, tuple)) else picked
         name = os.path.basename(path)
         raw, error = self._read_import_file(path, "ZOrbit settings file")
@@ -776,31 +956,44 @@ class Api(webapi.LibraryApi, webapi.TagApi):
         info = tags.TagStore.from_raw(tags_raw) if tags_raw is not None else None
         has_tags = bool(tags_raw is not None and tags._parse(tags_raw)[0])
         if not has_tags:
-            tags_raw = None
+            tags_raw, info = None, None
+        if cfg is None and need_menus:
+            return refuse(f"{name} has no menus in it, so it cannot become a profile.")
         if cfg is None and not has_tags:
             return refuse(f"{name} has no menus and no tags in it.")
         problems = []
         if cfg is not None:
-            loaded, problems = self._load_dict(cfg, info if has_tags else None)
+            loaded, problems = self._load_dict(cfg, info)
             if loaded is None:
                 return refuse(f"The menus in {name} could not be read: {problems[0] if problems else 'unknown error'}")
-        out = {"ok": True, "path": path, "kind": kind, "has_config": cfg is not None,
+        return {"path": path, "name": name, "kind": kind, "version": version, "cfg": cfg, "tags": tags_raw,
+                "info": info, "problems": problems}, None
+
+    def pick_import(self):
+        """Asks for a settings file (an export, or a plain radial.json or tags.json), reads and checks it and
+        returns what it holds. Writes nothing; apply_import() does the work with what is read here."""
+        self._pending_import = None
+        found, answer = self._ask_settings_file()
+        if answer:
+            return answer
+        cfg, tags_raw, has_tags = found["cfg"], found["tags"], found["tags"] is not None
+        out = {"ok": True, "path": found["path"], "kind": found["kind"], "has_config": cfg is not None,
                "menus": len(cfg["menus"]) if cfg is not None else 0, "has_tags": has_tags,
-               "tags": 0, "new_tags": 0, "items": 0, "problems": problems, "version": version}
-        store = tags.TagStore(radiald.tags_path()).load()
+               "tags": 0, "new_tags": 0, "items": 0, "problems": found["problems"], "version": found["version"]}
+        store = tags.TagStore(self._tags_path()).load()
         if has_tags:
             out.update(store.import_preview(tags_raw))
         # What a replace would throw away, so the page can say "The file's 4 menus replace your 7".
         out["current_menus"] = self._current_menu_count()
         out["current_tags"] = 0 if store.error else len(store.tags())
-        self._pending_import = {"path": path, "kind": kind, "config": cfg, "tags": tags_raw}
+        self._pending_import = {"path": found["path"], "kind": found["kind"], "config": cfg, "tags": tags_raw,
+                                "profile": self._prof()}
         return out
 
-    @staticmethod
-    def _current_menu_count() -> int:
+    def _current_menu_count(self) -> int:
         """How many menus radial.json holds now (0 when it is missing or unreadable)."""
         try:
-            with open(CONFIG_FILE, encoding="utf-8-sig") as f:
+            with open(self._cfg_path(), encoding="utf-8-sig") as f:
                 menus = json.load(f).get("menus")
             return len(menus) if isinstance(menus, dict) else 0
         except (OSError, ValueError, AttributeError, RecursionError):
@@ -815,6 +1008,9 @@ class Api(webapi.LibraryApi, webapi.TagApi):
         if not pend:
             return {"ok": False, "config": None, "problems": [], "tags_message": "",
                     "message": "There is nothing to import. Pick the file again."}
+        if pend.get("profile") != self._prof():     # the editor moved to another profile after the file was read
+            return {"ok": False, "config": None, "problems": [], "tags_message": "",
+                    "message": "The profile changed. Pick the file again."}
         if tag_mode not in ("merge", "replace", "none"):
             return {"ok": False, "config": None, "problems": [], "tags_message": "",
                     "message": "Import the tags as merge, replace or none."}
@@ -825,7 +1021,7 @@ class Api(webapi.LibraryApi, webapi.TagApi):
                     "message": "There is nothing to import: the file has only tags, and they were left out."}
         renamed, tags_message = {}, ""
         if tag_mode != "none":
-            res = webapi._STORE.import_tags(pend["tags"], tag_mode)
+            res = webapi.store().import_tags(pend["tags"], tag_mode)
             if not res.get("ok"):
                 return {"ok": False, "config": None, "problems": [], "tags_message": "",
                         "message": res.get("error") or "The tags could not be imported."}
@@ -864,7 +1060,7 @@ class Api(webapi.LibraryApi, webapi.TagApi):
         path = picked[0] if isinstance(picked, (list, tuple)) else picked
         if not os.path.splitext(path)[1]:
             path += ".json"
-        store = tags.TagStore(radiald.tags_path()).load()
+        store = tags.TagStore(self._tags_path()).load()
         bundle = menushare.build(cfg, menu_id, None if store.error else store, VERSION)
         note = f" The tags are not in it: {store.error}." if store.error else ""
         subs = len(bundle["menus"]) - 1
@@ -913,7 +1109,7 @@ class Api(webapi.LibraryApi, webapi.TagApi):
         if tags_raw is not None and not tags._parse(tags_raw)[0]:
             tags_raw = None
         menus_out, root_out, renames = menushare.plan_import(menus, root, cfg if isinstance(cfg, dict) else {})
-        store = tags.TagStore(radiald.tags_path()).load()
+        store = tags.TagStore(self._tags_path()).load()
         counts, known = {"tags": 0, "new_tags": 0, "items": 0}, store
         if tags_raw is not None:
             counts = store.import_preview(tags_raw)
@@ -922,7 +1118,8 @@ class Api(webapi.LibraryApi, webapi.TagApi):
                 merged["tags"].setdefault(k, t)
             known = tags.TagStore.from_raw(merged)       # the user's tags plus the file's: none reads as unknown
         problems = self._menu_problems({"menus": menus_out}, known)
-        self._pending_menu_import = {"path": path, "menus": menus, "root": root, "tags": tags_raw}
+        self._pending_menu_import = {"path": path, "menus": menus, "root": root, "tags": tags_raw,
+                                     "profile": self._prof()}
         return {"ok": True, "path": path, "version": version, "root": root_out,
                 "title": menus_out[root_out].get("title") or root_out,
                 "menus": [{"id": mid, "title": m.get("title") or mid,
@@ -939,11 +1136,13 @@ class Api(webapi.LibraryApi, webapi.TagApi):
         pend = self._pending_menu_import
         if not pend:
             return {"ok": False, "message": "There is nothing to import. Pick the file again."}
+        if pend.get("profile") != self._prof():
+            return {"ok": False, "message": "The profile changed. Pick the file again."}
         menus_out, root_out, _ = menushare.plan_import(pend["menus"], pend["root"],
                                                        cfg if isinstance(cfg, dict) else {})
         renamed, tags_message = {}, ""
         if pend["tags"] is not None:
-            res = webapi._STORE.import_tags(pend["tags"], "merge")
+            res = webapi.store().import_tags(pend["tags"], "merge")
             if res.get("ok"):
                 renamed = res["renamed"]
                 bits = []
@@ -1040,9 +1239,14 @@ class Api(webapi.LibraryApi, webapi.TagApi):
         return False
 
     def open_folder(self, which="data"):
-        """'data' opens the logs folder; 'config' (and the older name 'app') and anything else open the folder
-        radial.json is in."""
-        folder = DATA_DIR if which == "data" else paths.CONFIG_DIR
+        """'data' opens the logs folder; 'profiles' the folder holding every profile; 'config' (and the older name
+        'app') and anything else open the folder of the profile the editor holds, where radial.json is."""
+        if which == "data":
+            folder = DATA_DIR
+        elif which == "profiles":
+            folder = profiles.root()
+        else:
+            folder = os.path.dirname(self._cfg_path())
         os.makedirs(folder, exist_ok=True)
         os.startfile(folder)
         return True
@@ -1280,6 +1484,10 @@ def main():
     if not webview2.require(_startup):          # says so in a message box; without the runtime pywebview would fall back to IE
         CloseHandle(mutex)
         return 1
+    try:                                                    # the first profile, before the page asks for menus
+        profiles.ensure()
+    except OSError as e:
+        _startup(f"profiles could not be set up: {e!r}")
     import webview
     _startup("pywebview imported")
     try:                                                    # own taskbar identity and icon, not Python's

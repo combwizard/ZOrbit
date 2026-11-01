@@ -70,7 +70,7 @@ h1, h2, h3, p { margin: 0; }
 /* Custom window chrome: the header is the title bar (native drag via WebView2 non-client regions). */
 .topbar { -webkit-app-region: drag; app-region: drag; padding-right: 0; user-select: none; }
 .topbar button, .topbar input, .topbar a, .topbar [role="button"], .topbar .no-drag, .topbar .path-hint { -webkit-app-region: no-drag; app-region: no-drag; }
-.brand { display: flex; align-items: center; gap: 10px; flex: 0 1 auto; min-width: 0; overflow: hidden; }       /* the brand gives way first, so the window buttons stay in view */
+.brand { display: flex; align-items: center; gap: 10px; flex: 0 1 auto; min-width: 0; overflow: hidden; }       /* the brand gives way before the buttons; the path hint (shrink 10) goes first of all */
 .logo { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%;
   filter: drop-shadow(0 0 6px rgba(248, 107, 51, .35)); }
 .wordmark { font-size: 14px; font-weight: 800; letter-spacing: .01em; color: var(--text); white-space: nowrap; }
@@ -78,6 +78,13 @@ h1, h2, h3, p { margin: 0; }
 .wordmark .z { color: var(--accent); }                      /* the Z of ZOrbit is orange wherever the name is drawn */
 .version-chip { white-space: nowrap; flex: none; font-size: 10.5px; color: var(--sub); padding: 3px 2px; border-radius: 4px; background: none; border: 0; }
 .version-chip:hover { color: var(--text); text-decoration: underline; text-underline-offset: 2px; }
+/* The profile picker: a compact button that sits after the brand (which gives way first). A profile the app is not using shows an amber dot. */
+.profile-btn { flex: none; gap: 6px; height: 26px; max-width: 220px; padding: 0 9px 0 11px; border-radius: 99px; font-size: 12px; font-weight: 600; }
+.profile-btn .profile-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.profile-btn svg { flex: none; opacity: .7; }
+.profile-btn[aria-expanded="true"] { border-color: rgba(248, 107, 51, .5); color: var(--accent); }
+.profile-btn.not-active { border-color: rgba(240, 192, 64, .4); }
+.profile-btn.not-active::before { content: ""; flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--amber); }
 .mode-seg { display: inline-flex; align-items: center; flex: none; height: 26px; padding: 2px; border-radius: 99px; background: var(--bg1); border: 1px solid var(--line); }
 .seg-btn { height: 20px; padding: 0 11px; border: 0; border-radius: 99px; background: none; color: var(--sub); font: 600 11.5px/20px var(--font); cursor: pointer; }
 .seg-btn:hover { color: var(--text); }
@@ -99,7 +106,7 @@ h1, h2, h3, p { margin: 0; }
 .winbtn .i-restore { display: none; }
 .is-max .winbtn .i-restore { display: block; }
 .is-max .winbtn .i-max { display: none; }
-.path-hint { flex: 0 1 auto; min-width: 0; color: var(--sub); font-size: 11px; max-width: 360px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; direction: rtl; text-align: left; padding-left: 8px; border-left: 1px solid var(--line); margin-left: 4px; user-select: text; cursor: text; }
+.path-hint { flex: 0 10 auto; min-width: 0; color: var(--sub); font-size: 11px; max-width: 360px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; direction: rtl; text-align: left; padding-left: 8px; border-left: 1px solid var(--line); margin-left: 4px; user-select: text; cursor: text; }
 .path-hint:empty { display: none; }
 .copy-path { flex: none; margin-left: -6px; }
 .problems-pill {
@@ -333,6 +340,15 @@ body.dragging, body.dragging * { cursor: grabbing !important; }
 .modal-body { display: flex; flex-direction: column; gap: 10px; color: #d6d7db; line-height: 1.5; }
 .modal-path { font-size: 12px; color: var(--sub); word-break: break-all; }
 .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+/* a dialog with one text box (promptModal), and the radio list of the New profile dialog */
+.modal-field, .modal-cap { display: flex; flex-direction: column; gap: 6px; font-size: 12px; color: var(--sub); }
+.modal-hint { font-size: 12px; color: var(--sub); line-height: 1.45; overflow-wrap: anywhere; }
+.radios { display: flex; flex-direction: column; gap: 4px; }
+.radio-row { display: flex; align-items: center; gap: 10px; padding: 7px 10px; text-align: left; background: none; border: 1px solid var(--line); border-radius: 6px; color: var(--text); transition: border-color .12s, background .12s; }
+.radio-row:hover { border-color: rgba(248, 107, 51, .4); }
+.radio-row[aria-checked="true"] { border-color: rgba(248, 107, 51, .6); background: rgba(248, 107, 51, .08); }
+.radio-dot { flex: none; width: 12px; height: 12px; border-radius: 50%; border: 1.5px solid var(--sub); }
+.radio-row[aria-checked="true"] .radio-dot { border-color: var(--accent); background: radial-gradient(circle, var(--accent) 0 38%, transparent 42%); }
 .warn-text { color: var(--amber); }
 .ref-list { margin: 0; padding: 8px 12px 8px 26px; background: var(--bg1); border-radius: 6px; max-height: 140px; overflow: auto; font-size: 12px; }
 .popover { position: fixed; z-index: 380; min-width: 250px; max-height: calc(100vh - 16px); overflow-y: auto; padding: 4px; background: rgba(20, 19, 22, .98); border: 1px solid var(--line2); border-radius: 8px; box-shadow: 0 8px 24px rgba(0, 0, 0, .5); opacity: 0; transform: translateY(-4px); transition: opacity .12s, transform .12s var(--ease); }
@@ -342,6 +358,9 @@ body.dragging, body.dragging * { cursor: grabbing !important; }
 .pop-item .ico { color: var(--accent); }
 .pop-text { display: flex; flex-direction: column; }
 .pop-text small { color: var(--sub); font-size: 11.5px; }
+.pop-tick { flex: none; width: 14px; margin-right: -4px; color: var(--accent); }
+.pop-item .pop-tick .ico { color: inherit; }
+.pop-sep { height: 1px; margin: 4px 6px; background: var(--line); }
 .combo-list { position: fixed; z-index: 390; max-height: 288px; overflow: auto; padding: 4px; background: rgba(20, 19, 22, .98); border: 1px solid var(--line2); border-radius: 8px; box-shadow: 0 8px 24px rgba(0, 0, 0, .5); }
 .combo-opt { display: flex; align-items: center; gap: 10px; padding: 5px 8px; border-radius: 6px; cursor: pointer; }
 .combo-opt:hover, .combo-opt.active { background: rgba(248, 107, 51, .12); }

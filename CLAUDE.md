@@ -32,7 +32,8 @@ Where each part is documented:
 |---|---|
 | `studio.py`, `webapi.py`, `studio_ui/` (Studio screens and settings) | `studio.md`, plus the page for the feature |
 | `config.py`, `expand.py`, `default_menus.json` (menus, item types, submenus, fans) | `menus.md` |
-| `usage.py` (auto slots, recent picks) | `menus.md`, `browser.md` |
+| `usage.py` (auto slots, recent picks) | `menus.md`, `browser.md`, `profiles.md` |
+| `profiles.py` (profiles, the profile in use, switching) | `profiles.md` |
 | `tags.py`, tag colours in `ring.py` | `tags.md`, `appearance.md` |
 | `popout.py`, `studio_ui/popout.html`, `assets.py`, `brushes.py` (browser, libraries) | `browser.md` |
 | `radiald.py` (hotkeys, pick modes, picks mid-stroke) | `hotkeys.md` |

@@ -192,6 +192,7 @@ const S = {
   ready: false, fatal: false,                 // ready after the first screen is up; fatal when the recovery screen is showing
   saving: false, savePromise: null, mtimeNs: null,
   dirtySent: undefined, dirtySeq: 0, dirtyFlight: null,
+  profile: '', active: '', profiles: [], profilesOn: false,   // the profile Studio edits, the one the app uses, every name, and whether profiles exist at all (not when a menus file is pinned)
 };
 const R = {};               // region renderers registered by the visible screen
 
@@ -518,7 +519,10 @@ function modal({ title, body, actions }) {
     let closed = false;
     const box = h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-label': title },
       h('h2', null, title), h('div', { class: 'modal-body' }, body),
-      h('div', { class: 'modal-actions' }, actions.map(a => h('button', { class: 'btn ' + (a.kind || ''), type: 'button', dataset: { v: a.value }, 'data-focus': a.focus, onclick: () => close(a.value) }, a.text))));
+      h('div', { class: 'modal-actions' }, actions.map(a => h('button', { class: 'btn ' + (a.kind || ''), type: 'button', dataset: { v: a.value }, 'data-focus': a.focus, onclick: async e => {
+        if (a.check) { const b = e.currentTarget; b.disabled = true; let ok = false; try { ok = await a.check(); } finally { b.disabled = false; } if (!ok) return; }   // a check that answers false keeps the dialog open
+        close(a.value);
+      } }, a.text))));
     const scrim = h('div', { class: 'scrim', onmousedown: e => { if (e.target === scrim) close(undefined); } }, box);
     function close(v) {
       if (closed) return;
@@ -551,10 +555,14 @@ function modal({ title, body, actions }) {
 }
 
 let openPopover = null;
-function popover(anchor, entries) {
+/* Entries are { icon, label, hint, fn }; { checked: true|false } makes a radio row (a tick before the label), { sep: true } a divider. onClose runs when it closes, however it closes. */
+function popover(anchor, entries, { onClose = null } = {}) {
   if (openPopover) { const same = openPopover.anchor === anchor; openPopover(); if (same) return; }   // a second click on the anchor closes it
-  const pop = h('div', { class: 'popover', role: 'menu' }, entries.map(en => h('button', { class: 'pop-item', role: 'menuitem', type: 'button', onclick: () => { close(); en.fn(); } },
-    en.icon ? icon(en.icon, 16) : null, h('span', { class: 'pop-text' }, h('b', null, en.label), en.hint ? h('small', null, en.hint) : null))));
+  const row = en => en.sep ? h('div', { class: 'pop-sep', role: 'separator' }) : h('button', { class: 'pop-item', role: en.checked === undefined ? 'menuitem' : 'menuitemradio',
+      'aria-checked': en.checked === undefined ? null : String(!!en.checked), type: 'button', onclick: () => { close(); en.fn(); } },
+    en.checked === undefined ? null : h('span', { class: 'pop-tick' }, en.checked ? icon('check', 14) : null),
+    en.icon ? icon(en.icon, 16) : null, h('span', { class: 'pop-text' }, h('b', null, en.label), en.hint ? h('small', null, en.hint) : null));
+  const pop = h('div', { class: 'popover', role: 'menu' }, entries.map(row));
   document.body.append(pop);
   const r = anchor.getBoundingClientRect();
   pop.style.left = clamp(r.left, 8, Math.max(8, innerWidth - pop.offsetWidth - 8)) + 'px';
@@ -578,12 +586,13 @@ function popover(anchor, entries) {
     const had = pop.contains(document.activeElement);            // focus goes back to the anchor, not to the page
     pop.remove(); document.removeEventListener('mousedown', onDown, true); document.removeEventListener('keydown', onKey, true); openPopover = null;
     if (had && document.contains(anchor)) anchor.focus();
+    if (onClose) onClose();
   }
   close.anchor = anchor;
   document.addEventListener('mousedown', onDown, true);
   document.addEventListener('keydown', onKey, true);
   openPopover = close;
-  $('.pop-item', pop).focus();
+  ($('.pop-item[aria-checked="true"]', pop) || $('.pop-item', pop)).focus();     // a radio list opens on the chosen row
 }
 
 /* ================================================================== thumbnails */
@@ -2478,16 +2487,18 @@ function applyTagSnapshot(res, mutated = false, seq = ++tagSeq) {
   if (favTag && /^#[0-9a-f]{6}$/i.test(favTag.color || '')) document.documentElement.style.setProperty('--fav', favTag.color);
   else document.documentElement.style.removeProperty('--fav');
   if (Array.isArray(res.palette) && res.palette.length) S.palette = res.palette;
+  const pathMoved = !!res.path && !!S.tagsPath && String(res.path) !== S.tagsPath;   // another profile's tags file: its Recent list differs too
   if (res.path) S.tagsPath = String(res.path);
   S.tagMtime = res.mtime_ns === undefined ? S.tagMtime : res.mtime_ns;
   S.tagsErr = err; S._tagSig = sig; S.tagsLoaded = true;
   if (changed) tagsChanged(keysChanged);
+  if (pathMoved) reloadUsage();
   return changed;
 }
 async function loadTags(force = false) {
   let res = null;
   const seq = ++tagSeq;
-  try { res = await call('get_tags', force ? null : S.tagMtime); } catch (e) { res = null; }
+  try { res = await call('get_tags', force ? null : S.tagMtime, S.tagsPath); } catch (e) { res = null; }   // the path too: a switch between two profiles without a tags file is not "unchanged"
   applyTagSnapshot(res, false, seq);
 }
 /* Every tag change goes through here: the answer carries the fresh snapshot, a refusal is toasted. A name that clashes
@@ -3965,6 +3976,7 @@ function buildSettingsScreen(root) {
           mode === 'message' ? 'Not used in Message mode, but kept in case you switch back.' : 'Must be bound in ZBrush to Zplugin > ZOrbit > Apply. Use a bare F-key other than F10: ZBrush reads Ctrl and Shift as mask and smooth, and does not act on Alt combinations or F10 when ZOrbit sends them.'));
       };
       page.append(card('ZBrush bridge', 'How a pick reaches ZBrush',
+        h('div', { class: 'fhint' }, 'Applies to the profile you are editing. Each profile keeps its own bridge key.'),
         choiceCards(['auto', 'message', 'key'].map(m => [m, BRIDGE_INFO[m][0], BRIDGE_INFO[m][1]]), bmode, v => { bridge().mode = v; commit(); paintKey(); }, 'bridge-cards', 'How a pick reaches ZBrush'),
         keyWrap));
       paintKey();
@@ -4066,7 +4078,8 @@ function buildSettingsScreen(root) {
       h('button', { class: 'btn small', type: 'button', title: 'Load menus, ring settings and tags from a file', onclick: () => ioRun(ioBtns, importSettings) }, icon('folder', 12), 'Import...')];
     page.append(card('Import and export', 'Back up your setup or move it to another PC.',
       h('div', { class: 'field row' }, h('div', { class: 'grow' }, h('span', { class: 'flabel' }, 'Settings file'),
-        h('div', { class: 'fhint' }, 'The file holds your menus, the ring settings and your tags. The Studio window preferences and the usage counts are not included, as they belong to this PC. Export saves what is on screen, unsaved changes included. Import shows what is in a file first, and the menus and settings it loads can be undone.')),
+        h('div', { class: 'fhint' }, 'The file holds your menus, the ring settings and your tags. The Studio window preferences and the usage counts are not included, as they belong to this PC. Export saves what is on screen, unsaved changes included. Import shows what is in a file first, and the menus and settings it loads can be undone.'),
+        h('div', { class: 'fhint', style: { marginTop: '6px' } }, 'Export... saves this profile’s menus, settings and tags. To bring a file in as a new profile, use New profile... in the top bar.')),
         h('div', { class: 'btn-row' }, ...ioBtns))));
     R.preview();
   };
@@ -4211,7 +4224,7 @@ function buildStatusScreen(root) {
       h('div', { class: 'btn-row between' }, h('div', { class: 'btn-row' },
         h('button', { class: 'btn', type: 'button', onclick: copyLog }, icon('copy', 13), 'Copy log'),
         h('button', { class: 'btn', type: 'button', title: 'Where the app log is kept', onclick: folder('data') }, icon('folder', 13), 'Open logs folder'),
-        h('button', { class: 'btn', type: 'button', title: 'Where radial.json, your menus file, lives', onclick: folder('config') }, icon('external', 13), 'Open menus folder')),
+        h('button', { class: 'btn', type: 'button', title: 'The folder of the profile you are editing', onclick: folder('config') }, icon('external', 13), 'Open menus folder')),
         h('span', { class: 'live' }, h('i', { class: 'livedot' }), 'Auto-refresh every 3 s ', stamp))));
   root.append(h('div', { class: 'settings-scroll' }, page));
 
@@ -4892,23 +4905,313 @@ function adoptConfig(res) {
   S.path = res.path || S.path || ''; S.problems = res.problems || [];
   S.mtimeNs = res.mtime_ns !== undefined ? res.mtime_ns : null;
   S.savedStr = JSON.stringify(S.cfg); resetHistory(S.savedStr);
+  takeProfile(res);
+  return '';
+}
+/* Takes a get_config answer as the editor's new state and redraws everything that shows it (a reload, a profile switch).
+   Returns '' when it was taken, else why not; the editor is then left alone. */
+function adoptAndRender(res) {
+  validateSoon.cancel(); snapSoon.cancel();
+  const bad = adoptConfig(res);
+  if (bad) return bad;
+  S.cameFrom = null;
+  if (!S.cfg.menus[S.menuId]) S.menuId = Object.keys(S.cfg.menus)[0] || null;
+  const m = curMenu();
+  if (!m || S.itemIdx === null || S.itemIdx >= (m.items || []).length) S.itemIdx = null;
+  if (S.itemIdx === null && S.tab === 'item') S.tab = 'menu';
+  rememberSel();
+  S.version++; updateDirty(); renderProblems(); previewSoon();
+  renderAllMenus(); if (R.settings) R.settings(); if (R.libTarget) R.libTarget();
+  setPathHint(S.path); renderProfile();
   return '';
 }
 async function reloadFromDisk() {
   let res;
-  try { res = await call('get_config'); } catch (e) { toast('Could not reload: ' + (e.message || e), { tone: 'err' }); return false; }
+  const prof = editProfile();
+  try { res = await call('get_config', ...(prof ? [prof] : [])); } catch (e) { toast('Could not reload: ' + (e.message || e), { tone: 'err' }); return false; }
   if (!res || !res.config) { toast('Could not reload: ' + ((res && res.error) || 'the file cannot be read'), { tone: 'err' }); return false; }
-  validateSoon.cancel(); snapSoon.cancel();
-  const bad = adoptConfig(res);
+  const bad = adoptAndRender(res);
   if (bad) { toast('Could not reload: ' + bad, { tone: 'err' }); return false; }
-  if (!S.cfg.menus[S.menuId]) S.menuId = Object.keys(S.cfg.menus)[0] || null;
-  const m = curMenu();
-  if (!m || S.itemIdx === null || S.itemIdx >= (m.items || []).length) S.itemIdx = null;
-  rememberSel();
-  S.version++; updateDirty(); renderProblems(); previewSoon();
-  renderAllMenus(); if (R.settings) R.settings(); if (R.libTarget) R.libTarget();
   toast('Reloaded the file from disk.', { tone: 'ok', ms: 2600 });
   return true;
+}
+
+/* ---- profiles. A profile is one set of menus, ring settings and tags in a folder of its own; the app uses the active one, and the button in the
+   top bar shows the one Studio edits and picks another. The backend does the file work (switch_profile, create_profile, rename_profile, delete_profile). */
+/* The profile fields of a get_config answer (or of a switch_profile one). */
+function takeProfile(res) {
+  if (!res || typeof res !== 'object') return;
+  if (typeof res.profile === 'string') S.profile = res.profile;
+  if (typeof res.active === 'string') S.active = res.active;
+  if (Array.isArray(res.profiles)) S.profiles = res.profiles.map(String);
+  if (res.enabled !== undefined) S.profilesOn = !!res.enabled;
+}
+/* The names and the active profile of a create, rename or delete answer. */
+function takeNames(res) {
+  if (!res || typeof res !== 'object') return;
+  if (Array.isArray(res.names)) S.profiles = res.names.map(String);
+  if (typeof res.active === 'string') S.active = res.active;
+}
+/* The profile fields and the path of a get_config answer, without touching the config being edited. */
+function adoptProfileInfo(res) {
+  if (!res || typeof res !== 'object') return;
+  takeProfile(res);
+  if (res.path) { S.path = String(res.path); setPathHint(S.path); }
+  renderProfile();
+}
+/* What save_config and get_config are told: the profile Studio edits, or nothing when there are no profiles. */
+const editProfile = () => (S.profilesOn && S.profile ? S.profile : null);
+function renderProfile() {
+  const b = $('#profileBtn');
+  if (!b) return;
+  b.hidden = !S.profilesOn || !S.profile;
+  setText($('.profile-name', b), S.profile);
+  const off = !!S.active && S.active !== S.profile;
+  b.classList.toggle('not-active', off);
+  const tip = off ? `Editing ${S.profile}. The app is using ${S.active}.` : 'Profile: ' + S.profile;
+  b.title = tip; b.setAttribute('aria-label', tip);
+}
+let profileBusy = false;                                      // a switch is under way (its dialogs included)
+let warnedActive = '', deletedAsked = '';                     // the app's profile the focus check already spoke about; the missing profile it already asked about
+function openProfileMenu(anchor) {
+  const entries = S.profiles.map(n => ({ label: n, checked: n === S.profile, hint: n === S.active && n !== S.profile ? 'in use' : '', fn: () => switchProfile(n) }));
+  entries.push({ sep: true },
+    { icon: 'plus', label: 'New profile...', fn: newProfile },
+    { icon: 'edit', label: 'Rename...', fn: renameProfile },
+    { icon: 'copy', label: 'Duplicate', fn: duplicateProfile },
+    { icon: 'trash', label: 'Delete...', fn: deleteProfile },
+    { icon: 'folder', label: 'Open profiles folder', fn: openProfilesFolder });
+  anchor.setAttribute('aria-expanded', 'true');
+  popover(anchor, entries, { onClose: () => anchor.setAttribute('aria-expanded', 'false') });
+}
+/* Makes `name` the profile Studio edits (the backend also makes it the app's). Edits not saved yet are asked about first. fromApp: the app moved first, and the toast says so.
+   Resolves true when it switched. */
+async function switchProfile(name, { fromApp = false } = {}) {
+  if (!name || name === S.profile || profileBusy) return false;
+  profileBusy = true;
+  try {
+    if (dirtyNow()) {
+      const v = await modal({ title: 'Unsaved changes', body: unsavedBody('Switching profile'), actions: [
+        { text: 'Keep editing', value: 'keep', focus: true },
+        { text: 'Switch without saving', value: 'discard', kind: 'danger-ghost' },
+        { text: 'Save and switch', value: 'save', kind: 'primary' }] });
+      if (v === 'save') { const out = await save(); if (out !== 'saved' && out !== 'reloaded') return false; }
+      else if (v !== 'discard') return false;
+    }
+    return await performSwitch(name, fromApp);
+  } finally { profileBusy = false; }
+}
+/* The switch itself, with no question asked. */
+async function performSwitch(name, fromApp = false) {
+  let res;
+  try { res = await call('switch_profile', name); } catch (e) { res = { ok: false, message: 'Could not switch profile: ' + ((e && e.message) || e) }; }
+  if (!res || !res.ok) { toast((res && res.message) || 'Could not switch profile.', { tone: 'err' }); return false; }
+  if (S.fatal) { location.reload(); return true; }
+  const bad = res.config ? adoptAndRender(res) : 'unreadable';
+  if (bad) { S.savedStr = JSON.stringify(S.cfg); location.reload(); return true; }      // the backend has switched but the page cannot show that profile: boot shows the recovery screen for it
+  profileChanged();
+  toast(fromApp ? `The app switched to ${name}.` : `Switched to ${name}. The app and the browser follow.`, { tone: 'ok' });
+  return true;
+}
+/* What follows a change of profile besides the config: the tags file and the Recent list belong to the profile too. */
+function profileChanged() { warnedActive = ''; loadTags(); reloadUsage(); }
+/* A dialog with one text box. Resolves the trimmed text, or null when cancelled. submit(text) (optional) does the work and answers '' when done or a message,
+   which is shown under the box with the dialog left open. extra is more content below the box; ctl, if given, gets ctl.input. */
+function promptModal({ title, label, value = '', confirm = 'OK', hint = '', extra = null, submit = null, ctl = null }) {
+  const inp = h('input', { class: 'inp', type: 'text', value, spellcheck: 'false', autocomplete: 'off', 'data-focus': true });
+  if (ctl) ctl.input = inp;
+  const msg = h('p', { class: 'warn-text', role: 'alert', hidden: true });
+  const say = t => { msg.textContent = t || ''; msg.hidden = !t; };
+  inp.addEventListener('input', () => say(''));
+  inp.addEventListener('keydown', e => {
+    if (e.key !== 'Enter' || e.isComposing) return;
+    e.preventDefault();
+    const box = inp.closest('.modal'), ok = box && $('.btn.primary', box);
+    if (ok) ok.click();
+  });
+  let text = '';
+  const done = modal({ title, body: [h('label', { class: 'modal-field' }, label, inp), hint ? h('p', { class: 'modal-hint' }, hint) : null, extra, msg],
+    actions: [{ text: 'Cancel', value: false }, { text: confirm, value: true, kind: 'primary', check: async () => {
+      const t = inp.value.trim();
+      const bad = t ? (submit ? await submit(t) : '') : 'Type a name first.';
+      say(bad);
+      if (bad) { inp.focus(); inp.select(); return false; }
+      text = t;
+      return true;
+    } }] });
+  inp.focus(); inp.select();
+  return done.then(v => (v ? text : null));
+}
+/* create_profile for the dialogs: { res } on success, { err } with the words to show otherwise. */
+async function createProfileCall(name, source) {
+  let res;
+  try { res = await call('create_profile', name, source); } catch (e) { return { err: 'Could not create the profile: ' + ((e && e.message) || e) }; }
+  return res && res.ok ? { res } : { err: (res && res.message) || 'The profile could not be created.' };
+}
+async function newProfile() {
+  let source = 'starter', picking = false, made = null;
+  const ctl = {}, note = h('p', { class: 'modal-hint', hidden: true });
+  const n = (v, one, many) => { v = +v || 0; return v + ' ' + (v === 1 ? one : many); };
+  const sources = [['starter', 'Starter menus'], ['empty', 'Empty'], ['copy', 'Copy of ' + S.profile], ['file', 'From a file...']];
+  const rows = sources.map(([v, text]) => h('button', { class: 'radio-row', type: 'button', role: 'radio', 'aria-checked': 'false', dataset: { v },
+    title: v === 'copy' && dirtyNow() ? 'The saved version of ' + S.profile + ', without your unsaved changes' : null, onclick: () => choose(v, true) }, h('i', { class: 'radio-dot' }), text));
+  const rowOf = v => rows.find(r => r.dataset.v === v);
+  const mark = v => { source = v; rows.forEach(r => r.setAttribute('aria-checked', r.dataset.v === v ? 'true' : 'false')); setRoving(rows, rowOf(v)); };
+  async function choose(v, focus) {
+    if (picking) return;
+    if (v !== 'file') { note.hidden = true; mark(v); if (focus) rowOf(v).focus(); return; }
+    picking = true;
+    let res;
+    try { res = await call('pick_profile_file'); } catch (e) { res = { ok: false, message: 'Could not read the file: ' + ((e && e.message) || e) }; }
+    picking = false;
+    if (res && res.ok) {
+      mark('file');
+      if (res.name) ctl.input.value = res.name;
+      const probs = (res.problems || []).length, file = String(res.path || '').split(/[\\/]/).pop() || 'The file';
+      note.textContent = `${file}: ${n(res.menus, 'menu', 'menus')}, ${res.has_tags ? n(res.tags, 'tag', 'tags') : 'no tags'}` + (probs ? `. ${n(probs, 'problem', 'problems')} in the menus.` : '');
+      note.hidden = false;
+    } else {
+      note.hidden = true; mark('starter');                       // cancelled, or refused: back to Starter menus
+      if (res && !res.cancelled) toast(res.message || 'That file could not be read.', { tone: 'warn', ms: 5000 });
+    }
+    rowOf(source).focus();
+  }
+  const group = h('div', { class: 'radios', role: 'radiogroup', 'aria-label': 'Start the new profile from' }, rows);
+  group.addEventListener('keydown', e => {
+    if (e.ctrlKey || e.altKey || e.metaKey || e.shiftKey) return;
+    const at = rows.indexOf(document.activeElement);
+    if (at < 0) return;
+    const k = rows.length;
+    const to = { ArrowRight: (at + 1) % k, ArrowDown: (at + 1) % k, ArrowLeft: (at + k - 1) % k, ArrowUp: (at + k - 1) % k, Home: 0, End: k - 1 }[e.key];
+    if (to === undefined) return;
+    e.preventDefault();
+    if (rows[to].dataset.v === 'file') rows[to].focus();         // choosing it opens a file dialog: the arrows only get there, Enter or Space choose it
+    else choose(rows[to].dataset.v, true);
+  });
+  mark('starter');
+  const name = await promptModal({ title: 'New profile', label: 'Name', confirm: 'Create', ctl, extra: [h('div', { class: 'modal-cap' }, 'Start from'), group, note],
+    submit: async t => {
+      if (picking) return 'Wait for the file dialog to close.';
+      const out = await createProfileCall(t, source);
+      if (out.err) return out.err;
+      made = out.res;
+      return '';
+    } });
+  if (name === null || !made) return;
+  takeNames(made); renderProfile();
+  await switchProfile(made.name || name);
+}
+/* "Default" gives "Default 2", then "Default 3"... the first one nobody has. */
+function freeProfileName(base) {
+  const stem = String(base).replace(/ \d+$/, '') || String(base), have = new Set(S.profiles.map(x => x.toLowerCase()));
+  let k = 2;
+  while (have.has(`${stem} ${k}`.toLowerCase())) k++;
+  return `${stem} ${k}`;
+}
+async function duplicateProfile() {
+  let made = null;
+  const name = await promptModal({ title: 'Duplicate profile', label: 'Name of the copy', value: freeProfileName(S.profile), confirm: 'Duplicate',
+    hint: dirtyNow() ? 'The copy is made from the saved version of ' + S.profile + ', not your unsaved changes.' : '',
+    submit: async t => {
+      const out = await createProfileCall(t, 'copy');
+      if (out.err) return out.err;
+      made = out.res;
+      return '';
+    } });
+  if (name === null || !made) return;
+  takeNames(made); renderProfile();
+  await switchProfile(made.name || name);
+}
+async function renameProfile() {
+  const old = S.profile;
+  let done = null;
+  const name = await promptModal({ title: 'Rename profile', label: 'Name', value: old, confirm: 'Rename',
+    submit: async t => {
+      if (t === old) return '';
+      let res;
+      try { res = await call('rename_profile', old, t); } catch (e) { return 'Could not rename the profile: ' + ((e && e.message) || e); }
+      if (!res || !res.ok) return (res && res.message) || 'The profile could not be renamed.';
+      done = res;
+      return '';
+    } });
+  if (name === null || !done) return;
+  S.profile = done.name || name; takeNames(done); renderProfile();
+  try { adoptProfileInfo(await call('get_config', S.profile)); } catch (e) { /* the path in the top bar catches up at the next reload */ }
+  toast(done.message || `Renamed to ${S.profile}.`, { tone: 'ok' });
+}
+async function deleteProfile() {
+  const name = S.profile;
+  if (S.profiles.length < 2) { toast('The last profile cannot be deleted.', { tone: 'warn' }); return; }
+  const body = [h('p', null, 'Its menus, tags and usage go to profiles\\.deleted and are removed after 30 days.')];
+  if (name === S.active) body.push(h('p', null, 'The app switches to another profile.'));
+  if (dirtyNow()) body.push(h('p', { class: 'warn-text' }, 'Your unsaved changes in it are lost.'));
+  const ok = await modal({ title: `Delete the profile ${name}?`, body, actions: [{ text: 'Cancel', value: false, focus: true }, { text: 'Delete profile', kind: 'danger', value: true }] });
+  if (!ok) return;
+  let res;
+  try { res = await call('delete_profile', name); } catch (e) { res = { ok: false, message: 'Could not delete the profile: ' + ((e && e.message) || e) }; }
+  if (!res || !res.ok) { toast((res && res.message) || 'The profile could not be deleted.', { tone: 'err' }); return; }
+  if (res.reload) {                                            // the editor's own profile went: the backend now edits another
+    let cfg = null;
+    try { cfg = await call('get_config'); } catch (e) { cfg = null; }
+    const bad = cfg && cfg.config ? adoptAndRender(cfg) : 'unreadable';
+    if (bad) { S.savedStr = JSON.stringify(S.cfg); location.reload(); return; }
+    profileChanged();
+  } else { takeNames(res); renderProfile(); }
+  toast(res.message || `Deleted ${name}.`, { tone: 'ok' });
+}
+async function openProfilesFolder() {
+  try { await call('open_folder', 'profiles'); } catch (e) { toast('Could not open the folder.', { tone: 'warn' }); }
+}
+/* When Studio gets the focus: the app's profile may have changed (tray, another window), or this profile may be gone. A clean editor follows the app;
+   one with edits keeps them and says so, once per change. */
+async function checkProfile() {
+  if (!S.ready || S.fatal || !S.profilesOn || profileBusy) return;
+  let res;
+  try { res = await call('get_profiles'); } catch (e) { return; }
+  if (!res || res.ok === false || !Array.isArray(res.names)) return;
+  if (res.enabled === false) { S.profilesOn = false; renderProfile(); return; }
+  S.profiles = res.names.map(String); S.active = String(res.active || S.active); renderProfile();
+  if (activeModal) return;                                     // a dialog is open: it keeps the screen
+  if (!S.profiles.includes(S.profile)) {
+    if (deletedAsked === S.profile) return;
+    deletedAsked = S.profile;
+    const to = S.profiles.includes(S.active) ? S.active : S.profiles[0];
+    if (!to) return;
+    const v = await modal({ title: `The profile ${S.profile} was deleted`,
+      body: h('p', null, `It was removed outside this window. Switch to ${to}, or keep editing: the next save will say it is missing.`),
+      actions: [{ text: 'Keep editing', value: 'keep', focus: true }, { text: `Switch to ${to}`, value: 'switch', kind: 'primary' }] });
+    if (v === 'switch') switchProfile(to);
+    return;
+  }
+  deletedAsked = '';
+  if (S.active === S.profile) { warnedActive = ''; return; }
+  if (warnedActive === S.active) return;
+  warnedActive = S.active;                                     // one try, or one warning, per change of the app's profile
+  const to = S.active;
+  if (dirtyNow()) toast(`The app switched to ${to}. Save keeps your changes in ${S.profile}.`, { tone: 'warn', ms: 20000, action: { text: 'Reload', fn: () => switchProfile(to) } });
+  else switchProfile(to, { fromApp: true });
+}
+/* save_config said the profile is gone. Switch away (the edits are dropped), make it again (the edits go in), or cancel. */
+async function profileGone(r, { allowUnusable = false } = {}) {
+  const name = S.profile;
+  try {
+    const g = await call('get_profiles');
+    if (g && Array.isArray(g.names)) { S.profiles = g.names.map(String); S.active = String(g.active || S.active); renderProfile(); }
+  } catch (e) { /* the names stay as they were */ }
+  const to = S.profiles.includes(S.active) ? S.active : (S.profiles.find(x => x !== name) || '');
+  const v = await modal({ title: `Profile ${name} no longer exists`,
+    body: [h('p', null, (r && r.message) || `The profile ${name} was deleted or renamed outside this window. Your changes are still here.`),
+      h('p', null, `Make it again creates it and saves your changes in it.` + (to ? ` Switching to ${to} drops your unsaved changes.` : ''))],
+    actions: [{ text: 'Cancel', value: 'cancel', focus: true }, to ? { text: `Switch to ${to}`, value: 'switch', kind: 'danger-ghost' } : null, { text: 'Make it again', value: 'again', kind: 'primary' }].filter(Boolean) });
+  if (v === 'switch') return (await performSwitch(to)) ? 'reloaded' : 'failed';
+  if (v === 'again') {
+    const out = await createProfileCall(name, 'starter');
+    if (out.err) { toast(out.err, { tone: 'err' }); return 'failed'; }
+    takeNames(out.res); renderProfile();
+    S.mtimeNs = null;
+    return doSave({ force: true, allowUnusable });             // lands in the profile just made
+  }
+  return 'cancelled';
 }
 /* ---- import and export: one file with the menus, the ring settings and the tags (the backend does the file work) */
 let ioBusy = false;
@@ -5060,7 +5363,8 @@ function save() {
 async function doSave({ force = false, allowUnusable = false } = {}) {
   const snap = JSON.stringify(S.cfg), prior = (S.problems || []).slice();
   try {
-    const r = await call('save_config', S.cfg, S.mtimeNs, !!force, !!allowUnusable);
+    const r = await call('save_config', S.cfg, S.mtimeNs, !!force, !!allowUnusable, editProfile());
+    if (r && r.profile_missing) return await profileGone(r, { allowUnusable });
     if (r && r.saved) {
       S.savedStr = snap; S.problems = r.problems || [];
       if (r.mtime_ns !== undefined) S.mtimeNs = r.mtime_ns;
@@ -5179,18 +5483,21 @@ function describeChanges() {
   return groups;
 }
 
+/* The body of the dialogs that ask about unsaved changes: how many, and what they are. `doing` completes "... without saving loses them". */
+function unsavedBody(doing) {
+  const groups = describeChanges();
+  const count = groups.reduce((n, g) => n + g.lines.length, 0);
+  return h('div', { class: 'changes' },
+    h('p', null, count ? `You have ${count} unsaved change${count === 1 ? '' : 's'}. ${doing} without saving loses ${count === 1 ? 'it' : 'them'}.` : `You have unsaved changes. ${doing} without saving loses them.`),
+    h('div', { class: 'changes-list' }, groups.map(g => h('div', { class: 'chg-group' },
+      h('div', { class: 'micro' }, g.area),
+      h('ul', null, g.lines.map(l => h('li', null, l)))))));
+}
 async function openCloseDialog() {
   if (S.closeDialogOpen) return;
   if (!dirtyNow()) { call('close_now').catch(() => {}); return; }
   S.closeDialogOpen = true;
-  const groups = describeChanges();
-  const count = groups.reduce((n, g) => n + g.lines.length, 0);
-  const body = h('div', { class: 'changes' },
-    h('p', null, count ? `You have ${count} unsaved change${count === 1 ? '' : 's'}. Closing without saving loses ${count === 1 ? 'it' : 'them'}.` : 'You have unsaved changes. Closing without saving loses them.'),
-    h('div', { class: 'changes-list' }, groups.map(g => h('div', { class: 'chg-group' },
-      h('div', { class: 'micro' }, g.area),
-      h('ul', null, g.lines.map(l => h('li', null, l)))))));
-  const v = await modal({ title: 'Unsaved changes', body, actions: [
+  const v = await modal({ title: 'Unsaved changes', body: unsavedBody('Closing'), actions: [
     { text: 'Keep editing', value: 'keep' },
     { text: 'Close without saving', value: 'discard', kind: 'danger-ghost' },
     { text: 'Save and close', value: 'save', kind: 'primary' }] });
@@ -5338,6 +5645,7 @@ function recovery(res) {
   $('#saveBtn').disabled = true; $('#revertBtn').disabled = true;
   modeBtns().forEach(b => { b.disabled = true; });
   if (path) setPathHint(path);
+  if (!isErr) { takeProfile(res); renderProfile(); }          // the picker stays usable: another profile may be fine
   const run = async (btn, method) => {
     btn.disabled = true;
     try {
@@ -5393,7 +5701,7 @@ async function boot() {
   if (params.get('cat')) S.lib.cat = params.get('cat');
   if (isLib(params.get('kind'))) S.lib.kind = params.get('kind');
   if (params.get('dock')) S.dock.cat = params.get('dock');
-  setPathHint(S.path);
+  setPathHint(S.path); renderProfile();
   updateDirty(); renderProblems();
   applyPrefs();
   loadLibrary(); loadSuggestions(); loadTags();
@@ -5442,6 +5750,7 @@ function init() {
   $('#undoBtn').append(icon('undo', 16)); $('#redoBtn').append(icon('redo', 16));
   $('#browserBtn').prepend(icon('k_browser', 13));
   $('#browserBtn').addEventListener('click', openBrowserFromButton);   // works before the config loads: the browser needs none
+  $('#profileBtn').addEventListener('click', e => { if ((S.ready || S.fatal) && S.profilesOn) openProfileMenu(e.currentTarget); });
   const modeSeg = $('#modeSeg');                                       // Simple / Full; the popout has no such control
   if (modeSeg) {
     modeBtns().forEach(b => b.addEventListener('click', () => setMode(b.dataset.mode)));
@@ -5484,6 +5793,7 @@ function init() {
     else if (e.altKey && !e.ctrlKey && !e.shiftKey && screenKey(e) !== null) { e.preventDefault(); showScreen(['menus', 'library', 'settings', 'status', 'setup'][screenKey(e)]); }
   });
   window.addEventListener('focus', debounce(() => { if (S.ready && !S.fatal) { loadTags(); reloadUsage(); } }, 300));      // tags.json may have changed (the popout, a hand edit), and picks add to Recent
+  window.addEventListener('focus', debounce(checkProfile, 300));                                                                   // the app's profile may have changed (the tray), or this one may be gone
   window.addEventListener('focus', debounce(() => { if (S.ready && !S.fatal && S.screen !== 'setup') refreshSetupBadge(); }, 600));   // the Setup screen polls for itself
   window.addEventListener('beforeunload', e => { if (dirtyNow()) { e.preventDefault(); e.returnValue = ''; } });
   const showErr = msg => {
@@ -5623,6 +5933,7 @@ async function bootPopout() {
     if (+state.size >= 84) S.pop.size = clamp(+state.size, 84, 220);
     S.popSide = state.side === 'right' ? 'right' : 'left';
     S.popColumn = state.column !== false;
+    if (state.profile) S.profile = String(state.profile);
     if (state.tag === FAV) S.pop.cat = '@fav';           // Favourites is a folder, not a chip
     else if (state.tag) S.pop.tags = new Set([String(state.tag)]);
     if (isLib(state.kind)) S.pop.kind = state.kind;

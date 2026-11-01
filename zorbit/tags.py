@@ -1,4 +1,5 @@
-"""The user's tags on brushes, alphas, materials and textures: a sidecar file, %APPDATA%\\ZOrbit\\tags.json.
+"""The user's tags on brushes, alphas, materials and textures: a sidecar file, one per profile,
+%APPDATA%\\ZOrbit\\profiles\\<profile>\\tags.json.
 
 {"version": 1,
  "tags":  {"blocking": {"label": "Blocking", "color": "#F86B33"}},
@@ -23,9 +24,6 @@ The ring app only reads (reload_if_changed() on every config poll). The Studio a
 each change reloads the file, applies itself and writes it back atomically while holding the named mutex
 Local\\ZOrbitTags, so two processes cannot lose each other's edits.
 """
-import contextlib
-import ctypes
-import ctypes.wintypes as w
 import json
 import os
 import re
@@ -33,7 +31,7 @@ import threading
 import time
 
 import fsutil
-import paths
+import profiles
 
 PALETTE = ("#A8DF23", "#C77DFF", "#FFD166", "#5EEAD4", "#F472B6", "#E8413C", "#F86B33", "#4DC8E9")
 FAVOURITE = "favourite"                # the built-in tag; the Studio and the browser star items with it
@@ -50,16 +48,6 @@ _COLOR_RE = re.compile(r"#[0-9a-fA-F]{6}")
 _ITEM_RE = re.compile(r"[a-z]+:.+")
 _KNOWN = ("version", "tags", "items")
 
-_kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
-_CreateMutexW = _kernel32.CreateMutexW
-_CreateMutexW.restype, _CreateMutexW.argtypes = w.HANDLE, [ctypes.c_void_p, w.BOOL, w.LPCWSTR]
-_WaitForSingleObject = _kernel32.WaitForSingleObject
-_WaitForSingleObject.restype, _WaitForSingleObject.argtypes = w.DWORD, [w.HANDLE, w.DWORD]
-_ReleaseMutex = _kernel32.ReleaseMutex
-_ReleaseMutex.argtypes = [w.HANDLE]
-_CloseHandle = _kernel32.CloseHandle
-_CloseHandle.argtypes = [w.HANDLE]
-
 
 def _norm(s: str) -> str:
     """Lower case without any spaces: 'Dam Standard' and 'DamStandard' are the same brush, as in
@@ -72,18 +60,9 @@ def item_key(kind: str, name: str) -> str:
     return f"{kind}:{_norm(name)}"
 
 
-@contextlib.contextmanager
 def _file_lock():
     """The cross-process mutex around a read-modify-write. After 2 s without it the change goes ahead anyway."""
-    h = _CreateMutexW(None, False, MUTEX_NAME)
-    got = bool(h) and _WaitForSingleObject(h, MUTEX_WAIT_MS) in (0, 0x80)    # signalled / abandoned
-    try:
-        yield
-    finally:
-        if got:
-            _ReleaseMutex(h)
-        if h:
-            _CloseHandle(h)
+    return fsutil.named_lock(MUTEX_NAME, MUTEX_WAIT_MS)
 
 
 def _slug(label: str) -> str:
@@ -126,7 +105,7 @@ def _parse(raw: dict):
 
 class TagStore:
     def __init__(self, path=None):
-        self.path = path or paths.TAGS_FILE
+        self.path = path or profiles.tags_file()
         self.error = ""                   # why the file could not be read (the previous state is kept)
         self.mtime = 0                    # st_mtime_ns of the file as loaded; 0 when it does not exist
         self._lock = threading.RLock()

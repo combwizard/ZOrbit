@@ -231,7 +231,8 @@ def tagfile(tmp_path, monkeypatch):
                                                     "metal": {"label": "Metal", "color": "#112233"}},
                              "items": {}}), encoding="utf-8")
     monkeypatch.setenv("ZORBIT_TAGS_FILE", str(p))
-    monkeypatch.setattr(webapi, "_STORE", tags.TagStore(str(p)).load())
+    monkeypatch.setattr(webapi, "_store", None)
+    monkeypatch.setattr(webapi, "_ensured", True)       # the api fixture puts CONFIG_DIR in tmp_path: no first-run move
     return p
 
 
@@ -329,7 +330,7 @@ def test_apply_menu_import_merges_tags_retags_and_clears_the_pending_file(api, t
     assert list(res["menus"]) == ["sculpt_2", "detail"]
     assert res["menus"]["sculpt_2"]["items"][1:] == [{"menu": "detail"}, {"tag": "rock"}, {"browser": "metal"}]
     assert res["tags_message"] == "Added 1 tag to yours; 1 joined a tag of yours with the same name."
-    assert webapi._STORE.has("rock") and webapi._STORE.tags_of("brush:claybuildup") == ["rock"]
+    assert webapi.store().has("rock") and webapi.store().tags_of("brush:claybuildup") == ["rock"]
     assert "hotkey" not in res["menus"]["sculpt_2"] and res["problems"] == []
     assert res["message"] == 'Added "Sculpt 2" and its 1 submenu to the editor.'
     assert api.apply_menu_import(cfg) == {"ok": False, "message": "There is nothing to import. Pick the file again."}
@@ -366,7 +367,7 @@ def test_apply_menu_import_without_tags_has_an_empty_tags_message(api, tmp_path,
 
 def test_apply_menu_import_still_brings_the_menus_when_the_tags_cannot_be_added(api, tmp_path, monkeypatch, tagfile):
     assert _pick(api, monkeypatch, _file(tmp_path, _bundle()), {"menus": {}})["ok"]
-    monkeypatch.setattr(webapi._STORE, "import_tags", lambda raw, mode: {"ok": False, "error": "disk full"})
+    monkeypatch.setattr(webapi.store(), "import_tags", lambda raw, mode: {"ok": False, "error": "disk full"})
     res = api.apply_menu_import({"menus": {}})
     assert res["ok"] and list(res["menus"]) == ["sculpt", "detail"]
     assert res["tags_message"] == "The tags were not added: disk full."

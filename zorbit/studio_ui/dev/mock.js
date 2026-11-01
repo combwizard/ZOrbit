@@ -34,6 +34,9 @@
    Keep on top is kept in localStorage rm_pop_on_top (on until switched off), and the popout_* calls only log.
    ?kinds adds a Tag item ({"tag": "blocking"}) and a Browser item ({"browser": ""}) to the end of the Tools menu, so the two newer
    kinds can be seen (the recorded config has none). The default stays the faithful recording.
+   Profiles (the picker after the brand in the top bar): ?profiles=3 (three profiles, Creatures, Default and Hard surface, each with its own menus: the first menu's title carries the
+   profile's name; the default is the one profile Default), ?profilesoff (enabled: false, as when a menus file is pinned: no picker), ?profilegone (the first save finds its profile deleted:
+   save_config answers profile_missing). pick_profile_file follows ?importcancel and ?importfail. Profiles live in this page only: a reload starts again from the defaults.
    Studio mode: ?mode=simple|full (start Studio in that mode; the mock defaults to full so the screenshots keep their content).
    Setup screen (get_setup; state in localStorage rm_env for the registered folder and rm_zscript for the ZScript plugin, which Settings > Older
    ZBrush shares): ?firstrun (setup_done is false until Finish or Skip, so Studio opens on Setup; a reload does it again),
@@ -63,6 +66,35 @@
   var tagsMode = q.get('tags') === 'empty' ? 'empty' : q.has('tagsmany') ? 'many' : 'saved';
   var tagMtime = 1700000000000000000, tagStore = null;
   var BROKEN_ERR = "Expecting ',' delimiter: line 12 column 5 (char 301)";
+
+  /* ---- profiles: `saved` stays the editing profile's saved config, so everything below that reads it needs no change */
+  var P0 = (M.get_profiles && M.get_profiles.editing) || (M.get_config && typeof M.get_config.profile === 'string' && M.get_config.profile) || 'Default';
+  var profilesOn = !q.has('profilesoff'), profileGoneDone = false, pickedFile = false;
+  var profiles = { names: [P0], active: P0, editing: P0, saved: {} };
+  if (q.has('profiles')) {
+    var extra = ['Creatures', 'Hard surface', 'Props', 'Characters', 'Vehicles'].slice(0, Math.max(1, +q.get('profiles') || 3) - 1);
+    profiles.names = [P0].concat(extra);
+  }
+  function profTitle(cfg, name) {                                  // a different first menu title, so a switch can be seen
+    var ids = Object.keys(cfg.menus || {});
+    if (ids.length) cfg.menus[ids[0]].title = (cfg.menus[ids[0]].title || ids[0]) + ' (' + name + ')';
+    return cfg;
+  }
+  profiles.names.sort(function (a, b) { return a.localeCompare(b, undefined, { sensitivity: 'base' }); });
+  profiles.names.forEach(function (n) { profiles.saved[n] = n === P0 ? clone(saved) : profTitle(clone(saved), n); });
+  var profInfo = function () { return { profile: profiles.editing, active: profiles.active, profiles: profiles.names.slice(), enabled: profilesOn }; };
+  var profFind = function (n) { var l = String(n).trim().toLowerCase(), hit = profiles.names.filter(function (x) { return x.toLowerCase() === l; })[0]; return hit === undefined ? null : hit; };
+  var profFolder = function (n) { return 'C:\\Users\\you\\AppData\\Roaming\\ZOrbit' + (n === P0 ? '' : '\\profiles\\' + n); };
+  var profSort = function () { profiles.names.sort(function (a, b) { return a.localeCompare(b, undefined, { sensitivity: 'base' }); }); };
+  // The words create_profile and rename_profile refuse a name with (the backend's checks, close enough)
+  function profNameProblem(name, ignore) {
+    var t = typeof name === 'string' ? name.trim() : '';
+    if (!t) return 'Give the profile a name.';
+    if (/[\\/:*?"<>|]/.test(t)) return 'A profile name cannot contain \\ / : * ? " < > |';
+    var hit = profFind(t);
+    if (hit !== null && hit !== ignore) return 'There is already a profile called ' + hit + '.';
+    return '';
+  }
 
   // Python's repr of a string, close enough for the messages: 'x'
   function pyr(v) { return typeof v === 'string' ? "'" + v + "'" : String(v); }
@@ -260,7 +292,7 @@
     st.tags.forEach(function (t) { count[t.key] = 0; });
     Object.keys(st.items).forEach(function (ik) { st.items[ik].forEach(function (k) { if (k in count) count[k]++; }); });
     return { ok: true, tags: st.tags.map(function (t) { var o = { key: t.key, label: t.label, color: t.color, count: count[t.key] }; if (t.key === FAV) o.builtin = true; return o; }),
-      items: clone(st.items), palette: TAG_PALETTE.slice(), mtime_ns: tagMtime, path: 'C:\\Users\\you\\AppData\\Roaming\\ZOrbit\\tags.json', error: null };
+      items: clone(st.items), palette: TAG_PALETTE.slice(), mtime_ns: tagMtime, path: profFolder(profiles.editing) + '\\tags.json', error: null };
   }
   // Runs one change like TagStore._change: refused under ?tagfail; written (and the time bumped) only when it says ok
   function tagChange(apply) {
@@ -476,12 +508,19 @@
   var pluginLoaded = function () { return setupSnapshot().installs.some(function (i) { return i.procs.some(function (p) { return p.state === 'loaded'; }); }); };
 
   var api = {
-    get_config: function () {
+    get_config: function (profile) {
       return sleep(40).then(function () {
+        if (typeof profile === 'string' && profile) {              // like the backend: asking for a profile makes it the one the editor holds
+          var want = profFind(profile);
+          if (want === null) return Object.assign({ config: null, error: 'There is no profile called ' + profile + '.', path: '', backup_exists: false, problems: [], mtime_ns: null }, profInfo());
+          if (want !== profiles.editing) { profiles.editing = want; saved = clone(profiles.saved[want]); }
+        }
         var r = clone(M.get_config);
         r.config = clone(saved);                                   // what the last mock save wrote, so Reload from disk is honest
         r.defaults = Object.assign({}, r.defaults, TAG_DEFAULTS);
-        if (q.has('broken') && !sessionStorage.getItem('rm_repaired')) return { config: null, error: BROKEN_ERR, path: r.path, backup_exists: true, problems: [], mtime_ns: null };
+        Object.assign(r, profInfo());
+        if (profiles.editing !== P0) r.path = profFolder(profiles.editing) + '\\radial.json';
+        if (q.has('broken') && !sessionStorage.getItem('rm_repaired')) return Object.assign({ config: null, error: BROKEN_ERR, path: r.path, backup_exists: true, problems: [], mtime_ns: null }, profInfo());
         var bad = q.get('badmenus');
         if (bad && r.config.menus) {
           var ids = Object.keys(r.config.menus), id = ids[ids.length - 1];
@@ -496,8 +535,16 @@
       });
     },
     validate: function (cfg) { return sleep(30).then(function () { return { problems: validate(cfg) }; }); },
-    save_config: function (cfg, mtime_ns, force, allow_unusable) {
+    save_config: function (cfg, mtime_ns, force, allow_unusable, profile) {
       return sleep(180).then(function () {
+        if (q.has('profilegone') && !profileGoneDone && profiles.names.length > 1) {      // somebody deleted this profile while Studio was open
+          profileGoneDone = true;
+          var gone = profFind(profile || profiles.editing);
+          profiles.names = profiles.names.filter(function (x) { return x !== gone; });
+          if (profiles.active === gone) profiles.active = profiles.names[0];
+        }
+        var target = profile ? profFind(profile) : profiles.editing;
+        if (profile && target === null) return { saved: false, profile_missing: true, message: 'The profile ' + profile + ' no longer exists.' };
         if (q.has('conflict') && !force && !conflictDone) {
           conflictDone = true; mtime += 1000000;
           return { saved: false, conflict: true, message: 'radial.json was changed on disk after Studio loaded it (mock).', mtime_ns: mtime };
@@ -506,7 +553,9 @@
           return { saved: false, blocked: true, problems: ['menu brushes: no usable items', 'no menu has a hotkey, so nothing can open the ring'],
             message: 'Saving this would leave no ring that can open, so ZOrbit would stop working.' };
         }
-        saved = clone(cfg); mtime += 1000000;
+        profiles.saved[target] = clone(cfg);
+        if (target === profiles.editing) saved = clone(cfg);
+        mtime += 1000000;
         var kept = q.has('keptbroken') && !keptDone; keptDone = true;
         return { saved: true, problems: validate(cfg), time: Date.now() / 1000, mtime_ns: mtime, kept_broken: kept };
       });
@@ -514,6 +563,66 @@
     // Both mark the file as repaired for this tab, so the reload after them boots normally even with ?broken.
     restore_backup: function () { try { sessionStorage.setItem('rm_repaired', '1'); } catch (e) {} return sleep(200).then(function () { return { ok: true, kept_broken: true, message: 'Restored radial.json from radial.json.bak. The file it replaced is kept as radial.json.broken.' }; }); },
     reset_config: function () { try { sessionStorage.setItem('rm_repaired', '1'); } catch (e) {} return sleep(200).then(function () { return { ok: true, message: 'Started again from the default menus. The old file is kept as radial.json.broken.' }; }); },
+    // Profiles. The editor holds `editing`, the app uses `active`; switching moves both.
+    get_profiles: function () { return sleep(40).then(function () { return { ok: true, enabled: profilesOn, active: profiles.active, editing: profiles.editing, names: profiles.names.slice() }; }); },
+    switch_profile: function (name) {
+      var want = profFind(name);
+      if (want === null) return sleep(80).then(function () { return { ok: false, message: 'There is no profile called ' + name + '.' }; });
+      profiles.active = want;
+      return api.get_config(want).then(function (r) { r.ok = true; return r; });
+    },
+    pick_profile_file: function () {
+      return sleep(150).then(function () {
+        if (q.has('importcancel')) return { ok: false, cancelled: true };
+        if (q.has('importfail')) return { ok: false, message: "That file is not valid JSON: Expecting ',' delimiter: line 12 column 5 (mock)." };
+        var name = 'Imported', k = 2;
+        while (profFind(name) !== null) name = 'Imported ' + k++;
+        pickedFile = true;
+        return { ok: true, path: 'C:\\Users\\you\\Downloads\\ZOrbit settings.json', name: name, menus: 3, has_tags: true, tags: 4, problems: [], version: '0.12.0' };
+      });
+    },
+    create_profile: function (name, source) {
+      return sleep(120).then(function () {
+        var bad = profNameProblem(name, null);
+        if (bad) return { ok: false, message: bad };
+        if (['starter', 'empty', 'copy', 'file'].indexOf(source) < 0) return { ok: false, message: 'Unknown starting point: ' + source };
+        if (source === 'file' && !pickedFile) return { ok: false, message: 'Pick a file first.' };
+        var n = name.trim(), cfg;
+        if (source === 'empty') cfg = { menus: {} };
+        else if (source === 'copy') cfg = clone(profiles.saved[profiles.editing]);
+        else if (source === 'file') cfg = profTitle(clone(M.get_config.config), n);
+        else cfg = clone(M.get_config.config);
+        profiles.names.push(n); profSort(); profiles.saved[n] = cfg;
+        return { ok: true, name: n, names: profiles.names.slice(), active: profiles.active, editing: profiles.editing, message: 'Created the profile ' + n + '.' };
+      });
+    },
+    rename_profile: function (old, name) {
+      return sleep(120).then(function () {
+        var from = profFind(old);
+        if (from === null) return { ok: false, message: 'There is no profile called ' + old + '.' };
+        var bad = profNameProblem(name, from);
+        if (bad) return { ok: false, message: bad };
+        var n = name.trim();
+        profiles.names = profiles.names.map(function (x) { return x === from ? n : x; }); profSort();
+        profiles.saved[n] = profiles.saved[from]; if (n !== from) delete profiles.saved[from];
+        if (profiles.active === from) profiles.active = n;
+        if (profiles.editing === from) profiles.editing = n;
+        return { ok: true, name: n, names: profiles.names.slice(), active: profiles.active, editing: profiles.editing, message: 'Renamed ' + from + ' to ' + n + '.' };
+      });
+    },
+    delete_profile: function (name) {
+      return sleep(150).then(function () {
+        var gone = profFind(name);
+        if (gone === null) return { ok: false, message: 'There is no profile called ' + name + '.' };
+        if (profiles.names.length < 2) return { ok: false, message: 'The last profile cannot be deleted.' };
+        profiles.names = profiles.names.filter(function (x) { return x !== gone; });
+        delete profiles.saved[gone];
+        var reload = gone === profiles.editing;
+        if (profiles.active === gone) profiles.active = profiles.names[0];
+        if (reload) { profiles.editing = profiles.active; saved = clone(profiles.saved[profiles.editing]); }
+        return { ok: true, reload: reload, names: profiles.names.slice(), active: profiles.active, editing: profiles.editing, message: 'Deleted the profile ' + gone + '. Its files stay in profiles\\.deleted for 30 days.' };
+      });
+    },
     // Export and import: the picked file is a made-up bundle. ?importfail refuses it, ?importcancel is a closed dialog, ?importtags a tags-only file.
     export_settings: function (cfg) {
       return sleep(150).then(function () {
@@ -676,9 +785,10 @@
         if (k) uses[k] = (uses[k] || 0) + 1; }); });
       return sleep(30).then(function () { return { ok: true, uses: uses }; });
     },
-    get_tags: function (since) {
+    get_tags: function (since, since_path) {
       return sleep(40).then(function () {
-        if (since !== null && since !== undefined && since === tagMtime) return { unchanged: true, mtime_ns: tagMtime };
+        // unchanged only for the same file: the path travels with the time, so a switch to another profile is a change
+        if (since !== null && since !== undefined && since === tagMtime && (since_path === undefined || since_path === null || since_path === profFolder(profiles.editing) + '\\tags.json')) return { unchanged: true, mtime_ns: tagMtime };
         return tagSnapshot();
       });
     },
@@ -907,7 +1017,7 @@
     popout_get_state: function () {
       var onTop = true, kind = null, side = 'left', column = true;
       try { onTop = localStorage.getItem('rm_pop_on_top') !== '0'; kind = localStorage.getItem('rm_pop_kind'); side = localStorage.getItem('rm_pop_side') || 'left'; column = localStorage.getItem('rm_pop_column') !== '0'; } catch (e) {}
-      return Promise.resolve({ on_top: onTop, size: 96, side: side, column: column, tag: q.get('tag') || null, kind: q.get('kind') || kind || 'brush', tags_path: '' });
+      return Promise.resolve({ on_top: onTop, size: 96, side: side, column: column, tag: q.get('tag') || null, kind: q.get('kind') || kind || 'brush', tags_path: '', profile: profiles.editing });
     },
     popout_log: function (msg) { console.log('[mock] popout_log', msg); return Promise.resolve(true); },
   };

@@ -17,7 +17,7 @@ The first time you open **ZOrbit Studio** it starts on its **Setup** screen. Set
 
 ![The Setup screen with ZBrush found, Plugin loaded in ZBrush and Try the ring all ticked, and a row for each ZBrush version with its Install, Update or Remove button](images/setup.png)
 
-The first run puts a starter set of menus in `%APPDATA%\ZOrbit\radial.json`. They use only brushes that come with ZBrush.
+The first run puts a starter set of menus in the **Default** profile, `%APPDATA%\ZOrbit\profiles\Default\radial.json`. See [Profiles](profiles.md). They use only brushes that come with ZBrush.
 
 The installer also puts `LICENSE` and `THIRD_PARTY_NOTICES.md` in the install folder. If your PC has a machine-wide `ZBRUSH_PLUGIN_PATH`, the installer keeps its entries: Windows ignores the machine value once you have your own, so the new user value starts with the machine entries and adds the ZOrbit folder after them.
 
@@ -25,7 +25,7 @@ The installer also puts `LICENSE` and `THIRD_PARTY_NOTICES.md` in the install fo
 
 Save your work in Studio and close it, then run the new installer over the old one. It closes ZOrbit for you, and it asks you to close Studio if it is still open. If ZOrbit Studio is open, it asks Studio to close the way you would, and Studio shows its own dialog when it has unsaved changes. Answer the dialog, or close Studio yourself, then run Setup again if it stopped with "Close ZOrbit Studio first". Setup never ends a Studio that is still open.
 
-An update keeps the folder you installed to: if you chose a custom folder the first time, Setup offers the same one. It replaces the program files whole, so nothing from an older version stays behind. Your menus, settings and tags are not touched: they live in `%APPDATA%\ZOrbit`, outside the install folder.
+An update keeps the folder you installed to: if you chose a custom folder the first time, Setup offers the same one. It replaces the program files whole, so nothing from an older version stays behind. Your menus, settings and tags are not touched: they live in `%APPDATA%\ZOrbit`, outside the install folder. The first start after an update from a version before profiles moves your old menus, tags and usage into the **Default** profile. The originals go to `%APPDATA%\ZOrbit\pre-profiles\`, and you can delete them. See [Profiles](profiles.md#where-the-files-are).
 
 After an update:
 
@@ -34,7 +34,7 @@ After an update:
 
 ### Upgrading from Radial Menu for ZBrush
 
-ZOrbit used to be called Radial Menu for ZBrush. Run the new installer over the old install. It moves the program to `%LOCALAPPDATA%\Programs\ZOrbit` and removes the old folder, its Start menu shortcut and its plugin path entry. Your menus and settings are copied to `%APPDATA%\ZOrbit` on the first start, and learned auto slots to `%LOCALAPPDATA%\ZOrbit`. The old `RadialMenu` folders stay where they are; you can delete them.
+ZOrbit used to be called Radial Menu for ZBrush. Run the new installer over the old install. It moves the program to `%LOCALAPPDATA%\Programs\ZOrbit` and removes the old folder, its Start menu shortcut and its plugin path entry. Your menus, settings, tags and learned auto slots are copied on the first start into the **Default** [profile](profiles.md), in `%APPDATA%\ZOrbit\profiles\Default\`. The old `RadialMenu` folders stay where they are; you can delete them.
 
 In ZBrush 2026 the palette is now **Zplugin > ZOrbit**. If you bound F9 to the old **Apply** by hand, bind it again on **Zplugin > ZOrbit > Apply**: Ctrl+Alt+click it, press **F9**, then **Preferences > Hotkeys > Store**. In ZBrush 2022 to 2025, Studio shows the old plugin as **Update available**. **Update** replaces it with the ZOrbit plugin.
 
@@ -92,4 +92,4 @@ It removes:
 - `%APPDATA%\ZOrbit\launch.json`,
 - the plugin from every ZBrush 2022 to 2025 that Studio's **Setup** lists: the ones Windows knows about, the ones ZBrush recorded and the ones you added by hand. A ZBrush under `C:\Program Files` asks for administrator rights once. If a folder could not be cleaned, the uninstaller lists it, and you delete `ZOrbitBridge.zsc` and the `ZOrbitData` folder from that ZBrush's `ZStartup\ZPlugs64` yourself.
 
-It leaves your menus, tags, learned auto slots and logs. They are not part of the program. They live in `%APPDATA%\ZOrbit` and `%LOCALAPPDATA%\ZOrbit`; delete those folders if you want no trace.
+It leaves your profiles (menus, settings, tags and learned auto slots, in `%APPDATA%\ZOrbit\profiles\`) and your logs. They are not part of the program. They live in `%APPDATA%\ZOrbit` and `%LOCALAPPDATA%\ZOrbit`; delete those folders if you want no trace.

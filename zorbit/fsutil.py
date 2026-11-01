@@ -1,9 +1,37 @@
-"""Small file helpers shared by the app, the Studio and the tag store."""
+"""Small file helpers shared by the app, the Studio, the tag store and the profiles."""
+import contextlib
+import ctypes
+import ctypes.wintypes as w
 import json
 import os
 import time
 
 REPLACE_PAUSES = (0.05, 0.1, 0.2, 0.4, 0.8)       # seconds between tries when another process holds the file
+
+_kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+_CreateMutexW = _kernel32.CreateMutexW
+_CreateMutexW.restype, _CreateMutexW.argtypes = w.HANDLE, [ctypes.c_void_p, w.BOOL, w.LPCWSTR]
+_WaitForSingleObject = _kernel32.WaitForSingleObject
+_WaitForSingleObject.restype, _WaitForSingleObject.argtypes = w.DWORD, [w.HANDLE, w.DWORD]
+_ReleaseMutex = _kernel32.ReleaseMutex
+_ReleaseMutex.argtypes = [w.HANDLE]
+_CloseHandle = _kernel32.CloseHandle
+_CloseHandle.argtypes = [w.HANDLE]
+
+
+@contextlib.contextmanager
+def named_lock(name, wait_ms):
+    """A cross-process mutex around a read-modify-write. Yields True when it was got, False after wait_ms without
+    it; the caller decides whether to go ahead anyway. The same thread may take it again while it holds it."""
+    h = _CreateMutexW(None, False, name)
+    got = bool(h) and _WaitForSingleObject(h, wait_ms) in (0, 0x80)      # signalled / abandoned
+    try:
+        yield got
+    finally:
+        if got:
+            _ReleaseMutex(h)
+        if h:
+            _CloseHandle(h)
 
 
 def _held(e: OSError) -> bool:

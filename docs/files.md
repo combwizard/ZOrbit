@@ -6,9 +6,9 @@
 
 ![Settings > Import and export: the Settings file section with Export and Import buttons, and a note on what the file holds](images/settings-import-export.png)
 
-**Export...** writes one `.json` file with your menus and settings (everything in `radial.json`) and your tags. It saves what is on screen, including edits you have not saved yet. It leaves out Studio's window placement and preferences, the ZBrush folders you added by hand and the usage counts, since those belong to one PC.
+**Export...** writes the profile you are editing as one `.json` file: its menus and settings (everything in `radial.json`) and its tags. It saves what is on screen, including edits you have not saved yet. It leaves out Studio's window placement and preferences, the ZBrush folders you added by hand and the usage counts, which stay with the profile on this PC.
 
-**Import...** reads a file and shows what it holds before anything changes. It also accepts a plain `radial.json` or a plain `tags.json`, such as one you copied by hand.
+**Import...** reads a file and shows what it holds before anything changes. It also accepts a plain `radial.json` or a plain `tags.json`, such as one you copied by hand. It loads the file into the profile you are editing. To make a new profile from a file instead, use **New profile... > From a file...** (see [Sharing a profile](profiles.md#sharing-a-profile)).
 
 - The menus and settings load into the editor as an unsaved change. **Save** keeps them and **Undo** takes them back.
 - If the file has tags, you choose each time (both buttons also load the file's menus and settings, as above):
@@ -22,9 +22,12 @@ To share one menu, use **Export menu...** in the **Menu** tab. It writes the men
 
 | Path | What |
 |---|---|
-| `%APPDATA%\ZOrbit\radial.json` | Your menus and settings. Created from the starter menus on first run. |
-| `%APPDATA%\ZOrbit\radial.json.bak` | The version before your last save in Studio (only replaced when the file was readable and changed). |
-| `%APPDATA%\ZOrbit\radial.json.broken` | A copy of the `radial.json` that Studio replaced: **Start from defaults** and **Restore backup** on the recovery screen keep the unreadable file here first, and so does a save over a file that is not valid JSON. Only the last one is kept. |
+| `%APPDATA%\ZOrbit\profile.json` | Which profile is in use, as `{"active": "Default"}`. Every part of ZOrbit reads it fresh, so a switch needs no restart. See [Profiles](profiles.md#switching). |
+| `%APPDATA%\ZOrbit\profiles\<profile>\radial.json` | The menus and settings of one profile. A new profile starts from the starter menus, an empty menu or a copy, as you choose. See [Profiles](profiles.md#making-a-profile). |
+| `%APPDATA%\ZOrbit\profiles\<profile>\radial.json.bak` | The version before your last save in Studio (only replaced when the file was readable and changed). |
+| `%APPDATA%\ZOrbit\profiles\<profile>\radial.json.broken` | A copy of the profile's `radial.json` that Studio replaced: **Start from defaults** and **Restore backup** on the recovery screen keep the unreadable file here first, and so does a save over a file that is not valid JSON. Only the last one is kept. |
+| `%APPDATA%\ZOrbit\profiles\.deleted\` | Deleted profiles, kept as `<name>-<date>`. ZOrbit removes each one 30 days after it was deleted; drag one out to recover it. See [Rename, duplicate, delete](profiles.md#rename-duplicate-delete). |
+| `%APPDATA%\ZOrbit\pre-profiles\` | The `radial.json`, `tags.json` and `usage.json` files from before profiles existed, moved here by the first start after the update. They are no longer used. Safe to delete. |
 | `%APPDATA%\ZOrbit\launch.json` | Tells the plugin how to start the app and Studio. Rewritten on each start. |
 | `%LOCALAPPDATA%\ZOrbit\radiald.log` | The app: config loads, hotkeys, rings, hand-offs. Trimmed automatically. |
 | `%LOCALAPPDATA%\ZOrbit\bridge.log` | The plugin inside ZBrush: what each pick actually did. |
@@ -37,13 +40,13 @@ To share one menu, use **Export menu...** in the **Menu** tab. It writes the men
 | `%LOCALAPPDATA%\ZOrbit\zscript_launch.log` | ZBrush 2022 to 2025: how the plugin last started the app or Studio. |
 | `%LOCALAPPDATA%\ZOrbit\zscript_hotkey.log` | ZBrush 2022 to 2025: the hotkey Apply had when the plugin loaded, and the one it has after (88 is F9). |
 | `%APPDATA%\ZOrbit\studio.json` | Studio's own preferences: `check_updates` (the update check), `setup_done` (Setup finished or skipped), `last_screen` (the screen Studio reopens on), `mode` (`simple` or `full`, see [Simple and Full mode](studio.md#simple-and-full-mode)), `zbrush_folders` (ZBrush folders added by hand on Setup or Older ZBrush), and `window` (window placement). |
-| `%APPDATA%\ZOrbit\tags.json` | Your tags: each tag's label and colour (Favourites included), and which items carry which tags. Created the first time you change a tag. See [Tags](tags.md#where-tags-live). |
-| `%APPDATA%\ZOrbit\tags.json.bak` | Your old `tags.json`, kept when you import a file with **Replace tags** (see [Import and export](#import-and-export)). Only the last one is kept. |
+| `%APPDATA%\ZOrbit\profiles\<profile>\tags.json` | The tags of one profile: each tag's label and colour (Favourites included), and which items carry which tags. Created the first time you change a tag. See [Tags](tags.md#where-tags-live). |
+| `%APPDATA%\ZOrbit\profiles\<profile>\tags.json.bak` | The profile's old `tags.json`, kept when you import a file with **Replace tags** (see [Import and export](#import-and-export)). Only the last one is kept. |
 | `%APPDATA%\ZOrbit\popout.json` | The browser's window position and size, whether it is maximised, Keep on top, thumbnail size, the side of the folders column (`side`), whether it is shown (`column`) and the tab you were last on (`kind`). Safe to delete. |
 | `%LOCALAPPDATA%\ZOrbit\popout.log` | The browser: how it started, what it showed, the picks it sent to the app. |
 | `%LOCALAPPDATA%\ZOrbit\studio.log` | How Studio started: which program launched it and how long each step took. A failed update check is noted here. |
-| `%LOCALAPPDATA%\ZOrbit\usage.json` | Brush usage, which fills the auto slots, and your recent picks under `"picks"` (see [Favourites and Recent](browser.md#favourites-and-recent)). Names are kept in lower case without spaces, so `Clay Buildup` and `ClayBuildup` count as one brush. |
-| `%LOCALAPPDATA%\ZOrbit\usage.json.bad` | A copy of `usage.json` made when the file could not be read (a stray character, say). The app goes on with what it had in memory. Safe to delete. |
+| `%APPDATA%\ZOrbit\profiles\<profile>\usage.json` | Brush usage for one profile, which fills the auto slots, and its recent picks under `"picks"` (see [Favourites and Recent](browser.md#favourites-and-recent)). Names are kept in lower case without spaces, so `Clay Buildup` and `ClayBuildup` count as one brush. |
+| `%APPDATA%\ZOrbit\profiles\<profile>\usage.json.bad` | A copy of the profile's `usage.json` made when the file could not be read (a stray character, say). The app goes on with what it had in memory. Safe to delete. |
 | `%LOCALAPPDATA%\ZOrbit\*.log.old` | The older part of a log that grew too big. `bridge.log` moves to `bridge.log.old` at 500 KB, and `studio.log` and `popout.log` move at 200 KB; each time the last `.old` is replaced. `radiald.log` has no `.old`: when it passes 1 MB, the app keeps its newest half. The `zscript_*.log` files are rewritten on each pick or start. Safe to delete. |
 | `%LOCALAPPDATA%\ZOrbit\zscript_stage\` | A work folder that Studio fills with the ZBrush 2022 to 2025 plugin files while it installs or updates the plugin, and rebuilds each time. Safe to delete when no install is running. |
 | `%LOCALAPPDATA%\ZOrbit\thumbs\` | Cached thumbnails of brushes, alphas, materials and textures. Safe to delete. |

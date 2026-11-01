@@ -88,8 +88,8 @@ hiddenimports = [h for h in hiddenimports if not h.startswith(("webview.platform
                                                                  "webview.platforms.cef", "webview.platforms.mshtml"))]
 
 # The app modules import each other as top-level modules; some are imported inside functions.
-for mod in ("config", "win32", "ring", "radiald", "studio", "brushes", "assets", "zbp", "paths", "tray", "installs",
-            "zscript_bridge", "winframe", "popout"):
+for mod in ("config", "win32", "ring", "radiald", "studio", "brushes", "assets", "zbp", "paths", "profiles", "tray",
+            "installs", "zscript_bridge", "winframe", "popout"):
     if os.path.isfile(os.path.join(SRC, mod + ".py")):
         hiddenimports.append(mod)
 

@@ -5,6 +5,10 @@ LibraryApi: the brush, alpha, material and texture libraries and their thumbnail
 (tags.py, one shared TagStore); every changing method returns the store's result merged with a fresh snapshot,
 so the page needs one call per change and never has to ask again. The recent picks and use counts (usage.py) are
 read through LibraryApi.get_usage().
+
+The tag store and the usage store follow the active profile (profiles.py), or the profile Studio pins with pin()
+while its editor holds one. store() and usage_store() are asked on every call and make a new store when the path
+they should read has changed, so a profile switch in another process is followed at the next call.
 """
 import hashlib
 import json
@@ -16,26 +20,74 @@ import assets
 import brushes
 import config as C
 import fsutil
-import paths
-import radiald
+import profiles
 import tags
 import usage
 
-_USAGE = usage.Usage()                # usage.json is written by the app; load() is cached on its mtime
+_store = None                         # the TagStore of the profile this process serves, made on first use
+_usage = None                         # the same for usage.json, which the app writes; load() is cached on its mtime
+_pin = None                           # a profile name Studio pins (the one its editor holds); None follows the active
+_lock = threading.Lock()
+_ensured = False
 THUMB_WORKERS = 4                     # Pillow and zlib let go of the GIL while they decode: 4 images at a time
 _pool = None                          # made on the first batch of more than one name, then kept for the session
 _pool_lock = threading.Lock()
 _lib_cache: dict = {}                 # kind -> (signature, items, categories): the payload of the last walk
 
 
+def pin(name) -> None:
+    """Studio's editor holds one profile while another may be active: the stores follow that one. None unpins."""
+    global _pin
+    _pin = name
+
+
+def _profile():
+    """The profile served: the pinned one while it still exists, else None, which means the active profile."""
+    return _pin if _pin is not None and profiles.exists(_pin) else None
+
+
+def _ensure_profiles() -> None:
+    """Makes the first profile once per process. Called under _lock. An unwritable folder must not stop tag reads."""
+    global _ensured
+    if not _ensured:
+        _ensured = True
+        try:
+            profiles.ensure()
+        except OSError:
+            pass
+
+
+def store() -> tags.TagStore:
+    """The tag store of the profile served, made again when the profile (so the path) has changed."""
+    global _store
+    with _lock:
+        _ensure_profiles()
+        want = profiles.tags_file(_profile())
+        if _store is None or _store.path != want:
+            _store = tags.TagStore(want)
+        return _store
+
+
+def usage_store() -> usage.Usage:
+    """The usage store of the profile served, made again when the path has changed."""
+    global _usage
+    with _lock:
+        _ensure_profiles()
+        want = profiles.usage_file(_profile())
+        if _usage is None or _usage.path != want:
+            _usage = usage.Usage(want)
+        return _usage
+
+
 def _usage_payload(kind: str) -> dict:
     """The recent picks and the use scores of one kind, as the page wants them."""
-    _USAGE.load()
+    us = usage_store()
+    us.load()
     try:
-        mtime_ns = os.stat(_USAGE.path).st_mtime_ns
+        mtime_ns = os.stat(us.path).st_mtime_ns
     except OSError:
         mtime_ns = 0
-    return {"ok": True, "kind": kind, "recent": _USAGE.recent(kind), "scores": _USAGE.scores_for(kind),
+    return {"ok": True, "kind": kind, "recent": us.recent(kind), "scores": us.scores_for(kind),
             "mtime_ns": mtime_ns}
 
 
@@ -125,10 +177,11 @@ class LibraryApi:
     def forget_recent(self, kind, name):
         """Takes a name off the Recent list. The same payload as get_usage(), with ok = whether it was there."""
         try:
-            _USAGE.load()
-            gone = _USAGE.forget(kind, name)
+            us = usage_store()
+            us.load()
+            gone = us.forget(kind, name)
             if gone:
-                _USAGE.save()
+                us.save()
         except OSError:
             gone = False
         out = _usage_payload(kind)
@@ -153,14 +206,15 @@ class LibraryApi:
         return dict(zip(names, urls))
 
 
-def retarget_ring(renamed: dict) -> tuple:
+def retarget_ring(renamed: dict, profile=None) -> tuple:
     """Rewrites radial.json so the {"tag": key} and {"browser": key} slots named in renamed ({old key: new key})
     use the new key. For the browser window, which holds no menus: Studio does the same inside its editor, where
     Undo can take it back. Returns (items changed, problem or None). Nothing is written when the file is missing,
     cannot be read or is not a JSON object, or holds no matching item. The file as it was is kept as
     radial.json.bak (as Studio's Save does), and the new one is swapped in atomically. The app and Studio notice
-    the change by the file's time."""
-    path = paths.CONFIG_FILE
+    the change by the file's time. profile: the profile whose radial.json is rewritten (default: the one served), so
+    a merge that began in one profile does not land in another."""
+    path = profiles.config_file(profile) if profile else profiles.config_file(_profile())
     try:
         with open(path, "rb") as f:
             old = f.read()
@@ -186,39 +240,39 @@ def retarget_ring(renamed: dict) -> tuple:
     return n, None
 
 
-_STORE = tags.TagStore(radiald.tags_path())
-
-
 class TagApi:
     # --- tags ------------------------------------------------------------------------------------
     @staticmethod
     def _tag_snapshot() -> dict:
-        st = _STORE
+        st = store()
         with st._lock:                                      # one consistent view: counts, items and mtime together
             tag_list = [dict(t, builtin=True) if t["key"] == tags.FAVOURITE else t for t in st.tags()]
             return {"ok": True, "tags": tag_list, "items": st.items(), "palette": list(tags.PALETTE),
                     "mtime_ns": st.mtime, "path": st.path, "error": st.error or None}
 
-    def get_tags(self, since_mtime_ns=None):
-        """All tags with counts, and which tags every tagged item carries. Pass the last mtime_ns to get
-        {"unchanged": true} when nothing changed (the page asks again whenever its window gets focus)."""
-        _STORE.reload_if_changed()
+    def get_tags(self, since_mtime_ns=None, since_path=None):
+        """All tags with counts, and which tags every tagged item carries. Pass the last mtime_ns and path to get
+        {"unchanged": true} when nothing changed (the page asks again whenever its window gets focus). The path
+        matters because two profiles without a tags.json both report a time of 0."""
+        st = store()
+        st.reload_if_changed()
         try:       # the page holds the time as a JS double, which rounds a 1.7e18 ns value: 1 microsecond slack
-            same = since_mtime_ns is not None and abs(int(since_mtime_ns) - _STORE.mtime) <= 1000
+            same = since_mtime_ns is not None and abs(int(since_mtime_ns) - st.mtime) <= 1000
         except (TypeError, ValueError, OverflowError):
             same = False
-        if same and not _STORE.error:
-            return {"unchanged": True, "mtime_ns": _STORE.mtime}
+        if same and (since_path is None or since_path == st.path) and not st.error:
+            return {"unchanged": True, "mtime_ns": st.mtime}
         return self._tag_snapshot()
 
-    def get_tag_uses(self):
-        """How many ring items point at each tag, read from radial.json: {"ok": True, "uses": {tag key: n}}. A Tag
-        slot ({"tag": key}) and a Browser slot ({"browser": key}) each count once. The browser window holds no
-        menus, so its tag manager asks for this to say what deleting a tag touches. A file that cannot be read
-        gives {"ok": False, "uses": {}}."""
+    def get_tag_uses(self, profile=None):
+        """How many ring items point at each tag, read from radial.json of profile (default: the one served):
+        {"ok": True, "uses": {tag key: n}}. A Tag slot ({"tag": key}) and a Browser slot ({"browser": key}) each
+        count once. The browser window holds no menus, so its tag manager asks for this to say what deleting a tag
+        touches. A file that cannot be read gives {"ok": False, "uses": {}}."""
         uses = {}
         try:
-            with open(paths.CONFIG_FILE, encoding="utf-8-sig") as f:
+            with open(profiles.config_file(profile) if profile else profiles.config_file(_profile()),
+                      encoding="utf-8-sig") as f:
                 menus = (json.load(f) or {}).get("menus") or {}
             for m in menus.values():
                 for it in (m.get("items") or []) if isinstance(m, dict) else ():
@@ -237,22 +291,22 @@ class TagApi:
         return out
 
     def create_tag(self, label, color=None):
-        return self._tag_result(_STORE.create_tag(label, color))
+        return self._tag_result(store().create_tag(label, color))
 
     def rename_tag(self, key, label):
-        return self._tag_result(_STORE.rename_tag(key, label))
+        return self._tag_result(store().rename_tag(key, label))
 
     def recolor_tag(self, key, color):
-        return self._tag_result(_STORE.recolor_tag(key, color))
+        return self._tag_result(store().recolor_tag(key, color))
 
     def delete_tag(self, key):
-        return self._tag_result(_STORE.delete_tag(key))
+        return self._tag_result(store().delete_tag(key))
 
     def merge_tags(self, src, dst):
-        return self._tag_result(_STORE.merge_tags(src, dst))
+        return self._tag_result(store().merge_tags(src, dst))
 
     def set_item_tags(self, item_key, tag_keys):
-        return self._tag_result(_STORE.set_tags(item_key, tag_keys))
+        return self._tag_result(store().set_tags(item_key, tag_keys))
 
     def tag_items(self, item_keys, add=None, remove=None):
-        return self._tag_result(_STORE.tag_items(item_keys, add or (), remove or ()))
+        return self._tag_result(store().tag_items(item_keys, add or (), remove or ()))

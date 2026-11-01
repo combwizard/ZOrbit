@@ -9,6 +9,14 @@ All notable changes to this project are listed here. The format follows
 ### Added
 
 - Studio: **Export menu...** and **Import menu...** share one menu and its submenus as a small file, with the tags it uses (#67).
+- Profiles: a whole set of menus, settings, tags and usage per kind of work, switched from Studio's top bar or the
+  tray icon without a restart. New, rename, duplicate, delete, or make one from a settings file (#19).
+
+### Changed
+
+- Your files moved into `%APPDATA%\ZOrbit\profiles\Default\`. The old ones are kept in `%APPDATA%\ZOrbit\pre-profiles\`,
+  which you can delete. `usage.json` is per profile now, inside the profile folder. An app left running from an older
+  version keeps its old menus until it is restarted.
 
 ### Fixed
 

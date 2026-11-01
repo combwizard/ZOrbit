@@ -27,7 +27,7 @@ def main():
         kinds["get_thumbs_" + kind] = a.get_thumbs([it["name"] for it in klib["items"][:30]], 128, kind)
     mock = {
         "get_config": cfg, "get_library": lib, "get_thumbs": a.get_thumbs(names, 128),
-        "get_suggestions": a.get_suggestions(), "get_tags": a.get_tags(), "get_status": a.get_status(), "get_options": a.get_options(),
+        "get_suggestions": a.get_suggestions(), "get_tags": a.get_tags(), "get_profiles": a.get_profiles(), "get_status": a.get_status(), "get_options": a.get_options(),
         "preview_ring": {mid: a.preview_ring(cfg["config"], mid) for mid in cfg["config"]["menus"]},
         "preview_ring_hover0": a.preview_ring(cfg["config"], first, hover=0),
         "preview_tags": a.preview_tags(cfg["config"]),

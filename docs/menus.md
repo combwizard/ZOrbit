@@ -2,7 +2,7 @@
 
 ## Menus
 
-A menu is a named list of items shown as one ring. Menus live in one file, `%APPDATA%\ZOrbit\radial.json`. Each has an id (its key in the file), a title, a list of items, and optionally a hotkey.
+A menu is a named list of items shown as one ring. Menus live in one file, `%APPDATA%\ZOrbit\profiles\<profile>\radial.json`, one per profile; see [Profiles](profiles.md). Each has an id (its key in the file), a title, a list of items, and optionally a hotkey.
 
 - A menu **with a hotkey** can be opened from ZBrush.
 - A menu **without a hotkey** is a submenu: it opens when you pick an item of type `menu` in another ring.

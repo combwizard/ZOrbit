@@ -48,7 +48,8 @@ The **[roadmap board](https://github.com/users/combwizard/projects/2)** shows wh
 - **Starts and stops with ZBrush.** There is nothing to launch by hand.
 - **Safe with your stroke.** In ZBrush 2026 and newer, a pick that arrives mid-stroke waits until you lift the pen. ZBrush 2022 to 2025 cannot wait and apply it at once.
 - **High-DPI and multi-monitor aware.** The ring stays on screen, even at the screen edge.
-- **Plain JSON menus** in `%APPDATA%\ZOrbit\radial.json`, so you can back them up, share them and keep them in version control.
+- **Profiles.** Keep a whole set of menus, settings, tags and usage per kind of work, and switch between them from Studio's top bar or the tray icon without a restart.
+- **Plain JSON menus** in `%APPDATA%\ZOrbit\profiles\<profile>\radial.json`, so you can back them up, share them and keep them in version control.
 
 <p align="center">
   <img src="docs/images/ring.png" alt="Brushes menu with ClayBuildup hovered" width="600">
@@ -77,7 +78,7 @@ A menu can open as a fan: hover its slot and its items spread out beyond it, wit
 
 The first time you open **ZOrbit Studio** it starts on its **Setup** screen. Setup walks through the rest: it finds your ZBrush, tells you whether to restart it, lists each ZBrush 2022 to 2025 with an **Install** button, and has you try the ring once. You can reopen it any time with Alt+5.
 
-The first run puts a starter set of menus in `%APPDATA%\ZOrbit\radial.json`. They use only brushes that come with ZBrush.
+The first run puts a starter set of menus in the **Default** profile, `%APPDATA%\ZOrbit\profiles\Default\radial.json`. They use only brushes that come with ZBrush.
 
 ### Windows says "Windows protected your PC"
 
@@ -101,10 +102,10 @@ The [documentation](https://zorbit.lol/docs/) covers every setting and item type
 ## Upgrading, uninstalling and troubleshooting
 
 - **Upgrading from Radial Menu for ZBrush:** run the new installer over the old one. Your menus and settings are copied over on the first start. See [Upgrading from Radial Menu for ZBrush](https://zorbit.lol/docs/install/#upgrading-from-radial-menu-for-zbrush).
-- **Updating:** run the new installer over the old one. Your menus, settings and tags stay. See [Updating](https://zorbit.lol/docs/install/#updating).
+- **Updating:** run the new installer over the old one. Your menus, settings and tags stay (an update from a version before profiles moves them into the **Default** profile). See [Updating](https://zorbit.lol/docs/install/#updating).
 - **Portable zip:** unzip it somewhere permanent and press **Fix** on Studio's **Setup** screen. See [Portable zip](https://zorbit.lol/docs/install/#portable-zip).
 - **ZBrush 2022 to 2025:** these versions get a ZScript plugin that you install from Studio. See [ZBrush 2022 to 2025](https://zorbit.lol/docs/install/#zbrush-2022-to-2025).
-- **Uninstall:** remove ZOrbit in **Windows Settings > Apps > Installed apps**. The uninstaller also removes the plugin from the ZBrush 2022 to 2025 that Setup lists. See [Uninstall](https://zorbit.lol/docs/install/#uninstall).
+- **Uninstall:** remove ZOrbit in **Windows Settings > Apps > Installed apps**. The uninstaller also removes the plugin from the ZBrush 2022 to 2025 that Setup lists. Your profiles stay. See [Uninstall](https://zorbit.lol/docs/install/#uninstall).
 - **How it works:** a small app draws the ring outside ZBrush, and a plugin inside ZBrush carries out the pick. The app installs a Windows keyboard hook that compares each key press with your hotkeys and acts only when ZBrush is the front window; it does not record, store or send what you type. See [How ZOrbit talks to ZBrush](https://zorbit.lol/docs/bridge/).
 - **Something not working?** See [Troubleshooting](https://zorbit.lol/docs/troubleshooting/).
 

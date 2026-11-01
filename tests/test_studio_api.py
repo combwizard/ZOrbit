@@ -16,7 +16,7 @@ def api(tmp_path, monkeypatch):
     """An Api whose radial.json, studio.json and logs live in tmp_path."""
     cfg = tmp_path / "radial.json"
     cfg.write_bytes(open(paths.DEFAULT_MENUS, "rb").read())
-    monkeypatch.setattr(studio, "CONFIG_FILE", str(cfg))
+    monkeypatch.setenv("ZORBIT_CONFIG_FILE", str(cfg))      # profiles off: one pinned file
     monkeypatch.setattr(studio, "STUDIO_FILE", str(tmp_path / "studio.json"))
     monkeypatch.setattr(studio, "DATA_DIR", str(tmp_path))
     monkeypatch.setattr(studio, "_STARTUP_LOG", str(tmp_path / "studio.log"))

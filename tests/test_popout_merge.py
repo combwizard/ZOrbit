@@ -5,9 +5,7 @@ import json
 import pytest
 
 import config as C
-import paths
 import popout
-import tags
 import webapi
 
 
@@ -44,12 +42,13 @@ def test_retag_with_nothing_to_do_changes_nothing():
 def merge_env(tmp_path, monkeypatch):
     """A PopoutApi over a temporary tags.json and radial.json."""
     cfg = tmp_path / "radial.json"
-    monkeypatch.setattr(paths, "CONFIG_FILE", str(cfg))
+    monkeypatch.setenv("ZORBIT_CONFIG_FILE", str(cfg))
     raw = {"tags": {k: {"label": k.title(), "color": "#F86B33"} for k in ("blocking", "detailing")},
            "items": {"brush:claybuildup": ["blocking"]}}
     tfile = tmp_path / "tags.json"
     tfile.write_text(json.dumps(raw), encoding="utf-8")
-    monkeypatch.setattr(webapi, "_STORE", tags.TagStore(str(tfile)).load())
+    monkeypatch.setenv("ZORBIT_TAGS_FILE", str(tfile))
+    monkeypatch.setattr(webapi, "_store", None)       # the accessor makes a fresh store at tfile
     return popout.PopoutApi(None), cfg
 
 

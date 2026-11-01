@@ -1,15 +1,19 @@
 """Where things live, both in a source checkout and in the installed (PyInstaller) build.
 
-  %APPDATA%\\ZOrbit\\radial.json      the user's menus and settings (created from default_menus.json)
-  %APPDATA%\\ZOrbit\\tags.json        the user's brush tags
-  %APPDATA%\\ZOrbit\\popout.json      window placement of the browser popout
-  %APPDATA%\\ZOrbit\\launch.json      how to start the app, the Studio and the browser popout
-                                    (read by the ZBrush bridge)
-  %LOCALAPPDATA%\\ZOrbit\\            logs, thumbnail cache, request/listener exchange with ZBrush,
-                                    activity.json (what the app last did with a ring, for the Setup screen)
-  bridge_dir()                      the folder of zorbit_bridge.py that ZBRUSH_PLUGIN_PATH points at
+  %APPDATA%\\ZOrbit\\profile.json              which profile is active: {"active": "Default"}
+  %APPDATA%\\ZOrbit\\profiles\\<name>\\          one profile: radial.json (the menus and settings, created from
+                                              default_menus.json), tags.json (the brush tags), usage.json
+                                              (what was picked), and the .bak, .broken and .bad copies of them
+  %APPDATA%\\ZOrbit\\pre-profiles\\             the files as they were before profiles existed (safe to delete)
+  %APPDATA%\\ZOrbit\\studio.json, popout.json   per PC: Studio settings and the window placement of the popout
+  %APPDATA%\\ZOrbit\\launch.json                how to start the app, the Studio and the browser popout
+                                              (read by the ZBrush bridge)
+  %LOCALAPPDATA%\\ZOrbit\\                      logs, thumbnail cache, request/listener exchange with ZBrush,
+                                              activity.json (what the app last did with a ring, for the Setup screen)
+  bridge_dir()                                the folder of zorbit_bridge.py that ZBRUSH_PLUGIN_PATH points at
 
-ZOrbit used to be called Radial Menu and kept these in RadialMenu folders; ensure_config() copies them over.
+profiles.py owns the profile folders; ensure_config() hands over to it. ZOrbit used to be called Radial Menu and kept
+its files in RadialMenu folders; the first run copies them over.
 """
 import json
 import os
@@ -32,21 +36,22 @@ BROWSER_ICON = (os.path.join(RESOURCE_DIR, "browser.ico") if FROZEN
 
 DATA_DIR = os.path.join(os.environ.get("LOCALAPPDATA") or os.path.expanduser("~"), "ZOrbit")
 CONFIG_DIR = os.path.join(os.environ.get("APPDATA") or os.path.expanduser("~"), "ZOrbit")
-CONFIG_FILE = os.path.join(CONFIG_DIR, "radial.json")
 LAUNCH_FILE = os.path.join(CONFIG_DIR, "launch.json")
-TAGS_FILE = os.path.join(CONFIG_DIR, "tags.json")
 POPOUT_FILE = os.path.join(CONFIG_DIR, "popout.json")
 
-# What carries over from a Radial Menu install. launch.json is left out (rewritten on every start), and so are
-# logs and the thumbnail cache.
-_LEGACY = ((os.path.join(os.path.dirname(CONFIG_DIR), "RadialMenu"), CONFIG_DIR,
-            ("radial.json", "radial.json.bak", "studio.json")),
-           (os.path.join(os.path.dirname(DATA_DIR), "RadialMenu"), DATA_DIR, ("usage.json",)))
+
+def legacy_sources() -> tuple:
+    """What carries over from a Radial Menu install: ((its folder, our folder, file names), ...). launch.json is left
+    out (rewritten on every start), and so are logs and the thumbnail cache. Worked out on each call from
+    CONFIG_DIR and DATA_DIR, so a test that points those elsewhere gets its own answer."""
+    return ((os.path.join(os.path.dirname(CONFIG_DIR), "RadialMenu"), CONFIG_DIR,
+             ("radial.json", "radial.json.bak", "studio.json")),
+            (os.path.join(os.path.dirname(DATA_DIR), "RadialMenu"), DATA_DIR, ("usage.json",)))
 
 
 def _migrate_legacy() -> None:
     """Copies the user's files from the Radial Menu folders. The old folders are left as they were."""
-    for old, new, names in _LEGACY:
+    for old, new, names in legacy_sources():
         for name in names:
             src, dst = os.path.join(old, name), os.path.join(new, name)
             if os.path.isfile(src) and not os.path.exists(dst):
@@ -58,15 +63,10 @@ def _migrate_legacy() -> None:
 
 
 def ensure_config() -> str:
-    """The user's config path; on first run copied from a Radial Menu install, else from the shipped defaults."""
-    if not os.path.exists(CONFIG_FILE):
-        _migrate_legacy()
-    if not os.path.exists(CONFIG_FILE):
-        os.makedirs(CONFIG_DIR, exist_ok=True)
-        import fsutil                     # here, not at the top: paths is imported before anything else
-        with open(DEFAULT_MENUS, "rb") as f:
-            fsutil.write_atomic(CONFIG_FILE, f.read())   # the app and Studio starting together never read half a file
-    return CONFIG_FILE
+    """The active profile's config path. On first run the profile is built from the root files, a Radial Menu
+    install or the shipped defaults (profiles.ensure()); an OSError from that is not caught here."""
+    import profiles                       # here, not at the top: paths is imported before anything else
+    return profiles.ensure()
 
 
 def bridge_dir() -> str | None:

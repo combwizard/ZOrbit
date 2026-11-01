@@ -10,7 +10,8 @@ loop does), and create()/destroy() must be called from it.
     ...
     tray.destroy()
 
-on_command(name) is called with "browser", "studio", "reload", "logs" or "quit".
+on_command(name) is called with "browser", "studio", "reload", "logs", "quit" or "profile:<name>". The Profile
+submenu is built from profile_source, a callable returning (names, active name); without one there is no submenu.
 """
 import ctypes
 import ctypes.wintypes as w
@@ -93,7 +94,7 @@ WS_POPUP, WS_EX_TOOLWINDOW = 0x80000000, 0x80
 IMAGE_ICON, LR_LOADFROMFILE = 1, 0x10
 SM_CXSMICON = 49
 IDI_APPLICATION = 32512
-MF_STRING, MF_SEPARATOR = 0x0, 0x800
+MF_STRING, MF_SEPARATOR, MF_POPUP, MF_CHECKED = 0x0, 0x800, 0x10, 0x8
 TPM_RIGHTBUTTON, TPM_NONOTIFY, TPM_RETURNCMD = 0x2, 0x80, 0x100
 ERROR_CLASS_ALREADY_EXISTS = 1410
 TIMER_RETRY = 1
@@ -105,6 +106,11 @@ MENU_ITEMS = [(CMD_BROWSER, "Browser", "browser"), (CMD_STUDIO, "Open Studio", "
               (CMD_RELOAD, "Reload menus", "reload"), (CMD_LOGS, "Open logs folder", "logs"), None,
               (CMD_QUIT, "Quit ZOrbit", "quit")]
 _CMD_NAMES = {i[0]: i[2] for i in MENU_ITEMS if i}
+CMD_MANAGE = 6                              # "Manage profiles...": appended with the Profile submenu, opens the Studio
+_CMD_NAMES[CMD_MANAGE] = "studio"
+CMD_PROFILE_BASE = 100                      # the profile at index i in the submenu has the command id 100 + i
+PROFILE_MAX = 30                            # a longer list is cut; Studio has the rest
+PROFILE_TEXT_MAX = 40
 
 
 def _signed16(v: int) -> int:
@@ -112,12 +118,34 @@ def _signed16(v: int) -> int:
     return v - 0x10000 if v & 0x8000 else v
 
 
+def listed(names, active):
+    """The profiles the submenu shows: at most PROFILE_MAX, and the active one always (it takes the last place)."""
+    names = list(names)
+    shown = names[:PROFILE_MAX]
+    if active in names and active not in shown:
+        shown[-1] = active
+    return shown
+
+
+def menu_entries(names, active):
+    """(command id, text, checked) for each profile in the submenu. A name is shown with its & doubled (Windows reads
+    a single one as a mnemonic) and cut when long."""
+    out = []
+    for i, name in enumerate(listed(names, active)):
+        text = name if len(name) <= PROFILE_TEXT_MAX else name[:PROFILE_TEXT_MAX - 3] + "..."
+        out.append((CMD_PROFILE_BASE + i, text.replace("&", "&&"), name == active))
+    return out
+
+
 class Tray:
-    def __init__(self, app_title, icon_path, on_command, log=None):
+    def __init__(self, app_title, icon_path, on_command, log=None, profile_source=None):
         self.title = str(app_title)
         self.tip = self.title               # the tooltip now; set_tip() changes it
         self.icon_path = icon_path
         self.on_command = on_command
+        self.profile = None                 # the active profile, shown in the tooltip
+        self._profile_source = profile_source
+        self._profile_ids = {}              # command id -> profile name, rebuilt with every menu
         self._log = log or (lambda msg: None)
         self.hwnd = None
         self.added = False                  # the shell currently shows our icon
@@ -223,9 +251,18 @@ class Tray:
             _KillTimer(self.hwnd, TIMER_RETRY)
         return self.added
 
+    def _default_tip(self) -> str:
+        return f"{self.title}: {self.profile}" if self.profile else self.title
+
+    def set_profile(self, name) -> None:
+        """Notes the active profile and shows it in the tooltip."""
+        self.profile = name
+        self.set_tip(None)
+
     def set_tip(self, text=None) -> bool:
-        """Changes the tooltip (None restores the title). Returns whether the shell took it."""
-        tip = self.title if text is None else str(text)
+        """Changes the tooltip (None restores the default: the title and the profile). Returns whether the shell took
+        it."""
+        tip = self._default_tip() if text is None else str(text)
         if tip == self.tip:
             return True
         self.tip = tip                      # also what a re-added icon (Explorer restarted) shows
@@ -305,16 +342,41 @@ class Tray:
         if not menu:
             raise ctypes.WinError(ctypes.get_last_error())
         try:
+            self._profile_ids = {}
             for item in MENU_ITEMS:
                 if item is None:
                     _AppendMenuW(menu, MF_SEPARATOR, 0, None)
                 else:
                     _AppendMenuW(menu, MF_STRING, item[0], item[1])
+                if item and item[0] == CMD_RELOAD:
+                    self._add_profiles(menu)
             _SetMenuDefaultItem(menu, CMD_STUDIO, False)     # bold
         except Exception:
             _DestroyMenu(menu)
             raise
         return menu
+
+    def _add_profiles(self, menu):
+        """The Profile submenu and Manage profiles... after Reload menus. Left out when there is no profile_source or
+        it fails; DestroyMenu on the parent frees the submenu."""
+        if self._profile_source is None:
+            return
+        try:
+            names, active = self._profile_source()
+            entries = menu_entries(names, active)
+        except Exception as e:
+            self._log(f"tray: profile list failed: {e!r}")
+            return
+        if not entries:
+            return
+        sub = _CreatePopupMenu()
+        if not sub:
+            return
+        for (cmd_id, text, checked), name in zip(entries, listed(names, active)):
+            _AppendMenuW(sub, MF_STRING | (MF_CHECKED if checked else 0), cmd_id, text)
+            self._profile_ids[cmd_id] = name
+        _AppendMenuW(menu, MF_POPUP | MF_STRING, int(sub), "Profile")      # the child handle goes in the id slot
+        _AppendMenuW(menu, MF_STRING, CMD_MANAGE, "Manage profiles...")
 
     def show_menu(self, x, y):
         if self._menu_open or not self.hwnd:
@@ -330,5 +392,7 @@ class Tray:
             _DestroyMenu(menu)
             self._menu_open = False
         name = _CMD_NAMES.get(cmd)
+        if name is None and cmd in self._profile_ids:
+            name = "profile:" + self._profile_ids[cmd]
         if name:
             self._command(name)

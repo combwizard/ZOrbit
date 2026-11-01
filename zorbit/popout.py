@@ -49,6 +49,7 @@ sys.path.insert(0, HERE)
 import config as C          # noqa: E402
 import fsutil               # noqa: E402
 import paths                # noqa: E402
+import profiles             # noqa: E402
 import radiald              # noqa: E402
 import webapi               # noqa: E402
 import webview2              # noqa: E402
@@ -204,10 +205,14 @@ class PopoutApi(webapi.LibraryApi, webapi.TagApi):
         """Merges the tags, then points the ring items that used src at dst in radial.json (this window holds no
         menus to do it in, as Studio does). The answer adds ring_items (how many changed) and, when radial.json
         could not be updated, ring_error."""
+        prof = profiles.active() if profiles.enabled() else None     # None: a pinned menus file (tests, --check)
         res = super().merge_tags(src, dst)
-        if res.get("ok"):
+        if res.get("ok") and profiles.tags_file(prof) != webapi.store().path:
+            res["ring_items"] = 0          # switched between the two steps: radial.json is not the one merged
+            res["ring_error"] = "The profile changed during the merge, so the ring items were not updated."
+        elif res.get("ok"):
             try:
-                n, problem = webapi.retarget_ring({src: dst})
+                n, problem = webapi.retarget_ring({src: dst}, profile=prof)
             except Exception as e:          # the merge is done: never turn it into a failure
                 n, problem = 0, f"radial.json could not be updated: {e}"
                 _log(f"retarget_ring failed: {e!r}")
@@ -227,7 +232,8 @@ class PopoutApi(webapi.LibraryApi, webapi.TagApi):
         return {"on_top": self._pop.on_top, "size": size if isinstance(size, int) else None, "side": side,
                 "column": st.get("column") != "hidden",
                 "tag": self._pop.start_tag,
-                "kind": kind if kind in C.ASSET_KINDS else "brush", "tags_path": radiald.tags_path()}
+                "kind": kind if kind in C.ASSET_KINDS else "brush", "tags_path": profiles.tags_file(),
+                "profile": profiles.active()}
 
     def popout_pick(self, name, kind="brush"):
         """Selects a brush, alpha, material or texture in ZBrush: hands the focus back to ZBrush, then asks the
@@ -767,6 +773,10 @@ def _forward(opts) -> int:
 def main(args) -> int:
     opts = _parse(args)
     _log(f"Popout {paths.VERSION} main(): {args}")
+    try:
+        profiles.ensure()                                # the first profile, when this is the first process to start
+    except OSError as e:                                 # the window still opens: tags and usage just read nothing
+        _log(f"profiles could not be set up: {e!r}")
     mutex = kernel32.CreateMutexW(None, False, MUTEX)
     if ctypes.get_last_error() == W.ERROR_ALREADY_EXISTS:
         return _forward(opts)

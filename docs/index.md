@@ -21,6 +21,7 @@ Then the pages on using it:
 - [Browser window](browser.md): the window that shows everything ZBrush can load, plus Favourites and Recent.
 - [Hotkeys and picking](hotkeys.md): hotkey syntax, hold and release, tap and click, flicks.
 - [Appearance](appearance.md): ring size, colours, tag colours and the open animations.
+- [Profiles](profiles.md): keep several sets of menus, settings, tags and usage, and switch between them without a restart.
 - [Files, backups and logs](files.md): import and export, and where everything is stored.
 
 If something does not work, start with [Troubleshooting](troubleshooting.md). [How ZOrbit talks to ZBrush](bridge.md) explains how a pick reaches ZBrush, and [Build from source](building.md) is for making the installer yourself.

@@ -52,7 +52,7 @@ ring or from the browser, newest first. Each tab keeps the latest 24, and the fi
 an item out of Recent, right-click it in the Recent view and choose **Remove from Recent**. This does not change a
 brush's standing for auto slots.
 
-Recent is stored in `%LOCALAPPDATA%\ZOrbit\usage.json`, under `"picks"`, next to the brush usage that fills the auto
+Recent is stored in the `usage.json` of the [profile](profiles.md) you are using (`%APPDATA%\ZOrbit\profiles\<profile>\usage.json`), under `"picks"`, next to the brush usage that fills the auto
 slots (see [Files and logs](files.md#files-and-logs)).
 
 ## Picks, focus and ZBrush 2022 to 2025
