@@ -603,6 +603,31 @@ kbd {
   box-shadow: 0 24px 60px rgba(0, 0, 0, .45), 0 0 60px rgba(248, 107, 51, .07);
 }
 .feature-media img { width: 100%; }
+/* Theme demo: a Dark / Light switch and a picture that crossfades between the two. */
+.theme-switch { display: flex; align-items: center; gap: 12px; margin-top: 16px; }
+.theme-switch-l { font: 700 11px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--sub); }
+.theme-seg {
+  display: inline-flex; gap: 2px; padding: 3px; border-radius: 99px;
+  background: rgba(26, 27, 30, .7); border: 1px solid var(--line2);
+}
+.theme-seg button {
+  height: 28px; padding: 0 14px; border-radius: 99px;
+  background: transparent; border: 1px solid transparent; color: var(--sub);
+  font-size: 12px; font-weight: 600; cursor: pointer;
+  transition: border-color .12s, color .12s, background .12s;
+}
+.theme-seg button:hover { color: var(--text); }
+.theme-seg button[aria-pressed="true"] {
+  color: var(--accent); border-color: rgba(248, 107, 51, .5); background: var(--accent-wash);
+}
+.theme-note { color: var(--sub); font-size: 13.5px; margin-top: 12px; }
+.theme-swap { display: grid; }
+.theme-swap > img { grid-area: 1 / 1; }
+.theme-swap > .theme-alt { opacity: 0; transition: opacity .35s ease; }
+html[data-shots="light"] .theme-swap > .theme-alt { opacity: 1; }
+@media (prefers-reduced-motion: reduce) {
+  .theme-swap > .theme-alt { transition: none; }
+}
 .tilt {
   transform: perspective(900px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
   transition: transform .5s var(--ease), box-shadow .3s, border-color .3s;

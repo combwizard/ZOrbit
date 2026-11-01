@@ -371,8 +371,57 @@
     groups.forEach(function (g) { io.observe(g); });
   }
 
+  // Theme demo: the Dark / Light switches flip the ring and Studio pictures together. The light picture is a
+  // second image stacked over the dark one and faded in by CSS (html[data-shots]); the choice is remembered.
+  var SHOTS_KEY = 'zorbit.shots.v1';
+
+  function themeDemo() {
+    var imgs = document.querySelectorAll('img[data-light]');
+    var buttons = document.querySelectorAll('[data-theme-set]');
+    if (!imgs.length || !buttons.length) return;
+
+    var layers = [];
+    imgs.forEach(function (base) {
+      var wrap = document.createElement('span');
+      wrap.className = 'theme-swap';
+      base.parentNode.insertBefore(wrap, base);
+      wrap.appendChild(base);
+      var top = base.cloneNode(false);
+      top.removeAttribute('data-light');
+      top.removeAttribute('data-light-alt');
+      top.className = 'theme-alt';
+      top.src = base.dataset.light;
+      wrap.appendChild(top);
+      layers.push({ base: base, top: top, darkAlt: base.alt, lightAlt: base.dataset.lightAlt || base.alt });
+    });
+
+    function apply(mode) {
+      var light = mode === 'light';
+      document.documentElement.setAttribute('data-shots', light ? 'light' : 'dark');
+      layers.forEach(function (l) {
+        l.base.alt = light ? '' : l.darkAlt;
+        l.top.alt = light ? l.lightAlt : '';
+        if (light) { l.base.setAttribute('aria-hidden', 'true'); l.top.removeAttribute('aria-hidden'); }
+        else { l.top.setAttribute('aria-hidden', 'true'); l.base.removeAttribute('aria-hidden'); }
+      });
+      buttons.forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.themeSet === (light ? 'light' : 'dark'))); });
+    }
+
+    var saved = null;
+    try { saved = localStorage.getItem(SHOTS_KEY); } catch (e) {}
+    apply(saved === 'light' ? 'light' : 'dark');
+
+    buttons.forEach(function (b) {
+      b.addEventListener('click', function () {
+        apply(b.dataset.themeSet);
+        try { localStorage.setItem(SHOTS_KEY, b.dataset.themeSet); } catch (e) {}
+      });
+    });
+  }
+
   function boot() {
     faq();
+    themeDemo();
     enhanceDownloads();
     reviewWall();
     reveal();
