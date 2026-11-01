@@ -555,7 +555,8 @@ body.dragging, body.dragging * { cursor: grabbing !important; }
 .stage.busy .stage-busy { opacity: 1; animation: pulse .9s infinite; }
 
 .items-panel { flex: 1 1 36%; min-height: 160px; display: flex; flex-direction: column; background: var(--bg2); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
-.items-note { flex: none; display: flex; align-items: center; gap: 8px; padding: 7px 14px; font-size: 12px; line-height: 1.35; color: var(--amber); background: color-mix(in srgb, var(--amber) 7%, transparent); border-bottom: 1px solid color-mix(in srgb, var(--amber) 20%, transparent); }
+.items-note { flex: none; display: flex; align-items: center; gap: 8px; padding: 7px 14px; font-size: 12px; line-height: 1.35; color: var(--sub); background: color-mix(in srgb, var(--sub) 7%, transparent); border-bottom: 1px solid var(--line); }
+.items-note.warn { color: var(--amber); background: color-mix(in srgb, var(--amber) 7%, transparent); border-bottom-color: color-mix(in srgb, var(--amber) 20%, transparent); }
 .items-note .ico { flex: none; }
 .mode-note { flex: none; display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; margin: 0 0 14px; padding: 7px 14px; font-size: 12px; line-height: 1.35; color: var(--amber); background: color-mix(in srgb, var(--amber) 7%, transparent); border-bottom: 1px solid color-mix(in srgb, var(--amber) 20%, transparent); }
 .locked-line { font-size: 13px; color: var(--text); padding: 6px 0; overflow-wrap: anywhere; }

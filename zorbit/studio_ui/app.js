@@ -1613,9 +1613,10 @@ function buildMenusScreen(root) {
     if (!back && S.cameFrom) S.cameFrom = null;
     itemsHead.replaceChildren(...[back ? h('button', { class: 'chip back', type: 'button', title: 'Back to ' + (back.title || S.cameFrom.menuId), onclick: goBack }, icon('chevL', 12), h('span', { class: 'back-txt' }, 'Back to ' + (back.title || S.cameFrom.menuId))) : null,
       h('span', { class: 'micro' }, 'Items'), h('span', { class: 'count' }, m ? String(m.items.length) : '0'), h('span', { class: 'spacer' }), m ? addBtn : null].filter(Boolean));
-    const crowded = !!m && m.items.length > 12;
-    itemsNote.hidden = !crowded;
-    if (crowded) itemsNote.replaceChildren(icon('alert', 13), 'Rings work best with 4 to 12 items. With more, the ring grows so slots never overlap, and the far ones get harder to reach. Split it into submenus to keep it small.');
+    const full = ringFull(m ? m.items.length : 0);
+    itemsNote.hidden = !full;
+    itemsNote.classList.toggle('warn', !!full && full.tooBig);
+    if (full) itemsNote.replaceChildren(icon('alert', 13), full.text);
     renderItemList(itemsEl, S.menuId, false);
   };
 
@@ -1749,6 +1750,25 @@ function renderItemList(box, menuId, compact) {
 /* ---------- the ring stage (live preview with overlay) */
 // Widest angle (degrees) one slot answers to. A copy of MAX_SECTOR in zorbit/ring.py (Ring._index_at): keep the two in step.
 const MAX_SECTOR = 90;
+// Least distance between neighbouring slot centres, in slot widths. A copy of SLOT_GAP in zorbit/ring.py (Ring._geometry): keep the two in step.
+const SLOT_GAP = 1.25;
+/* Is a ring of n slots full at the radius and slot size in use? ring.py grows the radius until neighbours are SLOT_GAP slot widths
+   apart, so a ring is full when it has to. Returns null when n fits, else { text, tooBig } for the note above the item list;
+   tooBig is true when the grown ring's window would not fit the screen (ring.py pushes it against the edges then). */
+function ringFull(n) {
+  if (n < 2) return null;
+  const slot = ringNum('slot'), radius = ringNum('radius');
+  const need = SLOT_GAP * slot / (2 * Math.sin(Math.PI / n));                       // the radius ring.py grows to
+  if (!(need > radius + 0.5)) return null;
+  const x = SLOT_GAP * slot / (2 * radius);
+  const fit = x < 1 ? Math.max(1, Math.floor(Math.PI / Math.asin(x) + 1e-6)) : 1;   // how many slots fit at this radius
+  const label = isFull() ? 'Ring radius' : 'Ring size';
+  const tooBig = 2 * (need + slot * 0.62 + 34) > Math.min(screen.availWidth || Infinity, screen.availHeight || Infinity);
+  const text = 'At a radius of ' + Math.round(radius) + ' px this ring holds ' + fit + (fit === 1 ? ' item' : ' items') + '. With ' + n + ' it grows to ' + Math.round(need) + ' px. '
+    + (tooBig ? 'It is too big for this screen, so it is pushed against the edges. ' : '')
+    + (isFull() ? 'Raise ' + label + ', lower Slot size or move some items into a submenu.' : 'Raise ' + label + ' or move some items into a submenu.');
+  return { text, tooBig };
+}
 function buildStage() {
   const img = h('img', { class: 'ring-img pending', alt: 'Ring preview', draggable: false });     // hidden until the first image has decoded, so no broken-image icon
   const ov = h('div', { class: 'ring-ov' });

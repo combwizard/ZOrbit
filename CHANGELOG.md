@@ -15,6 +15,11 @@ All notable changes to this project are listed here. The format follows
 - **Glow** in the item inspector gives one slot its own glow colour, saved as `glow` in `radial.json`. It wins over the
   slot's tag colour for the hover glow, the hover rim and the idle halo only (#33).
 
+### Changed
+
+- Studio's note above the item list no longer waits for 12 items. It shows when the ring is full at the current radius,
+  says how many items fit and how big the ring grows, and warns when it is too big for the screen (#33).
+
 ## [0.14.0] - 2026-11-01
 
 ZOrbit now has an experimental **Theme** setting for the ring, the browser and Studio: Dark, Light, Follow Windows, and
