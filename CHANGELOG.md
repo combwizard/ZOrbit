@@ -39,6 +39,7 @@ All notable changes to this project are listed here. The format follows
 - Ring size, labels, colours and tag colours moved from **Settings** to the **Look** screen. **Library**, **Settings**,
   **Status** and **Setup** move to **Alt+3** to **Alt+6** (#33).
 - **What's new** shows a link in the release notes as its text, not as `[text](address)`.
+- The **Revert** confirmation lists the unsaved changes it would discard.
 - The note above the item list shows when a ring is full at its radius, not after 12 items. It says how many items fit
   and what the ring does then (grows to a radius, a second ring, or a More slot), warns when it is too big for the
   screen, and has a **Change in Look** link (#33).

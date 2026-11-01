@@ -5591,7 +5591,8 @@ async function doSave({ force = false, allowUnusable = false } = {}) {
 }
 async function revert() {
   if (!dirtyNow()) return;
-  const ok = await modal({ title: 'Revert changes', body: h('p', null, 'Discard all unsaved changes and go back to the last saved version?'), actions: [{ text: 'Keep editing', value: false, focus: true }, { text: 'Revert', kind: 'danger', value: true }] });
+  const body = unsavedBody('', n => (n ? `These ${n === 1 ? 'change is' : n + ' changes are'} discarded` : 'Your unsaved changes are discarded') + ' and Studio goes back to the last saved version.');
+  const ok = await modal({ title: 'Revert changes', body, actions: [{ text: 'Keep editing', value: false, focus: true }, { text: 'Revert', kind: 'danger', value: true }] });
   if (!ok) return;
   S.cfg = JSON.parse(S.savedStr);
   if (!hasMenu(S.menuId)) S.menuId = Object.keys(S.cfg.menus)[0] || null;
@@ -5688,12 +5689,13 @@ function describeChanges() {
   return groups;
 }
 
-/* The body of the dialogs that ask about unsaved changes: how many, and what they are. `doing` completes "... without saving loses them". */
-function unsavedBody(doing) {
+/* The body of the dialogs that ask about unsaved changes: how many, and what they are. `doing` completes "... without saving loses them".
+   With `intro` the first line is that text instead (Revert says it discards them, so "without saving" would be wrong). */
+function unsavedBody(doing, intro) {
   const groups = describeChanges();
   const count = groups.reduce((n, g) => n + g.lines.length, 0);
   return h('div', { class: 'changes' },
-    h('p', null, count ? `You have ${count} unsaved change${count === 1 ? '' : 's'}. ${doing} without saving loses ${count === 1 ? 'it' : 'them'}.` : `You have unsaved changes. ${doing} without saving loses them.`),
+    h('p', null, intro ? intro(count) : count ? `You have ${count} unsaved change${count === 1 ? '' : 's'}. ${doing} without saving loses ${count === 1 ? 'it' : 'them'}.` : `You have unsaved changes. ${doing} without saving loses them.`),
     h('div', { class: 'changes-list' }, groups.map(g => h('div', { class: 'chg-group' },
       h('div', { class: 'micro' }, g.area),
       h('ul', null, g.lines.map(l => h('li', null, l)))))));
