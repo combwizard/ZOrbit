@@ -26,6 +26,9 @@ All notable changes to this project are listed here. The format follows
 
 ### Changed
 
+- Studio has a **Look** screen (**Alt+2**) for how the ring looks: size, slot shape, hub, labels, colours and tag
+  colours moved there from **Settings**. A badge on each setting says whether it is the default, comes from the
+  theme, or is your own. **Library**, **Settings**, **Status** and **Setup** move to **Alt+3** to **Alt+6** (#33).
 - **What's new** shows a link in the release notes as its text, not as `[text](address)`.
 - Studio's note above the item list no longer waits for 12 items. It shows when the ring is full at the current radius,
   says how many items fit and how big the ring grows, and warns when it is too big for the screen (#33).
