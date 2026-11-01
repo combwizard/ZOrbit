@@ -66,6 +66,7 @@ STATE_FILE = os.environ.get("ZORBIT_POPOUT_FILE") or paths.POPOUT_FILE      # th
 APP_CLASS = os.environ.get("ZORBIT_POPOUT_APP_CLASS") or "ZOrbitControl"    # ... and so is this one
 START_SIZE = (780, 560)            # logical pixels, until the user has resized it
 MIN_SIZE = (560, 380)
+THEME_POLL_S = 0.5                 # how often a visible window looks for a new theme (a few hundred bytes read)
 POLL_S = 3.0                       # --managed: how often to look for the app, and
 POLL_MISSES = 2                    # ... how many misses in a row mean it has quit
 WM_APP_STOP = W.WM_APP + 1         # control window: leave the message loop
@@ -470,8 +471,26 @@ class Popout:
                 self.request_show(pend[0], pend[1], False, pend[2])
             if self.managed:
                 threading.Thread(target=self._watch_app, daemon=True, name="popout-managed").start()
+            threading.Thread(target=self._watch_theme, daemon=True, name="popout-theme").start()
         except Exception as e:
             _log(f"worker failed: {e!r}")
+
+    def _watch_theme(self):
+        """While the window is up, a theme picked in Studio (or Windows' colour mode, or a new stored ZBrush scheme)
+        reaches it within THEME_POLL_S, so Studio's Theme card can be tried with the browser open beside it."""
+        while not self.quitting:
+            time.sleep(THEME_POLL_S)
+            try:
+                self.theme_tick()
+            except Exception as e:                 # never let a bad read end the watch
+                _log(f"theme check failed: {e!r}")
+
+    def theme_tick(self):
+        """One look at the theme: the same sync show() does, for a visible window only (a hidden one is synced when
+        it is shown)."""
+        with self._lock:
+            if self.ready and not self.quitting and self.visible():
+                self._sync_theme()
 
     def _watch_app(self):
         """--managed: the app owns us; when its control window has been gone for two looks in a row it has quit."""
@@ -597,9 +616,9 @@ class Popout:
             _log(f"frame theme failed: {e!r}")
 
     def _sync_theme(self):
-        """The theme may have changed while the window was hidden (Studio's setting, or Windows' colour mode under
-        Follow Windows): when it differs from what the page was last given, set the frame and tell the page.
-        Called by show() with the lock held."""
+        """The theme may have changed (Studio's setting, Windows' colour mode under Follow Windows, a new stored
+        ZBrush scheme under Match ZBrush): when it differs from what the page was last given, set the frame and tell
+        the page. Called with the lock held, by show() and, while the window is up, by theme_tick()."""
         now = (theme.read_setting(), theme.signature())   # a new stored ZBrush scheme changes the digest, not the name
         if now == self._theme_seen:
             return

@@ -41,7 +41,7 @@ The **Theme** card is at the top of **Settings**, in Simple and Full mode. It ha
 
 ![The Theme card on Settings: Dark, Light, Follow Windows and Match ZBrush, with Match ZBrush picked and the ZBrush version it reads shown under it](images/settings-theme.png)
 
-The theme applies to Studio, the browser and the ring. It belongs to the PC, not to a profile: it is kept as `theme` in `studio.json` (`dark`, `light`, `system` or `zbrush`), not in `radial.json`, so it is not part of an [export](files.md#import-and-export). The [browser](browser.md) reads it when it is shown. The plain colour Windows shows for a moment while Studio or the browser is being resized is the one the window started with; it changes when the window is next opened.
+The theme applies to Studio, the browser and the ring. It belongs to the PC, not to a profile: it is kept as `theme` in `studio.json` (`dark`, `light`, `system` or `zbrush`), not in `radial.json`, so it is not part of an [export](files.md#import-and-export). An open [browser](browser.md) changes with it within about half a second. The plain colour Windows shows for a moment while Studio or the browser is being resized is the one the window started with; it changes when the window is next opened.
 
 ![The Brushes ring in the Light theme, over a light grey background: pale slots with dark labels on white pills](images/ring-light.png)
 
@@ -68,7 +68,7 @@ If ZBrush is running, ZOrbit uses that version. Otherwise it uses the newest ins
 
 The rest of the look (the label pill, the hints, and everything the scheme does not give) comes from Dark or Light, whichever is closer to ZBrush's Main colour. Any colour that would be hard to read on what it sits on is replaced by the Dark or Light one. A colour you set under **Colours** still wins, as with the other themes.
 
-After a new **Store Config** the ring follows within about half a second. Studio and the browser follow when their window next gets the focus, or when the browser is next shown.
+After a new **Store Config** the ring and an open browser follow within about half a second, and Studio when its window next gets the focus.
 
 If ZOrbit finds no stored scheme, it uses Dark and the card says so. See [Match ZBrush shows the Dark colours](troubleshooting.md#match-zbrush-shows-the-dark-colours).
 

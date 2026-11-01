@@ -83,6 +83,29 @@ def test_sync_tells_the_page_and_the_frame_when_it_changed(monkeypatch, tmp_path
     assert len(pop.window.js) == 1 and len(frames) == 1
 
 
+def test_a_visible_window_takes_a_theme_picked_in_studio_on_the_next_tick(monkeypatch, tmp_path, frames):
+    pop = _pop(monkeypatch, tmp_path)
+    pop.ready = True
+    monkeypatch.setattr(pop, "visible", lambda: True)
+    pop._theme_seen = ("dark", ("dark", ""))
+    _set(monkeypatch, "light", "light")                  # picked on Studio's Theme card with the browser open
+    pop.theme_tick()
+    assert len(pop.window.js) == 1 and _arg(pop.window.js[0])["effective"] == "light"
+    pop.theme_tick()                                     # nothing new: nothing sent
+    assert len(pop.window.js) == 1
+
+
+@pytest.mark.parametrize("ready, visible, quitting", [(False, True, False), (True, False, False), (True, True, True)])
+def test_the_tick_leaves_a_hidden_unready_or_closing_window_alone(monkeypatch, tmp_path, frames, ready, visible, quitting):
+    pop = _pop(monkeypatch, tmp_path)
+    pop.ready, pop.quitting = ready, quitting
+    monkeypatch.setattr(pop, "visible", lambda: visible)
+    pop._theme_seen = ("dark", ("dark", ""))
+    _set(monkeypatch, "light", "light")
+    pop.theme_tick()
+    assert pop.window.js == [] and frames == []          # a hidden window is synced when it is shown
+
+
 def test_sync_notices_a_new_setting_with_the_same_effective_theme(monkeypatch, tmp_path, frames):
     pop = _pop(monkeypatch, tmp_path)
     pop._theme_seen = ("dark", ("dark", ""))
