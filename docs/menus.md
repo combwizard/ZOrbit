@@ -15,7 +15,7 @@ A menu has these fields, and no others (a name ZOrbit does not know is reported 
 
 | Field | What it is |
 |---|---|
-| id | The menu's key in the `menus` object. Any text works in the file except one that starts with `tag:`, which is kept for the fans that tag slots open. Studio takes letters, digits, `-` and `_`, not only digits, and each id once. |
+| id | The menu's key in the `menus` object. Any text works in the file except one that starts with `tag:`, which is kept for the fans that tag slots open. The names a JavaScript object already has (`__proto__`, `constructor`, `toString` and the like) are reserved too, because Studio keeps the menus in such an object. Studio takes letters, digits, `-` and `_`, not only digits, and each id once. |
 | `title` | The name in the middle of the ring and in Studio's lists. Without one, the id is shown. |
 | `hotkey` | Optional. See [Hotkeys](hotkeys.md#hotkeys). |
 | `swallow` | `true` (the default) or `false`: whether the hotkey is hidden from ZBrush. |

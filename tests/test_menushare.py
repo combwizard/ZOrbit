@@ -128,6 +128,22 @@ def test_plan_import_gives_an_invalid_id_one_from_its_title():
     assert [r["id"] for r in renames] == ["cafe", "m_42", "t"]
 
 
+@pytest.mark.parametrize("old, title, new", [("__proto__", "Proto Kit", "proto_kit"),
+                                             ("constructor", "Builder", "builder")])
+def test_plan_import_gives_a_reserved_id_one_from_its_title(old, title, new):
+    menus = {old: {"title": title, "items": []}}
+    out, root, renames = menushare.plan_import(menus, old, {"menus": {}})
+    assert list(out) == [new] and root == new
+    assert renames == [{"old_id": old, "id": new, "old_title": title, "title": title}]
+
+
+def test_plan_import_numbers_a_title_slug_that_is_a_reserved_id():
+    menus = {"bad id": {"title": "Constructor", "items": []}}
+    out, root, renames = menushare.plan_import(menus, "bad id", {"menus": {}})
+    assert root == "constructor_2" and list(out) == ["constructor_2"]
+    assert renames[0]["id"] == "constructor_2"
+
+
 def test_plan_import_renames_a_taken_title_case_insensitively():
     menus = {"a": {"title": " sculpt ", "items": []}, "b": {"title": "SCULPT 2", "items": []},
              "c": {"title": "Sculpt", "items": []}}
