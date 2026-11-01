@@ -329,6 +329,35 @@ def test_set_pref_takes_a_string_seen_version(api):
     assert api.get_prefs()["seen_version"] == "0.11.0"
 
 
+def test_tour_seen_is_false_on_a_fresh_install(api, tmp_path):
+    assert api.get_prefs()["tour_seen"] is False
+    assert _studio_json(tmp_path)["tour_seen"] is False
+
+
+def test_tour_seen_is_true_for_an_existing_user(api, tmp_path):
+    (tmp_path / "studio.json").write_text('{"last_screen": "library"}', encoding="utf-8")
+    assert api.get_prefs()["tour_seen"] is True
+    assert _studio_json(tmp_path)["tour_seen"] is True
+
+
+def test_tour_seen_is_false_when_setup_was_not_done(api, tmp_path):
+    (tmp_path / "studio.json").write_text('{"setup_done": false}', encoding="utf-8")
+    assert api.get_prefs()["tour_seen"] is False
+    assert _studio_json(tmp_path)["tour_seen"] is False
+
+
+def test_tour_seen_is_true_when_setup_was_done(api, tmp_path):
+    (tmp_path / "studio.json").write_text('{"setup_done": true}', encoding="utf-8")
+    assert api.get_prefs()["tour_seen"] is True
+
+
+def test_set_pref_takes_a_bool_tour_seen(api):
+    api.set_pref("tour_seen", True)
+    assert api.get_prefs()["tour_seen"] is True
+    api.set_pref("tour_seen", "yes")                      # not a bool: ignored
+    assert api.get_prefs()["tour_seen"] is True
+
+
 def _whats_new_log(tmp_path, monkeypatch):
     f = tmp_path / "CHANGELOG.md"
     f.write_text(f"## [Unreleased]\n\nSoon.\n\n## [{paths.VERSION}] - 2026-10-31\n\n### Added\n\n- Now one.\n\n"

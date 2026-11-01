@@ -1296,8 +1296,9 @@ class Api(webapi.LibraryApi, webapi.TagApi):
     # --- Studio preferences (not part of the menus; saved straight away) --------------------------
     # mode is "" until Studio decides it at first start (Simple for a fresh install, Full for an existing setup).
     # seen_version is the version whose "What's new" was closed last ("" until it has been shown once).
+    # tour_seen is whether the tour of Studio has been offered (a fresh install gets the offer after Setup; an existing user does not).
     _PREFS_DEFAULTS = {"check_updates": True, "last_screen": "menus", "setup_done": False, "mode": "",
-                       "seen_version": ""}
+                       "seen_version": "", "tour_seen": False}
     # Keys an earlier Studio already wrote: a studio.json with any of them belongs to someone who has used the
     # Studio, so the Setup screen is not forced on them after an update.
     _USED_KEYS = ("window", "last_screen", "check_updates", "zbrush_folders")
@@ -1317,6 +1318,10 @@ class Api(webapi.LibraryApi, webapi.TagApi):
             # version's section once
             if "seen_version" not in data and (data or not os.path.exists(STUDIO_FILE)):
                 data["seen_version"] = VERSION if data.get("setup_done") is False else ""
+                changed = True
+            # the tour of Studio: offered once to someone new, never to someone who had already used Studio
+            if "tour_seen" not in data and (data or not os.path.exists(STUDIO_FILE)):
+                data["tour_seen"] = data.get("setup_done") is not False
                 changed = True
             if changed:
                 try:

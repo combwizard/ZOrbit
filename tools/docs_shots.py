@@ -69,6 +69,14 @@ SHOTS = {
     "studio-library": dict(q="screen=library"),
     "studio-settings": dict(q="screen=settings"),
     "studio-settings-simple": dict(q="screen=settings&mode=simple"),
+    # studio-tour opens the guided tour, waits for its card and clicks Next twice: stop 3 of 9, The ring, lit.
+    "studio-tour": dict(q="screen=menus", steps=[
+        "startTour()",
+        "new Promise(r => { const t0 = Date.now(); (function w() {"
+        " if (document.querySelector('.tour.in') || Date.now() - t0 > 5000) r(); else setTimeout(w, 100); })(); })",
+        "document.querySelector('.tour-card .btn.primary').click()",
+        "document.querySelector('.tour-card .btn.primary').click()",
+    ]),
     "setup": dict(q="screen=setup&zb=both&ringtried=done"),
     "setup-restart": dict(q="screen=setup&zb=2026&zbstale"),
     "browser": dict(page="popout.html", q="kind=brush", size=(980, 680)),

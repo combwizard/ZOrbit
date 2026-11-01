@@ -39,7 +39,8 @@
    save_config answers profile_missing). pick_profile_file follows ?importcancel and ?importfail. Profiles live in this page only: a reload starts again from the defaults.
    Studio mode: ?mode=simple|full (start Studio in that mode; the mock defaults to full so the screenshots keep their content).
    Setup screen (get_setup; state in localStorage rm_env for the registered folder and rm_zscript for the ZScript plugin, which Settings > Older
-   ZBrush shares): ?firstrun (setup_done is false until Finish or Skip, so Studio opens on Setup; a reload does it again),
+   ZBrush shares): ?firstrun (setup_done is false until Finish or Skip, so Studio opens on Setup; a reload does it again; tour_seen
+   is false until the tour is answered, so the tour is also offered after Finish or Skip),
    ?zb=2026|2022|both|none|multi (which ZBrush installs exist; default both = 2026 plus the two older ones, multi adds 2027 and runs two),
    ?setupfail (get_setup fails every time: only {now, checked_at, failed, error}), ?setupfail=later (the first two answers are good, then it fails),
    ?addmodern (Add a ZBrush folder picks a ZBrush 2027: ok, python: true, listed in Setup with Fix and Forget),
@@ -393,6 +394,7 @@
   // By default the app runs along with ZBrush. ?appoff, ?startfail and a ?status other than up leave it off until Start app succeeds.
   var appRunning = function () { return zbRunning() && (appStarted || q.get('status') === 'up' || !(q.has('appoff') || q.has('startfail') || q.has('status'))); };
   var firstDone = false, firstRun = function () { return q.has('firstrun') && !firstDone; };   // ?firstrun holds until Finish or Skip in this page; a reload starts it again
+  var tourDone = false;   // ?firstrun offers the tour (tour_seen false) until set_pref('tour_seen', true) in this page
   // Under ?firstrun or ?mode= the Studio mode lives only in this page (else one ?firstrun visit would flip every later
   // page to Simple): set_pref keeps it here and every reply reports it, so the app's merge of a reply cannot undo it.
   var pageMode = null;
@@ -979,8 +981,8 @@
       return sleep(100).then(function () { return { ok: true, message: 'Forgot ' + path + '. The folder itself was not touched.' }; });
     },
     // ?firstrun answers setup_done false until Finish or Skip, so a reload goes back to Setup
-    get_prefs: function () { var p = Object.assign({ check_updates: true, last_screen: 'menus', setup_done: true, mode: 'full', seen_version: '' }, JSON.parse(localStorage.getItem('rm_prefs') || '{}')); if (firstRun()) p.setup_done = false; return Promise.resolve(modeOf(p)); },
-    set_pref: function (k, v) { if (q.has('prefsfail') && k !== 'last_screen') return sleep(80).then(function () { throw new Error('disk full (mock)'); }); var p = Object.assign({ check_updates: true, last_screen: 'menus', setup_done: true, mode: 'full', seen_version: '' }, JSON.parse(localStorage.getItem('rm_prefs') || '{}')); p[k] = v; var pageOnly = k === 'mode' && (q.has('firstrun') || q.get('mode')); if (pageOnly) pageMode = v; else try { localStorage.setItem('rm_prefs', JSON.stringify(p)); } catch (e) {} if (k === 'setup_done' && v === true) firstDone = true; if (firstRun()) p.setup_done = false; return Promise.resolve(modeOf(p)); },
+    get_prefs: function () { var p = Object.assign({ check_updates: true, last_screen: 'menus', setup_done: true, mode: 'full', seen_version: '', tour_seen: true }, JSON.parse(localStorage.getItem('rm_prefs') || '{}')); if (firstRun()) p.setup_done = false; if (q.has('firstrun') && !tourDone) p.tour_seen = false; return Promise.resolve(modeOf(p)); },
+    set_pref: function (k, v) { if (q.has('prefsfail') && k !== 'last_screen') return sleep(80).then(function () { throw new Error('disk full (mock)'); }); var p = Object.assign({ check_updates: true, last_screen: 'menus', setup_done: true, mode: 'full', seen_version: '', tour_seen: true }, JSON.parse(localStorage.getItem('rm_prefs') || '{}')); p[k] = v; var pageOnly = k === 'mode' && (q.has('firstrun') || q.get('mode')); if (pageOnly) pageMode = v; else try { localStorage.setItem('rm_prefs', JSON.stringify(p)); } catch (e) {} if (k === 'setup_done' && v === true) firstDone = true; if (k === 'tour_seen' && v === true) tourDone = true; if (firstRun()) p.setup_done = false; if (q.has('firstrun') && !tourDone) p.tour_seen = false; return Promise.resolve(modeOf(p)); },
     set_dirty: function () { return Promise.resolve(true); },
     close_now: function () { console.log('[mock] close_now'); return Promise.resolve(true); },
     win_minimize: function () { return Promise.resolve(); },

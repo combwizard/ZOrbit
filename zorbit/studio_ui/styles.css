@@ -352,6 +352,19 @@ body.dragging, body.dragging * { cursor: grabbing !important; }
 /* a dialog with one text box (promptModal), and the radio list of the New profile dialog */
 .modal-field, .modal-cap { display: flex; flex-direction: column; gap: 6px; font-size: 12px; color: var(--sub); }
 .modal-hint { font-size: 12px; color: var(--sub); line-height: 1.45; overflow-wrap: anywhere; }
+/* The guided tour: a full-window layer that eats clicks, a lit box (its huge shadow is the dim) and a card beside it. Above .scrim (a dialog fading out) and #toasts (their buttons would act on the page). */
+.tour { position: fixed; inset: 0; z-index: 450; overflow: hidden; }
+.tour-hole { position: fixed; left: 0; top: 0; width: 0; height: 0; border-radius: 10px; outline: 2px solid var(--accent); box-shadow: 0 0 0 100vmax rgba(0, 0, 0, .55); pointer-events: none; }
+.tour.in .tour-hole { transition: top .25s ease, left .25s ease, width .25s ease, height .25s ease; }
+.tour-card { position: fixed; left: 0; top: 0; width: 300px; max-width: calc(100vw - 24px); padding: 16px; background: rgba(20, 19, 22, .98); border: 1px solid var(--line2); border-radius: 12px; box-shadow: 0 16px 48px rgba(0, 0, 0, .6); opacity: 0; }
+.tour.in .tour-card { opacity: 1; transition: opacity .18s, left .25s ease, top .25s ease; }
+.tour-count { display: block; font: 700 11px/1 var(--font); letter-spacing: .14em; text-transform: uppercase; color: var(--sub); margin-bottom: 8px; }
+.tour-card h2 { font-size: 16px; font-weight: 600; margin-bottom: 6px; }
+.tour-card p { color: #d6d7db; line-height: 1.5; }
+.tour-actions { display: flex; align-items: center; gap: 8px; margin-top: 16px; }
+.tour-end { margin-right: auto; color: var(--sub); }
+.tour-end:hover { color: var(--text); }
+@media (prefers-reduced-motion: reduce) { .tour.in .tour-hole, .tour.in .tour-card { transition: none; } }
 .radios { display: flex; flex-direction: column; gap: 4px; }
 .radio-row { display: flex; align-items: center; gap: 10px; padding: 7px 10px; text-align: left; background: none; border: 1px solid var(--line); border-radius: 6px; color: var(--text); transition: border-color .12s, background .12s; }
 .radio-row:hover { border-color: rgba(248, 107, 51, .4); }

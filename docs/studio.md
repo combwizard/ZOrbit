@@ -69,7 +69,35 @@ The steps:
 2. **Plugin loaded in ZBrush.** Live: whether ZBrush is running, which version, whether it loaded the plugin, and whether it needs a restart because it was started before the plugin was set up. When it did not load the plugin, the line under it says what to do: press **Fix** in step 1 and restart ZBrush, or close ZBrush completely and start it from the Start menu (a ZBrush started from a program that was already open does not get the new setting), and read `bridge.log` or `zscript_launch.log` if that does not help. A ZBrush running as administrator cannot be read, so Studio says the ring will not open and asks you to start ZBrush without **Run as administrator**; if the plugin's listener is up in it, the plugin still counts as loaded. A ZBrush running from a folder Studio does not know gets a note to add that folder with **Add a ZBrush folder** in step 1. If the check itself fails, Setup says so and keeps showing the last steps that worked. It also shows whether the app is running, with **Start app**.
 3. **Try the ring.** Hover ZBrush's canvas, press Q and flick to a brush. Three checks tick off as it happens: ring opened, pick sent, ZBrush did it. If the app could not send the pick, the hint says why and what to do: the bridge mode is **Message** and the plugin is not answering, no bridge key is set, ZBrush was not the front window, or the app could not write its request file. If ZBrush does not confirm a pick that was sent, the hint says what to look at for the route it took, naming your bridge key (F9 unless you changed it). If ZBrush answered with a failure, the hint is that line from the log instead. **Start over** forgets the try so far. This step reads `activity.json` (see [Files and logs](files.md#files-and-logs)).
 4. **Your brushes.** A preview of the Q ring, and **Change these brushes**, which opens it on the Menus screen.
-5. **What's where.** A line on each of Menus, Library, Settings, Status and the user guide, which links to these pages. It also says that Studio starts in Simple mode and that the switch at the top turns on Full mode (see [Simple and Full mode](#simple-and-full-mode)).
+5. **What's where.** A line on each of Menus, Library, Settings, Status and the user guide, which links to these pages. It also says that Studio starts in Simple mode and that the switch at the top turns on Full mode (see [Simple and Full mode](#simple-and-full-mode)). **Take the tour** starts [the tour](#the-tour) of the window.
+
+## The tour
+
+The tour walks you round the Studio window. It lights up one part at a time and puts a card beside it with a title, a sentence or two and a count such as "3 of 9". **Next** moves on (it reads **Done** on the last stop), **Back** goes back, and **End tour** stops at any point.
+
+![The tour on its third stop, the ring, with the card beside the ring preview](images/studio-tour.png)
+
+The tour switches to the Menus screen and stops at:
+
+1. The rail of screens (**Alt+1** to **Alt+5**).
+2. The list of menus.
+3. The ring preview.
+4. The **Item**, **Menu** and **Library** tabs.
+5. The **Library** button in the rail.
+6. The profile button.
+7. The **Simple** / **Full** switch.
+8. **Revert** and **Save**.
+9. **Status** and **Setup** in the rail.
+
+A stop whose part is not on screen, such as the profile button when it is hidden, is skipped and left out of the count.
+
+**Right** goes to the next stop, **Left** goes back and **Esc** ends the tour. **Tab** moves between the buttons on the card. While the tour is open you cannot click the rest of the window, and Studio's shortcuts (**Ctrl+S**, **Ctrl+Z**, **Alt+1** to **Alt+5**) do nothing until it ends.
+
+The tour changes no menu and no setting. When it ends, Studio goes back to the screen you started it from.
+
+Studio offers the tour once, after you press **Finish** or **Skip for now** on [Setup](#setup): "Take a short tour of Studio?" with **Not now** and **Take the tour**. If you close Studio before answering, it asks at the next start. Whatever you answer, **Esc** included, it does not ask again. People who used Studio before the tour existed are not asked.
+
+To take it later, press **Take the tour** in Setup step 5 (**What's where**) or in **Settings > Studio**, next to **What's new**. Once the tour has been offered or taken, `studio.json` has `tour_seen` set to true.
 
 ## Keyboard shortcuts
 

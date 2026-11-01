@@ -515,8 +515,10 @@ function toast(msg, o = {}) {
 }
 
 let activeModal = null;                                       // { close }: at most one dialog at a time
+let activeTour = null;                                        // { end }: the guided tour, while it is open (see the tour section)
 function modal({ title, body, actions }) {
   if (typeof openPopover === 'function') openPopover();      // a dialog always closes any open dropdown first
+  if (activeTour) activeTour.end();                          // and the tour: its end() frees #app before this dialog makes it inert again
   if (activeModal) activeModal.close(undefined);             // a newer dialog replaces the open one (e.g. the window X over a Revert confirm)
   return new Promise(resolve => {
     const prev = document.activeElement;
@@ -4064,6 +4066,7 @@ function buildSettingsScreen(root) {
       catch (err) { toast('Could not load the release notes.', { tone: 'warn' }); }
       b.disabled = false;
     } }, "What's new");
+    const tourBtn = h('button', { class: 'btn small', type: 'button', title: 'A short tour of this window', onclick: () => startTour() }, 'Take the tour');
     const verEl = h('span', { class: 'mono' }, '');
     call('get_app_info').then(i => { if (i && i.version) verEl.textContent = 'v' + i.version; }).catch(() => {});
     const gplLink = h('button', { class: 'link', type: 'button', onclick: async () => {
@@ -4071,7 +4074,7 @@ function buildSettingsScreen(root) {
     page.append(card('Studio', 'Preferences for this window. Saved straight away.',
       h('div', { class: 'field row' }, h('div', { class: 'grow' }, h('span', { class: 'flabel' }, 'Check for updates'),
         h('div', { class: 'fhint' }, 'When Studio opens, it asks GitHub for the newest release and shows it next to the version at the top. Nothing about you or your menus is sent.'), updNote,
-          h('div', { class: 'btn-row', style: { marginTop: '8px' } }, wnBtn)),
+          h('div', { class: 'btn-row', style: { marginTop: '8px' } }, wnBtn, tourBtn)),
         toggleSwitch(S.prefs.check_updates !== false, async v => {
           const ok = await setPref('check_updates', v);
           if (!ok) return false;
@@ -4577,6 +4580,7 @@ function buildSetupScreen(root) {
         h('div', { class: 'grow' }, h('b', null, name), h('small', null, text)),
         screen ? h('button', { class: 'btn small', type: 'button', onclick: () => showScreen(screen) }, 'Open')
           : h('button', { class: 'btn small', type: 'button', onclick: async () => { try { await call('open_url', USER_GUIDE_URL); } catch (e) { toast('Could not open the link.', { tone: 'warn' }); } } }, icon('external', 12), 'Open')))),
+        h('div', { class: 'btn-row' }, h('button', { class: 'btn small', type: 'button', title: 'A short tour of this window', onclick: () => startTour() }, 'Take the tour')),
         h('div', { class: 'fhint' }, 'Studio starts in Simple mode, which shows the settings most people use. The switch at the top turns on Full mode.')];
     } };
 
@@ -4637,6 +4641,7 @@ function buildSetupScreen(root) {
     if (!await setPref('setup_done', true)) return;
     if (withToast) toast('Setup done. Press ' + ((menuNow && menuNow.hotkey) || 'Q') + ' over ZBrush whenever you like.', { tone: 'ok', ms: 4500 });
     showScreen('menus');
+    offerTour().catch(() => {});
   };
   if (first) foot.append(h('button', { class: 'btn primary', type: 'button', onclick: () => finish(true) }, 'Finish'),
     h('button', { class: 'btn', type: 'button', onclick: () => finish(false) }, 'Skip for now'));
@@ -5783,7 +5788,150 @@ async function afterBoot() {
   if (S.fatal || S.screen === 'setup' || S.prefs.setup_done === false || params.has('screen')) return;
   try { await showWhatsNew(); } catch (e) { /* no release notes this time */ }
   try { await offerStrays(); } catch (e) { /* asks again next start */ }
+  try { await offerTour(); } catch (e) { /* offered again next start */ }      // after every dialog: a dialog ends the tour
   try { await warnOlderApp(); } catch (e) { /* no toast */ }
+}
+
+/* ================================================================== tour */
+/* The guided tour (#41). A stop names the screen it needs and the element to light up. A stop whose element is missing,
+   hidden or squeezed to nothing (profiles off, a narrow window) is skipped. */
+const TOUR_STOPS = [
+  { screen: null, target: () => $('.rail'), title: 'Screens', text: 'Studio has five screens. Click one here, or press Alt+1 to Alt+5.' },
+  { screen: 'menus', target: () => $('#screen-menus .menus-col'), title: 'Menus', text: 'Each menu is a ring. A menu with a hotkey opens over ZBrush; one without is a submenu.' },
+  { screen: 'menus', target: () => $('#screen-menus .stage'), title: 'The ring', text: 'How the ring will look. Drag brushes onto it, drag slots to reorder them, and click one to edit it.' },
+  { screen: 'menus', target: () => $('#screen-menus .right-col .tabs'), title: 'Item, Menu, Library', text: 'Item edits the slot you clicked, Menu edits the whole ring, and Library lists brushes to drag in.' },
+  { screen: null, target: () => $('.rail-btn[data-screen="library"]'), title: 'Library', text: 'Every brush, alpha, material and texture ZBrush can load, with tags and favourites.' },
+  { screen: null, target: () => $('#profileBtn'), title: 'Profiles', text: 'A whole set of menus and settings for each kind of work.' },
+  { screen: null, target: () => $('#modeSeg'), title: 'Simple and Full', text: 'Simple shows the everyday controls. Full shows every control. The ring is the same in both.' },
+  { screen: null, target: () => [$('#revertBtn'), $('#saveBtn')], title: 'Save', text: 'Nothing reaches the ring until you save. Then it applies straight away. Revert goes back to what was saved.' },
+  { screen: null, target: () => [$('.rail-btn[data-screen="status"]'), $('.rail-btn[data-screen="setup"]')], title: 'When something is not working',
+    text: 'Status shows whether ZBrush and the app are running, with the log. Setup is the first-start checklist. You can take this tour again from there or from Settings > Studio.' }
+];
+/* The bounding box of a stop's element(s) on screen, or null when none of them can be seen. */
+function tourRect(stop) {
+  let t = null;
+  try { t = stop.target(); } catch (e) { /* no target */ }
+  const rs = (Array.isArray(t) ? t : [t]).filter(el => el && el.isConnected && !el.closest('[hidden]')).map(el => el.getBoundingClientRect())
+    .filter(r => r.width > 0 && r.height > 0 && r.right > 0 && r.bottom > 0 && r.left < innerWidth && r.top < innerHeight);
+  if (!rs.length) return null;
+  return { left: Math.min(...rs.map(r => r.left)), top: Math.min(...rs.map(r => r.top)), right: Math.max(...rs.map(r => r.right)), bottom: Math.max(...rs.map(r => r.bottom)) };
+}
+/* Where the card goes beside the lit box r (w by h): right, else below, else left, else above, whichever fits with a 12px margin;
+   when none does, over the bottom of the box. Always clamped into the window. */
+function tourCardPos(r, w, hgt) {
+  const W = innerWidth, H = innerHeight, gap = 12, m = 12;
+  const fits = [[r.right + gap, r.top, r.right + gap + w <= W - m], [r.left, r.bottom + gap, r.bottom + gap + hgt <= H - m],
+    [r.left - gap - w, r.top, r.left - gap - w >= m], [r.left, r.top - gap - hgt, r.top - gap - hgt >= m]];
+  const c = fits.find(f => f[2]) || [(r.left + r.right - w) / 2, r.bottom - hgt - gap];
+  return [clamp(c[0], m, Math.max(m, W - m - w)), clamp(c[1], m, Math.max(m, H - m - hgt))];
+}
+/* Opens the tour. Returns false when it cannot (still loading, a recovery screen, a dialog or a tour already open). */
+function startTour() {
+  if (S.fatal || !S.ready || activeTour || activeModal) return false;
+  if (openPopover) openPopover();
+  if (comboClose) comboClose();
+  const ret = S.screen, prev = document.activeElement;
+  let dead = false, cur = -1, stops = [];
+  const hole = h('div', { class: 'tour-hole', 'aria-hidden': 'true' });
+  const count = h('span', { class: 'tour-count' });
+  const title = h('h2', { id: 'tourTitle' }), text = h('p', { id: 'tourText' });
+  const endBtn = h('button', { class: 'link tour-end', type: 'button', onclick: () => end() }, 'End tour');
+  const backBtn = h('button', { class: 'btn small', type: 'button', onclick: () => back() }, 'Back');
+  const nextBtn = h('button', { class: 'btn small primary', type: 'button', onclick: () => next() }, 'Next');
+  const card = h('div', { class: 'tour-card', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'tourTitle', 'aria-describedby': 'tourText' },
+    h('div', { 'aria-live': 'polite', 'aria-atomic': 'true' }, count, title, text), h('div', { class: 'tour-actions' }, endBtn, backBtn, nextBtn));   // each stop is read out whole
+  const layer = h('div', { class: 'tour' }, hole, card);
+  const eat = e => { if (e.target === layer) { e.preventDefault(); e.stopPropagation(); } };   // a click on the dim part goes nowhere
+  layer.addEventListener('mousedown', eat); layer.addEventListener('click', eat);
+  /* A stop can be shown when its screen is up and its element can be seen (checked again at each step: the window may have changed). */
+  const usable = stop => { if (stop.screen && S.screen !== stop.screen) showScreen(stop.screen); return !!tourRect(stop); };
+  /* Puts the lit box and the card at the current stop. False when the element can no longer be seen. */
+  const place = () => {
+    const r = tourRect(stops[cur]);
+    if (!r) return false;
+    const pad = 6;
+    hole.style.left = (r.left - pad) + 'px'; hole.style.top = (r.top - pad) + 'px';
+    hole.style.width = (r.right - r.left + 2 * pad) + 'px'; hole.style.height = (r.bottom - r.top + 2 * pad) + 'px';
+    const [x, y] = tourCardPos({ left: r.left - pad, top: r.top - pad, right: r.right + pad, bottom: r.bottom + pad }, card.offsetWidth, card.offsetHeight);
+    card.style.left = x + 'px'; card.style.top = y + 'px';
+    return true;
+  };
+  // The lit box follows its element when that changes size on its own (a column settling, a late layout).
+  const ro = typeof ResizeObserver === 'function' ? new ResizeObserver(() => { if (!dead && cur >= 0) place(); }) : null;
+  const show = (i, fromBack) => {
+    cur = i;
+    if (ro) { ro.disconnect(); let t = null; try { t = stops[i].target(); } catch (e) { /* none */ } (Array.isArray(t) ? t : [t]).forEach(el => { if (el) ro.observe(el); }); }
+    count.textContent = (i + 1) + ' of ' + stops.length;
+    title.textContent = stops[i].title; text.textContent = stops[i].text;
+    backBtn.disabled = i === 0;
+    nextBtn.textContent = i === stops.length - 1 ? 'Done' : 'Next';
+    place();
+    (fromBack && !backBtn.disabled ? backBtn : nextBtn).focus();     // Back keeps the focus on Back
+    requestAnimationFrame(() => { if (!dead) place(); });      // the screen may still be settling
+  };
+  const find = dir => { for (let i = cur + dir; i >= 0 && i < stops.length; i += dir) if (usable(stops[i])) return i; return -1; };
+  const next = () => { if (cur < 0) return; const i = find(1); if (i < 0) end(); else show(i); };
+  const back = () => { if (cur < 0) return; const i = find(-1); if (i >= 0) show(i, true); };
+  const onResize = () => { if (cur >= 0 && !place()) next(); };
+  const onKey = e => {
+    if ((e.ctrlKey || e.altKey || e.metaKey) && e.key !== 'F4') { e.preventDefault(); e.stopPropagation(); return; }   // Ctrl+S, Ctrl+Z and Alt+1 to Alt+5 wait until the tour is over; Alt+F4 still closes the window
+    const stop = () => { e.preventDefault(); e.stopPropagation(); };
+    if (e.key === 'Escape') { stop(); end(); }
+    else if (e.key === 'ArrowRight') { stop(); next(); }
+    else if (e.key === 'ArrowLeft') { stop(); back(); }
+    else if (e.key === 'Tab') {
+      const f = $$('button', card).filter(x => !x.disabled);
+      if (!f.length) return;
+      const first = f[0], last = f[f.length - 1];
+      if (!card.contains(document.activeElement)) { stop(); first.focus(); }
+      else if (e.shiftKey && document.activeElement === first) { stop(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { stop(); first.focus(); }
+    }
+  };
+  function end() {
+    if (dead) return;
+    dead = true;
+    if (activeTour === me) activeTour = null;
+    document.removeEventListener('keydown', onKey, true);
+    window.removeEventListener('resize', onResize);
+    if (ro) ro.disconnect();
+    layer.remove();
+    const app = $('#app'); if (app && !activeModal) app.inert = false;     // a dialog that is open keeps the page behind it inert
+    if (ret && ret !== S.screen && own(SCREENS, ret)) showScreen(ret);
+    if (S.prefs.tour_seen === false) setPref('tour_seen', true);
+    if (prev && prev !== document.body && prev.focus && document.contains(prev)) prev.focus();
+    else {                                                           // Settings and Setup were drawn again: back to their Take the tour button
+      const again = $$('#screen-' + S.screen + ' button').find(b => b.textContent === 'Take the tour');
+      if (again) again.focus();
+    }
+  }
+  const me = { end };
+  activeTour = me;
+  showScreen('menus');
+  document.addEventListener('keydown', onKey, true);
+  window.addEventListener('resize', onResize);
+  const appEl = $('#app'); if (appEl) appEl.inert = true;
+  $('#overlay-root').append(layer);
+  // Measure after the Menus screen has been laid out; the lit box and card appear in place, then move with a transition.
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    if (dead) return;
+    stops = TOUR_STOPS.filter(usable);
+    if (!stops.length) { end(); return; }
+    show(0);
+    requestAnimationFrame(() => { if (!dead) layer.classList.add('in'); });
+  }));
+  return true;
+}
+function endTour() { if (activeTour) activeTour.end(); }
+window.startTour = startTour;                                  // the file is one closure: the docs screenshot tool calls this from the page
+/* The first time Studio is ready after Setup: asks once. Whatever the answer (even Escape), it is not asked again. */
+async function offerTour() {
+  if (S.prefs.tour_seen !== false || S.fatal || !S.ready) return;
+  const v = await modal({ title: 'Take a short tour of Studio?',
+    body: h('p', null, 'A few stops around this window, about a minute. It only shows where things are; nothing is changed. You can take it later from Setup or Settings > Studio.'),
+    actions: [{ text: 'Not now', value: false }, { text: 'Take the tour', value: true, kind: 'primary', focus: true }] });
+  setPref('tour_seen', true);
+  if (v === true) startTour();                                // modal() has already closed and freed #app by now
 }
 
 async function boot() {

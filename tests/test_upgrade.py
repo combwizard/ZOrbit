@@ -177,6 +177,7 @@ def test_an_old_studio_json_skips_the_setup_screen(name, tmp_path, monkeypatch):
     assert prefs["setup_done"] is True
     assert read(src)["setup_done"] is True
     assert prefs["check_updates"] is False                    # the user's own choice is kept
+    assert prefs["tour_seen"] is True                         # nor offered the tour
 
 
 # --- an older ZOrbit started again after the move ------------------------------------------------------

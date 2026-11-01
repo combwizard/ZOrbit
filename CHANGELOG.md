@@ -6,6 +6,10 @@ All notable changes to this project are listed here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Studio: a short guided tour of the window. It is offered once after Setup, and you can take it again from Setup step 5 or **Settings > Studio** (#41).
+
 ### Fixed
 
 - Menu ids such as `constructor`, `toString` or `__proto__` (names a JavaScript object already has) broke Studio. They
