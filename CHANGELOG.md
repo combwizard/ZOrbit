@@ -4,7 +4,12 @@ All notable changes to this project are listed here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.15.0] - 2026-11-01
+
+ZOrbit 0.15.0 adds looks. A new **Look** screen in Studio (**Alt+2**) sets how the ring looks for every menu, for
+one menu or for one slot: six slot shapes, hub styles, glow and label colours, and slot sizes. Seven looks are built
+in and you can save your own, and a menu that uses a look follows it when you change it. A menu that has more items
+than fit can now spill onto a second ring or end in a **More** slot instead of growing.
 
 ### Added
 
@@ -854,6 +859,7 @@ First public release.
   only brushes included with ZBrush.
 - Documentation: README, user guide, third-party notices and contributing guide.
 
+[0.15.0]: https://github.com/combwizard/zorbit/releases/tag/v0.15.0
 [0.14.0]: https://github.com/combwizard/zorbit/releases/tag/v0.14.0
 [0.13.0]: https://github.com/combwizard/zorbit/releases/tag/v0.13.0
 [0.12.0]: https://github.com/combwizard/zorbit/releases/tag/v0.12.0
