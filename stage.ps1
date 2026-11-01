@@ -19,7 +19,7 @@ foreach ($f in $pages) {
     Copy-Item $src (Join-Path $OutFull $f)
 }
 
-foreach ($dir in @('images', 'personas', 'brush-icons')) {
+foreach ($dir in @('images', 'brush-icons')) {
     Copy-Item -Recurse (Join-Path $Site $dir) (Join-Path $OutFull $dir)
 }
 

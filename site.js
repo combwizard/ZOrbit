@@ -176,7 +176,7 @@
 
   function tilt() {
     if (REDUCE || !FINE) return;
-    document.querySelectorAll('.feature-media, .spotlight-media').forEach(function (el) {
+    document.querySelectorAll('.feature-media').forEach(function (el) {
       el.classList.add('tilt');
       el.addEventListener('pointermove', function (e) {
         var r = el.getBoundingClientRect();
@@ -279,29 +279,8 @@
     });
   }
 
-  function reviewWall() {
-    var wall = document.getElementById('reviewWall');
-    if (!wall || REDUCE) return;
-    wall.querySelectorAll('.wall-track').forEach(function (track) {
-      Array.prototype.slice.call(track.children).forEach(function (card) {
-        var copy = card.cloneNode(true);
-        copy.setAttribute('aria-hidden', 'true');
-        copy.setAttribute('inert', '');
-        track.appendChild(copy);
-      });
-    });
-    wall.classList.add('live');
-
-    var btn = document.getElementById('wallPause');
-    if (!btn) return;
-    btn.hidden = false;
-    btn.addEventListener('click', function () {
-      btn.setAttribute('aria-pressed', String(wall.classList.toggle('paused')));
-    });
-  }
-
   function reveal() {
-    var nodes = document.querySelectorAll('.section-head, .price-card, .feature, .spotlight, .wall, .steps li, .shield, .stat, .faq-group, .cta > *');
+    var nodes = document.querySelectorAll('.section-head, .feature, .steps li, .shield, .stat, .faq-group, .cta > *');
     nodes.forEach(function (n) {
       n.classList.add('reveal');
       var sibs = n.parentElement ? Array.prototype.indexOf.call(n.parentElement.children, n) : 0;
@@ -451,7 +430,6 @@
     faq();
     themeDemo();
     enhanceDownloads();
-    reviewWall();
     reveal();
     scrollProgress();
     heroSpotlight();
