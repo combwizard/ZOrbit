@@ -114,6 +114,8 @@ jobs:
           $zip = "dist\ZOrbit-$v-portable.zip"
           $tick = [string][char]96
           $fence = $tick * 3
+          # Studio's Install update reads the "<sha256>  ZOrbitSetup-<v>.exe" line below (studio.py _setup_asset) and
+          # checks it against GitHub's own digest of the file: keep the format.
           $head = @(
             "Download **ZOrbitSetup-$v.exe** and run it. $($tick)ZOrbit-$v-portable.zip$($tick) is the portable version (see the install page). SHA256:",
             "",

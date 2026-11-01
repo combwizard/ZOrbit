@@ -83,6 +83,10 @@ Name: "{autodesktop}\ZOrbit Studio"; Filename: "{app}\{#AppExe}"; Parameters: "-
 
 [Run]
 Filename: "{app}\{#AppExe}"; Parameters: "--studio"; Description: "Open ZOrbit Studio"; Flags: nowait postinstall skipifsilent
+; An update Studio started (studio.py install_update runs this setup with /SILENT): open Studio again, and the app
+; when it was running (StopApp ended it).
+Filename: "{app}\{#AppExe}"; Parameters: "--exit-with-zbrush"; Flags: nowait; Check: ParamOn('startapp')
+Filename: "{app}\{#AppExe}"; Parameters: "--studio"; Flags: nowait; Check: ParamOn('relaunch')
 
 [UninstallDelete]
 ; Files made after install (ZBrush compiles the bridge into __pycache__), so the folders can go.
@@ -403,6 +407,12 @@ begin
 end;
 
 { ---- setup events ----------------------------------------------------------------------------------- }
+
+{ True when Setup was started with /<Name>=1 (Studio's update passes /RELAUNCH=1 and /STARTAPP=1). }
+function ParamOn(const Name: String): Boolean;
+begin
+  Result := ExpandConstant('{param:' + Name + '|0}') = '1';
+end;
 
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 begin

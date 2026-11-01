@@ -102,7 +102,7 @@ The [documentation](https://zorbit.lol/docs/) covers every setting and item type
 ## Upgrading, uninstalling and troubleshooting
 
 - **Upgrading from Radial Menu for ZBrush:** run the new installer over the old one. Your menus and settings are copied over on the first start. See [Upgrading from Radial Menu for ZBrush](https://zorbit.lol/docs/install/#upgrading-from-radial-menu-for-zbrush).
-- **Updating:** run the new installer over the old one. Your menus, settings and tags stay (an update from a version before profiles moves them into the **Default** profile). See [Updating](https://zorbit.lol/docs/install/#updating).
+- **Updating:** click the new version at the top of Studio and press **Download and install**, or run the new installer over the old one. Your menus, settings and tags stay (an update from a version before profiles moves them into the **Default** profile). See [Updating](https://zorbit.lol/docs/install/#updating).
 - **Portable zip:** unzip it somewhere permanent and press **Fix** on Studio's **Setup** screen. See [Portable zip](https://zorbit.lol/docs/install/#portable-zip).
 - **ZBrush 2022 to 2025:** these versions get a ZScript plugin that you install from Studio. See [ZBrush 2022 to 2025](https://zorbit.lol/docs/install/#zbrush-2022-to-2025).
 - **Uninstall:** remove ZOrbit in **Windows Settings > Apps > Installed apps**. The uninstaller also removes the plugin from the ZBrush 2022 to 2025 that Setup lists. Your profiles stay. See [Uninstall](https://zorbit.lol/docs/install/#uninstall).

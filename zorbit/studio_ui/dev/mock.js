@@ -12,7 +12,9 @@
    refused as "no ring can open" until forced), ?nozbrush (get_library: ZBrush not found, no brushes), ?nolib (ZBrush
    found but no .zbp files in its folders), ?liberr (get_library reports an error), ?thumbfail (the first two get_thumbs
    calls are rejected, then they work), ?already (the first "Add a ZBrush folder" says the folder is already listed), ?busy
-   (install/remove report that another operation is running), ?update (check_update finds a newer release), ?unreach
+   (install/remove report that another operation is running), ?update (check_update finds a newer release Studio can install: the
+   update dialog downloads for two seconds; with ?portable it only links to the release, ?updatefail ends the download with the hash message;
+   Don't remind me again stores skipped_version in rm_prefs, so clear it to see the chip again), ?unreach
    (check_update cannot reach GitHub), ?prefsfail (set_pref is rejected).
    Tags (state in localStorage rm_tags, seeded with the built-in Favourites tag (always first, cannot be renamed, merged or deleted), the two
    starters and a few tagged brushes, three of them starred): ?tags=empty (only Favourites, nothing tagged),
@@ -67,6 +69,15 @@
   var sleep = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
   var clone = function (o) { return JSON.parse(JSON.stringify(o)); };
   var straysFound = q.has('strays'), appRestarted = false;
+  var mockUpd = { state: 'idle', version: '', done: 0, total: 0, message: '', file: '' };
+  var UPD_NOTES = { version: '0.15.0', date: '2026-11-20', url: 'https://github.com/combwizard/zorbit/releases/tag/v0.15.0', blog: 'https://zorbit.lol/docs/blog/zorbit-0-15-0/',
+    summary: ['Studio can now install an update itself: click the new version at the top and press **Download and install**. The ring also gets a **Hub** size and a **Rounded square** slot shape.'],
+    items: ['**Hub** (Full mode) sets the size of the accent dot in the middle of the ring, from 0 to 40 px (#33).',
+      '**Slot shape** switches every slot between **Circle** and **Rounded square** (#33).',
+      '**Glow** in the item inspector gives one slot its own glow colour, saved as `glow` in `radial.json` (#33).',
+      "Studio can install an update itself, and **Don't remind me again** hides a version until a newer one comes out.",
+      'Studio: the note above the item list no longer waits for 12 items.',
+      'Settings now says a newer version is available when Studio opens straight on Settings.'] };
   var libSeq = {}, ticks = 0, thumbCalls = 0, alreadyDone = false, appStarted = false, setupCalls = 0, modernAdded = false, keptDone = false;
   var saved = clone(M.get_config.config);
   var TAG_DEFAULTS = { hub: 10, slot_shape: 'circle', tag_colors: 'tint', tag_band: 'medium', tag_band_opacity: 0.45, tag_glow_opacity: 0.4, tag_tint_opacity: 0.3, tag_tint_style: 'gradient', tag_tint_blend: 'multiply' };
@@ -1035,7 +1046,19 @@
     win_toggle_maximize: function () { return Promise.resolve(false); },
     win_is_maximized: function () { return Promise.resolve(false); },
     get_app_info: function () { return Promise.resolve({ version: '0.14.0' }); },
-    check_update: function () { var p = JSON.parse(localStorage.getItem('rm_prefs') || '{}'); if (p.check_updates === false) return Promise.resolve({ newer: false, current: '0.14.0', latest: null, url: 'https://github.com/combwizard/zorbit/releases' }); return sleep(300).then(function () { if (q.has('unreach')) return { newer: false, current: '0.14.0', latest: null, url: 'https://github.com/combwizard/zorbit/releases' }; return q.has('update') ? { newer: true, current: '0.14.0', latest: '0.15.0', url: 'https://github.com/combwizard/zorbit/releases' } : { newer: false, current: '0.14.0', latest: '0.14.0', url: 'https://github.com/combwizard/zorbit/releases' }; }); },
+    check_update: function () { var p = JSON.parse(localStorage.getItem('rm_prefs') || '{}'); if (p.check_updates === false) return Promise.resolve({ newer: false, current: '0.14.0', latest: null, url: 'https://github.com/combwizard/zorbit/releases' }); return sleep(300).then(function () { if (q.has('unreach')) return { newer: false, current: '0.14.0', latest: null, url: 'https://github.com/combwizard/zorbit/releases' }; return q.has('update') ? { newer: true, current: '0.14.0', latest: '0.15.0', url: 'https://github.com/combwizard/zorbit/releases', can_install: !q.has('portable'), skipped: p.skipped_version === '0.15.0', notes: UPD_NOTES } : { newer: false, current: '0.14.0', latest: '0.14.0', url: 'https://github.com/combwizard/zorbit/releases' }; }); },
+    // The update download: about two seconds of progress; ?updatefail ends it with the hash message.
+    get_update_progress: function () { return Promise.resolve(Object.assign({}, mockUpd)); },
+    download_update: function () {
+      if (mockUpd.state === 'ready') return Promise.resolve({ ok: true, version: '0.15.0', message: '' });
+      mockUpd = { state: 'downloading', version: '0.15.0', done: 0, total: 31457280, message: '', file: '' };
+      var step = function (n) { return sleep(100).then(function () { mockUpd.done = Math.round(mockUpd.total * n / 20); return n < 20 ? step(n + 1) : null; }); };
+      return step(1).then(function () {
+        if (q.has('updatefail')) { mockUpd = { state: 'failed', version: '0.15.0', done: 0, total: 0, message: 'The downloaded file does not match the SHA-256 of the release, so it was deleted.', file: '' }; return { ok: false, version: '0.15.0', message: mockUpd.message }; }
+        mockUpd.state = 'ready'; return { ok: true, version: '0.15.0', message: '' };
+      });
+    },
+    install_update: function () { console.log('[mock] install_update: Setup would start and Studio close'); return Promise.resolve({ ok: true, message: '' }); },
     get_whats_new: function (all) {
       return sleep(60).then(function () {
         if (!q.has('whatsnew') && all !== true) return { current: '0.14.0', url: 'https://github.com/combwizard/zorbit/releases', sections: [] };

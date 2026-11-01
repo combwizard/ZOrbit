@@ -149,8 +149,8 @@ h1, h2, h3, p { margin: 0; }
 }
 /* Custom window chrome: the header is the title bar (native drag via WebView2 non-client regions). */
 .topbar { -webkit-app-region: drag; app-region: drag; padding-right: 0; user-select: none; }
-.topbar button, .topbar input, .topbar a, .topbar [role="button"], .topbar .no-drag, .topbar .path-hint { -webkit-app-region: no-drag; app-region: no-drag; }
-.brand { display: flex; align-items: center; gap: 10px; flex: 0 1 auto; min-width: 0; overflow: hidden; }       /* the brand gives way before the buttons; the path hint (shrink 10) goes first of all */
+.topbar button, .topbar input, .topbar a, .topbar [role="button"], .topbar .no-drag { -webkit-app-region: no-drag; app-region: no-drag; }
+.brand { display: flex; align-items: center; gap: 10px; flex: none; }       /* the brand and its version number never give way; the profile name does */
 .logo { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%;
   filter: drop-shadow(0 0 6px color-mix(in srgb, var(--accent) 35%, transparent)); }
 .wordmark { font-size: 14px; font-weight: 800; letter-spacing: .01em; color: var(--text); white-space: nowrap; }
@@ -158,8 +158,8 @@ h1, h2, h3, p { margin: 0; }
 .wordmark .z { color: var(--accent); }                      /* the Z of ZOrbit is orange wherever the name is drawn */
 .version-chip { white-space: nowrap; flex: none; font-size: 10.5px; color: var(--sub); padding: 3px 2px; border-radius: 4px; background: none; border: 0; }
 .version-chip:hover { color: var(--text); text-decoration: underline; text-underline-offset: 2px; }
-/* The profile picker: a compact button that sits after the brand (which gives way first). A profile the app is not using shows an amber dot. */
-.profile-btn { flex: none; gap: 6px; height: 26px; max-width: 220px; padding: 0 9px 0 11px; border-radius: 99px; font-size: 12px; font-weight: 600; }
+/* The profile picker: a compact button that sits after the brand. Its name is what shortens when the bar is tight. A profile the app is not using shows an amber dot. */
+.profile-btn { gap: 6px; height: 26px; max-width: 220px; padding: 0 9px 0 11px; border-radius: 99px; font-size: 12px; font-weight: 600; }
 .profile-btn .profile-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .profile-btn svg { flex: none; opacity: .7; }
 .profile-btn[aria-expanded="true"] { border-color: color-mix(in srgb, var(--accent) 50%, transparent); color: var(--accent); }
@@ -171,7 +171,9 @@ h1, h2, h3, p { margin: 0; }
 .seg-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .seg-btn:disabled { opacity: .5; cursor: default; }
 .seg-btn.on { color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); }
-.version-chip.has-update { display: inline-flex; align-items: center; gap: 5px; }
+.version-chip.has-update { display: inline-flex; align-items: center; gap: 6px; padding: 0 2px; }
+.version-chip .upd-vers { display: grid; text-align: left; line-height: 1.15; }     /* the current version over the new one, the arrow beside them: half the width */
+.version-chip .upd-old { color: var(--sub); }
 .version-chip .upd-dot { color: var(--accent); flex: none; overflow: visible;
   filter: drop-shadow(0 0 2px color-mix(in srgb, var(--accent) 90%, transparent)) drop-shadow(0 0 6px color-mix(in srgb, var(--accent) 60%, transparent));
   animation: upd-glow 2.4s ease-in-out infinite; }
@@ -186,9 +188,6 @@ h1, h2, h3, p { margin: 0; }
 .winbtn .i-restore { display: none; }
 .is-max .winbtn .i-restore { display: block; }
 .is-max .winbtn .i-max { display: none; }
-.path-hint { flex: 0 10 auto; min-width: 0; color: var(--sub); font-size: 11px; max-width: 360px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; direction: rtl; text-align: left; padding-left: 8px; border-left: 1px solid var(--line); margin-left: 4px; user-select: text; cursor: text; }
-.path-hint:empty { display: none; }
-.copy-path { flex: none; margin-left: -6px; }
 .problems-pill {
   flex: none; white-space: nowrap;
   display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 10px; border-radius: 99px;
@@ -198,6 +197,7 @@ h1, h2, h3, p { margin: 0; }
 .problems-pill:hover { background: color-mix(in srgb, var(--amber) 20%, transparent); }
 .dirty { display: flex; align-items: center; gap: 8px; flex: none; white-space: nowrap; color: var(--sub); font-size: 12px; margin-right: 4px; }
 .histctl, .topbar > .btn, .mode-seg { flex: none; }
+.topbar > .profile-btn { flex: 0 1 auto; min-width: 64px; }  /* the one button whose name may shorten (after fitTopbar's steps) */
 .dirty .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 8px var(--accent); animation: pulse 1.8s ease-in-out infinite; }
 @keyframes pulse { 50% { opacity: .45; } }
 
@@ -942,7 +942,6 @@ body.dragging .irow:hover { background: transparent; }
 }
 @media (max-width: 1180px) {
   .menus-screen { grid-template-columns: 216px minmax(0, 1fr) 316px; }
-  .path-hint, .copy-path { display: none; }                  /* the copy button goes with the path it copies */
   .status-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-height: 640px) {
@@ -954,9 +953,17 @@ body.dragging .irow:hover { background: transparent; }
   .browser.full { grid-template-columns: 200px minmax(0, 1fr); }
   .library-screen { grid-template-columns: minmax(0, 1fr) 252px; }
   .topbar { gap: 8px; }
-  .wordmark em { display: none; }                            /* "ZOrbit" alone; the window title says Studio */
-  #saveBtn kbd { display: none; }                            /* the button's title still names Ctrl+S */
 }
+/* Set by fitTopbar() only when the bar has no room left: first the Ctrl+S hint goes, then the word Studio, and last
+   Revert and Save become icons (their titles and aria-labels still name them). */
+.topbar.no-kbd #saveBtn kbd { display: none; }              /* the button's title still names Ctrl+S */
+.topbar.no-studio .wordmark em { display: none; }           /* "ZOrbit" alone; the window title says Studio */
+.topbar .tb-ico { display: none; }
+.topbar.no-label .tb-ico { display: inline-grid; }
+.topbar.no-label #revertBtn .lbl, .topbar.no-label #saveBtn .lbl { display: none; }
+.topbar.no-label #revertBtn, .topbar.no-label #saveBtn { width: 34px; padding: 0; }
+/* Last of all, Unsaved changes keeps only its dot; the words stay for screen readers and in the tooltip. */
+.topbar.no-dirty-text .dirty .lbl { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 @media (max-width: 900px) {
   .split, .split.anim-split, .split.tag-split { grid-template-columns: 1fr; }
   .tag-prev { position: static; }
@@ -1009,6 +1016,19 @@ body.dragging .irow:hover { background: transparent; }
 .upd-status { margin-top: 6px; font-style: normal; min-height: 0; }
 .upd-status:empty { display: none; }
 .upd-status.new { color: var(--cyan); }
+/* the update dialog: the version step, a status line with a spinner, and the download bar */
+.upd { display: flex; flex-direction: column; gap: 10px; align-items: flex-start; }
+.upd-ver { font-size: 12px; color: var(--sub); }
+.upd-line { display: flex; align-items: center; gap: 8px; min-height: 18px; font-size: 13px; color: var(--text); }
+.upd-line:has(> span:last-child:empty) { display: none; }
+.upd-line.warn { color: var(--amber-text); }
+.upd-line .spin { flex: none; }
+.upd-bar { align-self: stretch; height: 4px; border-radius: 99px; background: var(--bg0); border: 1px solid var(--line); overflow: hidden; }
+.upd-bar > i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .2s; }
+.upd .link { font-size: inherit; }
+.modal:has(.upd-notes) { width: min(560px, calc(100vw - 32px)); }
+.upd-notes { align-self: stretch; max-height: min(40vh, 320px); overflow: auto; padding: 12px 14px; border-radius: 8px; background: var(--bg0); border: 1px solid var(--line); }
+.upd-notes:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .btn.running:disabled { opacity: .85; }
 .btn .spin { flex: none; }
 .choice:focus-visible { outline-offset: 1px; }

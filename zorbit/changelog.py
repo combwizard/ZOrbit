@@ -12,6 +12,15 @@ SUMMARY_ITEMS = 5      # bullets shown for a section that has no summary paragra
 
 _HEADING = re.compile(r"## \[([^\]]+)\](?: - (\d{4}-\d{2}-\d{2}))?")
 _LINK = re.compile(r"\[[^\]]+\]: ")
+_MD_LINK = re.compile(r"\[([^\]]+)\]\([^)\s]+\)")      # [text](url): the dialogs show the text only
+_BLOG = re.compile(r"More about this release on the blog: (https://zorbit\.lol/docs/blog/[\w-]+/)")
+NOTES_MAX_CHARS = 50_000   # a release body longer than this is cut (GitHub allows 125,000)
+NOTES_MAX_ITEMS = 40
+
+
+def _unlink(text: str) -> str:
+    """Markdown links reduced to their text: "[#32](https://...)" becomes "#32"."""
+    return _MD_LINK.sub(lambda m: m.group(1), text)
 
 
 def sections(text: str) -> list[dict]:
@@ -20,7 +29,8 @@ def sections(text: str) -> list[dict]:
     "version" is the heading's text ("0.12.0" or "Unreleased") and "date" its date, or "". "summary" is the plain text
     between the heading and the first `###` group or bullet: the lines of a paragraph joined with spaces, paragraphs
     joined with a blank line. "items" are the bullets of every `###` group, each one's wrapped lines joined with
-    spaces and its leading "- " removed. Link references (`[0.12.0]: ...`) end the last section.
+    spaces and its leading "- " removed. Markdown links keep only their text. Link references (`[0.12.0]: ...`) end
+    the last section.
     """
     found = []                     # (section, its body lines)
     body = None                    # the lines of the section being read; None between sections
@@ -38,9 +48,34 @@ def sections(text: str) -> list[dict]:
             body.append(line)
     out = []
     for sec, lines in found:
-        sec["summary"], sec["items"] = _body(lines)
+        summary, items = _body(lines)
+        sec["summary"], sec["items"] = _unlink(summary), [_unlink(i) for i in items]
         out.append(sec)
     return out
+
+
+def release_notes(body, version: str) -> dict:
+    """The notes of a GitHub release, for Studio's update dialog: {"summary": [paragraphs], "items": [bullets],
+    "blog": url or ""}. The body is the release's CHANGELOG section with what the release workflow puts above it
+    (build.yml): the download line, the SHA-256 block and the blog link. Those are dropped; the blog link is kept as
+    "blog". Every bullet is kept, up to NOTES_MAX_ITEMS."""
+    lines, fenced, blog = [], False, ""
+    for raw in (body if isinstance(body, str) else "")[:NOTES_MAX_CHARS].splitlines():
+        line = raw.strip()
+        if line.startswith("```"):
+            fenced = not fenced
+            continue
+        m = _BLOG.fullmatch(line)
+        if m:
+            blog = m.group(1)
+            continue
+        if fenced or line.startswith("Download **ZOrbitSetup-"):
+            continue
+        lines.append(line)
+    secs = sections(f"## [{version}]\n" + "\n".join(lines))
+    sec = secs[0] if secs else {"summary": "", "items": []}
+    return {"summary": sec["summary"].split("\n\n") if sec["summary"] else [],
+            "items": sec["items"][:NOTES_MAX_ITEMS], "blog": blog}
 
 
 def _body(lines: list[str]) -> tuple[str, list[str]]:

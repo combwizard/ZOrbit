@@ -12,6 +12,13 @@ The installer is not code-signed yet. Click **More info**, then **Run anyway**. 
 
 Windows marked the unzipped files as downloaded, and ZOrbit could not remove the mark, usually because it is in a folder it cannot write to. Close ZOrbit, right-click the zip, choose **Properties**, tick **Unblock**, and unzip it again into a folder of your own, such as one under `Documents`.
 
+### Install update in Studio does not work
+
+- **The download stops with a message.** "The download did not work" means GitHub could not be reached: check your connection and try again. "does not match the SHA-256 of the release" means the file that arrived is not the one GitHub lists, so Studio deleted it. Try again later, or download the installer from the release page and run it yourself. `studio.log` has a line for each step that starts with `update:`.
+- **Studio closed and did not come back.** Setup may have stopped, for example with "Close ZOrbit Studio first" when Studio took longer than 15 seconds to close. Open Studio from the Start menu. If the version at the top is still the old one, try again. Setup writes what it did to `%LOCALAPPDATA%\ZOrbit\update-setup.log`; send that file with a report.
+- **The dialog says the copy was not installed with Setup.** It is a portable copy or a source checkout, which Setup does not know about. Download the new version from the release page.
+- **The orange version at the top is gone, but there is a newer release.** You chose **Don't remind me again** for it. **Settings > Studio** still offers it, and a newer release shows at the top again.
+
 ### A newer ZOrbit takes over from an older one
 
 A newer ZOrbit started while an older one was running, such as a portable copy. The new one asks the old one to quit, waits for it, and starts in its place. `radiald.log` shows `taking over from ZOrbit <version> (pid <n>)`, then `ZOrbit <version> has quit`. This is normal, and nothing needs doing. A browser window of the old version stays open until you close it. On Studio's **Status** screen, **Restart app** does the same job when the app running is older than Studio. See [Profiles](profiles.md#older-versions).

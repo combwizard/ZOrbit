@@ -27,14 +27,12 @@
       <button class="version-chip mono" id="versionChip" type="button" title="Release notes">v0.12.0</button>
     </div>
     <button class="btn profile-btn" id="profileBtn" type="button" aria-haspopup="menu" aria-expanded="false" title="Profile" hidden><span class="profile-name"></span><svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>
-    <span class="path-hint mono" id="pathHint"></span>
-    <button class="ibtn copy-path" id="copyPath" type="button" title="Copy path" aria-label="Copy path" hidden></button>
     <button class="problems-pill" id="problemsBtn" type="button" hidden aria-expanded="false" aria-controls="problemsPanel" aria-haspopup="dialog">
       <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4l9 16H3z"/><path d="M12 10v4M12 17v.4"/></svg>
       <span id="problemsCount">0 problems</span>
     </button>
     <div class="spacer"></div>
-    <div class="dirty" id="dirty" hidden role="status"><i class="dot"></i>Unsaved changes</div>
+    <div class="dirty" id="dirty" hidden role="status" title="Unsaved changes"><i class="dot"></i><span class="lbl">Unsaved changes</span></div>
     <div class="histctl" role="group" aria-label="History">
       <button class="ibtn" id="undoBtn" type="button" title="Undo (Ctrl+Z)" aria-label="Undo (Ctrl+Z)" disabled></button>
       <button class="ibtn" id="redoBtn" type="button" title="Redo (Ctrl+Y)" aria-label="Redo (Ctrl+Y)" disabled></button>
@@ -44,8 +42,8 @@
       <button class="seg-btn" type="button" role="radio" data-mode="full" aria-checked="false" title="Full: every control" disabled>Full</button>
     </div>
     <button class="btn browser-open-top" id="browserBtn" type="button" title="Open the ZOrbit Browser in its own window">Browser</button>
-    <button class="btn" id="revertBtn" type="button" disabled>Revert</button>
-    <button class="btn primary" id="saveBtn" type="button" title="Save (Ctrl+S)" disabled>Save <kbd>Ctrl+S</kbd></button>
+    <button class="btn" id="revertBtn" type="button" title="Revert to the saved version" aria-label="Revert" disabled><span class="lbl">Revert</span></button>
+    <button class="btn primary" id="saveBtn" type="button" title="Save (Ctrl+S)" aria-label="Save" aria-keyshortcuts="Control+S" disabled><span class="lbl">Save</span> <kbd>Ctrl+S</kbd></button>
     <div class="winctl" role="group" aria-label="Window">
       <button class="winbtn" id="winMin" type="button" title="Minimise" aria-label="Minimise">
         <svg viewBox="0 0 12 12" width="12" height="12"><path d="M2 6.5h8" stroke="currentColor" stroke-width="1.2"/></svg>

@@ -111,7 +111,20 @@ A pen or a finger drags rows, cards and ring slots the same way a mouse does, so
 
 ## Version and update check
 
-The version at the top links to its release notes. When Studio opens, it asks GitHub whether there is a newer release. If there is, the top shows your version, an orange dot and the new version in orange. Clicking it opens the new release's page, where you can download it. The check only asks GitHub for the latest release and sends nothing about you or your menus. Turn it off in **Settings > Studio > Check for updates**. It is never made while that is off. **Settings > Studio** also shows the version, with a link to the GPL-3.0 licence ZOrbit is released under.
+The version at the top links to its release notes. When Studio opens, it asks GitHub whether there is a newer release. If there is, the top shows your version with the new one in orange under it, and an orange arrow beside them, and **Settings > Studio** says **Version x.y.z available** with an **Install update** button. The check only asks GitHub for the latest release and sends nothing about you or your menus. Turn it off in **Settings > Studio > Check for updates**. It is never made while that is off. **Settings > Studio** also shows the version, with a link to the GPL-3.0 licence ZOrbit is released under.
+
+**Installing an update.** Click the new version at the top, or **Install update** in **Settings > Studio**. The dialog shows which version you go to and that version's release notes, taken from its page on GitHub, with **Full release notes** and, when the release has one, a link to its blog post.
+
+![The Update ZOrbit dialog: v0.14.0 to v0.15.0, the release notes of 0.15.0 in a box that scrolls, a note that Studio closes while Setup runs, and the Don't remind me again, Later and Download and install buttons](images/studio-update.png)
+
+- **Download and install** fetches the new installer from the GitHub release into `%LOCALAPPDATA%\ZOrbit\updates`, with a progress bar. Nothing is downloaded until you press it. Studio checks the file's size and SHA-256 against the ones the release lists, and deletes a file that does not match.
+- When you have unsaved changes, Studio then asks first: **Save and update**, **Update without saving** or **Keep editing**.
+- Studio starts Setup and closes. Setup runs on its own with a small progress window, closes the ring app and the browser, installs, and opens Studio again. If the ring app was running, Setup starts it again too. Studio then shows **What's new**.
+- Restart ZBrush afterwards so it loads the new plugin. For ZBrush 2022 to 2025, see [Updating](install.md#updating).
+
+**Later** closes the dialog, and the orange version stays at the top. **Don't remind me again** stops pointing out this version: the top shows only your version until a newer release comes out. **Settings > Studio** still offers the skipped version. Studio keeps it as `skipped_version` in `studio.json`.
+
+Only a copy installed with Setup can update itself. A [portable copy](install.md#portable-zip) or a source checkout shows the same dialog with **Open the download page** instead.
 
 **What's new.** The first time Studio opens after an update, it shows **What's new** with a short summary of each release since the one you last saw (at most three). **Full release notes** opens that release's page on GitHub. It appears once per update, and a fresh install does not show it. To see it again, press **What's new** next to the update check in **Settings > Studio**. Studio keeps the last version it showed as `seen_version` in `studio.json`. The text comes from `CHANGELOG.md`, which ships with the app.
 
@@ -127,6 +140,7 @@ How saving works:
   button that has focus.
 - A config that no ring can open from (no menus, or no menu with a hotkey) is not saved until you confirm.
 - **Revert** goes back to what is saved on disk.
+- When the window is too narrow for everything in the top bar, the **Ctrl+S** hint on **Save** goes first, then the word Studio, then **Revert** and **Save** show only their icons (a clock with an arrow, and a disk), and last **Unsaved changes** shows only its dot. Hover any of them for its name. If that is still not enough, the profile name is shortened.
 - The app re-reads the file as soon as it changes, so saved changes apply immediately, new hotkeys included. You do not need to restart ZBrush or the app.
 - If something in the file is wrong, a **problems** pill appears at the top. Click it for the list: each entry says what is wrong in plain words and jumps to the menu, item or setting to fix, and the menu and item rows concerned carry an amber marker. Studio saves anyway, and the app skips the bad items and logs what it skipped. The list opens by itself after a save or an import only when there is a problem that was not there before; the toast and the pill give the count either way.
 

@@ -23,7 +23,9 @@ The installer also puts `LICENSE` and `THIRD_PARTY_NOTICES.md` in the install fo
 
 ### Updating
 
-Save your work in Studio and close it, then run the new installer over the old one. It closes ZOrbit for you, and it asks you to close Studio if it is still open. If ZOrbit Studio is open, it asks Studio to close the way you would, and Studio shows its own dialog when it has unsaved changes. Answer the dialog, or close Studio yourself, then run Setup again if it stopped with "Close ZOrbit Studio first". Setup never ends a Studio that is still open.
+Studio can update itself: click the new version at the top of the window, or **Install update** in **Settings > Studio**, then **Download and install**. Studio downloads the installer, checks it, asks about any unsaved changes, and runs Setup for you. Studio and the ring app come back on their own when it is done. See [Installing an update](studio.md#version-and-update-check). A portable copy cannot update itself this way.
+
+To update by hand, save your work in Studio and close it, then run the new installer over the old one. It closes ZOrbit for you, and it asks you to close Studio if it is still open. If ZOrbit Studio is open, it asks Studio to close the way you would, and Studio shows its own dialog when it has unsaved changes. Answer the dialog, or close Studio yourself, then run Setup again if it stopped with "Close ZOrbit Studio first". Setup never ends a Studio that is still open.
 
 An update keeps the folder you installed to: if you chose a custom folder the first time, Setup offers the same one. It replaces the program files whole, so nothing from an older version stays behind. Your menus, settings and tags are not touched: they live in `%APPDATA%\ZOrbit`, outside the install folder. The first start after an update from a version before profiles moves your old menus, tags and usage into the **Default** profile. The originals go to `%APPDATA%\ZOrbit\pre-profiles\`, and you can delete them. See [Profiles](profiles.md#where-the-files-are).
 

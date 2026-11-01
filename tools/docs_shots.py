@@ -93,6 +93,12 @@ SHOTS = {
     "studio-strays": dict(q="strays", steps=["new Promise(r => { const t0 = Date.now(); (function w() {"
                                            " if (document.querySelector('.modal') || Date.now() - t0 > 5000) r(); else setTimeout(w, 100); })(); })"],
                           clip="document.querySelector('.modal')"),
+    # studio-update: the update dialog, opened from the version chip (?update: a newer release Studio can install).
+    "studio-update": dict(q="screen=menus&update", steps=[
+        "new Promise(r => { const t0 = Date.now(); (function w() {"
+        " if (document.querySelector('#versionChip.has-update') || Date.now() - t0 > 5000) r(); else setTimeout(w, 100); })(); })",
+        "document.getElementById('versionChip').click()",
+    ], clip="document.querySelector('.modal')"),
     "studio-profiles": dict(q="screen=menus&profiles=3", steps=["document.getElementById('profileBtn').click()"],
                             clip="({getBoundingClientRect: () => { const p = document.querySelector('.popover').getBoundingClientRect();"
                                  " return {left: 0, top: 0, right: Math.max(p.right + 24, 520), bottom: p.bottom + 12}; }})"),

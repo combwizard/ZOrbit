@@ -23,27 +23,31 @@
       if (info && chip && !chip.classList.contains('has-update')) chip.textContent = 'v' + info.version;
     });
     if (chip) chip.addEventListener('click', function () {
+      var u = window.RadialUpdate.last;     // a newer release (not one the user skipped): the update dialog (app.js)
+      if (u && u.newer && !u.skipped && window.__studioUpdate) { window.__studioUpdate(u); return; }
       call('open_url', chip.dataset.url || 'https://github.com/combwizard/zorbit/releases');
     });
     checkUpdate();
     call('win_is_maximized').then(setMax);
   }
-  // Update check (Settings > Studio > Check for updates): "v0.5.1 (dot) v0.5.3" when GitHub has a newer release.
+  // Update check (Settings > Studio > Check for updates): when GitHub has a newer release, the arrow dot beside the two
+  // versions stacked, the new one on top and the current one under it.
   var UPDATE_DOT = '<svg class="upd-dot" viewBox="0 0 12 12" width="11" height="11" aria-hidden="true">' +
     '<circle cx="6" cy="6" r="6" fill="currentColor"/><path d="M6 8.7V3.6M3.8 5.7L6 3.5l2.2 2.2" fill="none" ' +
     'stroke="var(--on-accent)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
   function checkUpdate() {
     var chip = document.getElementById('versionChip');
     if (!chip) return Promise.resolve(null);
-    // Resolves with the reply ({current, latest, url, newer}; latest is null when GitHub was not reached) so Settings can say what happened.
-    return call('check_update').then(function (u) {
+    // Resolves with the reply ({current, latest, url, newer, can_install, skipped}; latest is null when GitHub was not reached) so Settings can say what happened.
+    return window.RadialUpdate.pending = call('check_update').then(function (u) {
       if (!u) return null;
       window.RadialUpdate.last = u;
-      chip.dataset.url = u.url;
-      chip.classList.toggle('has-update', !!u.newer);
-      if (u.newer) {
-        chip.innerHTML = '<span>v' + u.current + '</span>' + UPDATE_DOT + '<span class="upd-new">v' + u.latest + '</span>';
-        chip.title = 'Version ' + u.latest + ' is available. Click for its release notes.';
+      var shown = !!(u.newer && !u.skipped);   // "Don't remind me again" for this version: the plain chip
+      chip.dataset.url = shown ? u.url : 'https://github.com/combwizard/zorbit/releases/tag/v' + u.current;
+      chip.classList.toggle('has-update', shown);
+      if (shown) {
+        chip.innerHTML = '<span class="upd-vers"><span class="upd-old">v' + u.current + '</span><span class="upd-new">v' + u.latest + '</span></span>' + UPDATE_DOT;
+        chip.title = 'Version ' + u.latest + ' is available. ' + (u.can_install ? 'Click to install it.' : 'Click to download it.');
       } else {
         chip.textContent = 'v' + u.current;
         chip.title = 'Release notes';
@@ -51,7 +55,8 @@
       return u;
     }, function () { return { latest: null, newer: false }; });
   }
-  window.RadialUpdate = { check: checkUpdate };
+  // last: the latest reply; pending: the check under way, for a Settings screen drawn before it answers.
+  window.RadialUpdate = { check: checkUpdate, last: null, pending: null };
   window.RadialWin = { setMax: setMax };
   if (window.pywebview && window.pywebview.api) wire();
   else window.addEventListener('pywebviewready', wire, { once: true });

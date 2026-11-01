@@ -14,11 +14,28 @@ All notable changes to this project are listed here. The format follows
   The icon, glow and submenu badge follow the shape (#33).
 - **Glow** in the item inspector gives one slot its own glow colour, saved as `glow` in `radial.json`. It wins over the
   slot's tag colour for the hover glow, the hover rim and the idle halo only (#33).
+- Studio can install an update itself. Click the new version at the top, or **Install update** in **Settings > Studio**,
+  to see the new version's release notes. **Download and install** fetches the installer from GitHub and checks its
+  SHA-256. It then runs Setup, and Setup
+  reopens Studio and the ring app when it is done. **Don't remind me again** hides that version until a newer one
+  comes out. A portable copy gets a link to the download page.
 
 ### Changed
 
+- **What's new** shows a link in the release notes as its text, not as `[text](address)`.
 - Studio's note above the item list no longer waits for 12 items. It shows when the ring is full at the current radius,
   says how many items fit and how big the ring grows, and warns when it is too big for the screen (#33).
+- Studio's top bar gives way only when it has no room left, not whenever the window is narrower than 1100 px. First
+  the **Ctrl+S** hint on **Save** goes, then the word Studio, then **Revert** and **Save** turn into icons, and last
+  **Unsaved changes** keeps only its dot. After that the profile name is shortened.
+- When an update is available, the version chip stacks your version above the new one, with the arrow beside them, so
+  it takes half the width.
+
+### Removed
+
+- The path to `radial.json` and its copy button are gone from Studio's top bar. With **Unsaved changes** showing, they
+  pushed the version number out of sight. **Open menus folder** on the Status screen still opens the folder that holds
+  it.
 
 ## [0.14.0] - 2026-11-01
 

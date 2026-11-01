@@ -75,6 +75,8 @@ const ICONS = {
   alert: '<path d="M12 4l9 16H3z"/><path d="M12 10v4M12 17v.4"/>',
   folder: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
   undo: '<path d="M4 12a8 8 0 1 1 3 6.2M4 5v5h5"/>',
+  revert: '<path d="M3.5 12a8.5 8.5 0 1 0 2.8-6.3L3.5 8.3"/><path d="M3.5 3.5v4.8h4.8"/><path d="M12 7.5V12l3.2 1.9"/>',
+  save: '<path d="M5 3.5h10.6L20.5 8.4V19a1.5 1.5 0 0 1-1.5 1.5H5A1.5 1.5 0 0 1 3.5 19V5A1.5 1.5 0 0 1 5 3.5z"/><path d="M7.5 20.5v-6.5h9v6.5"/><path d="M7.5 3.5v4h7"/>',
   redo: '<path d="M20 12a8 8 0 1 0-3 6.2M20 5v5h-5"/>',
   record: '<circle cx="12" cy="12" r="5" fill="currentColor" stroke="none"/>',
   info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8v.4"/>',
@@ -4130,12 +4132,16 @@ function buildSettingsScreen(root) {
 
     /* --- studio (preferences of this window, saved immediately, not part of the menus file) */
     const updNote = h('div', { class: 'fhint upd-status', role: 'status' });
+    const updBtn = h('button', { class: 'btn small primary', type: 'button', hidden: true, title: 'Get the new version',
+      onclick: () => openUpdate(window.RadialUpdate && window.RadialUpdate.last) }, 'Install update');
     let updTok = 0;
     const paintUpdate = u => {
-      if (!u || S.prefs.check_updates === false) { updNote.textContent = ''; return; }
+      if (!u || S.prefs.check_updates === false) { updNote.textContent = ''; updBtn.hidden = true; return; }
       const newer = !!(u.newer && u.latest);
-      updNote.textContent = newer ? 'Version ' + u.latest + ' available' : (u.latest ? 'Up to date' : 'Could not reach GitHub');
+      updNote.textContent = newer ? 'Version ' + u.latest + ' available' + (u.skipped ? '. You chose not to be reminded about it.' : '') : (u.latest ? 'Up to date' : 'Could not reach GitHub');
       updNote.className = 'fhint upd-status' + (newer ? ' new' : (u.latest ? '' : ' warn'));
+      updBtn.hidden = !newer;
+      updBtn.textContent = u.can_install ? 'Install update' : 'Download update';
     };
     const checkNow = async () => {
       const tok = ++updTok;
@@ -4146,6 +4152,10 @@ function buildSettingsScreen(root) {
       if (u) paintUpdate(u); else updNote.textContent = '';
     };
     if (window.RadialUpdate && window.RadialUpdate.last) paintUpdate(window.RadialUpdate.last);
+    else if (window.RadialUpdate && window.RadialUpdate.pending) {      // Studio opened on Settings: paint when the first check answers
+      const tok = updTok;
+      window.RadialUpdate.pending.then(u => { if (tok === updTok && u && document.contains(updNote)) paintUpdate(u); }, () => {});
+    }
     const wnBtn = h('button', { class: 'btn small', type: 'button', title: 'The release notes up to this version', onclick: async e => {
       const b = e.currentTarget; b.disabled = true;
       try { if (!(await showWhatsNew({ all: true, remember: false }))) toast('There is nothing to show yet.', { ms: 2500 }); }
@@ -4159,12 +4169,12 @@ function buildSettingsScreen(root) {
       try { await call('open_url', 'https://www.gnu.org/licenses/gpl-3.0.html'); } catch (e) { toast('Could not open the link.', { tone: 'warn' }); } } }, 'GPL-3.0');
     page.append(card('Studio', 'Preferences for this window. Saved straight away.',
       h('div', { class: 'field row' }, h('div', { class: 'grow' }, h('span', { class: 'flabel' }, 'Check for updates'),
-        h('div', { class: 'fhint' }, 'When Studio opens, it asks GitHub for the newest release and shows it next to the version at the top. Nothing about you or your menus is sent.'), updNote,
-          h('div', { class: 'btn-row', style: { marginTop: '8px' } }, wnBtn, tourBtn)),
+        h('div', { class: 'fhint' }, 'When Studio opens, it asks GitHub for the newest release and shows it next to the version at the top, where you can install it. Nothing about you or your menus is sent.'), updNote,
+          h('div', { class: 'btn-row', style: { marginTop: '8px' } }, updBtn, wnBtn, tourBtn)),
         toggleSwitch(S.prefs.check_updates !== false, async v => {
           const ok = await setPref('check_updates', v);
           if (!ok) return false;
-          if (v) checkNow(); else { updTok++; updNote.textContent = ''; if (window.RadialUpdate) window.RadialUpdate.check(); }
+          if (v) checkNow(); else { updTok++; updNote.textContent = ''; updBtn.hidden = true; if (window.RadialUpdate) window.RadialUpdate.check(); }
           return true;
         }, 'Check for updates')),
       h('div', { class: 'field row' }, h('div', { class: 'grow' }, h('span', { class: 'flabel' }, 'Version'),
@@ -5027,7 +5037,7 @@ function adoptAndRender(res) {
   rememberSel();
   S.version++; updateDirty(); renderProblems(); previewSoon();
   renderAllMenus(); if (R.settings) R.settings(); if (R.libTarget) R.libTarget();
-  setPathHint(S.path); renderProfile();
+  renderProfile();
   return '';
 }
 async function reloadFromDisk() {
@@ -5061,7 +5071,7 @@ function takeNames(res) {
 function adoptProfileInfo(res) {
   if (!res || typeof res !== 'object') return;
   takeProfile(res);
-  if (res.path) { S.path = String(res.path); setPathHint(S.path); }
+  if (res.path) S.path = String(res.path);
   renderProfile();
 }
 /* What save_config and get_config are told: the profile Studio edits, or nothing when there are no profiles. */
@@ -5842,7 +5852,6 @@ function recovery(res) {
   $$('.rail-btn').forEach(b => { b.classList.remove('on'); b.setAttribute('aria-current', 'false'); b.setAttribute('aria-disabled', 'true'); b.title = 'Fix or reset the menus file first'; });
   $('#saveBtn').disabled = true; $('#revertBtn').disabled = true;
   modeBtns().forEach(b => { b.disabled = true; });
-  if (path) setPathHint(path);
   if (!isErr) { takeProfile(res); renderProfile(); }          // the picker stays usable: another profile may be fine
   const run = async (btn, method) => {
     btn.disabled = true;
@@ -5905,6 +5914,98 @@ async function showWhatsNew({ all = false, remember = true } = {}) {
   if (remember && cur) setPref('seen_version', cur);
   return true;
 }
+/* The update dialog (the version chip, or the button in Settings > Studio), for a newer release. A copy Setup installed
+   (check_update's can_install): download_update fetches the setup and checks its SHA-256; installUpdate deals with unsaved
+   changes and hands over to install_update, which starts Setup and closes Studio. Setup opens Studio again when it is done.
+   A portable copy gets the release page instead. "Don't remind me again" stores the version as skipped_version: the top
+   stops pointing it out until a newer one comes, and Settings > Studio still offers it. */
+let updateOpen = false;
+/* The new release's notes (check_update's notes), drawn like a What's new section, or only a link when it has none. */
+function updateNotes(u) {
+  const n = u.notes;
+  if (!n || !((n.summary || []).length || (n.items || []).length))
+    return h('button', { class: 'link', type: 'button', onclick: () => openLink(u.url) }, `Release notes for ${u.latest}`);
+  return h('div', { class: 'wn upd-notes', tabindex: '0', 'aria-label': `Release notes for ${u.latest}` }, whatsNewBody([n]),
+    n.blog ? h('button', { class: 'link', type: 'button', onclick: () => openLink(n.blog) }, 'More about this release on the blog') : null);
+}
+async function openUpdate(u) {
+  if (updateOpen || !u || !u.newer) return;
+  updateOpen = true;
+  try {
+    const skip = u.skipped ? [] : [{ text: "Don't remind me again", value: 'skip' }];
+    if (!u.can_install) {
+      const v = await modal({ title: 'Update ZOrbit', body: h('div', { class: 'upd' },
+        h('p', { class: 'upd-ver mono' }, `v${u.current} to v${u.latest}`),
+        updateNotes(u),
+        h('p', null, 'This copy of ZOrbit was not installed with Setup, so it cannot update itself. Download the new version from its release page.')),
+      actions: [...skip, { text: 'Later', value: 'later' }, { text: 'Open the download page', value: 'page', kind: 'primary', focus: true }] });
+      if (v === 'page') openLink(u.url);
+      else if (v === 'skip') await skipUpdate(u);
+      return;
+    }
+    const fill = h('i'), bar = h('div', { class: 'upd-bar', hidden: true }, fill);
+    const spin = h('span', { class: 'spin', hidden: true }), text = h('span', null, '');
+    const status = h('p', { class: 'upd-line', role: 'status' }, spin, text);
+    const say = (t, { busy = false, warn = false } = {}) => { text.textContent = t; spin.hidden = !busy; status.classList.toggle('warn', warn); };
+    let fetching = false;
+    const show = p => {
+      if (!fetching) return;                                   // a late poll reply after the download ended
+      const pct = p && p.total ? Math.min(100, Math.round(100 * p.done / p.total)) : 0;
+      bar.hidden = false; fill.style.width = pct + '%';
+      say(`Downloading... ${pct} %`, { busy: true });
+    };
+    let p0 = null;
+    try { p0 = await call('get_update_progress'); } catch (e) { p0 = null; }
+    const ready = !!(p0 && p0.state === 'ready' && p0.version === u.latest);
+    if (p0 && p0.state === 'downloading') say('Downloading...', { busy: true });
+    else if (ready) say('Downloaded. Ready to install.');
+    else if (p0 && p0.state === 'failed' && p0.message) say(p0.message, { warn: true });
+    const download = async () => {
+      fetching = true;
+      say('Downloading...', { busy: true });
+      const poll = setInterval(async () => { try { show(await call('get_update_progress')); } catch (e) { /* the next poll tries again */ } }, 250);
+      let r;
+      try { r = await call('download_update'); }
+      catch (e) { r = { ok: false, message: 'The download did not work: ' + ((e && e.message) || e) }; }
+      finally { clearInterval(poll); fetching = false; }
+      if (!r || !r.ok) { bar.hidden = true; say((r && r.message) || 'The download did not work.', { warn: true }); return false; }
+      fill.style.width = '100%';
+      say('Downloaded and checked.');
+      return true;
+    };
+    const v = await modal({ title: 'Update ZOrbit', body: h('div', { class: 'upd' },
+      h('p', { class: 'upd-ver mono' }, `v${u.current} to v${u.latest}`),
+      updateNotes(u),
+      h('p', null, 'Studio closes while Setup runs and opens again when it is done. Setup restarts the ring app too. Afterwards, restart ZBrush so it loads the new plugin.'),
+      status, bar),
+    actions: [...skip,
+      { text: 'Later', value: 'later' },
+      { text: ready ? 'Install and restart' : 'Download and install', value: 'install', kind: 'primary', focus: true, check: download }] });
+    if (v === 'install') await installUpdate();
+    else if (v === 'skip') await skipUpdate(u);
+  } finally { updateOpen = false; }
+}
+async function skipUpdate(u) {
+  if (!(await setPref('skipped_version', u.latest))) return;
+  if (window.RadialUpdate) window.RadialUpdate.check();           // the chip goes back to the plain version
+  toast(`You will not be reminded about ZOrbit ${u.latest} again. Settings > Studio still offers it.`, { ms: 6000 });
+}
+/* After the download: unsaved changes are saved or dropped first (as on close), then Setup starts and Studio closes. */
+async function installUpdate() {
+  if (dirtyNow()) {
+    const v = await modal({ title: 'Unsaved changes', body: unsavedBody('Updating'), actions: [
+      { text: 'Keep editing', value: 'keep' },
+      { text: 'Update without saving', value: 'discard', kind: 'danger-ghost' },
+      { text: 'Save and update', value: 'save', kind: 'primary' }] });
+    if (v === 'save') { const out = await save(); if (out !== 'saved' || dirtyNow()) return; }
+    else if (v !== 'discard') return;
+  }
+  let r;
+  try { r = await call('install_update'); } catch (e) { r = { ok: false, message: 'Setup did not start: ' + ((e && e.message) || e) }; }
+  if (r && r.ok) toast('Installing the update. Studio opens again when it is done.', { ms: 8000 });
+  else toast((r && r.message) || 'Setup did not start.', { tone: 'warn', ms: 7000 });
+}
+window.__studioUpdate = u => openUpdate(u);
 /* Menus or tags an older ZOrbit left where this one does not look (get_strays). Add them as a profile or set them aside; Escape asks again next start. */
 async function offerStrays() {
   if (S.fatal || !S.profilesOn) return;
@@ -6140,7 +6241,7 @@ async function boot() {
   if (params.get('cat')) S.lib.cat = params.get('cat');
   S.lib.kind = LIB_KINDS.find(k => k === params.get('kind')) || S.lib.kind;
   if (params.get('dock')) S.dock.cat = params.get('dock');
-  setPathHint(S.path); renderProfile();
+  renderProfile();
   updateDirty(); renderProblems();
   applyPrefs();
   loadLibrary(); loadSuggestions(); loadTags();
@@ -6157,26 +6258,37 @@ async function boot() {
   afterBoot();
 }
 
-/* The path in the top bar, with its Copy path button (hidden while there is no path). */
-function setPathHint(path) {
-  const el = $('#pathHint'), btn = $('#copyPath');
-  el.textContent = path || ''; el.title = path || '';
-  if (btn) btn.hidden = !path;
+/* The top bar drops the Ctrl+S hint, then the word Studio, then turns Revert and Save into icons, and last shows
+   Unsaved changes as its dot alone, each only when it has no room left without that step. After that the profile
+   name shortens. The spacer takes the free space, so a spacer with no width means the bar is full. */
+function fitTopbar() {
+  const bar = $('.topbar'), gap = $('.topbar > .spacer');
+  if (!bar || !gap) return;
+  const steps = ['no-kbd', 'no-studio', 'no-label', 'no-dirty-text'];
+  bar.classList.remove(...steps);
+  for (const c of steps) {
+    if (gap.getBoundingClientRect().width >= 1) break;
+    bar.classList.add(c);
+  }
+}
+/* Fits the bar again when the window changes size and when what is in it changes (Unsaved changes, the problems
+   pill, the profile name, the version). Only the classes on the bar itself change, so this does not feed itself. */
+function watchTopbar() {
+  const bar = $('.topbar');
+  if (!bar) return;
+  const fit = () => fitTopbar();
+  if (typeof ResizeObserver === 'function') new ResizeObserver(fit).observe(bar);
+  new MutationObserver(fit).observe(bar, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ['hidden'] });
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(fit);
+  fit();
 }
 
 function init() {
   watchSystemTheme();
   watchZbrushTheme();
   if (POPOUT) { initPopout(); return; }
-  const cp = $('#copyPath');
-  if (cp) {
-    cp.append(icon('copy', 13));
-    cp.addEventListener('click', async () => {
-      const path = S.path || $('#pathHint').textContent;
-      if (!path) return;
-      if (await copyText(path)) toast('Path copied', { ms: 1800 }); else toast('Could not copy the path', { tone: 'warn' });
-    });
-  }
+  $('#revertBtn').prepend(icon('revert', 15, 'tb-ico')); $('#saveBtn').prepend(icon('save', 15, 'tb-ico'));   // shown only when the bar is full (fitTopbar)
+  watchTopbar();
   const skip = $('#skipLink');
   if (skip) {
     skip.addEventListener('click', e => { e.preventDefault(); const main = $('#screens'); if (main) main.focus(); });

@@ -64,6 +64,10 @@ SETTINGS_FORMAT = 1         # the "zorbit_settings" number of an exported settin
 IMPORT_MAX_BYTES = 5 * 1024 * 1024    # a settings file is a few hundred KB at most; refuse anything bigger
 RELEASES_API = "https://api.github.com/repos/combwizard/zorbit/releases/latest"
 RELEASES_URL = "https://github.com/combwizard/zorbit/releases"
+DOWNLOAD_URL = RELEASES_URL + "/download/"    # a release's files; the only place Studio downloads a setup from
+SETUP_MAX_BYTES = 300 * 1024 * 1024           # the setup is about 30 MB; anything far bigger is not ours
+# The uninstall entry Setup writes (installer.iss AppId; PrivilegesRequired=lowest puts it under HKCU).
+UNINSTALL_KEY = r"Software\Microsoft\Windows\CurrentVersion\Uninstall\{6F1B7C52-3D4A-4E8B-9A57-2C0E81D4B9A3}_is1"
 
 kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
 user32 = ctypes.WinDLL("user32", use_last_error=True)
@@ -84,6 +88,96 @@ def _mutex_exists(name) -> bool:
         return True
     # An app running elevated owns a mutex this process may not open: access denied still means it exists.
     return ctypes.get_last_error() == 5          # ERROR_ACCESS_DENIED
+
+
+class UpdateError(Exception):
+    """A downloaded setup that cannot be used; the text is shown to the user."""
+
+
+def _update_dir() -> str:
+    return os.path.join(DATA_DIR, "updates")
+
+
+def _clear_updates():
+    """Deletes the downloaded setups (best effort: one that is still running stays until next time)."""
+    try:
+        names = os.listdir(_update_dir())
+    except OSError:
+        return
+    for name in names:
+        try:
+            os.remove(os.path.join(_update_dir(), name))
+        except OSError:
+            pass
+
+
+def _file_sha256(path) -> str | None:
+    """The file's SHA-256 in lower-case hex, None when it cannot be read."""
+    import hashlib
+    if not path:
+        return None
+    h = hashlib.sha256()
+    try:
+        with open(path, "rb") as f:
+            for chunk in iter(lambda: f.read(1024 * 1024), b""):
+                h.update(chunk)
+    except OSError:
+        return None
+    return h.hexdigest()
+
+
+def _setup_asset(release, version) -> dict | None:
+    """The release's ZOrbitSetup-<version>.exe as {"name", "url", "size", "sha256", "version"}, or None when it has
+    none, it is not on this project's releases, or its SHA-256 is not known. The hash comes from GitHub's own digest
+    of the file and from the "<sha256>  <name>" line the release notes carry; when both are there they must agree."""
+    if not isinstance(release, dict):
+        return None
+    name = f"ZOrbitSetup-{version}.exe"
+    asset = next((a for a in release.get("assets") or [] if isinstance(a, dict) and a.get("name") == name), None)
+    if not asset:
+        return None
+    url, size = asset.get("browser_download_url"), asset.get("size")
+    if not isinstance(url, str) or not url.startswith(DOWNLOAD_URL) or not url.endswith("/" + name):
+        return None
+    if not isinstance(size, int) or isinstance(size, bool) or not 0 < size <= SETUP_MAX_BYTES:
+        return None
+    hashes = set()
+    digest = asset.get("digest")
+    if isinstance(digest, str) and re.fullmatch(r"sha256:[0-9a-fA-F]{64}", digest):
+        hashes.add(digest[7:].lower())
+    body = release.get("body")
+    if isinstance(body, str):
+        for m in re.finditer(r"^\s*([0-9a-fA-F]{64})\s+\*?" + re.escape(name) + r"\s*$", body, re.M):
+            hashes.add(m.group(1).lower())
+    if len(hashes) != 1:
+        return None
+    return {"name": name, "url": url, "size": size, "sha256": hashes.pop(), "version": version}
+
+
+def _installed_here() -> bool:
+    """Whether this is the copy Setup installed (so its setup can update it): a portable copy or a checkout is not."""
+    if not paths.FROZEN:
+        return False
+    try:
+        import winreg
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, UNINSTALL_KEY) as k:
+            app = winreg.QueryValueEx(k, "Inno Setup: App Path")[0]
+    except OSError:
+        return False
+    here = os.path.dirname(os.path.abspath(sys.executable))
+    return isinstance(app, str) and os.path.normcase(os.path.abspath(app)) == os.path.normcase(here)
+
+
+def _download_problem(e) -> str:
+    """What to tell the user about a failed update download."""
+    import urllib.error
+    if isinstance(e, UpdateError):
+        return str(e)
+    if isinstance(e, urllib.error.HTTPError):
+        return f"GitHub answered {e.code} for the setup file. Try again later, or download it from GitHub."
+    if isinstance(e, OSError) and not isinstance(e, urllib.error.URLError) and getattr(e, "filename", None):
+        return f"The setup could not be saved: {e.strerror or e}"
+    return "The download did not work. Check your connection and try again."
 
 
 def _tail(path, n=40):
@@ -166,6 +260,10 @@ class Api(webapi.LibraryApi, webapi.TagApi):
         self._session_ending = False   # Windows is shutting down, restarting or signing out: never veto the close
         self._profile = None           # the profile get_config last served, which saves go back to; None before that
         self._pending_profile_file = None    # the file pick_profile_file read, until create_profile uses it
+        self._upd_lock = threading.Lock()    # guards _upd and _upd_release
+        self._upd_dl = threading.Lock()      # held for the whole of a download
+        self._upd_release = None             # _setup_asset() of the newer release check_update last saw
+        self._upd = {"state": "idle", "version": "", "done": 0, "total": 0, "message": "", "file": ""}
         try:
             profiles.ensure()
         except OSError as e:
@@ -1311,7 +1409,7 @@ class Api(webapi.LibraryApi, webapi.TagApi):
     # theme is dark, light, system (follow Windows) or zbrush; get_prefs adds theme_effective (the one in force),
     # theme_base, theme_tokens, theme_sig and theme_source.
     _PREFS_DEFAULTS = {"check_updates": True, "last_screen": "menus", "setup_done": False, "mode": "",
-                       "seen_version": "", "tour_seen": False, "theme": "dark"}
+                       "seen_version": "", "tour_seen": False, "theme": "dark", "skipped_version": ""}
     # Keys an earlier Studio already wrote: a studio.json with any of them belongs to someone who has used the
     # Studio, so the Setup screen is not forced on them after an update.
     _USED_KEYS = ("window", "last_screen", "check_updates", "zbrush_folders")
@@ -1362,6 +1460,8 @@ class Api(webapi.LibraryApi, webapi.TagApi):
             return self.get_prefs()
         if key == "theme" and value not in theme.NAMES:
             return self.get_prefs()
+        if key == "skipped_version" and value and paths.version_key(value) is None:
+            return self.get_prefs()
         with _studio_lock:                     # read, change and write as one step
             data = _studio_for_update()            # keeps the other keys (window placement)
             if data is None:
@@ -1375,10 +1475,16 @@ class Api(webapi.LibraryApi, webapi.TagApi):
         return self.get_prefs()
 
     def check_update(self):
-        """Asks GitHub for the latest release. {"current", "latest", "url", "newer"}; latest is None when the
-        check is off (no request is made) or GitHub could not be reached."""
-        out = {"current": VERSION, "latest": None, "url": f"{RELEASES_URL}/tag/v{VERSION}", "newer": False}
-        if not self.get_prefs()["check_updates"]:
+        """Asks GitHub for the latest release. {"current", "latest", "url", "newer", "can_install", "skipped"};
+        latest is None when the check is off (no request is made) or GitHub could not be reached. can_install: Studio
+        can download and install it itself (an installed copy, and the release has a setup file with a known
+        SHA-256). skipped: the user chose "Don't remind me again" for this version (skipped_version), so the top
+        does not point it out; a newer one is pointed out again. notes: the newer release's notes for the update
+        dialog, {"version", "date", "url", "summary", "items", "blog"} (changelog.release_notes), else None."""
+        out = {"current": VERSION, "latest": None, "url": f"{RELEASES_URL}/tag/v{VERSION}", "newer": False,
+               "can_install": False, "skipped": False, "notes": None}
+        prefs = self.get_prefs()
+        if not prefs["check_updates"]:
             return out
         try:
             import urllib.request
@@ -1397,7 +1503,123 @@ class Api(webapi.LibraryApi, webapi.TagApi):
         out["newer"] = current is not None and latest > current
         if out["newer"]:
             out["url"] = f"{RELEASES_URL}/tag/{tag}"
+            setup = _setup_asset(data, out["latest"])
+            with self._upd_lock:
+                if self._upd["state"] != "downloading":
+                    self._upd_release = setup
+            out["can_install"] = bool(setup) and _installed_here()
+            out["skipped"] = paths.version_key(prefs["skipped_version"]) == latest
+            published = data.get("published_at")
+            date = published[:10] if isinstance(published, str) and re.match(r"\d{4}-\d{2}-\d{2}", published) else ""
+            out["notes"] = dict(changelog.release_notes(data.get("body"), out["latest"]),
+                                version=out["latest"], date=date, url=out["url"])
+        elif current is not None:
+            _clear_updates()                   # an update that is installed now, or never was: its setup can go
         return out
+
+    def get_update_progress(self):
+        """Where the update download is: {"state": "idle" | "downloading" | "ready" | "failed", "version", "done",
+        "total", "message"}. done and total are bytes."""
+        with self._upd_lock:
+            return dict(self._upd)
+
+    def download_update(self):
+        """Downloads the setup of the release check_update found, into %LOCALAPPDATA%\\ZOrbit\\updates, and checks
+        its size and SHA-256. Blocks until it is done. A call while a download runs waits for that one. A setup
+        that is already there and checks out is not fetched again. {"ok", "version", "message"}."""
+        with self._upd_dl:                                 # one download at a time; a second caller waits for it
+            with self._upd_lock:
+                setup, st = self._upd_release, dict(self._upd)
+            if not setup:
+                return {"ok": False, "message": "There is no update to download. Check for updates first."}
+            if st["state"] == "ready" and st["version"] == setup["version"] \
+                    and _file_sha256(st["file"]) == setup["sha256"]:
+                return {"ok": True, "version": setup["version"], "message": ""}
+            with self._upd_lock:
+                self._upd = {"state": "downloading", "version": setup["version"], "done": 0,
+                             "total": setup["size"], "message": "", "file": ""}
+            dest = os.path.join(_update_dir(), setup["name"])
+            _startup(f"update: downloading {setup['url']}")
+            try:
+                if _file_sha256(dest) != setup["sha256"]:
+                    _clear_updates()
+                    os.makedirs(_update_dir(), exist_ok=True)
+                    self._fetch_setup(setup, dest)
+            except Exception as e:
+                msg = _download_problem(e)
+                _startup(f"update: download failed: {e!r}")
+                with self._upd_lock:
+                    self._upd.update(state="failed", message=msg)
+                return {"ok": False, "version": setup["version"], "message": msg}
+            _startup(f"update: {setup['name']} downloaded and checked")
+            with self._upd_lock:
+                self._upd.update(state="ready", done=setup["size"], file=dest)
+            return {"ok": True, "version": setup["version"], "message": ""}
+
+    def _fetch_setup(self, setup, dest):
+        """Streams the setup to dest + ".part" and moves it into place only when its size and SHA-256 match."""
+        import hashlib
+        import urllib.request
+        part = dest + ".part"
+        h, done = hashlib.sha256(), 0
+        req = urllib.request.Request(setup["url"], headers={"User-Agent": f"ZOrbitStudio/{VERSION}"})
+        try:
+            with urllib.request.urlopen(req, timeout=30) as r, open(part, "wb") as f:
+                while True:
+                    chunk = r.read(256 * 1024)
+                    if not chunk:
+                        break
+                    done += len(chunk)
+                    if done > setup["size"]:
+                        raise UpdateError("The download is bigger than GitHub says the file is.")
+                    h.update(chunk)
+                    f.write(chunk)
+                    with self._upd_lock:
+                        self._upd["done"] = done
+            if done != setup["size"]:
+                raise UpdateError("The download stopped before the end of the file.")
+            if h.hexdigest() != setup["sha256"]:
+                raise UpdateError("The downloaded file does not match the SHA-256 of the release, so it was "
+                                  "deleted.")
+            os.replace(part, dest)
+        finally:
+            try:
+                os.remove(part)
+            except OSError:
+                pass
+
+    def install_update(self):
+        """Starts the downloaded setup (silent, it reopens Studio when it is done, and the app when it was running)
+        and closes Studio without asking: the page has dealt with unsaved changes first. The file is checked
+        again first. {"ok", "message"}; on ok the window is closing."""
+        with self._upd_lock:
+            st = dict(self._upd)
+            setup = self._upd_release
+        if st["state"] != "ready" or not setup or st["version"] != setup["version"]:
+            return {"ok": False, "message": "The update has not been downloaded yet."}
+        if not _installed_here():
+            return {"ok": False, "message": "This copy of ZOrbit was not installed with Setup, so it cannot "
+                                            "update itself. Download the new version from GitHub."}
+        if _file_sha256(st["file"]) != setup["sha256"]:
+            with self._upd_lock:
+                self._upd.update(state="idle", file="")
+            return {"ok": False, "message": "The downloaded setup changed on disk since it was checked. "
+                                            "Download it again."}
+        args = [st["file"], "/SILENT", "/SP-", "/NOCANCEL", "/NORESTART", "/CLOSEAPPLICATIONS",
+                f"/LOG={os.path.join(DATA_DIR, 'update-setup.log')}", "/RELAUNCH=1"]
+        if _mutex_exists(APP_MUTEX):
+            args.append("/STARTAPP=1")
+        try:
+            subprocess.Popen(args, cwd=_update_dir(), env=paths.clean_env(), close_fds=True,
+                             creationflags=0x00000008 | 0x00000200,     # DETACHED_PROCESS, CREATE_NEW_PROCESS_GROUP
+                             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except OSError as e:
+            _startup(f"update: setup did not start: {e!r}")
+            return {"ok": False, "message": f"Setup did not start: {e.strerror or e}"}
+        _startup(f"update: started {os.path.basename(st['file'])}; closing for the install")
+        self._allow_close = True
+        self.win_close()
+        return {"ok": True, "message": ""}
 
     def get_whats_new(self, all_current=False):
         """The "What's new" sections: every version after seen_version (the one the user last closed the
