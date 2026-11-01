@@ -4,6 +4,7 @@ Nothing here opens a window: Ring.preview and the sprite methods only need Pillo
 """
 import copy
 import dataclasses
+import json
 import math
 import os
 import shutil
@@ -1079,3 +1080,186 @@ def test_replacing_does_not_push_other_menus_out_of_the_cache():
     for slot in range(40, 60, 4):
         prepared(make_menu(2, mid="dragged"), slot=slot)
     assert {k[0] for k in ring._sprite_cache} == {f"keep{i}" for i in range(7)} | {"dragged"}
+
+
+# --- per-slot size and the layout map ----------------------------------------------------------
+def sized_menu(n=6, big=None, mult=1.25, mid="sized"):
+    """A menu whose slots in big (indices) have the style size mult."""
+    menu = make_menu(n, mid=mid)
+    for i in big or ():
+        menu.items[i] = dataclasses.replace(menu.items[i], style={"size": mult})
+    return menu
+
+
+def sized_fan_menu():
+    """(ring menu, fan menu): slot 1 of the ring opens a fan whose first slot has the style size 1.25."""
+    sub = SimpleNamespace(id="s", title="Sub", animation="", fan=True,
+                          items=[dataclasses.replace(config.Item(f"S{i}", "brush", {"brush": f"S{i}"}),
+                                                     style={"size": 1.25} if i == 0 else {}) for i in range(3)])
+    menu = make_menu(4)
+    menu.items[1] = config.Item("Sub", "menu", {"menu": "s"})
+    return menu, sub
+
+
+def test_equal_sizes_give_exactly_the_old_radius_and_window():
+    r = make_ring(make_menu(12))
+    r._geometry(1.0)
+    assert r.R == 1.25 * r.slot / (2 * math.sin(math.pi / 12))
+    assert r.rad == [r.R] * 12 and r.sizes == [r.slot] * 12
+    assert r.rsize == int(2 * (r.R * (1.0 + max(0.0, -r.anim.get("travel", 0.0))) + (r.slot * 0.62 + 34)))
+    assert r.flick_r == r.R + r.slot * 0.56 and r.flick_at == [r.flick_r] * 12
+    assert r.hit_r == r.R + r.slot * 0.62 + 6
+
+
+def test_a_bigger_slot_makes_the_ring_grow_for_its_pair_and_keeps_the_angles_even():
+    r = make_ring(sized_menu(12, big=[3]))
+    r._geometry(1.0)
+    plain = make_ring(make_menu(12))
+    plain._geometry(1.0)
+    assert r.sizes[3] == pytest.approx(90.0) and r.sizes[2] == 72.0
+    assert r.R == pytest.approx(1.25 * ((72 + 90) / 2) / (2 * math.sin(math.pi / 12)))
+    assert r.R > plain.R
+    for i, (ux, uy) in enumerate(r.seats):
+        assert (ux, uy) == pytest.approx((math.sin(math.radians(30 * i)), -math.cos(math.radians(30 * i))))
+
+
+def test_slot_sizes_are_limited_to_the_range_and_ignore_bad_values():
+    menu = make_menu(4)
+    for i, v in enumerate((3, 0.1, "wide", None)):
+        menu.items[i] = dataclasses.replace(menu.items[i], style={"size": v})
+    r = make_ring(menu)
+    r._geometry(1.0)
+    assert r.sizes == [72 * 1.25, 72 * 0.75, 72.0, 72.0]
+
+
+def test_a_bigger_slot_has_a_bigger_hit_area_and_its_own_flick_distance():
+    r = make_ring(sized_menu(6, big=[1]), radius=300)
+    r._geometry(1.0)
+    r._relayout()
+    cx, cy = r.centre[0] + r.seats[1][0] * r.rad[1], r.centre[1] + r.seats[1][1] * r.rad[1]
+    ox, oy = r.centre[0] + r.seats[2][0] * r.rad[2], r.centre[1] + r.seats[2][1] * r.rad[2]
+    assert r._hit(cx + 40, cy) == ((1,), "disc")                     # 40 px out: inside a 90 px slot ...
+    assert r._hit(ox + 40, oy)[1] != "disc"                          # ... outside a 72 px one
+    assert r.flick_at[1] == pytest.approx(r.rad[1] + 90 * 0.56)
+    assert r.flick_at[2] == pytest.approx(r.rad[2] + 72 * 0.56)
+    assert r.flick_r == max(r.flick_at) == r.flick_at[1]
+    assert r.hit_r == pytest.approx(r.rad[1] + 90 * 0.62 + 6)
+
+
+def test_the_window_and_dead_zone_follow_the_biggest_slot():
+    plain = make_ring(make_menu(6), radius=300)
+    plain.nested = True
+    plain._geometry(1.0)
+    r = make_ring(sized_menu(6, big=[2]), radius=300)
+    r.nested = True
+    r._geometry(1.0)
+    assert r.rsize > plain.rsize
+    assert r.dead == pytest.approx(90 / 2 + 4) and plain.dead == pytest.approx(72 / 2 + 4)
+
+
+def test_a_slots_size_reaches_its_sprites_and_the_cache_key():
+    plain = prepared(make_menu(4, mid="a"))
+    big = prepared(sized_menu(4, big=[1], mid="a"))
+    assert big.sprites[1][0].size[0] > plain.sprites[1][0].size[0]
+    assert big.sprites[0][0].size == plain.sprites[0][0].size
+    assert plain._sprite_key() != big._sprite_key()
+
+
+def test_preview_is_the_same_size_for_default_looks_and_grows_with_big_slots():
+    im = ring.Ring.preview(make_menu(8), make_cfg(), lambda it: None)
+    r = make_ring(make_menu(8))
+    r._geometry(1.0)
+    assert im.size == (r.rsize, r.rsize) and im.info["centre"] == (r.rsize // 2, r.rsize // 2)
+    big = ring.Ring.preview(sized_menu(8, big=range(8)), make_cfg(), lambda it: None)
+    assert big.size[0] > im.size[0]
+
+
+def test_the_layout_map_says_where_every_slot_is():
+    menu = sized_menu(6, big=[2])
+    im = ring.Ring.preview(menu, make_cfg(), lambda it: None, scale=1.0)
+    lay = im.info["layout"]
+    assert lay["scale"] == 1.0 and lay["size"] == list(im.size) and lay["centre"] == list(im.info["centre"])
+    assert lay["hub"] == {"style": "dot", "r": 5.0} and lay["dead"] == 38.0
+    assert lay["fans"] == []
+    r = make_ring(menu)
+    r._geometry(1.0)
+    assert lay["rings"] == [{"r": pytest.approx(r.R, abs=0.01), "first": 0, "n": 6, "offset": 0.0, "step": 60.0,
+                             "rmin": 38.0}]
+    assert [s["i"] for s in lay["slots"]] == list(range(6))
+    for s, (ux, uy) in zip(lay["slots"], r.seats):
+        assert (s["x"], s["y"]) == pytest.approx((ux * r.rad[s["i"]], uy * r.rad[s["i"]]), abs=0.01)
+        assert s["ring"] == 0 and s["shape"] == "circle" and s["corner"] == 0.28 and s["more"] is False
+        assert s["half"] == 30.0 and s["ang"] == 60.0 * s["i"]
+    assert [s["size"] for s in lay["slots"]] == [72.0, 72.0, 90.0, 72.0, 72.0, 72.0]
+    assert lay["slots"][3]["y"] == pytest.approx(r.R, abs=0.01)                         # slot 3 is straight down
+    json.dumps(lay)                                                                      # plain JSON
+
+
+def test_the_layout_map_gaps_sit_between_slots():
+    lay = ring.Ring.preview(make_menu(4), make_cfg(), lambda it: None).info["layout"]
+    assert [g["k"] for g in lay["gaps"]] == [1, 2, 3, 4]
+    assert [g["ang"] for g in lay["gaps"]] == [45.0, 135.0, 225.0, 315.0]               # k = n half a step after the last
+    R = lay["rings"][0]["r"]
+    g = lay["gaps"][0]
+    assert (g["x"], g["y"]) == pytest.approx((R * math.sin(math.radians(45)), -R * math.cos(math.radians(45))), abs=0.01)
+    one = ring.Ring.preview(make_menu(1), make_cfg(), lambda it: None).info["layout"]
+    assert [g["ang"] for g in one["gaps"]] == [180.0]
+
+
+def test_the_layout_map_says_when_the_ring_is_full():
+    lay = ring.Ring.preview(make_menu(12), make_cfg(), lambda it: None).info["layout"]
+    full = lay["full"]
+    assert full["mode"] == "grow" and full["n"] == 12 and full["capacity"] == 9 and full["grown"] is True
+    assert full["needed"] == pytest.approx(173.9, abs=0.05) and full["radius"] == 145.0
+    assert full["rings"] == 1 and full["more_slot"] is None
+    assert lay["rings"][0]["r"] == pytest.approx(full["needed"], abs=0.01)
+    ok = ring.Ring.preview(make_menu(5), make_cfg(), lambda it: None).info["layout"]["full"]
+    assert ok["grown"] is False and ok["capacity"] == 5 and ok["radius"] == 145.0
+
+
+def test_the_layout_map_follows_the_scale_and_the_slot_shape():
+    lay = ring.Ring.preview(make_menu(4), make_cfg(slot_shape="diamond"), lambda it: None, scale=2.0).info["layout"]
+    assert lay["scale"] == 2.0 and lay["slots"][0]["shape"] == "diamond" and lay["slots"][0]["size"] == 144.0
+    assert lay["rings"][0]["r"] == 290.0 and lay["hub"]["r"] == 10.0
+
+
+def test_the_layout_map_lists_open_fans_only_when_asked():
+    menu, sub = sized_fan_menu()
+    kw = dict(submenus=lambda mid: sub if mid == "s" else None)
+    assert ring.Ring.preview(menu, make_cfg(), lambda it: None, **kw).info["layout"]["fans"] == []
+    im = ring.Ring.preview(menu, make_cfg(), lambda it: None, open_path=(1,), **kw)
+    fans = im.info["layout"]["fans"]
+    assert len(fans) == 1 and fans[0]["path"] == [1]
+    slot1 = im.info["layout"]["slots"][1]
+    assert fans[0]["anchor"] == [slot1["x"], slot1["y"]]
+    assert [s["k"] for s in fans[0]["slots"]] == [0, 1, 2]
+    assert [s["size"] for s in fans[0]["slots"]] == pytest.approx([72 * 0.86 * 1.25, 72 * 0.86, 72 * 0.86], abs=0.01)
+    assert all(s["shape"] == "circle" for s in fans[0]["slots"])
+
+
+def test_a_fan_slot_with_a_size_is_hit_over_its_own_area():
+    menu, sub = sized_fan_menu()
+    r = ring.Ring(menu, make_cfg(), lambda it: None, lambda *a: None, lambda m: None, held=False,
+                  submenus=lambda mid: sub)
+    r._geometry(1.0)
+    r._relayout()
+    r._prepare()
+    fan = r._fan((1,))
+    r.open = [1]
+    r.centre = (0, 0)
+    assert fan.csizes == pytest.approx([72 * 0.86 * 1.25, 72 * 0.86, 72 * 0.86])
+    plain_reach = fan.csizes[1] / 2 * 1.12 + 4                       # a plain fan slot's hit radius, 4 px more than its disc
+    for k, hit in ((0, True), (1, False)):                           # past the plain reach, inside the big slot's
+        px, py = fan.pos[k]
+        assert (r._hit(px + plain_reach + 2, py)[0] == (1, k)) == hit
+
+
+def test_the_hub_disc_is_a_disc_and_the_ring_is_hollow():
+    def centre_pixel(style):
+        dot = prepared(make_menu(4), hub=40, hub_style=style)._dot
+        return dot.getpixel((dot.size[0] // 2, dot.size[1] // 2))
+    disc, ring_, dot = centre_pixel("disc"), centre_pixel("ring"), centre_pixel("dot")
+    assert disc[3] == 255 and ring_[3] < 255
+    assert disc[:3] != dot[:3]
+    placeholder = theme.preset("dark")["ring"]["placeholder"]
+    assert max(abs(a - b) for a, b in zip(disc[:3], placeholder[1])) <= 12            # the slot surface, its middle

@@ -43,7 +43,7 @@ Studio's [Simple mode](studio.md#simple-and-full-mode) shows only some of these.
 - **Octagon** is a square with its corners cut off, flat at the top.
 - **Diamond** is a square turned on its corner. Its tips reach a little past where a circle's edge would be, so a diamond looks larger than the other shapes at the same slot size.
 
-The icon, the hover glow, the tag colours and the submenu badge follow the shape, and a slot is picked where the shape is (a rounded square answers anywhere in its box). The names, the lines and the spacing of the ring do not change. The setting is for every menu, and for fans as well as rings.
+The icon, the hover glow, the tag colours and the submenu badge follow the shape, and a slot is picked where the shape is (a rounded square answers anywhere in its box). The names, the lines and the spacing of the ring do not change. The setting is for every menu, and for fans as well as rings. A single slot can be made bigger or smaller than the rest: `style.size` on an item is a share of **Slot size**, from 0.75 to 1.25 (1 by default; see [Labels and icons](menus.md#labels-and-icons)). The ring grows to give the two neighbours that need the most room their space, the slots stay evenly spaced, and a bigger slot is also picked over a bigger area and flicked a little further out.
 
 ![The Brushes ring with Rounded square slots, ClayBuildup hovered](images/slot-shapes.png)
 
@@ -52,7 +52,7 @@ The icon, the hover glow, the tag colours and the submenu badge follow the shape
 The hub is drawn in one of four styles, all the same size (`hub`) and all with a soft glow in the hub colour:
 
 - `dot` is a filled dot in the accent colour. It is the default.
-- `disc` is a disc in the theme's background colour with a rim in the hub colour.
+- `disc` is a filled disc with a rim in the hub colour. It is filled like an empty slot, so it reads as a disc and not as the `ring` style.
 - `ring` is the rim alone, so the middle of the ring shows through it. The spokes start at its edge.
 - `icon` is a round disc showing the menu's icon. A menu with no icon, or an icon that cannot be found, shows the first letters of its title instead.
 

@@ -52,6 +52,7 @@ from collections import OrderedDict
 
 from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageFont
 
+import layout
 import shapes
 import tags
 import theme
@@ -62,7 +63,7 @@ SS = 3                      # supersampling for sprites (drawn large, reduced on
 TIMER_TICK = 1
 CLASS_NAME = "ZOrbitRing"
 HOVER_MS = 120
-MAX_SECTOR = 90.0           # widest angle (degrees) a single slot answers to
+MAX_SECTOR = layout.MAX_SECTOR   # widest angle (degrees) a single slot answers to (layout.py; app.js copies it)
 TAG_BANDS = {"hairline": 0.0, "narrow": 0.36, "medium": 0.62, "wide": 0.9}   # band width, relative to a slot
 FAN_SLOT = 0.86             # fan slot size, relative to a ring slot
 FAN_DEPTH = 3               # fans inside fans, at most this deep
@@ -70,7 +71,7 @@ FAN_SPAN = (130.0, 110.0)   # widest arc (degrees) of a first fan and of a deepe
 FAN_TURNS = (0, 15, -15, 30, -30, 45, -45, 60, -60, 75, -75, 90, -90)   # turns tried to dodge slots and edges
 FAN_MS = 220                # longest fan open animation (per slot)
 FAN_GRACE = 0.12            # seconds a fan stays open after the cursor leaves it
-SLOT_GAP = 1.25             # neighbouring slot centres are at least this many slot widths apart (app.js copies it)
+SLOT_GAP = layout.SLOT_GAP       # neighbouring slot centres are at least this many slot widths apart (layout.py; app.js copies it)
 SPRITE_MENUS = 8            # menus whose sprites are kept between opens
 _instances = {}
 _sprite_cache = OrderedDict()   # key (see Ring._sprite_key) -> (sprites, labels, dot), least recently used first
@@ -329,6 +330,7 @@ class _Look:
         set_(self, "hub_style", style if style in HUB_STYLES else "dot")
         set_(self, "hub_color", _role(d.get("hub_color", "accent"), colors) or colors["accent"])
         set_(self, "hub_glow", _num(d.get("hub_glow"), 1.0, 0.0, 1.0))
+        set_(self, "when_full", d.get("when_full", "grow"))
         set_(self, "tag_colors", d.get("tag_colors", "tint"))
         set_(self, "tag_glow_opacity", d.get("tag_glow_opacity", 0.4))
         set_(self, "tag_tint_opacity", d.get("tag_tint_opacity", 0.3))
@@ -485,6 +487,7 @@ class _Fan:
         self.items = menu.items
         self.anchor, self.anchor_r = anchor, anchor_r
         self.cslot = cslot
+        self.csizes = [cslot] * len(self.items)    # each slot's width: cslot times its item's style size
         self.axis, self.offs, self.dists, self.pos = axis, offs, dists, pos
         self.step, self.half, self.reach = step, half, reach   # slot spacing, wedge half-angle and length
         self.hv = [[0.0, 0.0, 0.0] for _ in self.items]
@@ -543,7 +546,7 @@ class Ring:
         """Renders the ring to a PIL RGBA image without a window (Studio). t: seconds since open, or None
         for the settled look. open_path: indices of the fans to show open (needs submenus). The ring centre
         is in im.info["centre"] (and the hovered slot in im.info["hover_at"]): with a fan open the image is no
-        longer square around it. hover: an item index, or a path (a tuple) for a slot inside an open fan.
+        longer square around it. im.info["layout"] is layout_map(): where every slot, gap and open fan is. hover: an item index, or a path (a tuple) for a slot inside an open fan.
         held: draw the hold-mode hint instead of the click-mode one. open_age: seconds since the fans opened,
         a number for all of them or {path: seconds}; None for settled."""
         r = cls(menu, ring_cfg, icon_for, lambda *a: None, lambda m: None, held=held, submenus=submenus)
@@ -570,6 +573,7 @@ class Ring:
                 im.info["hover_at"] = (r.centre[0] + x, r.centre[1] + y)
             except (KeyError, IndexError):
                 pass
+        im.info["layout"] = r.layout_map()
         return im
 
     @classmethod
@@ -584,7 +588,54 @@ class Ring:
         r.t0 = now0
         for k in range(int(total * fps) + 1):
             frames.append(r._compose(now0 + k / fps))
+        if frames:
+            frames[0].info["layout"] = r.layout_map()      # of the settled ring; the frames share one geometry
         return frames
+
+    def layout_map(self):
+        """Where everything of the ring is, as plain JSON numbers in preview pixels (y down), for Studio's overlay:
+        {"scale", "size": [w, h] of the image, "centre": [x, y] of the ring centre in it, "dead": dead zone radius,
+        "hub": {"style", "r"}, "rings": [{"r", "first", "n", "offset", "step", "rmin"}],
+        "slots": [{"i", "ring", "x", "y", "size", "shape", "corner", "ang", "half", "more"}],
+        "gaps": [{"k", "x", "y", "ang"}], "full": {"mode", "when_full", "n", "capacity", "needed", "radius",
+        "grown", "rings", "more_slot"}, "fans": [{"path", "anchor": [x, y], "slots": [{"k", "x", "y", "size",
+        "shape"}]}]}. x and y are from the ring centre. ang is in degrees clockwise from 12 o'clock and half is half
+        the angle a slot answers to. A gap k is where an item dropped there would go in before ring slot k (1 to n,
+        k = n after the last), midway between its neighbours. fans lists the open fans only. Call it after
+        _geometry and _relayout (and with the fans open that should show)."""
+        def r2(v):
+            return round(float(v), 2)
+
+        pl, look = self.plan, self.look
+        rings = [{"r": r2(rp.radius), "first": rp.first, "n": rp.n, "offset": r2(rp.offset), "step": r2(rp.step),
+                  "rmin": r2(max(rp.rmin, self.dead) if k == 0 else rp.rmin)} for k, rp in enumerate(pl.rings)]
+        slots = []
+        for i, it in enumerate(self.items):
+            seat, (ux, uy) = pl.seats[i], self.seats[i]
+            shape, corner = self._shape_of(it, look)
+            slots.append({"i": i, "ring": seat.ring, "x": r2(ux * self.rad[i]), "y": r2(uy * self.rad[i]),
+                          "size": r2(self.sizes[i]), "shape": shape, "corner": r2(_num(corner, SLOT_CORNER, 0.0, 0.5)),
+                          "ang": r2(seat.angle), "half": r2(min(pl.rings[seat.ring].step, MAX_SECTOR) / 2),
+                          "more": _is_more(it)})
+        gaps = []
+        for rp in pl.rings:
+            for j in range(1, rp.n + 1):
+                a = rp.offset + rp.step * (j - 0.5)
+                gaps.append({"k": rp.first + j, "x": r2(math.sin(math.radians(a)) * rp.radius),
+                             "y": r2(-math.cos(math.radians(a)) * rp.radius), "ang": r2(a % 360)})
+        fans = []
+        for fan in self._open_fans():
+            fans.append({"path": list(fan.path), "anchor": [r2(fan.anchor[0]), r2(fan.anchor[1])],
+                         "slots": [{"k": k, "x": r2(px), "y": r2(py), "size": r2(fan.csizes[k]),
+                                    "shape": self._shape_of(fan.items[k], fan.look)[0]}
+                                   for k, (px, py) in enumerate(fan.pos)]})
+        return {"scale": self.scale, "size": list(self.size), "centre": [r2(self.centre[0]), r2(self.centre[1])],
+                "dead": r2(self.dead), "hub": {"style": look.hub_style, "r": r2(look.hub / 2 * self.scale)},
+                "rings": rings, "slots": slots, "gaps": gaps,
+                "full": {"mode": pl.mode, "when_full": look.when_full, "n": self.n, "capacity": pl.capacity,
+                         "needed": r2(pl.needed), "radius": r2(pl.radius), "grown": pl.grown,
+                         "rings": len(pl.rings), "more_slot": pl.more_slot},
+                "fans": fans}
 
     def show(self, x: int, y: int) -> None:
         _register_class()
@@ -658,20 +709,26 @@ class Ring:
         self.scale = scale
         self.n = len(self.items)
         self.step = 360.0 / self.n
-        self.R = c.radius * scale
         self.slot = c.slot * scale
-        if self.n >= 2:                            # the radius is a minimum: grow it until neighbours have room
-            self.R = max(self.R, SLOT_GAP * self.slot / (2 * math.sin(math.pi / self.n)))
+        # a slot's own size is a share (0.75 to 1.25) of the ring's slot size, from its style
+        self.sizes = [self.slot * _num(_style(it).get("size"), 1.0, 0.75, 1.25) for it in self.items]
+        # the radius is a minimum: layout grows it until neighbours have room
+        self.plan = layout.plan(self.sizes, c.radius * scale, c.when_full)
+        self.R = self.plan.rings[0].radius
+        self.rad = [seat.radius for seat in self.plan.seats]     # each slot's distance from the centre
         self.dead = c.dead_zone * scale
         if self.nested:                            # entered on the parent's slot disc: no instant pick there
-            self.dead = max(self.dead, self.slot / 2 + 4 * scale)
-        self.flick_r = self.R + self.slot * 0.56   # just past the hovered (1.12x) disc
-        reach = self.R * (1.0 + max(0.0, -self.anim.get("travel", 0.0)))
-        self.pad = self.slot * 0.62 + 34 * scale    # half slot at 1.12x + glow + label
-        self.rsize = int(2 * (reach + self.pad))    # the ring's own square; the window adds open fans
+            self.dead = max(self.dead, max(self.sizes) / 2 + 4 * scale)
+        self.flick_at = [self.rad[i] + self.sizes[i] * 0.56 for i in range(self.n)]   # just past the hovered (1.12x) disc
+        self.flick_r = max(self.flick_at)
+        grow = 1.0 + max(0.0, -self.anim.get("travel", 0.0))
+        self.pad = max(self.sizes) * 0.62 + 34 * scale    # half the widest slot at 1.12x + glow + label
+        # the ring's own square; the window adds open fans
+        self.rsize = int(2 * max(self.rad[i] * grow + (self.sizes[i] * 0.62 + 34 * scale) for i in range(self.n)))
+        self.hit_r = max(self.rad[i] + self.sizes[i] * 0.62 for i in range(self.n)) + 6 * scale   # clicks land inside
         self.seats = []
-        for i in range(self.n):
-            a = math.radians(self.step * i)        # 0 at 12 o'clock, clockwise
+        for seat in self.plan.seats:
+            a = math.radians(seat.angle)           # 0 at 12 o'clock, clockwise
             self.seats.append((math.sin(a), -math.cos(a)))
 
     def _fit_centre(self):
@@ -694,8 +751,8 @@ class Ring:
         hr = self.rsize // 2
         x0, y0, x1, y1 = -hr, -hr, self.rsize - hr, self.rsize - hr
         for fan in self._open_fans():
-            e = fan.cslot * 0.62 + 34 * self.scale
-            for px, py in fan.pos:
+            for (px, py), cs in zip(fan.pos, fan.csizes):
+                e = cs * 0.62 + 34 * self.scale
                 x0, y0, x1, y1 = min(x0, px - e), min(y0, py - e), max(x1, px + e), max(y1, py + e)
         x0, y0, x1, y1 = math.floor(x0), math.floor(y0), math.ceil(x1), math.ceil(y1)
         w, h = x1 - x0, y1 - y0
@@ -737,12 +794,12 @@ class Ring:
         rx, ry = x - self.centre[0], y - self.centre[1]
         fans = self._open_fans()
         for fan in reversed(fans):                 # deepest first
-            rr = fan.cslot / 2 * 1.12 + 4 * self.scale
             for k, (px, py) in enumerate(fan.pos):
+                rr = fan.csizes[k] / 2 * 1.12 + 4 * self.scale
                 if self._within(rx - px, ry - py, rr, fan.items[k], fan.look):
                     return fan.path + (k,), "disc"
         for i, (ux, uy) in enumerate(self.seats):
-            if self._within(rx - ux * self.R, ry - uy * self.R, self.slot / 2, self.items[i], self.look):
+            if self._within(rx - ux * self.rad[i], ry - uy * self.rad[i], self.sizes[i] / 2, self.items[i], self.look):
                 return (i,), "disc"
         for fan in reversed(fans):
             if self._in_wedge(fan, rx, ry):
@@ -765,7 +822,7 @@ class Ring:
         if abs(off) > fan.half:
             return None
         k = min(range(len(fan.offs)), key=lambda j: abs(off - fan.offs[j]))
-        return k if math.hypot(vx, vy) >= fan.dists[k] + fan.cslot * 0.56 else None
+        return k if math.hypot(vx, vy) >= fan.dists[k] + fan.csizes[k] * 0.56 else None
 
     def _current_hover(self):
         """(path, how, item) under the cursor; item is None between slots."""
@@ -784,8 +841,14 @@ class Ring:
         """Centre of the slot at path, relative to the ring centre."""
         if len(path) == 1:
             ux, uy = self.seats[path[0]]
-            return ux * self.R, uy * self.R
+            return ux * self.rad[path[0]], uy * self.rad[path[0]]
         return self.fans[path[:-1]].pos[path[-1]]
+
+    def _size_at(self, path):
+        """Width of the slot at path (a ring slot's own, or a fan slot's)."""
+        if len(path) == 1:
+            return self.sizes[path[0]]
+        return self.fans[path[:-1]].csizes[path[-1]]
 
     def _node_screen(self, path):
         x, y = self._node_pos(path)
@@ -829,12 +892,13 @@ class Ring:
         menu = self._submenu(self._item(path).data["menu"])
         cs = self.slot * FAN_SLOT
         anchor = self._node_pos(path)
-        anchor_r = self.slot / 2 if len(path) == 1 else cs / 2
+        anchor_r = self._size_at(path) / 2
         fan = _Fan(path, menu, anchor, anchor_r, cs, *self._layout(path)[:-1])
+        fan.csizes = self._fan_sizes(menu)
         fan.look = self._look_for(menu)
         art = self._fan_art(menu)
         fan.sprites, fan.labels = [a[0] for a in art], [a[1] for a in art]
-        fan.lines = self._fan_lines(anchor, anchor_r, fan.pos, cs, _chrome(self._item(path), self._look_at(path)),
+        fan.lines = self._fan_lines(anchor, anchor_r, fan.pos, fan.csizes, _chrome(self._item(path), self._look_at(path)),
                                     fan.look)
         mode = MODES.get(menu.animation or self.cfg.get("animation", "smooth"), MODES["smooth"])
         dur = min(mode["dur"], FAN_MS)
@@ -865,26 +929,35 @@ class Ring:
         lay = self._layouts.get(path)
         if lay is None:
             menu = self._submenu(self._item(path).data["menu"])
-            cs, pad = self.slot * FAN_SLOT, 4 * self.scale
+            sizes = self._fan_sizes(menu)
+            cs, pad = max(sizes), 4 * self.scale
             anchor = self._node_pos(path)
             if len(path) == 1:                     # straight out from the ring centre
                 axis = math.atan2(anchor[1], anchor[0])
             else:                                  # on along the way the parent fan points
                 px, py = self._node_pos(path[:-1])
                 axis = math.atan2(anchor[1] - py, anchor[0] - px)
-            taken = [(0.0, 0.0, self.R - self.slot * 0.6)]
-            taken += [(ux * self.R, uy * self.R, self.slot * 0.56 + pad) for ux, uy in self.seats]
+            taken = [(0.0, 0.0, min(self.rad[i] - self.sizes[i] * 0.6 for i in range(self.n)))]
+            taken += [(ux * self.rad[i], uy * self.rad[i], self.sizes[i] * 0.56 + pad)
+                      for i, (ux, uy) in enumerate(self.seats)]
             for k in range(1, len(path)):
-                taken += [(x, y, cs * 0.56 + pad) for x, y in self.fans[path[:k]].pos]
-            lay = self._layouts[path] = self._fan_layout(len(path), len(menu.items), anchor, axis, taken)
+                fan = self.fans[path[:k]]
+                taken += [(x, y, c * 0.56 + pad) for (x, y), c in zip(fan.pos, fan.csizes)]
+            lay = self._layouts[path] = self._fan_layout(len(path), len(menu.items), anchor, axis, taken, cs)
         return lay
 
-    def _fan_layout(self, depth, n, anchor, axis, taken):
+    def _fan_sizes(self, menu):
+        """The width of each slot of a fan menu: the fan slot size times the item's own style size."""
+        cs = self.slot * FAN_SLOT
+        return [cs * _num(_style(it).get("size"), 1.0, 0.75, 1.25) for it in menu.items]
+
+    def _fan_layout(self, depth, n, anchor, axis, taken, cs=None):
         """Seats for n slots in an arc around anchor, centred on axis: spaced so neighbours (and their
         labels) clear each other, the arc widened and pushed out as n grows, and past a size limit every other
         slot set further out. The arc turns away from ring slots, outer fans and the screen edge when it has
-        to. Returns (axis, offsets, distances, positions, step, wedge half-angle, wedge length, penalty)."""
-        cs = self.slot * FAN_SLOT
+        to. cs: the widest slot of the fan. Returns (axis, offsets, distances, positions, step, wedge half-angle,
+        wedge length, penalty)."""
+        cs = cs or self.slot * FAN_SLOT
         g = cs * (1.3 if self.look.labels != "none" else 1.15)   # centre-to-centre gap
         span = math.radians(FAN_SPAN[0] if depth == 1 else FAN_SPAN[1])
         r = self.slot * (1.5 if depth == 1 else 1.3)
@@ -934,10 +1007,11 @@ class Ring:
     def _fan_art(self, menu, upto=None):
         """(sprites, labels) of a fan's slots, rendered once per menu (upto: stop after that many)."""
         art = self._art.setdefault(menu.id, [])
-        cs = self.slot * FAN_SLOT
+        sizes = self._fan_sizes(menu)
         look = self._look_for(menu)
         while len(art) < len(menu.items) and (upto is None or len(art) < upto):
             it = menu.items[len(art)]
+            cs = sizes[len(art)]
             art.append((self._slot_sprites(it, cs, look), self._label_sprites(it, cs, look)))
         return art
 
@@ -1016,7 +1090,7 @@ class Ring:
             k = self._fan_flick(rx, ry)
             if k is not None:
                 return self._flicked(tuple(self.open) + (k,), flick, hover_sub)
-        if how == "sector" and math.hypot(rx, ry) >= self.flick_r:
+        if how == "sector" and math.hypot(rx, ry) >= self.flick_at[path[0]]:
             return self._flicked(path, flick, hover_sub)
         return False
 
@@ -1042,7 +1116,8 @@ class Ring:
         cached = _sprite_get(key)
         hit = cached is not None
         if not hit:
-            cached = ([self._slot_sprites(it) for it in self.items], [self._label_sprites(it) for it in self.items],
+            cached = ([self._slot_sprites(it, self.sizes[i]) for i, it in enumerate(self.items)],
+                      [self._label_sprites(it, self.sizes[i]) for i, it in enumerate(self.items)],
                       self._dot_sprite())
             _sprite_put(key, cached)
         self.sprites, self.labels, self._dot = cached
@@ -1269,6 +1344,8 @@ class Ring:
             draw.ellipse(box, outline=_rgba(hc, 1.0), width=rim)
         else:                                      # disc, or the menu's icon on a disc
             draw.ellipse(box, fill=_rgba(L.bg, 0.92), outline=_rgba(hc, 1.0), width=rim)
+            if style == "disc":                    # the surface of an untinted slot, so it reads as a disc, not a ring
+                self._placeholder(im, "circle", SLOT_CORNER, c, d / 2 - rim, L)
             if style == "icon":
                 self._hub_face(im, L, c, int(d) - 2 * rim)
         return im.resize((max(1, int(C / s)),) * 2, Image.LANCZOS)
@@ -1291,9 +1368,9 @@ class Ring:
         l, t_, r_, b_ = gd.textbbox((0, 0), glyph, font=f)
         gd.text((c - (r_ - l) / 2 - l, c - (b_ - t_) / 2 - t_), glyph, font=f, fill=_rgba(L.text, 0.9))
 
-    def _fan_lines(self, anchor, anchor_r, pos, cs, color="", look=None):
-        """Dashed lines from a fan's slot out to each of its slots, in color if it has one, else the lines colour
-        of the fan's look: (image, top-left relative to the ring centre)."""
+    def _fan_lines(self, anchor, anchor_r, pos, sizes, color="", look=None):
+        """Dashed lines from a fan's slot out to each of its slots (sizes: their widths), in color if it has one,
+        else the lines colour of the fan's look: (image, top-left relative to the ring centre)."""
         s = SS
         m = 4 * self.scale
         xs, ys = [anchor[0]] + [p[0] for p in pos], [anchor[1]] + [p[1] for p in pos]
@@ -1305,7 +1382,7 @@ class Ring:
         lw = max(1, int(1.3 * self.scale * s))
         dash, gap = 5 * self.scale, 4 * self.scale
         ax, ay = anchor
-        for px, py in pos:
+        for (px, py), cs in zip(pos, sizes):
             L = math.hypot(px - ax, py - ay)
             if L < 1:
                 continue
@@ -1328,7 +1405,7 @@ class Ring:
         cx = cy = self.rsize // 2 * s
         im = Image.new("RGBA", (S, S), (0, 0, 0, 0))
         d = ImageDraw.Draw(im)
-        hit = (self.R + self.slot * 0.62 + 6 * self.scale) * s   # invisible disc so clicks land on us
+        hit = self.hit_r * s                       # invisible disc so clicks land on us
         d.ellipse((cx - hit, cy - hit, cx + hit, cy + hit), fill=(0, 0, 0, 1))
         lw = max(1, int(self.scale * s))
         self._band(im, cx, cy)
@@ -1337,8 +1414,8 @@ class Ring:
             d.ellipse((cx - r, cy - r, cx + r, cy + r), outline=_rgba(self.c_lines, a), width=lw)
         # spokes start at the hub's edge; under a solid dot they were always hidden, so a dot keeps today's 8 px
         r0 = (8 if self.look.hub_style == "dot" else max(8, self._hub() / 2 + 3)) * self.scale * s
-        r1 = (self.R - self.slot / 2 - 6 * self.scale) * s
-        for (ux, uy), it in zip(self.seats, self.items):
+        for (ux, uy), it, rad, size in zip(self.seats, self.items, self.rad, self.sizes):
+            r1 = (rad - size / 2 - 6 * self.scale) * s
             colr = _rgba(_chrome(it, self.look), 0.35) if _chrome(it, self.look) else (
                 _rgba(self.c_hi, 0.35) if it.kind == "menu" else _rgba(self.c_lines, 0.30))
             d.line((cx + ux * r0, cy + uy * r0, cx + ux * r1, cy + uy * r1), fill=colr, width=lw)
@@ -1365,7 +1442,8 @@ class Ring:
         then loses letters, the hint tries its shorter wordings and smaller sizes and is left out when none
         fits, so a small ring never has text across its slots or its centre dot."""
         s = SS
-        free = self.R - self.slot * 0.62 - 4 * self.scale          # radius of the space inside the discs
+        # radius of the space inside the discs
+        free = min(self.rad[i] - self.sizes[i] * 0.62 for i in range(self.n)) - 4 * self.scale
 
         def room(dy):                                              # width of that space at dy, supersampled
             return 2 * math.sqrt(max(0.0, free * free - (dy * self.scale) ** 2)) * s
@@ -1433,8 +1511,8 @@ class Ring:
             arc = [fan.axis + fan.half * (j / 8 - 1) for j in range(17)]
             d.polygon([(ax, ay)] + [(ax + fan.reach * math.cos(a), ay + fan.reach * math.sin(a)) for a in arc],
                       fill=(0, 0, 0, 1))
-            r = fan.cslot * 0.62 + 6 * self.scale
-            for px, py in fan.pos:
+            for (px, py), cs in zip(fan.pos, fan.csizes):
+                r = cs * 0.62 + 6 * self.scale
                 d.ellipse((cx + px - r, cy + py - r, cx + px + r, cy + py + r), fill=(0, 0, 0, 1))
         static = self._static()
         if fading:
@@ -1490,7 +1568,7 @@ class Ring:
         sc = a["scale"] + (1.0 - a["scale"]) * e
         travel = a.get("travel", 0.0) * (1.0 - e)
         ux, uy = self.seats[i]
-        dx, dy = -ux * self.R * travel, -uy * self.R * travel
+        dx, dy = -ux * self.rad[i] * travel, -uy * self.rad[i] * travel
         dy += a.get("drift", 0) * self.scale * (1.0 - e)
         rot = a.get("rot", 0) * (1.0 - e)
         blur = 0.0
@@ -1542,9 +1620,9 @@ class Ring:
         for i in order:                            # every disc first, then every label, so no disc covers a name
             sc, alpha, dx, dy, rot, blur = self._slot_state(i, now)
             ux, uy = self.seats[i]
-            px, py, h = cx + ux * self.R + dx, cy + uy * self.R + dy, self._hover_val(self.hv, i, now)
+            px, py, h = cx + ux * self.rad[i] + dx, cy + uy * self.rad[i] + dy, self._hover_val(self.hv, i, now)
             self._draw_disc(canvas, ((), i), self.sprites[i], px, py, sc, alpha, h, rot, blur)
-            labels.append((self.labels[i], px, py, sc, alpha, h, self.slot))
+            labels.append((self.labels[i], px, py, sc, alpha, h, self.sizes[i]))
         for args in labels:
             self._draw_label(canvas, *args)
         for fan in self._open_fans():
@@ -1571,7 +1649,7 @@ class Ring:
             px, py = cx + ax + (fan.pos[k][0] - ax) * e, cy + ay + (fan.pos[k][1] - ay) * e
             sc, h = 0.6 + 0.4 * e, self._hover_val(fan.hv, k, now)
             self._draw_disc(canvas, (fan.path, k), fan.sprites[k], px, py, sc, alpha, h, 0, 0.0)
-            labels.append((fan.labels[k], px, py, sc, alpha, h, fan.cslot))
+            labels.append((fan.labels[k], px, py, sc, alpha, h, fan.csizes[k]))
         for args in labels:
             self._draw_label(canvas, *args)
 
@@ -1688,8 +1766,7 @@ class Ring:
         x, y = W.cursor_pos()
         lx, ly = x - self.origin[0], y - self.origin[1]
         path, how = self._hit(lx, ly)
-        over = how in ("disc", "wedge") or math.hypot(lx - self.centre[0], ly - self.centre[1]) <= (
-            self.R + self.slot * 0.62 + 6 * self.scale)
+        over = how in ("disc", "wedge") or math.hypot(lx - self.centre[0], ly - self.centre[1]) <= self.hit_r
         if self.mode == "click" and not over and (W.key_down(W.VK_LBUTTON) or W.key_down(W.VK_RBUTTON)):
             self._finish(None, "clicked outside")
             return
