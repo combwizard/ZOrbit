@@ -83,8 +83,9 @@ All notable changes to this project are listed here. The format follows
 - Studio and browser: Library cards and folder rows are one Tab stop each, with the arrow keys, Home and End
   moving inside them; opening the problems list with the keyboard puts the focus on its first entry; dimmed and
   red text reach a 4.5:1 contrast; with Windows animations off the spinners and pulsing dots stand still instead
-  of flickering; a pen or a finger can drag rows, cards and ring slots. A rescan of an unchanged library keeps
-  the list and its cards, and thumbnails load in small batches with the visible ones first.
+  of flickering (thanks to Jay, #92); a pen or a finger can drag rows, cards and ring slots. A rescan of an
+  unchanged library keeps the list and its cards, and thumbnails load in small batches with the visible ones
+  first.
 - Studio: Setup says what to do when ZBrush has not loaded the plugin (press **Fix** and restart, or close ZBrush
   and start it from the Start menu, then read `bridge.log` or `zscript_launch.log` if it exists), notices a
   ZBrush started from a program that was already open before the plugin was registered, and explains a ZBrush
