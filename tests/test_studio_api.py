@@ -447,7 +447,7 @@ def test_the_ring_defaults_follow_the_theme(api, monkeypatch):
     opts = api.get_options()
     assert opts["ring_defaults"]["colors"] == light
     assert opts["theme_ring_colors"] == {"dark": theme.ring_colors("dark"), "light": light}
-    assert opts["themes"] == ["dark", "light", "system"]
+    assert opts["themes"] == ["dark", "light", "system", "zbrush"]
 
 
 def test_the_ring_defaults_are_dark_by_default(api):
