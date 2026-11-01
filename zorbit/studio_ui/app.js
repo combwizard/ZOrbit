@@ -2173,18 +2173,21 @@ function buildItemInspector() {
 
 /* The Glow colour of one item: a swatch and a #rrggbb field like the Colours rows, and a button that clears it (the key is then dropped). */
 function glowControl(it) {
-  const has = () => typeof it.glow === 'string' && !!normHex(it.glow);
+  // kept in style.glow_color (radial.json); the style object is dropped when it empties
+  const cur = () => (it.style && typeof it.style === 'object') ? it.style.glow_color : undefined;
+  const drop = () => { if (it.style) { delete it.style.glow_color; if (!Object.keys(it.style).length) delete it.style; } };
+  const has = () => typeof cur() === 'string' && !!normHex(cur());
   const sw = h('input', { type: 'color', class: 'swatch', 'aria-label': 'Glow colour' });
   const hex = h('input', { class: 'inp mono hex', type: 'text', maxlength: '7', placeholder: 'Default', spellcheck: 'false', 'aria-label': 'Glow hex value' });
   const msg = h('span', { class: 'hex-msg', role: 'status' });
-  const clear = iconBtn('undo', 'Clear the glow colour', () => { delete it.glow; commit(); paint(); }, 'reset');
+  const clear = iconBtn('undo', 'Clear the glow colour', () => { drop(); commit(); paint(); }, 'reset');
   const paint = () => {
     const on = has();
-    sw.value = on ? it.glow.toLowerCase() : colorVal('accent'); sw.style.opacity = on ? '1' : '.45';
-    hex.value = on ? it.glow : ''; hex.classList.remove('bad'); msg.textContent = '';
+    sw.value = on ? cur().toLowerCase() : colorVal('accent'); sw.style.opacity = on ? '1' : '.45';
+    hex.value = on ? cur() : ''; hex.classList.remove('bad'); msg.textContent = '';
     clear.style.visibility = on ? 'visible' : 'hidden';
   };
-  const set = n => { if (n !== it.glow) { it.glow = n; commit(); } };
+  const set = n => { if (n !== cur()) { it.style = Object.assign({}, it.style, { glow_color: n }); commit(); } };
   sw.addEventListener('input', () => { set(sw.value); paint(); });
   hex.addEventListener('input', () => {
     const t = hex.value.trim(), n = normHex(t), bad = !!t && !n;
@@ -2193,7 +2196,7 @@ function glowControl(it) {
   });
   const apply = () => {
     const t = hex.value.trim(), n = normHex(t);
-    if (!t) { if (it.glow !== undefined) { delete it.glow; commit(); } } else if (n) set(n);
+    if (!t) { if (cur() !== undefined) { drop(); commit(); } } else if (n) set(n);
     paint();
   };
   hex.addEventListener('blur', apply);
@@ -4812,7 +4815,8 @@ function describeProblem(raw) {
     if ((r = /^: unknown setting (.+)$/s.exec(t))) return `has an unknown setting ${r[1].replace(/\s*\(did you mean .*$/s, '')}.` + didYouMean(r[1]);
     if ((r = /^: tag (.+) does not exist; the slot stays empty$/s.exec(t))) return `uses the tag ${unq(r[1])}, which does not exist, so the slot stays empty`;
     if ((r = /^: tag (.+) does not exist; the browser opens unfiltered$/s.exec(t))) return `filters by the tag ${unq(r[1])}, which does not exist, so the browser opens unfiltered`;
-    if ((r = /^: glow (.+) is not a #rrggbb colour$/s.exec(t))) return `has the glow colour ${r[1]}, which is not a #rrggbb value, so it is ignored`;
+    if ((r = /^: style\.glow_color: (.+) is not a #rrggbb colour/s.exec(t))) return `has the glow colour ${r[1]}, which is not a #rrggbb value or a theme colour, so it is ignored`;
+    if (/^: unknown setting 'glow' \(glow is now style\.glow_color\)$/.test(t)) return 'has a glow colour saved the old way. Set it again under Glow';
     if (/^: icon .+ must be a plain file path/s.test(t)) return 'has an icon on a network path. Use a file on this PC';
     if ((r = /^: icon (.+) must be a full path, such as /s.exec(t))) return `has the icon ${r[1]}, which is not a full path. Use a path such as C:\\Art\\clay.png, or a brush name`;
     if ((r = /^: icon file not found: (.+)$/s.exec(t))) return `has an icon file that was not found (${r[1]}). Check the path`;

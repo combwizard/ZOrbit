@@ -147,7 +147,7 @@
     "menu brushes item 5: 'auto' must be one of brush", "menu brushes item 5: 'browser' must be a string (a tag key, or \"\" for everything)", "menu brushes item 5: browser 'kind' must be one of brush, alpha, material, texture",
     "menu brushes item 6: 'press' must be a non-empty string", "menu brushes item 6: brush name 'C:\\x\\Clay' must not contain \\ / : or ..", "menu brushes item 7: submenu 'nope' does not exist",
     "menu brushes item 7: unknown setting 'lable' (did you mean label?)", "menu brushes item 8: tag 'gone' does not exist; the slot stays empty", "menu brushes item 8: tag 'gone' does not exist; the browser opens unfiltered",
-    "menu brushes item 9: icon '\\\\pc\\share\\a.png' must be a plain file path on this PC, not a network path", "menu brushes item 9: glow 'orange' is not a #rrggbb colour", "menu brushes item 9: submenu 'tools' has no usable items",
+    "menu brushes item 9: icon '\\\\pc\\share\\a.png' must be a plain file path on this PC, not a network path", "menu brushes item 9: style.glow_color: 'orange' is not a #rrggbb colour or a theme colour (bg, accent, highlight, text, lines)", "menu brushes item 9: submenu 'tools' has no usable items",
     'menu tools: no usable items', "menu tools: hotkey 'Q' already used by menu brushes", "menu tools: hotkey 'Ctrl+Q+Q' not understood", "menu tools: animation 'spin' unknown; using ring.animation",
     "menu tools: swallow 'no' must be true or false; using true", "menu tools: fan 'yes' must be true or false; using false",
     'browser: must be an object like {"hotkey": "Alt+B"}', 'browser.hotkye: unknown setting (did you mean hotkey?)', "browser.hotkey 'Alt+B+B' not understood", "browser.hotkey 'Q' already used by menu brushes",
@@ -199,7 +199,9 @@
         else if (k === 'set' && !('value' in it)) { out.push(where + ": 'set' needs a 'value'"); return; }
         else if (k === 'set' && typeof it.value !== 'number') { out.push(where + ": 'set' value must be a number"); return; }
         else if (typeof it[k] !== 'string' || !it[k].trim()) { out.push(where + ": '" + k + "' must be a non-empty string"); return; }
-        if (it.glow && !(typeof it.glow === 'string' && /^#[0-9a-fA-F]{6}$/.test(it.glow))) out.push(where + ': glow ' + pyr(it.glow) + ' is not a #rrggbb colour');
+        var gc = it.style && it.style.glow_color;
+        if (gc && !(typeof gc === 'string' && /^(#[0-9a-fA-F]{6}|bg|accent|highlight|text|lines)$/.test(gc))) out.push(where + ': style.glow_color: ' + pyr(gc) + ' is not a #rrggbb colour or a theme colour (bg, accent, highlight, text, lines)');
+        if (it.glow !== undefined) out.push(where + ": unknown setting 'glow' (glow is now style.glow_color)");
         if (k === 'menu' && !menus[it.menu]) { out.push(where + ": submenu '" + it.menu + "' does not exist"); return; }
         if (k === 'tag' && !hasTag(st, it.tag)) out.push(where + ': tag ' + pyr(it.tag) + ' does not exist; the slot stays empty');
         else if (k === 'browser' && it.browser && !hasTag(st, it.browser)) out.push(where + ': tag ' + pyr(it.browser) + ' does not exist; the browser opens unfiltered');
