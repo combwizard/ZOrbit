@@ -1028,7 +1028,8 @@ body.dragging .irow:hover { background: transparent; }
 .pop-head button, .pop-head input { -webkit-app-region: no-drag; app-region: no-drag; }
 .pop-logo { display: inline-flex; flex: none; color: var(--accent); filter: drop-shadow(0 0 5px color-mix(in srgb, var(--accent) 35%, transparent)); }
 .pop-logo svg { display: block; }
-.pop-head .ktabs { height: 100%; padding: 0 4px; border-bottom: 0; -webkit-app-region: no-drag; app-region: no-drag; }
+.pop-head .ktabs { height: 100%; padding: 0 4px; border-bottom: 0; background: none;   /* its class "pop" would give it .pop's page colour */
+  -webkit-app-region: no-drag; app-region: no-drag; }
 .pop-head .ktab { height: 100%; }
 .pop-head .pin-btn { width: 30px; height: 30px; }
 .pop-head .pin-btn[aria-pressed="true"] { color: var(--accent); background: var(--accent-wash); }

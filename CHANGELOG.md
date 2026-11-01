@@ -19,7 +19,8 @@ All notable changes to this project are listed here. The format follows
 
 ### Changed
 
-- Studio: the header at the top has the same colour as the bar on the left, in every theme.
+- Studio: the header at the top has the same colour as the bar on the left, in every theme. In the browser, the tabs
+  no longer sit on a darker strip, so the whole header has the colour of the folders column.
 
 ### Fixed
 
