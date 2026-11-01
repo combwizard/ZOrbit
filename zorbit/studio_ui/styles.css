@@ -145,7 +145,7 @@ h1, h2, h3, p { margin: 0; }
 .app { position: relative; display: flex; flex-direction: column; height: 100vh; }
 .topbar {
   flex: none; height: 48px; display: flex; align-items: center; gap: 12px; padding: 0 16px;
-  background: var(--bg2); border-bottom: 1px solid var(--line);
+  background: var(--bg1); border-bottom: 1px solid var(--line);          /* the rail's colour: one frame round the screens */
 }
 /* Custom window chrome: the header is the title bar (native drag via WebView2 non-client regions). */
 .topbar { -webkit-app-region: drag; app-region: drag; padding-right: 0; user-select: none; }
