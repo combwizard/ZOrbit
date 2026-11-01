@@ -1093,6 +1093,16 @@ html[data-shots="light"] .theme-swap > .theme-alt { opacity: 1; }
 }
 
 /* ------------------------------------------------------------ responsive */
+/* Between the phone layout and a wide window the seven nav links leave the Download button too little room. */
+.top .download, .top .gh { flex-shrink: 0; }
+@media (max-width: 1080px) {
+  .top-inner { gap: 12px; }
+  .nav { gap: 0; }
+  .nav a { padding: 8px 10px; }
+  .top .gh { width: 42px; padding: 0; }
+  .top .gh-label { display: none; }
+}
+
 @media (max-width: 900px) {
   .hero {
     grid-template-columns: 1fr;
