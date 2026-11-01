@@ -113,14 +113,15 @@ def plan_import(bundle_menus, root, cfg):
     Returns (menus_out, root_out, renames): the menus under their new ids (same order), the root's new id, and a
     list of {"old_id", "id", "old_title", "title"} for the menus whose id or title changed. {"menu": old} items are
     pointed at the new ids, and a label that was the old title becomes the new one; hotkey and swallow are removed."""
-    taken = set(_menus(cfg))
+    taken = set(_menus(cfg)) | C.RESERVED_MENU_IDS
     titles = {_title_key(m.get("title")) for m in _menus(cfg).values() if isinstance(m, dict)}
     new_id, new_title, renames = {}, {}, []
     for old, m in bundle_menus.items():
         m = m if isinstance(m, dict) else {}
         title = m.get("title") if isinstance(m.get("title"), str) else ""
         nid = old
-        valid = bool(_VALID_ID.fullmatch(old)) and not old.isdigit() and not old.startswith("tag:")
+        valid = (bool(_VALID_ID.fullmatch(old)) and not old.isdigit() and not old.startswith("tag:")
+                 and old not in C.RESERVED_MENU_IDS)
         if not valid or old in taken:
             base = old if valid else menu_slug(title or old)      # a taken id is numbered, a bad one made anew
             nid, n = base, 2

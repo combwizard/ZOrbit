@@ -55,7 +55,8 @@ Schema (all keys optional except menus):
   {"browser": "", "kind": "alpha"}               open the browser (tabs: brush alpha material texture) on that
                                                  tab (default brush); a tag key filters it ("" = everything)
 
-Menu ids starting with "tag:" are reserved for the submenus a tag slot opens.
+Menu ids starting with "tag:" are reserved for the submenus a tag slot opens. Ids that are names a JavaScript
+object already has (__proto__, constructor, toString and the like) are reserved too.
 """
 import difflib
 import json
@@ -74,6 +75,10 @@ TAG_COLOR_MODES = ("none", "tint", "glow", "both")
 TAG_BANDS = ("none", "hairline", "narrow", "medium", "wide")
 TINT_STYLES = ("flat", "gradient")
 TINT_BLENDS = ("multiply", "overlay")
+# the names a JavaScript object already has; Studio holds menus in one, so a menu with such an id would break it
+RESERVED_MENU_IDS = frozenset({"__proto__", "constructor", "hasOwnProperty", "isPrototypeOf", "propertyIsEnumerable",
+                               "toLocaleString", "toString", "valueOf", "__defineGetter__", "__defineSetter__",
+                               "__lookupGetter__", "__lookupSetter__"})
 
 DEFAULT_RING = {"radius": 145, "slot": 72, "dead_zone": 38, "tap_ms": 250, "timeout_s": 20,
                 "animation": "smooth", "labels": "name", "tag_colors": "tint", "flick": True, "hover_submenus": True,
@@ -385,6 +390,9 @@ def load(path: str, tags=None) -> Config:
             continue
         if mid.startswith("tag:"):
             errors.append(f"menu {mid}: ids starting with 'tag:' are reserved for tag submenus")
+            continue
+        if mid in RESERVED_MENU_IDS:
+            errors.append(f"menu {mid}: that id is reserved, give the menu another")
             continue
         for k in m:
             if k not in MENU_KEYS:

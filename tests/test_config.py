@@ -354,6 +354,14 @@ def test_menu_ids_starting_with_tag_are_reserved(load_menus):
     assert problems(cfg, "menu tag:blocking: ids starting with 'tag:' are reserved")
 
 
+@pytest.mark.parametrize("mid", ["__proto__", "constructor", "toString"])
+def test_menu_ids_a_javascript_object_already_has_are_reserved(load_menus, mid):
+    cfg = load_menus({"main": one_item_menu({"brush": "Standard"}),
+                      mid: {"items": [{"brush": "Standard"}]}})
+    assert mid not in cfg.menus
+    assert problems(cfg, f"menu {mid}: that id is reserved, give the menu another")
+
+
 def test_a_menu_that_is_not_an_object_is_skipped(load_menus):
     cfg = load_menus({"main": one_item_menu({"brush": "Standard"}), "odd": ["x"]})
     assert list(cfg.menus) == ["main"]

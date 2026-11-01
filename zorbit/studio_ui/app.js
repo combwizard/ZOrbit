@@ -137,7 +137,12 @@ const KINDS = {
   texture:  { one: 'texture',  many: 'textures',  tab: 'Textures',  ext: '.psd', exts: '.psd, .jpg, .jpeg, .png, .bmp, .tif, .tiff or .exr', files: 'a .psd, .jpg, .png, .bmp, .tif or .exr file', eg: 'Txtr01' },
 };
 const LIB_KINDS = Object.keys(KINDS);
-const isLib = k => typeof k === 'string' && Object.prototype.hasOwnProperty.call(KINDS, k);
+const own = (o, k) => o != null && Object.prototype.hasOwnProperty.call(o, k);
+const isLib = k => typeof k === 'string' && own(KINDS, k);
+/* Names every object already has (constructor, __proto__, toString ...); never menu ids. */
+const RESERVED_IDS = new Set(Object.getOwnPropertyNames(Object.prototype));
+const hasMenu = id => typeof id === 'string' && !!S.cfg && own(S.cfg.menus, id);
+const menuOf = id => (hasMenu(id) ? S.cfg.menus[id] : undefined);
 const K = k => (isLib(k) ? KINDS[k] : KINDS.brush);
 const aOrAn = w => (/^[aeiou]/i.test(w) ? 'an ' : 'a ') + w;
 const emptyLib = () => ({ items: [], sorted: [], byName: new Map(), state: 'idle', loaded: false, busy: false, sources: [], zbrushFound: true, error: null, _tree: null, _tc: null });
@@ -178,7 +183,7 @@ const POPOUT = window.__ZORBIT_MODE__ === 'popout';       // the browser popout 
 const S = {
   cfg: null, savedStr: '', path: '', defaults: FALLBACK_DEFAULTS, opts: null,
   problems: [], problemsOpen: false, problemMenus: new Set(), problemItems: new Map(), problemTips: new Map(),
-  scroll: {}, shown: false,
+  scroll: Object.create(null), shown: false,
   screen: 'menus', menuId: null, itemIdx: null, tab: 'item',
   cameFrom: null,                              // { menuId, itemIdx }: where a submenu was opened from (drives the Back chip)
   suggestions: [],
@@ -198,14 +203,14 @@ const R = {};               // region renderers registered by the visible screen
 
 /* Per-kind library state: S.libs[kind] (see emptyLib). lib(kind) never throws, ensureLib(kind) loads a kind the first time it is shown. */
 S.libs = Object.fromEntries(LIB_KINDS.map(k => [k, emptyLib()]));
-const lib = kind => S.libs[kind] || S.libs.brush;
+const lib = kind => (isLib(kind) ? S.libs[kind] : S.libs.brush);
 const ensureLib = kind => { const L = lib(kind); if (!L.loaded && !L.busy) loadLibrary(kind); };
 
 /* Per-kind usage (get_usage): the picks of the Recent folder, newest first, and the scores that order Favourites. recentSet holds nameKey()s,
    recentT maps a nameKey() to the time of its last pick. Not to be confused with usageMap(), which is where the menus use an item. */
-const emptyUsage = () => ({ recent: [], recentSet: new Set(), recentT: new Map(), scores: {}, loaded: false, sig: '', mtime: null });
+const emptyUsage = () => ({ recent: [], recentSet: new Set(), recentT: new Map(), scores: Object.create(null), loaded: false, sig: '', mtime: null });
 S.usage = Object.fromEntries(LIB_KINDS.map(k => [k, emptyUsage()]));
-const usageOf = kind => S.usage[kind] || S.usage.brush;
+const usageOf = kind => (isLib(kind) ? S.usage[kind] : S.usage.brush);
 
 const kindOf = it => ACTIONS.find(k => it && k in it) || 'brush';
 const targetOf = it => { const k = kindOf(it); return k === 'steps' ? '' : String(it[k] ?? ''); };
@@ -214,7 +219,7 @@ const ring = () => S.cfg.ring || {};
 const ringNum = k => { const v = ring()[k]; return typeof v === 'number' ? v : S.defaults[k]; };
 const ranges = () => (S.opts && S.opts.ring_ranges) || FALLBACK_RANGES;
 const menus = () => S.cfg.menus;
-const curMenu = () => S.cfg.menus[S.menuId];
+const curMenu = () => menuOf(S.menuId);
 const curItem = () => { const m = curMenu(); return m && S.itemIdx !== null ? m.items[S.itemIdx] : undefined; };
 
 /* ---- Simple and Full mode. The mode only changes what Studio shows; the ring, the app and radial.json never see it.
@@ -249,7 +254,7 @@ function targetNeedsFull(t) {
   if (!t) return false;
   if (t.kind === 'settings') return FULL_CARDS.has(t.card) || !!(t.key && FULL_RING[t.key]);
   if (t.kind === 'menu') return t.field === 'id' || t.field === 'animation';
-  if (t.kind === 'item') { const m = S.cfg.menus[t.menuId], it = m && m.items && m.items[t.index]; return !!it && kindIsFull(kindOf(it)); }
+  if (t.kind === 'item') { const m = menuOf(t.menuId), it = m && m.items && m.items[t.index]; return !!it && kindIsFull(kindOf(it)); }
   return false;
 }
 /* One line saying what an item targets; the item rows and the read-only line in Simple share it. */
@@ -261,7 +266,7 @@ function itemSub(it) {
 function defaultLabel(it) {
   const k = kindOf(it);
   if (isLib(k)) return String(it[k] || '');
-  if (k === 'menu') { const m = S.cfg.menus[it.menu]; return (m && m.title) || String(it.menu || ''); }
+  if (k === 'menu') { const m = menuOf(it.menu); return (m && m.title) || String(it.menu || ''); }
   if (k === 'steps') return 'Steps';
   if (k === 'auto') return 'Auto';
   if (k === 'tag') return tagName(it.tag);
@@ -307,7 +312,7 @@ function liveMenus() {
 /* A tag slot whose tag does not exist stays usable: the loader keeps it as an empty slot and the Problems panel warns. */
 const itemUsable = it => actionValid(it, false) && (!('menu' in it) || liveMenus().has(it.menu));
 function usableIdx(menuId) {
-  const m = S.cfg.menus[menuId];
+  const m = menuOf(menuId);
   const out = [];
   if (m && Array.isArray(m.items)) { const live = liveMenus(); m.items.forEach((it, i) => { if (actionValid(it, false) && (!('menu' in it) || live.has(it.menu))) out.push(i); }); }
   return out;
@@ -414,7 +419,7 @@ function hotkeyOwner(str, exceptId) {
   if (exceptId !== BROWSER && b && typeof b === 'object' && hkNorm(b.hotkey) === n) return BROWSER;
   return null;
 }
-const ownerName = id => (id === BROWSER ? 'the browser' : '“' + (S.cfg.menus[id].title || id) + '”');
+const ownerName = id => (id === BROWSER ? 'the browser' : '“' + (menuOf(id).title || id) + '”');
 function hkChips(str, cls = '') {
   const w = h('span', { class: 'hk ' + cls });
   String(str).split(/\+(?=.)/).forEach(p => w.append(h('kbd', null, p)));
@@ -430,7 +435,7 @@ function menuSlug(s) {
 function uniqueId(base, self) {
   const id = menuSlug(base);
   let n = 2, out = id;
-  while (S.cfg.menus[out] && out !== self) out = id + '_' + n++;
+  while ((hasMenu(out) || RESERVED_IDS.has(out)) && out !== self) out = id + '_' + n++;
   return out;
 }
 // A menu that has never been saved, whose id is still the one made from its title, takes a new id when the title
@@ -439,13 +444,13 @@ function uniqueId(base, self) {
 function idFollowsTitle(id, oldTitle) {
   let saved = {};
   try { saved = JSON.parse(S.savedStr).menus || {}; } catch (e) { /* nothing saved yet */ }
-  if (Object.prototype.hasOwnProperty.call(saved, id)) return false;
+  if (own(saved, id)) return false;
   const s = menuSlug(oldTitle);
   return id === s || new RegExp('^' + s + '_\\d+$').test(id);
 }
 // The id the menu should have after its title went from oldTitle to its current one, or null to keep it.
 function idForTitle(id, oldTitle) {
-  const m = S.cfg.menus[id];
+  const m = menuOf(id);
   if (!m || !idFollowsTitle(id, oldTitle)) return null;
   const nid = uniqueId(m.title, id);
   return nid !== id ? nid : null;
@@ -1202,7 +1207,7 @@ function applySnap(e) {
   const sigBefore = R.settings ? settingsSig() : '';
   S.cfg = JSON.parse(e.cfg);
   const ids = Object.keys(S.cfg.menus);
-  S.menuId = S.cfg.menus[e.menuId] ? e.menuId : (S.cfg.menus[S.menuId] ? S.menuId : (ids[0] || null));
+  S.menuId = hasMenu(e.menuId) ? e.menuId : (hasMenu(S.menuId) ? S.menuId : (ids[0] || null));
   const m = curMenu();
   S.itemIdx = m && S.menuId === e.menuId && Number.isInteger(e.itemIdx) && e.itemIdx >= 0 && e.itemIdx < (m.items || []).length ? e.itemIdx : null;
   if (S.itemIdx === null && S.tab === 'item') S.tab = 'menu';           // no item to show; any other tab stays where it was
@@ -1217,7 +1222,7 @@ function redo() { snapSoon.cancel(); pushSnap(); if (S.histI < S.hist.length - 1
 /* from: where this menu was opened from (a submenu item or an Open button), which the Back chip returns to. Any other way of
    picking a menu leaves the trail. */
 function selectMenu(id, { keepItem = false, from = null } = {}) {
-  if (!S.cfg.menus[id]) return;
+  if (!hasMenu(id)) return;
   S.menuId = id;
   S.cameFrom = from;
   if (!keepItem) S.itemIdx = null;
@@ -1228,12 +1233,12 @@ function selectMenu(id, { keepItem = false, from = null } = {}) {
   if (R.libTarget) R.libTarget();
 }
 function openSubmenu(targetId, itemIdx = S.itemIdx) {
-  if (!S.cfg.menus[targetId] || targetId === S.menuId) return;
+  if (!hasMenu(targetId) || targetId === S.menuId) return;
   selectMenu(targetId, { from: { menuId: S.menuId, itemIdx: Number.isInteger(itemIdx) ? itemIdx : null } });
 }
 function goBack() {
   const c = S.cameFrom;
-  if (!c || !S.cfg.menus[c.menuId]) { S.cameFrom = null; if (R.itemList) R.itemList(); return; }
+  if (!c || !hasMenu(c.menuId)) { S.cameFrom = null; if (R.itemList) R.itemList(); return; }
   selectMenu(c.menuId);
   const m = curMenu();
   if (c.itemIdx !== null && m && m.items[c.itemIdx]) selectItem(c.itemIdx);
@@ -1259,33 +1264,31 @@ function addMenu() {
   return id;
 }
 function dupMenu(id) {
-  const src = S.cfg.menus[id]; if (!src) return;
+  const src = menuOf(id); if (!src) return;
   const nid = uniqueId(id + '_copy');
   const copy = clone(src); copy.title = (src.title || id) + ' copy'; delete copy.hotkey;
-  const out = {};
-  for (const [k, v] of Object.entries(S.cfg.menus)) { out[k] = v; if (k === id) out[nid] = copy; }
-  S.cfg.menus = out; S.menuId = nid; S.itemIdx = null;
+  S.cfg.menus = Object.fromEntries(Object.entries(S.cfg.menus).flatMap(([k, v]) => (k === id ? [[k, v], [nid, copy]] : [[k, v]]))); S.menuId = nid; S.itemIdx = null;
   commit({ inspector: true }); if (R.head) R.head(); if (R.preview) R.preview();
   toast('Duplicated. The copy has no hotkey, so it works as a submenu.', { ms: 3600 });
 }
 async function deleteMenu(id) {
-  const m = S.cfg.menus[id]; if (!m) return;
+  const m = menuOf(id); if (!m) return;
   const refs = referrers(id).filter(r => r.menuId !== id);
   const body = [h('p', null, `Delete the menu "${m.title || id}" and its ${m.items.length} item${m.items.length === 1 ? '' : 's'}?`)];
   if (refs.length) {
     body.push(h('p', { class: 'warn-text' }, `It is opened as a submenu from ${refs.length} item${refs.length === 1 ? '' : 's'}. Those items will be removed too:`));
-    body.push(h('ul', { class: 'ref-list' }, refs.map(r => h('li', null, h('b', null, S.cfg.menus[r.menuId].title || r.menuId), ' / item ' + (r.index + 1) + ' ', h('span', { class: 'mono' }, '"' + itemLabel(r.item) + '"')))));
+    body.push(h('ul', { class: 'ref-list' }, refs.map(r => h('li', null, h('b', null, menuOf(r.menuId).title || r.menuId), ' / item ' + (r.index + 1) + ' ', h('span', { class: 'mono' }, '"' + itemLabel(r.item) + '"')))));
   }
   const ok = await modal({ title: 'Delete menu', body, actions: [{ text: 'Cancel', value: false, focus: true }, { text: refs.length ? 'Delete menu and links' : 'Delete menu', kind: 'danger', value: true }] });
   if (!ok) return;
-  if (!S.cfg.menus[id]) return;
+  if (!hasMenu(id)) return;
   const fresh = referrers(id).filter(r => r.menuId !== id);     // the config may have changed while the dialog was open
   sealSnap();
   if (S.itemIdx !== null && S.menuId !== id) {
     const here = fresh.filter(r => r.menuId === S.menuId).map(r => r.index);
     S.itemIdx = here.includes(S.itemIdx) ? null : S.itemIdx - here.filter(x => x < S.itemIdx).length;
   }
-  fresh.sort((a, b) => b.index - a.index).forEach(r => { const mm = S.cfg.menus[r.menuId]; if (mm) mm.items.splice(r.index, 1); });
+  fresh.sort((a, b) => b.index - a.index).forEach(r => { const mm = menuOf(r.menuId); if (mm) mm.items.splice(r.index, 1); });
   const ids = Object.keys(S.cfg.menus), pos = ids.indexOf(id);
   delete S.cfg.menus[id];
   if (S.menuId === id) { const rest = Object.keys(S.cfg.menus); S.menuId = rest[Math.min(pos, rest.length - 1)] || null; S.itemIdx = null; }
@@ -1301,15 +1304,15 @@ function menuIdProblem(oldId, newId) {
   if (newId === oldId) return null;
   if (!newId) return 'The id cannot be empty.';
   if (/^tag:/.test(newId)) return 'Ids starting with "tag:" are reserved for tag submenus.';
+  if (RESERVED_IDS.has(newId)) return 'That id is reserved. Pick another.';
   if (!/^[A-Za-z0-9_-]+$/.test(newId)) return 'Use letters, digits, - and _ only.';
   if (/^\d+$/.test(newId)) return 'The id cannot be only digits.';
-  if (S.cfg.menus[newId]) return 'Another menu already uses that id.';
+  if (hasMenu(newId)) return 'Another menu already uses that id.';
   return null;
 }
 // Moves a menu to a new id in place (same position in the file) and points every item that opened it at the new id.
 function moveMenuId(oldId, newId) {
-  const out = {};
-  for (const [k, v] of Object.entries(S.cfg.menus)) out[k === oldId ? newId : k] = v;
+  const out = Object.fromEntries(Object.entries(S.cfg.menus).map(([k, v]) => [k === oldId ? newId : k, v]));
   S.cfg.menus = out;
   for (const m of Object.values(out)) (m.items || []).forEach(it => { if (it && it.menu === oldId) it.menu = newId; });
   if (S.menuId === oldId) S.menuId = newId;
@@ -1328,8 +1331,7 @@ function moveMenu(id, beforeId) {
   const ids = Object.keys(S.cfg.menus).filter(k => k !== id);
   const at = beforeId ? ids.indexOf(beforeId) : ids.length;
   ids.splice(at < 0 ? ids.length : at, 0, id);
-  const out = {}; ids.forEach(k => { out[k] = S.cfg.menus[k]; });
-  S.cfg.menus = out; commit();
+  S.cfg.menus = Object.fromEntries(ids.map(k => [k, S.cfg.menus[k]])); commit();
 }
 
 /* ---------- item operations */
@@ -1345,7 +1347,7 @@ function addItem(kind, at = null) {
   const t = $('[data-focus="target"]'); if (t) t.focus();
 }
 function insertAsset(menuId, kind, name, at = null, silent = false) {
-  const m = S.cfg.menus[menuId]; if (!m || !isLib(kind)) return;
+  const m = menuOf(menuId); if (!m || !isLib(kind)) return;
   const i = at === null || at > m.items.length ? m.items.length : at;
   const sel = menuId === S.menuId ? curItem() : null;
   if (!silent) sealSnap();
@@ -1371,7 +1373,7 @@ function dupItem(i) {
   commit({ inspector: true }); if (R.head) R.head();
 }
 function delItem(i, menuId = S.menuId) {
-  const m = S.cfg.menus[menuId]; if (!m || !m.items[i]) return;
+  const m = menuOf(menuId); if (!m || !m.items[i]) return;
   sealSnap();
   const removed = m.items.splice(i, 1)[0];
   if (menuId === S.menuId) {
@@ -1382,7 +1384,7 @@ function delItem(i, menuId = S.menuId) {
   undoToast(`Removed "${itemLabel(removed)}"`, { ms: 3800 });
 }
 function moveItem(menuId, from, to) {
-  const m = S.cfg.menus[menuId]; if (!m) return;
+  const m = menuOf(menuId); if (!m) return;
   const sel = menuId === S.menuId ? curItem() : null;
   const [it] = m.items.splice(from, 1);
   const t = to > from ? to - 1 : to;
@@ -1392,7 +1394,7 @@ function moveItem(menuId, from, to) {
 }
 /* Moves item `index` of menu fromId to the end of menu toId, or copies it there (a deep copy) when `copy` is set. */
 function transferItem(fromId, index, toId, copy) {
-  const src = S.cfg.menus[fromId], dst = S.cfg.menus[toId];
+  const src = menuOf(fromId), dst = menuOf(toId);
   if (!src || !dst || fromId === toId || !src.items[index]) return;
   const it = src.items[index];
   if (it.menu === toId) { toast('A menu cannot open itself, so that item stays where it is.', { tone: 'warn' }); return; }
@@ -1416,12 +1418,12 @@ function transferItem(fromId, index, toId, copy) {
 /* "Move to menu...": a popover with the other menus, so an item can change menus without dragging. `then` runs after the move (the caller puts the focus back). */
 function moveToMenuPopover(anchor, menuId, index, then) {
   const others = Object.keys(S.cfg.menus).filter(id => id !== menuId);
-  if (!others.length || !S.cfg.menus[menuId] || !S.cfg.menus[menuId].items[index]) return;
-  popover(anchor, others.map(id => { const mm = S.cfg.menus[id]; return { icon: 'k_menu', label: mm.title || id, hint: plural((mm.items || []).length, 'item'), fn: () => { transferItem(menuId, index, id, false); if (then) then(); } }; }));
+  if (!others.length || !menuOf(menuId) || !menuOf(menuId).items[index]) return;
+  popover(anchor, others.map(id => { const mm = menuOf(id); return { icon: 'k_menu', label: mm.title || id, hint: plural((mm.items || []).length, 'item'), fn: () => { transferItem(menuId, index, id, false); if (then) then(); } }; }));
 }
 function dropOnMenu(menuId, payload, at) {
   if (payload.type === 'asset') insertAsset(menuId, payload.kind, payload.name, at);
-  else if (payload.type === 'item' && payload.menuId === menuId) moveItem(menuId, payload.index, at === null ? S.cfg.menus[menuId].items.length : at);
+  else if (payload.type === 'item' && payload.menuId === menuId) moveItem(menuId, payload.index, at === null ? menuOf(menuId).items.length : at);
 }
 
 /* ================================================================== shared UI bits */
@@ -1496,7 +1498,7 @@ function buildMenusScreen(root) {
   R.menuList = () => {
     const ids = Object.keys(S.cfg.menus);
     setText($('.count', left), String(ids.length));
-    const sig = JSON.stringify(ids.map(id => { const m = S.cfg.menus[id]; return [id, m.title || '', m.hotkey || '', (m.items || []).length]; }));
+    const sig = JSON.stringify(ids.map(id => { const m = menuOf(id); return [id, m.title || '', m.hotkey || '', (m.items || []).length]; }));
     if (sig === listEl._sig) { refreshMenuSel(); listEl._sel = S.menuId; return; }
     listEl._sig = sig;
     const act = document.activeElement, fr = act && listEl.contains(act) ? act.closest('.mrow') : null;
@@ -1504,7 +1506,7 @@ function buildMenusScreen(root) {
     listEl.replaceChildren();
     if (!ids.length) { listEl.append(emptyState('menus', 'No menus yet', 'Create a menu to get started. Give it a hotkey to open it from ZBrush.', { text: 'Add menu', fn: addMenu })); return; }
     ids.forEach(id => {
-      const m = S.cfg.menus[id];
+      const m = menuOf(id);
       const n = (m.items || []).length;
       // the full title, hotkey and item count, for when the row is too narrow to show them
       const row = h('div', { class: 'mrow' + (id === S.menuId ? ' sel' : '') + (m.hotkey ? '' : ' subonly'), role: 'option', 'aria-selected': id === S.menuId ? 'true' : 'false', tabindex: '-1', dataset: { id },
@@ -1573,7 +1575,7 @@ function buildMenusScreen(root) {
   R.focusMenu = () => { const t = menuRowOf(S.menuId) || menuRows()[0] || $('button', listEl) || $('.dashed', left); if (t) t.focus(); };
   R.renameMenu = id => {
     const row = $(`.mrow[data-id="${CSS.escape(id)}"]`, listEl); if (!row) return;
-    const title = $('.mrow-title', row), m = S.cfg.menus[id];
+    const title = $('.mrow-title', row), m = menuOf(id);
     const inp = h('input', { class: 'inp rename', type: 'text', value: m.title || '', 'aria-label': 'Menu title' });
     title.replaceChildren(inp); row.classList.add('renaming');
     inp.focus(); inp.select();
@@ -1605,7 +1607,7 @@ function buildMenusScreen(root) {
   const addBtn = h('button', { class: 'btn small', type: 'button', onclick: e => popover(e.currentTarget, Object.keys(KIND).filter(k => isFull() || !KIND[k].full).map(k => ({ icon: KIND[k].icon, label: KIND[k].label, hint: KIND[k].hint, fn: () => addItem(k) }))) }, icon('plus', 13), 'Add item');
   R.itemList = () => {
     const m = curMenu();
-    const back = S.cameFrom && S.cameFrom.menuId !== S.menuId ? S.cfg.menus[S.cameFrom.menuId] : null;
+    const back = S.cameFrom && S.cameFrom.menuId !== S.menuId ? menuOf(S.cameFrom.menuId) : null;
     if (!back && S.cameFrom) S.cameFrom = null;
     itemsHead.replaceChildren(...[back ? h('button', { class: 'chip back', type: 'button', title: 'Back to ' + (back.title || S.cameFrom.menuId), onclick: goBack }, icon('chevL', 12), h('span', { class: 'back-txt' }, 'Back to ' + (back.title || S.cameFrom.menuId))) : null,
       h('span', { class: 'micro' }, 'Items'), h('span', { class: 'count' }, m ? String(m.items.length) : '0'), h('span', { class: 'spacer' }), m ? addBtn : null].filter(Boolean));
@@ -1646,7 +1648,7 @@ function buildMenusScreen(root) {
 
 /* Reusable item list: used by the Menus screen and the Library screen's target panel. */
 function renderItemList(box, menuId, compact) {
-  const m = S.cfg.menus[menuId];
+  const m = menuOf(menuId);
   box.classList.toggle('compact', compact);
   const refreshSel = () => {
     const rows = $$('.irow', box);
@@ -1709,7 +1711,7 @@ function renderItemList(box, menuId, compact) {
     });
     if (!compact) {
       row.addEventListener('click', () => selectItem(i));
-      row.addEventListener('dblclick', () => { if (k === 'menu' && S.cfg.menus[it.menu]) openSubmenu(it.menu, i); });
+      row.addEventListener('dblclick', () => { if (k === 'menu' && hasMenu(it.menu)) openSubmenu(it.menu, i); });
     }
     DnD.source(row, () => ({ type: 'item', menuId, index: i }), () => h('span', { class: 'ghost-chip' }, itemThumb(it, 22), itemLabel(it)));
     box.append(row);
@@ -1792,7 +1794,7 @@ function buildStage() {
   function fanPath() {
     const m = curMenu(); if (!m) return null;
     const at = hoverRing !== null ? idxs[hoverRing] : S.itemIdx, j = idxs.indexOf(at);
-    const it = j >= 0 ? m.items[at] : null, t = it && 'menu' in it ? S.cfg.menus[it.menu] : null;
+    const it = j >= 0 ? m.items[at] : null, t = it && 'menu' in it ? menuOf(it.menu) : null;
     if (it && 'tag' in it) return tagItemCount(it.tag) > 0 ? [j] : null;     // the expander turns it into a fan submenu of its items
     return t && t.fan === true && it.menu !== S.menuId ? [j] : null;
   }
@@ -2092,7 +2094,7 @@ function buildItemInspector() {
         else if (v && L.items.length && !L.byName.has(nameKey(v))) { hintEl.classList.add('warn'); hintEl.append(`Not found in your ${W.one} folders. ZBrush can still select it if it is loaded there; a picture needs ${W.files} with this name.`); }
         else if (!v) hintEl.append('Type to search your library.');
       } else if (k === 'menu') {
-        const t = S.cfg.menus[v];
+        const t = menuOf(v);
         if (openBtn) openBtn.disabled = !t || v === S.menuId;
         if (t) hintEl.append('Opens ', h('b', null, t.title || v), ` (${plural(t.items.length, 'item')}). `, linkBtn('Open it', () => openSubmenu(v)));
         else {
@@ -2233,7 +2235,7 @@ function buildMenuProps() {
       // for the click to land, or the button under the pointer would be swapped out and the click lost; then the
       // keyboard goes back to the same field in the new panel.
       const run = () => {
-        if (!S.cfg.menus[id] || S.cfg.menus[nid]) return;            // changed meanwhile (the click deleted or renamed it)
+        if (!hasMenu(id) || hasMenu(nid)) return;            // changed meanwhile (the click deleted or renamed it)
         const fa = document.activeElement, label = fa && fa.isConnected && box.contains(fa) && fa.getAttribute('aria-label');
         moveMenuId(id, nid); commit({ inspector: true }); if (R.head) R.head();
         const back = label && $(`.insp [aria-label="${label}"]`);
@@ -2299,7 +2301,7 @@ function buildMenuProps() {
   const refs = referrers(id);
   if (full) box.append(sectionTitle('Used by'), refs.length
     ? h('div', { class: 'refs' }, refs.map(r => h('button', { class: 'chip cyan', type: 'button', title: 'Go to this item', onclick: () => { selectMenu(r.menuId); selectItem(r.index); } },
-      icon('k_menu', 12), (S.cfg.menus[r.menuId].title || r.menuId) + ' / ' + (r.index + 1))))
+      icon('k_menu', 12), (menuOf(r.menuId).title || r.menuId) + ' / ' + (r.index + 1))))
     : h('div', { class: 'fhint' }, m.hotkey ? 'Opened from ZBrush by its hotkey.' : 'Nothing opens this menu yet. Add a Submenu item in another menu that points to it.'));
 
   const anims = (S.opts && S.opts.animations) || Object.keys(ANIM_INFO);
@@ -2438,12 +2440,12 @@ function tagCounts(kind) {
 }
 /* How many ring items point at a tag ({"tag": key}). The browser window holds no menus, so it asks the backend (get_tag_uses, which reads
    radial.json) when the delete confirmation is about to show: see loadTagUses. */
-let tagUses = {};
+let tagUses = Object.create(null);
 async function loadTagUses() {
   if (!POPOUT) return;
   let r = null;
   try { r = await call('get_tag_uses'); } catch (e) { r = null; }
-  tagUses = r && r.ok && r.uses && typeof r.uses === 'object' ? r.uses : {};
+  tagUses = Object.assign(Object.create(null), r && r.ok && r.uses && typeof r.uses === 'object' ? r.uses : null);
 }
 function tagRingUses(key) {
   if (POPOUT) return tagUses[key] || 0;
@@ -2764,15 +2766,15 @@ function kindTabs(get, set, cls = '') {
 
 /* ---------- usage: what the Recent folder lists and how Favourites are ordered (get_usage / forget_recent) */
 const usageCat = cat => cat === '@fav' || cat === '@recent';
-const usageFlight = {};                                      // kind -> the get_usage call in flight, so a burst of triggers makes one call
+const usageFlight = Object.create(null);                                      // kind -> the get_usage call in flight, so a burst of triggers makes one call
 /* Takes a get_usage or forget_recent answer. Returns true when anything the browsers show changed. */
-const usageSeq = {}, usageSeqApplied = {};                    // kind -> usage calls started / the newest one applied (as tagSeq)
+const usageSeq = Object.create(null), usageSeqApplied = Object.create(null);                    // kind -> usage calls started / the newest one applied (as tagSeq)
 function applyUsage(kind, res, seq = usageSeq[kind] = (usageSeq[kind] || 0) + 1) {
   if (!res || res.ok === false || !Array.isArray(res.recent)) return false;
   const u = usageOf(kind);
   if (seq < (usageSeqApplied[kind] || 0)) return false;       // an answer to an older call never replaces a newer one (a replaced usage.json has an older time and still wins)
   usageSeqApplied[kind] = seq;
-  const scores = res.scores && typeof res.scores === 'object' ? res.scores : {};
+  const scores = Object.assign(Object.create(null), res.scores && typeof res.scores === 'object' ? res.scores : null);
   const sig = JSON.stringify([res.recent, scores]), changed = !u.loaded || sig !== u.sig;
   u.recent = res.recent; u.scores = scores; u.sig = sig; u.loaded = true;
   u.mtime = typeof res.mtime_ns === 'number' ? res.mtime_ns : u.mtime;
@@ -2884,7 +2886,7 @@ const STUDIO_HOST = {
   },
   badge(name, kind) {
     const u = usageMap().get(tagKey(kind, name));
-    return u ? { n: u.length, titles: Array.from(new Set(u.map(x => (S.cfg.menus[x.menuId] || {}).title || x.menuId))) } : null;
+    return u ? { n: u.length, titles: Array.from(new Set(u.map(x => (menuOf(x.menuId) || {}).title || x.menuId))) } : null;
   },
 };
 
@@ -3136,16 +3138,16 @@ function makeBrowser({ compact, st, host = STUDIO_HOST, kindUi = compact ? 'comp
         dataset: { tk: key }, onclick: () => toggleTag(key) },
         h('i', { class: 'tdot' + (color ? '' : ' none') }), h('span', { class: 'tc-name' }, label), h('span', { class: 'tc-n mono' }, String(n)));
     };
-    const own = S.tags.filter(t => t.key !== FAV);                // Favourites has its own folder, not a chip
-    const chips = own.map(t => chip(t.key, t.label, counts.byKey.get(t.key) || 0, t.color));
-    if (own.length) chips.push(chip('@untagged', 'Untagged', counts.untagged, null));
+    const userTags = S.tags.filter(t => t.key !== FAV);                // Favourites has its own folder, not a chip
+    const chips = userTags.map(t => chip(t.key, t.label, counts.byKey.get(t.key) || 0, t.color));
+    if (userTags.length) chips.push(chip('@untagged', 'Untagged', counts.untagged, null));
     const clear = tagFilterOn() ? h('button', { class: 'link tag-clear', type: 'button', onclick: clearTagFilter }, 'Clear') : null;
     if (compact) {
-      tagRow.hidden = !own.length;
+      tagRow.hidden = !userTags.length;
       tagRow.replaceChildren(...[...chips, clear, isFull() ? h('button', { class: 'ibtn tag-manage', type: 'button', title: 'Manage tags...', 'aria-label': 'Manage tags', onclick: () => openTagManager() }, icon('tag', 14)) : null].filter(Boolean));
     } else {
       tagSec.replaceChildren(...[h('div', { class: 'tag-head' }, h('span', { class: 'micro side-title' }, 'Tags'), clear),
-        own.length ? h('div', { class: 'tagchips' }, chips) : h('div', { class: 'tag-none fhint' }, `No tags yet. Select ${W().many} and press Tag to make one.`),
+        userTags.length ? h('div', { class: 'tagchips' }, chips) : h('div', { class: 'tag-none fhint' }, `No tags yet. Select ${W().many} and press Tag to make one.`),
         S.tagsErr ? h('div', { class: 'fhint bad' }, S.tagsErr) : null,
         isFull() || POPOUT ? manageTagsBtn('btn small tag-manage') : null].filter(Boolean));
     }
@@ -3547,7 +3549,7 @@ function buildLibraryScreen(root) {
     const top = list.scrollTop, same = list._menu === S.menuId;
     target.replaceChildren();
     const ids = Object.keys(S.cfg.menus), m = curMenu();
-    const sel = h('select', { class: 'inp sel', 'aria-label': 'Target menu', onchange: () => selectMenu(sel.value) }, ids.map(id => h('option', { value: id, selected: id === S.menuId }, (S.cfg.menus[id].title || id))));
+    const sel = h('select', { class: 'inp sel', 'aria-label': 'Target menu', onchange: () => selectMenu(sel.value) }, ids.map(id => h('option', { value: id, selected: id === S.menuId }, (menuOf(id).title || id))));
     target.append(h('div', { class: 'col-head' }, h('span', { class: 'micro' }, 'Add to menu')),
       h('div', { class: 'target-sel' }, ids.length ? sel : null),
       h('div', { class: 'items-panel' }, list),
@@ -3854,11 +3856,11 @@ function buildSettingsScreen(root) {
     restoreStatic();
     const anims = (S.opts && S.opts.animations) || Object.keys(ANIM_INFO);
     const cur = ring().animation || S.defaults.animation;
-    const own = Object.entries(S.cfg.menus).filter(([, m]) => m.animation).map(([id, m]) => m.title || id);
+    const ownAnim = Object.entries(S.cfg.menus).filter(([, m]) => m.animation).map(([id, m]) => m.title || id);
     page.append(card('Open animation', 'Pick one to see it play', h('div', { class: 'split anim-split' }, astage,
       choiceCards(anims.map(a => [a, a[0].toUpperCase() + a.slice(1), ANIM_INFO[a] || '']), cur, v => { settingsPlayer.stop(); setRing('animation', v); setTimeout(() => abtn.onclick(), 0); }, 'anim-cards', 'Open animation')),
-      h('div', { class: 'fhint' }, own.length
-        ? 'Used by every menu except ' + own.map(t => '\u201c' + t + '\u201d').join(', ') + ', which ' + (own.length === 1 ? 'has its own' : 'have their own') + (isFull() ? ' (set on the Menus screen).' : ' (set in Full mode, on the Menus screen).')
+      h('div', { class: 'fhint' }, ownAnim.length
+        ? 'Used by every menu except ' + ownAnim.map(t => '\u201c' + t + '\u201d').join(', ') + ', which ' + (ownAnim.length === 1 ? 'has its own' : 'have their own') + (isFull() ? ' (set on the Menus screen).' : ' (set in Full mode, on the Menus screen).')
         : 'Used by every menu. A menu can have its own instead: pick it on the Menus screen' + (isFull() ? '.' : ' in Full mode.'))));
 
     /* --- labels */
@@ -4581,7 +4583,7 @@ function buildSetupScreen(root) {
   const renderStep = (el, s, n) => {
     const parts = String(s.detail || '').split('{key}');
     const detail = h('div', { class: 'sdetail' }, ...parts.flatMap((t, i) => (i ? [hkChips(s.key || 'Q', 'sm'), t] : [t])));
-    const body = (bodies[s.id](s) || []).filter(Boolean);
+    const body = ((own(bodies, s.id) ? bodies[s.id](s) : null) || []).filter(Boolean);
     el.replaceChildren(h('div', { class: 'snum', 'aria-hidden': 'true' }, s.state === 'ok' ? icon('check', 14) : String(n)),
       h('div', { class: 'smain' }, h('b', { class: 'stitle' }, s.title), detail, body.length ? h('div', { class: 'sbody' }, ...body) : null));
   };
@@ -4683,8 +4685,8 @@ const didYouMean = s => { const d = /\(did you mean (.+)\?\)\s*$/.exec(String(s)
 function describeProblem(raw) {
   const out = (text, target) => ({ text, raw, target: target || null });
   const cfgMenus = (S.cfg && S.cfg.menus) || {};
-  const titleOf = id => '\u201c' + ((cfgMenus[id] && cfgMenus[id].title) || id) + '\u201d';
-  const known = id => !!cfgMenus[id] && typeof cfgMenus[id] === 'object';
+  const titleOf = id => '\u201c' + ((menuOf(id) && menuOf(id).title) || id) + '\u201d';
+  const known = id => !!menuOf(id) && typeof menuOf(id) === 'object';
   let m;
   /* What is wrong with one item, in words that follow "Menu item 3": t is the loader's text after the item number (": ..." or " step 2: ..."), and null when it is not one it knows. */
   const itemReason = t => {
@@ -4702,7 +4704,7 @@ function describeProblem(raw) {
     if (t.startsWith(": 'auto' must be one of ")) return 'has an auto slot that is not supported (only brushes can be auto)';
     if (t.startsWith(": 'browser' must be a string")) return 'has a browser filter that is not a tag';
     if (t.startsWith(": browser 'kind' must be one of ")) return 'opens a browser tab that does not exist';
-    if ((r = /^: '(\w+)' must be a non-empty string$/.exec(t))) return 'needs a ' + (TARGET_NOUN[r[1]] || 'target');
+    if ((r = /^: '(\w+)' must be a non-empty string$/.exec(t))) return 'needs a ' + (own(TARGET_NOUN, r[1]) ? TARGET_NOUN[r[1]] : 'target');
     if ((r = /^: (\w+) name (.+) must not contain /s.exec(t))) return `has the ${r[1]} name ${r[2]}, which looks like a path. Use only the name, without \\ / : or ..`;
     if ((r = /^: submenu (.+) does not exist$/s.exec(t))) return `opens the submenu ${unq(r[1])}, which does not exist`;
     if ((r = /^: submenu (.+) has no usable items$/s.exec(t))) return `opens ${titleOf(unq(r[1]))}, which has no usable items, so this slot is dropped`;
@@ -4716,8 +4718,8 @@ function describeProblem(raw) {
   };
   // "menu <id> item <n><rest>": the id is matched against the real menus first, so an id with spaces still resolves
   const ids = Object.keys(cfgMenus).sort((x, y) => y.length - x.length);
-  const own = ids.find(id => raw.startsWith('menu ' + id + ' item ') || raw.startsWith('menu ' + id + ': '));
-  const mid = own !== undefined ? own : ((m = /^menu (\S+)(?: item |: )/.exec(raw)) ? m[1] : null);
+  const owner = ids.find(id => raw.startsWith('menu ' + id + ' item ') || raw.startsWith('menu ' + id + ': '));
+  const mid = owner !== undefined ? owner : ((m = /^menu (\S+)(?: item |: )/.exec(raw)) ? m[1] : null);
   if (mid !== null) {
     const rest = raw.slice(('menu ' + mid).length);
     if ((m = /^ item (\d+)(.*)$/s.exec(rest))) {
@@ -4731,6 +4733,7 @@ function describeProblem(raw) {
       const other = m[2];
       return out(`${titleOf(mid)} and ${titleOf(other)} both use the hotkey ${unq(m[1])}; only ${titleOf(other)} (the first) will open it`, tgt('hotkey'));
     }
+    if (rest.startsWith(': that id is reserved')) return out(`The id of ${titleOf(mid)} is reserved. Give it another in the Id field`, tgt('id'));
     if (rest.startsWith(': ids starting with')) return out(`The id of ${titleOf(mid)} cannot start with “tag:”; those ids are reserved for tag submenus`, tgt('id'));
     if ((m = /^: hotkey (.+) not understood$/s.exec(rest))) return out(`The hotkey ${unq(m[1])} on ${titleOf(mid)} is not understood`, tgt('hotkey'));
     if ((m = /^: animation (.+) unknown; using ring\.animation$/s.exec(rest))) return out(`${titleOf(mid)} has an unknown animation (${unq(m[1])}); the one from Settings is used instead`, tgt('animation'));
@@ -4800,7 +4803,7 @@ function paintMarkers() {
   });
   $$('.irow').forEach(row => {
     const menuId = row.dataset.menu, i = +row.dataset.i, want = S.problemTips.get(menuId + '#' + i), cur = $('.iwarn', row);
-    const m = S.cfg.menus[menuId], bad = !m || !m.items[i] || !itemUsable(m.items[i]);
+    const m = menuOf(menuId), bad = !m || !m.items[i] || !itemUsable(m.items[i]);
     if (!want && !bad) { if (cur) cur.remove(); return; }
     const title = want ? want.join('\n') : 'This item is incomplete and will be skipped';
     if (cur) { cur.title = title; cur.setAttribute('aria-label', 'Problem: ' + title.replace(/\n/g, '. ')); return; }
@@ -4822,13 +4825,13 @@ function goToProblem(t) {
   }
   showScreen('menus', { fresh: true });
   if (t.kind === 'item') {
-    const m = S.cfg.menus[t.menuId]; if (!m) return;
+    const m = menuOf(t.menuId); if (!m) return;
     selectMenu(t.menuId);
     if (t.index >= 0 && t.index < (m.items || []).length) selectItem(t.index);
     return;
   }
   if (t.kind === 'menu') {
-    if (!S.cfg.menus[t.menuId]) return;
+    if (!hasMenu(t.menuId)) return;
     selectMenu(t.menuId); S.tab = 'menu'; if (R.right) R.right();
     const mr = $('.mrow.sel'); if (mr) mr.scrollIntoView({ block: 'nearest' });
     const el = t.field === 'hotkey' ? $('.insp .hk-field') : t.field === 'id' ? $('.insp input[aria-label="Menu id"]') : t.field === 'animation' ? $('.insp select[aria-label="Open animation for this menu"]') : null;
@@ -4925,7 +4928,7 @@ function adoptAndRender(res) {
   const bad = adoptConfig(res);
   if (bad) return bad;
   S.cameFrom = null;
-  if (!S.cfg.menus[S.menuId]) S.menuId = Object.keys(S.cfg.menus)[0] || null;
+  if (!hasMenu(S.menuId)) S.menuId = Object.keys(S.cfg.menus)[0] || null;
   const m = curMenu();
   if (!m || S.itemIdx === null || S.itemIdx >= (m.items || []).length) S.itemIdx = null;
   if (S.itemIdx === null && S.tab === 'item') S.tab = 'menu';
@@ -5277,7 +5280,7 @@ async function importSettings() {
     S.cfg = res.config;
     S.problems = res.problems || [];
     if (newProblems(priorProblems, S.problems)) S.problemsOpen = true;
-    if (!S.cfg.menus[S.menuId]) S.menuId = Object.keys(S.cfg.menus)[0] || null;
+    if (!hasMenu(S.menuId)) S.menuId = Object.keys(S.cfg.menus)[0] || null;
     const m = curMenu();
     if (!m || S.itemIdx === null || S.itemIdx >= (m.items || []).length) S.itemIdx = null;
     if (S.itemIdx === null && S.tab === 'item') S.tab = 'menu';
@@ -5293,7 +5296,7 @@ async function importSettings() {
 }
 /* ---- share one menu: Export menu... writes a menu and the submenus it opens to a small file, Import menu... adds them next to the current menus */
 async function exportMenu(id) {
-  if (!S.cfg || S.fatal || !S.ready || !S.cfg.menus[id]) return;
+  if (!S.cfg || S.fatal || !S.ready || !hasMenu(id)) return;
   let res;
   try { res = await call('export_menu', S.cfg, id); } catch (e) { toast('Could not export: ' + (e.message || e), { tone: 'err' }); return; }
   if (!res || res.cancelled) return;
@@ -5311,7 +5314,7 @@ async function importMenu() {
   const lines = [];
   for (const r of info.renames || []) {
     if (r.title !== r.old_title) lines.push(`${q(r.old_title)} is taken, so it comes in as ${q(r.title)}.`);
-    else if (r.id !== r.old_id && isFull()) lines.push(`The id ${r.old_id} ${S.cfg.menus[r.old_id] ? 'is taken' : 'cannot be used here'}, so it comes in as ${r.id}.`);
+    else if (r.id !== r.old_id && isFull()) lines.push(`The id ${r.old_id} ${hasMenu(r.old_id) ? 'is taken' : 'cannot be used here'}, so it comes in as ${r.id}.`);
   }
   const tags = +info.tags || 0, fresh = +info.new_tags || 0;
   const miss = Object.entries(info.missing || {}).filter(([, v]) => v && v.length).map(([k, v]) => {
@@ -5338,8 +5341,10 @@ async function importMenu() {
   if (tags || (res && res.tags_message)) await loadTags(true);          // the tags may have changed even when the call reports a problem
   if (!res || !res.ok) { toast((res && (res.message || res.error)) || 'The import did not work.', { tone: 'warn', ms: 5000 }); return; }
   const add = res.menus || {}, ids = Object.keys(add);
-  if (!ids.length || !add[res.root]) { toast('The file held no menu to add.', { tone: 'warn', ms: 5000 }); return; }
-  const clash = ids.find(k => S.cfg.menus[k]);                          // the editor may have changed while the dialog was open
+  if (!ids.length || !own(add, res.root)) { toast('The file held no menu to add.', { tone: 'warn', ms: 5000 }); return; }
+  const reserved = ids.find(k => RESERVED_IDS.has(k));
+  if (reserved) { toast(`Nothing was added. The file has a menu with the reserved id ${reserved}.`, { tone: 'warn', ms: 6000 }); return; }
+  const clash = ids.find(k => hasMenu(k));                          // the editor may have changed while the dialog was open
   if (clash) { toast(`Nothing was added. The editor already has a menu with the id ${clash}. Try again.`, { tone: 'warn', ms: 6000 }); return; }
   const bad = normaliseMenus({ menus: add });
   if (bad) { toast(`Nothing was added. ${bad}`, { tone: 'warn', ms: 6000 }); return; }
@@ -5417,7 +5422,7 @@ async function revert() {
   const ok = await modal({ title: 'Revert changes', body: h('p', null, 'Discard all unsaved changes and go back to the last saved version?'), actions: [{ text: 'Keep editing', value: false, focus: true }, { text: 'Revert', kind: 'danger', value: true }] });
   if (!ok) return;
   S.cfg = JSON.parse(S.savedStr);
-  if (!S.cfg.menus[S.menuId]) S.menuId = Object.keys(S.cfg.menus)[0] || null;
+  if (!hasMenu(S.menuId)) S.menuId = Object.keys(S.cfg.menus)[0] || null;
   S.itemIdx = null; S.version++; updateDirty(); validateSoon(); previewSoon(); pushSnap();
   renderAllMenus(); if (R.settings) R.settings(); if (R.libTarget) R.libTarget();
   toast('Reverted to the last saved version.', { ms: 2200 });
@@ -5434,7 +5439,7 @@ function describeChanges() {
   const itemName = it => it.label || it.brush || it.alpha || it.material || it.texture || it.press || it.toggle || it.set || (it.menu ? 'Submenu ' + it.menu : it.steps ? 'Steps' : it.tag ? 'Tag ' + it.tag : 'browser' in it ? 'Browser' + (it.browser ? ' ' + it.browser : '') : 'item');
   const bm = before.menus || {}, am = after.menus || {};
   for (const id of Object.keys(am)) {
-    const a = am[id] || {}, b = bm[id];
+    const a = am[id] || {}, b = own(bm, id) ? bm[id] : undefined;
     const title = a.title || id;
     if (!b) { groups.push({ area: 'Menu ' + q(title), lines: ['New menu with ' + (a.items || []).length + ' item' + ((a.items || []).length === 1 ? '' : 's')] }); continue; }
     const lines = [];
@@ -5574,7 +5579,7 @@ const scrollerOf = name => { const root = $('#screen-' + name); return root ? $(
 let lastScreenChain = Promise.resolve();   // writes run one after another, so two quick switches cannot land out of order
 const saveLastScreen = name => { lastScreenChain = lastScreenChain.then(() => call('set_pref', 'last_screen', name)).catch(() => {}); };
 function showScreen(name, { fresh = false } = {}) {
-  if (!SCREENS[name]) name = 'menus';
+  if (!own(SCREENS, name)) name = 'menus';
   if (openPopover) openPopover();
   if (comboClose) comboClose();
   if (S.shown && name === S.screen) return;
@@ -5798,7 +5803,7 @@ async function boot() {
     call('set_pref', 'mode', S.prefs.mode).catch(() => {});
   }
   const ids = Object.keys(S.cfg.menus);
-  S.menuId = params.get('menu') && S.cfg.menus[params.get('menu')] ? params.get('menu') : (ids.find(id => S.cfg.menus[id].hotkey) || ids[0] || null);
+  S.menuId = hasMenu(params.get('menu')) ? params.get('menu') : (ids.find(id => S.cfg.menus[id].hotkey) || ids[0] || null);
   const m0 = curMenu();
   if (params.has('item') && m0 && m0.items[+params.get('item')]) { S.itemIdx = +params.get('item'); S.tab = 'item'; }
   else S.tab = params.get('tab') || 'menu';
@@ -5922,7 +5927,7 @@ function init() {
 let popBrowser = null, popTabs = null, popWant, popPicking = false;
 /* The popout is one long-lived process, so a brush saved in ZBrush after it started is not in its list. Whenever the window is shown, or a tab is
    opened, the library of that kind is read again if the last read is more than a minute old. popScanned: kind -> when (R.libRefresh stamps it). */
-const popScanned = {}, POP_RESCAN_MS = 60000;
+const popScanned = Object.create(null), POP_RESCAN_MS = 60000;
 function popRescanIfOld(kind) {
   const L = lib(kind);
   if (L.loaded && !L.busy && Date.now() - (popScanned[kind] || 0) > POP_RESCAN_MS) loadLibrary(kind, true);

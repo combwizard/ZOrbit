@@ -4,6 +4,15 @@ All notable changes to this project are listed here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+
+- Menu ids such as `constructor`, `toString` or `__proto__` (names a JavaScript object already has) broke Studio. They
+  are now reserved: the app reports such a menu, the **Id** field refuses them, and **Import menu...** gives the menu a
+  new id.
+- Studio no longer opens on a blank screen when `studio.json` names a screen that does not exist.
+
 ## [0.13.0] - 2026-11-01
 
 Profiles: a whole set of menus, settings, tags and usage for each kind of work, switched without a restart. Your files moved into the **Default** profile, and the old ones are kept in `%APPDATA%\ZOrbit\pre-profiles`. Going back to an older version and updating again no longer loses what you changed on it.
