@@ -4,7 +4,7 @@ All notable changes to this project are listed here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.13.0] - 2026-11-01
 
 Profiles: a whole set of menus, settings, tags and usage for each kind of work, switched without a restart. Your files moved into the **Default** profile, and the old ones are kept in `%APPDATA%\ZOrbit\pre-profiles`. Going back to an older version and updating again no longer loses what you changed on it.
 
@@ -765,6 +765,7 @@ First public release.
   only brushes included with ZBrush.
 - Documentation: README, user guide, third-party notices and contributing guide.
 
+[0.13.0]: https://github.com/combwizard/zorbit/releases/tag/v0.13.0
 [0.12.0]: https://github.com/combwizard/zorbit/releases/tag/v0.12.0
 [0.11.0]: https://github.com/combwizard/zorbit/releases/tag/v0.11.0
 [0.10.2]: https://github.com/combwizard/zorbit/releases/tag/v0.10.2
