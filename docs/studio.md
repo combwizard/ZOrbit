@@ -29,7 +29,7 @@ The mode only changes what Studio shows. The ring, the app, `radial.json`, Save,
 | Library and the dock | Everything, with starring, tag chips and the right-click tag picker. | **Manage tags...**. |
 | Look | **Applies to** (all menus or one), **Ring size**, **Slot shape**, **Labels** and **When full**, and the gallery with **Use for ...** and **New from current**. | **Ring radius**, **Slot size** and **Dead zone** in place of **Ring size**, **Corner roundness**, **Rim width**, **Icon size**, **Hub**, **Glow**, **Label colour**, **Colours** and **Tag colours**, **Edit**, **Duplicate**, **Rename** and **Delete** on a look, and the **This slot** level. |
 | Menus, **Item** tab | A read-only **Style** line when the item has a style. | **Style** with **Edit in Look** and **Reset style**. |
-| Settings | **Theme**, **Ring look**, **Open animation**, **Behaviour** with **Flick to pick**, **Browser**, **Studio** and **Import and export**. | **Open submenus on hover**, **Tap time**, **Auto-close**, **ZBrush bridge**, **Older ZBrush** and **Tags**. |
+| Settings | **Theme**, **Ring look**, **Open animation**, **Behaviour** with **Flick to pick** and **Show the hint**, **Browser**, **Studio** and **Import and export**. | **Open submenus on hover**, **Tap time**, **Auto-close**, **ZBrush bridge**, **Older ZBrush** and **Tags**. |
 | Status and Setup | The same. | The same. |
 
 ![The Settings screen in Simple mode: a shorter list of sections on the left, with the Theme, Ring look and Open animation cards](images/studio-settings-simple.png)
@@ -119,7 +119,7 @@ The version at the top links to its release notes. When Studio opens, it asks Gi
 
 **Installing an update.** Click the new version at the top, or **Install update** in **Settings > Studio**. The dialog shows which version you go to and that version's release notes, taken from its page on GitHub, with **Full release notes** and, when the release has one, a link to its blog post.
 
-![The Update ZOrbit dialog: v0.14.0 to v0.15.0, the release notes of 0.15.0 in a box that scrolls, a note that Studio closes while Setup runs, and the Don't remind me again, Later and Download and install buttons](images/studio-update.png)
+![The Update ZOrbit dialog: v0.15.0 to v0.16.0, the release notes of 0.16.0 in a box, a note that Studio closes while Setup runs, and the Don't remind me again, Later and Download and install buttons](images/studio-update.png)
 
 - **Download and install** fetches the new installer from the GitHub release into `%LOCALAPPDATA%\ZOrbit\updates`, with a progress bar. Nothing is downloaded until you press it. Studio checks the file's size and SHA-256 against the ones the release lists, and deletes a file that does not match.
 - When you have unsaved changes, Studio then asks first: **Save and update**, **Update without saving** or **Keep editing**.

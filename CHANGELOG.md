@@ -4,6 +4,15 @@ All notable changes to this project are listed here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [0.16.0] - 2026-11-02
+
+ZOrbit 0.16.0 adds **Show the hint** to Settings. Turn it off and the ring no longer shows the line of help
+under the menu's title.
+
+### Added
+
+- **Show the hint** in Settings turns off the line of help under the menu's title on the ring (`ring.hint` in `radial.json`).
+
 ## [0.15.0] - 2026-11-01
 
 ZOrbit 0.15.0 adds looks. A new **Look** screen in Studio (**Alt+2**) sets how the ring looks for every menu, for
@@ -859,6 +868,7 @@ First public release.
   only brushes included with ZBrush.
 - Documentation: README, user guide, third-party notices and contributing guide.
 
+[0.16.0]: https://github.com/combwizard/zorbit/releases/tag/v0.16.0
 [0.15.0]: https://github.com/combwizard/zorbit/releases/tag/v0.15.0
 [0.14.0]: https://github.com/combwizard/zorbit/releases/tag/v0.14.0
 [0.13.0]: https://github.com/combwizard/zorbit/releases/tag/v0.13.0
