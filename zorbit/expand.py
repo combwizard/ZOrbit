@@ -24,6 +24,7 @@ import threading
 import time
 
 import config as C
+import layout
 import usage as U
 from tags import item_key
 
@@ -35,24 +36,20 @@ except Exception:                  # thumbnails and the asset index are optional
 TAG_SLOTS = 12
 RESCAN_ASK_S = 5.0                 # a tag fan asks for a library rescan of a kind at most this often
 MORE_PREFIX = "more:"              # the id prefix of the menu a More slot opens
-SLOT_GAP = 1.25                    # TODO: use layout.SLOT_GAP and layout.fit_count once layout.py is merged
+MORE_CAP = 256                     # more slots than any ring holds: the most fit_count is asked to count
 
 
 def _capacity(radius, slot) -> int:
-    """How many slots of this size sit round a ring of this radius with the gap the ring keeps between neighbours.
-    At least 1. TODO: layout.fit_count(sizes, radius) replaces this (it also reads a slot's style size)."""
-    arg = SLOT_GAP * slot / (2 * radius) if radius > 0 else 1.0
-    if arg >= 1:
-        return 1
-    return max(1, int(math.floor(math.pi / math.asin(arg) + 1e-6)))
+    """How many slots of this size sit round a ring of this radius with the gap the ring keeps between neighbours
+    (layout.fit_count, the ring's own rule). At least 1. Per-slot style sizes are not counted here."""
+    return max(1, layout.fit_count([slot] * MORE_CAP, radius))
 
 
 def needed_radius(count, slot) -> int:
-    """The smallest radius (whole pixels) at which count slots of this size sit round a ring with the usual gap.
-    TODO: layout.needed_radius(sizes) replaces this."""
+    """The smallest radius (whole pixels) at which count slots of this size sit round a ring with the usual gap."""
     if count < 2:
         return 0
-    return int(math.ceil(SLOT_GAP * slot / (2 * math.sin(math.pi / count)) - 1e-6))
+    return int(math.ceil(layout.needed_radius([slot] * count) - 1e-6))
 
 
 class Expander:
