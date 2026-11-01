@@ -44,7 +44,7 @@ The hotkey, the ring settings and the bridge and browser settings stay behind, a
 
 ## Item types
 
-Every item does exactly one thing. Besides the action, an item can have a `label` (the text under the slot; if you leave it out, one is made from the action) and an `icon`.
+Every item does exactly one thing. Besides the action, an item can have a `label` (the text under the slot; if you leave it out, one is made from the action), an `icon` and a `glow` colour.
 
 | Type | What it does |
 |---|---|
@@ -231,3 +231,4 @@ Opens the [browser window](browser.md). `kind` chooses the tab it opens on: `bru
 
 - `label`: text shown under the slot. Long labels are shortened with an ellipsis.
 - `icon`: a brush name, the path to a `.zbp`, or the path to a `.png` file (an alpha image or a `.zmt` also works, and shows its thumbnail). Give the full path, such as `C:\Art\clay.png`. A text with a `\` or `/` in it, or one that ends in an image extension, counts as a path. A relative path (`icons\clay.png`) is listed as a problem, because it is looked up from the app's working directory, not from `radial.json`, so it is usually not found and the slot shows a letter tile. A full path to a file that does not exist is listed as a problem too ("icon file not found"); the item still works and picks up the file if it appears. Any other text is taken as a brush name. A network path (`\\server\share\...`) is refused and listed as a problem. Without one, brush, alpha, material and texture items use the item's own thumbnail, and a `steps` item uses the thumbnail of its first asset step. Other items show a round placeholder with a short text.
+- `glow`: a colour such as `"#4dc8e9"` for this slot's glow: the soft light around it and its rim when the pointer is on it, and the halo when **Glow** is on under [Tag colours](appearance.md#tag-colours). It wins over the slot's tag colour for the glow only; the tint and the band keep the tag colour. Set it with **Glow** in the item panel in Studio, or clear it there to go back to the tag colour or the accent. A value that is not `#rrggbb` is listed as a problem and left out.

@@ -925,7 +925,7 @@ class Ring:
         """What the ring's sprites are drawn from: the menu, each item's look (its icon by content, since a
         thumbnail can turn up later), and every setting that reaches a sprite."""
         c, col = self.cfg, self.cfg["colors"]
-        items = tuple((it.kind, it.label, _icon_sig(self._icon(it)), it.color, it.tag,
+        items = tuple((it.kind, it.label, _icon_sig(self._icon(it)), it.color, it.tag, it.glow,
                        self._fans_out(it) if it.kind == "menu" else False) for it in self.items)
         look = (c["slot"], col["bg"], col["accent"], col["highlight"], col["text"],
                 c.get("tag_colors", "tint"), c.get("tag_glow_opacity", 0.4), c.get("tag_tint_opacity", 0.3),
@@ -944,11 +944,12 @@ class Ring:
         fan = sub and self._fans_out(it)
         rd = self._rounded()
         col = _chrome(it)
-        hue = col or (self.c_hi if sub else self.c_accent)
+        hue = it.glow or col or (self.c_hi if sub else self.c_accent)    # a glow colour of its own wins for the glow
         mode = self.cfg.get("tag_colors", "tint")
         tint = bool(col) and (mode in ("tint", "both") or bool(it.tag))
         glow_a = self.cfg.get("tag_glow_opacity", 0.4)
-        soft = bool(col) and mode in ("glow", "both") and glow_a > 0
+        halo_col = it.glow or col
+        soft = bool(halo_col) and mode in ("glow", "both") and glow_a > 0
         icon = self._icon(it)
         ins = int(D - 16 * 1.12 * self.scale * s)
         if icon is not None:
@@ -1024,11 +1025,11 @@ class Ring:
                     d.polygon([(bx - tri * 0.7, by - tri), (bx - tri * 0.7, by + tri), (bx + tri, by)],
                               fill=_rgba(self.c_hi, 1.0))
             out = im.resize((int(C / s), int(C / s)), Image.LANCZOS)
-            if soft and not hover:                 # soft halo in the tag colour, blurred at 1x
+            if soft and not hover:                 # soft halo in the glow or tag colour, blurred at 1x
                 n = out.size[0]
                 gr = D / 2 / s + 2 * self.scale
                 halo = Image.new("RGBA", (n, n), (0, 0, 0, 0))
-                _slot_shape(ImageDraw.Draw(halo), (n / 2 - gr, n / 2 - gr, n / 2 + gr, n / 2 + gr), rd, fill=_rgba(col, glow_a))
+                _slot_shape(ImageDraw.Draw(halo), (n / 2 - gr, n / 2 - gr, n / 2 + gr, n / 2 + gr), rd, fill=_rgba(halo_col, glow_a))
                 halo = halo.filter(ImageFilter.GaussianBlur(8 * self.scale))
                 halo.alpha_composite(out)
                 out = halo

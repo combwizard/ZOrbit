@@ -12,6 +12,8 @@ All notable changes to this project are listed here. The format follows
   change it, and 0 hides the dot. The dead zone does not change with it (#33).
 - **Slot shape** (Simple and Full mode) switches every slot between **Circle**, the default, and **Rounded square**.
   The icon, glow and submenu badge follow the shape (#33).
+- **Glow** in the item inspector gives one slot its own glow colour, saved as `glow` in `radial.json`. It wins over the
+  slot's tag colour for the hover glow, the hover rim and the idle halo only (#33).
 
 ## [0.14.0] - 2026-11-01
 

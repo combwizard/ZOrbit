@@ -676,6 +676,22 @@ def test_item_label_and_icon_are_kept_and_not_part_of_the_action_data(load_menus
     assert (it.label, it.icon, it.data) == ("Inflate", "Standard", {"brush": "Inflat"})
 
 
+def test_a_glow_colour_is_read_onto_the_item_and_is_not_part_of_the_action_data(load_menus):
+    cfg = load_menus({"main": one_item_menu({"brush": "Inflat", "glow": "#ff8800"}, {"brush": "Standard"})})
+    it = cfg.menus["main"].items[0]
+    assert (it.glow, it.data) == ("#ff8800", {"brush": "Inflat"})
+    assert cfg.menus["main"].items[1].glow == ""
+    assert not problems(cfg, "unknown setting")
+
+
+@pytest.mark.parametrize("glow", ["orange", "#ff88", "ff8800", 5])
+def test_a_glow_that_is_not_rrggbb_is_reported_and_dropped_but_the_item_stays(load_menus, glow):
+    cfg = load_menus({"main": one_item_menu({"brush": "Inflat", "glow": glow}, {"brush": "Standard"})})
+    assert problems(cfg, "menu main item 1: glow")
+    assert problems(cfg, "is not a #rrggbb colour")
+    assert [(it.data["brush"], it.glow) for it in cfg.menus["main"].items] == [("Inflat", ""), ("Standard", "")]
+
+
 @pytest.mark.parametrize("item, label", [
     ({"brush": "ClayBuildup"}, "ClayBuildup"), ({"press": "Tool:Masking:Clear"}, "Clear"),
     ({"toggle": "Transform:PolyF"}, "PolyF"), ({"set": "Draw:Draw Size", "value": 1}, "Draw Size"),

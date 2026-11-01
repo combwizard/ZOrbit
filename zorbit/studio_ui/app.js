@@ -2144,8 +2144,40 @@ function buildItemInspector() {
     field('Label', labelInp, 'Shown under the icon. Leave empty to use the default.'),
     field('Icon', h('div', { class: 'target-row' }, iconPrev, iconInp), isLib(k)
       ? `By default the icon comes from the ${K(k).one}. Use a brush name or a full path to a .png or .zbp to override it.`
-      : 'Use a brush name or a full path to a .png or .zbp as the icon.'));
+      : 'Use a brush name or a full path to a .png or .zbp as the icon.'),
+    field('Glow', glowControl(it), 'The glow when the pointer is on this slot. Empty uses the tag colour or the accent.'));
   return box;
+}
+
+/* The Glow colour of one item: a swatch and a #rrggbb field like the Colours rows, and a button that clears it (the key is then dropped). */
+function glowControl(it) {
+  const has = () => typeof it.glow === 'string' && !!normHex(it.glow);
+  const sw = h('input', { type: 'color', class: 'swatch', 'aria-label': 'Glow colour' });
+  const hex = h('input', { class: 'inp mono hex', type: 'text', maxlength: '7', placeholder: 'Default', spellcheck: 'false', 'aria-label': 'Glow hex value' });
+  const msg = h('span', { class: 'hex-msg', role: 'status' });
+  const clear = iconBtn('undo', 'Clear the glow colour', () => { delete it.glow; commit(); paint(); }, 'reset');
+  const paint = () => {
+    const on = has();
+    sw.value = on ? it.glow.toLowerCase() : colorVal('accent'); sw.style.opacity = on ? '1' : '.45';
+    hex.value = on ? it.glow : ''; hex.classList.remove('bad'); msg.textContent = '';
+    clear.style.visibility = on ? 'visible' : 'hidden';
+  };
+  const set = n => { if (n !== it.glow) { it.glow = n; commit(); } };
+  sw.addEventListener('input', () => { set(sw.value); paint(); });
+  hex.addEventListener('input', () => {
+    const t = hex.value.trim(), n = normHex(t), bad = !!t && !n;
+    hex.classList.toggle('bad', bad); msg.textContent = bad ? 'Use #rrggbb' : '';
+    if (n && t.replace('#', '').length === 6) { set(n); sw.value = n; sw.style.opacity = '1'; clear.style.visibility = 'visible'; }   // short forms wait for Enter or blur
+  });
+  const apply = () => {
+    const t = hex.value.trim(), n = normHex(t);
+    if (!t) { if (it.glow !== undefined) { delete it.glow; commit(); } } else if (n) set(n);
+    paint();
+  };
+  hex.addEventListener('blur', apply);
+  hex.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); apply(); } });
+  paint();
+  return h('div', { class: 'target-row glow-row' }, sw, h('div', { class: 'hexwrap' }, hex, msg), clear);
 }
 
 /* The brush the app puts into auto slot i of menu m at the moment (read from usage.json). */
@@ -4750,6 +4782,7 @@ function describeProblem(raw) {
     if ((r = /^: unknown setting (.+)$/s.exec(t))) return `has an unknown setting ${r[1].replace(/\s*\(did you mean .*$/s, '')}.` + didYouMean(r[1]);
     if ((r = /^: tag (.+) does not exist; the slot stays empty$/s.exec(t))) return `uses the tag ${unq(r[1])}, which does not exist, so the slot stays empty`;
     if ((r = /^: tag (.+) does not exist; the browser opens unfiltered$/s.exec(t))) return `filters by the tag ${unq(r[1])}, which does not exist, so the browser opens unfiltered`;
+    if ((r = /^: glow (.+) is not a #rrggbb colour$/s.exec(t))) return `has the glow colour ${r[1]}, which is not a #rrggbb value, so it is ignored`;
     if (/^: icon .+ must be a plain file path/s.test(t)) return 'has an icon on a network path. Use a file on this PC';
     if ((r = /^: icon (.+) must be a full path, such as /s.exec(t))) return `has the icon ${r[1]}, which is not a full path. Use a path such as C:\\Art\\clay.png, or a brush name`;
     if ((r = /^: icon file not found: (.+)$/s.exec(t))) return `has an icon file that was not found (${r[1]}). Check the path`;

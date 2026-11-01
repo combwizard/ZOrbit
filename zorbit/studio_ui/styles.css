@@ -620,6 +620,7 @@ body.dragging .irow:hover { background: transparent; }
 .kind.on.k-menu { color: var(--cyan); border-color: color-mix(in srgb, var(--cyan) 50%, transparent); background: var(--cyan-wash); }
 .target-row { display: flex; align-items: center; gap: 10px; }
 .target-row .inp { flex: 1; width: auto; min-width: 0; }
+.glow-row .hexwrap .inp { flex: none; width: 100px; }
 .tthumb { display: inline-flex; flex: none; transition: opacity .15s; }
 .steps { display: flex; flex-direction: column; gap: 6px; }
 .step { display: grid; grid-template-columns: 16px 96px minmax(0, 1fr); gap: 6px 8px; align-items: center; padding: 8px; background: var(--bg1); border: 1px solid var(--line); border-radius: 8px; }

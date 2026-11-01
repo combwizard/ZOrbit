@@ -42,7 +42,8 @@ Schema (all keys optional except menus):
   }
 }
 
-<item> is one action plus an optional "label" and "icon" (full path to a .png/.zbp, or a brush name):
+<item> is one action plus an optional "label", "icon" (full path to a .png/.zbp, or a brush name) and "glow"
+(#rrggbb: the colour of the slot's hover glow, which wins over its tag colour):
   {"brush": "ClayBuildup"}                       select a brush (loaded from its .zbp if needed)
   {"alpha": "Alpha 58"}                          select an alpha (imported from its file if needed)
   {"material": "SkinShade4"}                     select a material (Material:Load replaces the selected slot)
@@ -106,7 +107,7 @@ _NAMED_VK = {
 MENU_KEYS = ("title", "hotkey", "swallow", "animation", "fan", "items")
 BRIDGE_KEYS = ("mode", "key")
 BROWSER_KEYS = ("hotkey",)
-ITEM_KEYS = ACTION_KEYS + ("label", "icon", "value", "kind")
+ITEM_KEYS = ACTION_KEYS + ("label", "icon", "glow", "value", "kind")
 DEFAULT_BRIDGE_KEY = "F9"          # used when radial.json has no usable bridge.key
 VK_F10 = 0x79                       # Windows' menu-bar key: never usable as the bridge key
 _MODS = {"ctrl": "ctrl", "control": "ctrl", "alt": "alt", "shift": "shift"}
@@ -130,6 +131,7 @@ class Item:
     auto: bool = False        # put into an auto slot by the app (from usage.json), not by the user
     tag: str = ""             # tag key of a tag item (and of the submenu it opens)
     color: str = ""           # #rrggbb from the item's tag, stamped by expand.py, never by the loader
+    glow: str = ""            # #rrggbb the user chose for this slot's glow; wins over color for the glow only
 
 
 @dataclass
@@ -446,9 +448,13 @@ def load(path: str, tags=None, theme: str = "dark") -> Config:
                 icon_problem = _icon_problem(icon)
                 if icon_problem:
                     errors.append(f"{where}: {icon_problem}")      # the item and its icon value stay: only a warning
+            glow = it.get("glow") or ""
+            if glow and not (isinstance(glow, str) and re.fullmatch(r"#[0-9a-fA-F]{6}", glow)):
+                errors.append(f"{where}: glow {glow!r} is not a #rrggbb colour")
+                glow = ""
             items.append((i + 1, Item(label=str(it.get("label") or _default_label(it, menus_raw, tags)), kind=kind,
-                                      data={k: v for k, v in it.items() if k not in ("label", "icon")},
-                                      icon=icon, tag=it["tag"] if kind == "tag" else "")))
+                                      data={k: v for k, v in it.items() if k not in ("label", "icon", "glow")},
+                                      icon=icon, tag=it["tag"] if kind == "tag" else "", glow=glow)))
         if not items:
             errors.append(f"menu {mid}: no usable items")
             continue

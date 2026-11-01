@@ -3,6 +3,7 @@
 Nothing here opens a window: Ring.preview and the sprite methods only need Pillow.
 """
 import copy
+import dataclasses
 import math
 import os
 import shutil
@@ -415,6 +416,48 @@ def test_rounded_slots_render_and_change_the_sprite_key():
     assert a.sprites[0] is not b.sprites[0] and a.sprites[0][0].tobytes() != b.sprites[0][0].tobytes()
     shaped = ring.Ring.preview(menu, make_cfg(slot_shape="rounded"), lambda it: None)
     assert shaped.size == ring.Ring.preview(menu, make_cfg(), lambda it: None).size
+
+
+def _hover_edge(r, i=0):
+    """The hover sprite of slot i and a pixel just outside its disc, where the glow is."""
+    sprite = r.sprites[i][1]
+    n = sprite.size[0]
+    return sprite.getpixel((n // 2 + int(r.slot * 1.12 / 2 + 4 * r.scale), n // 2))
+
+
+def test_a_glow_colour_changes_the_sprite_key_and_the_hover_glow():
+    plain, blue = make_menu(3), make_menu(3)
+    blue.items[0] = dataclasses.replace(blue.items[0], glow="#0000ff")
+    a, b = prepared(plain), prepared(blue)
+    assert a._sprite_key() != b._sprite_key()
+    ar, ag, ab, aa = _hover_edge(a)
+    br, bg, bb, ba = _hover_edge(b)
+    assert ar > ab and bb > br and ba > 0          # the accent is orange; the glow colour is blue
+    assert b.sprites[1][1].tobytes() == a.sprites[1][1].tobytes()      # the next slot is untouched
+
+
+def test_a_glow_colour_beats_the_tag_colour_for_the_glow_only():
+    tagged = make_menu(3)
+    tagged.items[0] = dataclasses.replace(tagged.items[0], color="#ff0000")
+    both = make_menu(3)
+    both.items[0] = dataclasses.replace(both.items[0], color="#ff0000", glow="#0000ff")
+    t, g = prepared(tagged), prepared(both)
+    tr, _, tb, _ = _hover_edge(t)
+    gr, _, gb, _ = _hover_edge(g)
+    assert tr > tb and gb > gr
+    assert g.sprites[0][0].tobytes() == t.sprites[0][0].tobytes()      # idle (tint mode): fill and rim unchanged
+
+
+def test_a_glow_colour_shows_the_idle_halo_without_a_tag():
+    plain, blue = make_menu(3), make_menu(3)
+    blue.items[0] = dataclasses.replace(blue.items[0], glow="#0000ff")
+    a, b = prepared(plain, tag_colors="glow"), prepared(blue, tag_colors="glow")
+    assert b.sprites[0][0].tobytes() != a.sprites[0][0].tobytes()
+    assert b.sprites[1][0].tobytes() == a.sprites[1][0].tobytes()      # no glow field, no halo, as before
+    n = b.sprites[0][0].size[0]
+    assert b.sprites[0][0].getpixel((n // 2 + int(b.slot / 2 + 6 * b.scale), n // 2))[3] > 0
+    off = prepared(blue, tag_colors="tint")                            # the halo follows the Glow switch
+    assert off.sprites[0][0].tobytes() == prepared(plain, tag_colors="tint").sprites[0][0].tobytes()
 
 
 def test_preview_window_grows_with_the_item_count():
