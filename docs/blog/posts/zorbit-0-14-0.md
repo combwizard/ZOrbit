@@ -1,16 +1,18 @@
 ---
-date: 2026-11-01
+date: 2026-11-01 20:00:00
 authors:
   - combwizard
 slug: zorbit-0-14-0
-description: ZOrbit 0.14.0 adds experimental themes, including one that takes its colours from ZBrush.
+description: ZOrbit 0.14.0 adds experimental themes, including one that takes its colours from ZBrush, and a guided tour of Studio.
 ---
 
-# ZOrbit 0.14.0: themes
+# ZOrbit 0.14.0: themes and a tour of Studio
 
 0.14.0 adds a **Theme** setting. Until now the ring, the browser and Studio came in dark only, which looks out of place if you run ZBrush or Windows with lighter colours, and plenty of people do. There are four choices now: Dark, Light, Follow Windows, and Match ZBrush, which takes its colours from ZBrush itself.
 
 Themes are experimental in this release, and Studio marks them that way. I expect the colours to change a fair amount once more people use them, so I'd like to hear how they look on your setup.
+
+Studio also has a short guided tour now, for anyone finding their way round it for the first time.
 
 <!-- more -->
 
@@ -47,9 +49,20 @@ I tuned the light colours and the matching on one PC and a handful of ZBrush sch
 
 Two follow-ups are already open: [custom themes](https://github.com/combwizard/zorbit/issues/98) you can make, save and share, and a small one about the browser taking a theme from Studio at once instead of within half a second ([#97](https://github.com/combwizard/zorbit/issues/97)).
 
+## A tour of Studio
+
+Studio has grown a lot over the last few releases: five screens, a library, profiles, a Simple and a Full mode. That is a lot to take in when you open it for the first time, and some of it, like the profile button or the fact that nothing reaches the ring until you save, is easy to miss. So Studio now has a tour ([#41](https://github.com/combwizard/zorbit/issues/41)).
+
+![The tour on its third stop, the ring, with the card beside the ring preview](../../images/studio-tour.png)
+
+It lights up one part of the window at a time and puts a card next to it with a sentence or two about what it is for. It starts with the screens down the left and the list of menus, then the ring preview, where you drag brushes in and click a slot to edit it, and the **Item**, **Menu** and **Library** tabs beside it. After that come the Library, the profile button and the **Simple** / **Full** switch. It ends with **Save** and **Revert**, and with **Status** and **Setup** for when something isn't working. That's nine stops, and it takes about a minute.
+
+Studio offers the tour once, after you finish or skip Setup. If you used Studio before this release it won't ask, but you can take it whenever you like from **Settings > Studio**, next to **What's new**, or from the last step of Setup. It works from the keyboard as well (the arrow keys move between stops and **Esc** ends it), it changes nothing, and when it ends you are back on the screen you started from. The [Studio page](../../studio.md#the-tour) has the details.
+
+If a stop says something unclear, or the tour leaves out something you had to find on your own, [open an issue](https://github.com/combwizard/zorbit/issues) and say which.
+
 ## Also in 0.14.0
 
-- Studio has a short tour of its window. It is offered once after Setup, and you can take it again from **Settings > Studio** ([#41](https://github.com/combwizard/zorbit/issues/41)).
 - Studio's header now has the same colour as the bar on the left, and the browser's tabs no longer sit on a darker strip.
 - A menu id such as `constructor` or `toString` broke Studio. Those ids are now refused.
 - Studio no longer opens on a blank screen when its settings file names a screen that doesn't exist.

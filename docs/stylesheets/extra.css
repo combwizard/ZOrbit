@@ -195,6 +195,7 @@ body::before {
 .md-nav__link:hover, .md-nav__link:focus { color: var(--zo-text); }
 .md-nav__link--active, .md-nav__item .md-nav__link--active { color: var(--zo-accent); font-weight: 600; }
 .md-nav--secondary .md-nav__title { color: var(--zo-sub); background: transparent; box-shadow: none; }
+.md-post__back .md-nav__title { background: transparent; box-shadow: none; }   /* a blog post's "Back to index": no dark bar */
 @media screen and (max-width: 76.234375em) {
   .md-nav--primary .md-nav__title { background: var(--zo-bg1); }
   .md-nav--primary .md-nav__item--active > .md-nav__link { color: var(--zo-accent); }

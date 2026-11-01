@@ -1,5 +1,5 @@
 ---
-date: 2026-11-01
+date: 2026-11-01 12:00:00
 authors:
   - combwizard
 slug: zorbit-0-13-0
