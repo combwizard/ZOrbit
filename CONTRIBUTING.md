@@ -110,6 +110,8 @@ If a change to what ZOrbit keeps on disk would make an older version misread or 
 
 At release time, add a short plain summary of two to four sentences under the `## [x.y.z]` heading in `CHANGELOG.md`, before the `###` groups. Studio's **What's new** shows it, and the GitHub release notes include it. Without one, **What's new** shows the first five bullets.
 
+A bigger release can also get a post on the [blog](https://zorbit.lol/docs/blog/): a Markdown file in `docs\blog\posts\` with a `date`, `authors` (from `docs\blog\.authors.yml`) and `slug` at the top, and `<!-- more -->` after the opening paragraphs, which are what the blog's front page shows. Give it the slug `zorbit-` and the version with dashes for dots (`zorbit-0-13-0`), and the release notes link to it. Push the post before the tag so the link works when the release appears.
+
 ### Working on Studio's interface in a browser
 
 Run `python tools\make_mock.py`, then open `zorbit\studio_ui\index.html?mock` in a browser. This

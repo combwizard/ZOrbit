@@ -123,6 +123,11 @@ jobs:
             $fence,
             ""
           )
+          # A blog post with the slug zorbit-<version, dots as dashes> gets a link above the changelog section.
+          $slug = "zorbit-" + $v.Replace(".", "-")
+          $post = Get-ChildItem docs\blog\posts\*.md -ErrorAction SilentlyContinue |
+            Where-Object { Select-String -Path $_.FullName -Pattern "^slug:\s*$([regex]::Escape($slug))\s*$" -Quiet }
+          if ($post) { $head += @("More about this release on the blog: https://zorbit.lol/docs/blog/$slug/", "") }
           (($head + $body) -join "`n").Trim() | Set-Content -Encoding utf8 release-notes.md
           Get-Content release-notes.md
 

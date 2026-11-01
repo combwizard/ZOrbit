@@ -53,6 +53,9 @@ Where each part is documented:
 | A new way for something to fail, or a new log line worth reading | `troubleshooting.md` |
 | `packaging/build.ps1`, `tools/` | `building.md`, `CONTRIBUTING.md` |
 
+The blog is in `docs/blog/` (posts in `docs/blog/posts/`, see "Release notes" in `CONTRIBUTING.md`). Posts are in
+the first person and personal, but without the landing page's jokes; run the humanizer over them.
+
 Write like the existing pages: plain, short, concrete sentences, British spelling (colour, behaviour, licence), UI
 labels and keys in **bold**, no em dashes, no marketing words.
 

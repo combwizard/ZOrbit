@@ -28,6 +28,7 @@ nav:
   - Under the hood:
       - bridge.md
       - building.md
+  - Blog: blog/index.md
 
 theme:
   name: material
@@ -52,6 +53,15 @@ theme:
     - toc.follow
     - content.code.copy
     - content.action.edit
+
+plugins:
+  - search
+  # Longer posts about releases, at /docs/blog/. Posts are in docs/blog/posts/, authors in docs/blog/.authors.yml.
+  - blog:
+      post_url_format: "{slug}"
+      post_date_format: "d MMMM yyyy"
+      archive: false
+      categories: false
 
 extra_css:
   - stylesheets/extra.css

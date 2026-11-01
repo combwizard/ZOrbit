@@ -35,7 +35,7 @@ The tests import the Windows modules, so they run on Windows only. `--selftest` 
 
 `tests\test_starters.py` checks that `profiles.KNOWN_STARTERS` lists the hash of every `default_menus.json` in the git history. It needs the full history, which CI gets with `fetch-depth: 0`. When `default_menus.json` changes, add its new hash to `KNOWN_STARTERS`.
 
-GitHub Actions runs the tests on every push and pull request. A build only starts when they pass. After the build, the workflow runs `--check` and `--selftest` on the built exe, and `python tools\upgrade_check.py dist\ZOrbit\ZOrbit.exe`, which runs the exe's `--check` over each upgrade fixture. When you push a tag that starts with `v`, it also creates the release, and the release notes list the SHA256 hash of the installer and the portable zip.
+GitHub Actions runs the tests on every push and pull request. A build only starts when they pass. After the build, the workflow runs `--check` and `--selftest` on the built exe, and `python tools\upgrade_check.py dist\ZOrbit\ZOrbit.exe`, which runs the exe's `--check` over each upgrade fixture. When you push a tag that starts with `v`, it also creates the release, and the release notes list the SHA256 hash of the installer and the portable zip. When `docs\blog\posts\` has a post whose `slug` is `zorbit-` and the version with dashes (`zorbit-0-13-0`), the notes also link to that [blog](blog/index.md) post.
 
 To run straight from a checkout while you work on the code, use `tools\dev-install.ps1`. It registers the checkout's `bridge` folder in `ZBRUSH_PLUGIN_PATH` and adds the Start menu shortcut, and `-Uninstall` takes both away again. Add `-WhatIf` to see what it would do first.
 
