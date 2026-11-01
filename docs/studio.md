@@ -186,6 +186,8 @@ A **Change in Look** link opens the **When full** group for that menu.
 
 In Full mode the **Menu** tab has a **Look** section for the selected menu. The list in it chooses the menu's look:
 
+![The Look section of the Menu tab: the look list set to Tiles, with Edit in Look and Clear own settings below it](images/menu-look.png)
+
 - **Same as all menus (Global: ...)** follows the look chosen for all menus. The text in brackets says which one that is.
 - **Built-in** and **Yours** list the looks you can use. Picking one uses it for this menu only.
 - A menu that has settings of its own shows them as one line you cannot pick, such as **Custom (2 changes)** or **Soft + 2 changes**.
@@ -198,7 +200,7 @@ The animation list stays below it: a menu's open animation is not part of a look
 
 **Look** (Alt+2) is where the ring's looks are set. You can set them for every menu or for one menu, and you can save a group of settings as a named **look** to use again. The bar at the top shows what you are editing.
 
-![The Look screen: the ring preview of the Brushes menu and a menu picker on the left, and the Slots, Hub and Labels groups on the right, each setting with a Default badge](images/studio-look.png)
+![The Look screen at the Global level: the ring preview of the Brushes menu, a menu picker and the gallery of looks on the left, and the Slots group with the six slot shapes on the right, each setting with a Default badge](images/studio-look.png)
 
 On the left is a preview of the real ring, drawn by the same code as the app, with the dead zone as a dashed circle, and under it the [gallery of looks](#looks). Hover a slot and it lights up in its own shape and shows the hover glow the app would draw. In Full mode, click a slot to [style it on its own](#styling-one-slot). The **Preview menu** list picks which menu the preview shows. It only changes the preview, not the menu you are editing on the Menus screen. **Sample ring with tags** shows a ring of library brushes in your tag colours, for the tag settings.
 
@@ -211,11 +213,15 @@ The bar at the top says where what you set applies. In Simple mode it reads **Ap
 - **This slot** (Full mode) is the look of one slot of the menu. See [Styling one slot](#styling-one-slot).
 - **Look: Name** appears while you [edit a look](#editing-a-look).
 
+![The Look screen at the menu level: This menu chosen for Brushes, with badges showing which settings follow Global and which come from the Tiles look](images/look-menu.png)
+
 For a menu the layers are, from the bottom: the default, the colours of the [theme](appearance.md#theme), the look chosen for all menus, your own global settings, the look chosen for the menu and your own settings for the menu. A later layer wins over an earlier one.
 
 ### Looks
 
 A look is a named group of look settings. Seven are built in: **Classic** (the look ZOrbit starts with), **Soft**, **Tiles**, **Crystal**, **Circuit**, **Diamonds** and **Minimal**. They change the shape, the hub, the glow and the labels, never the size of the ring, and they use theme colours only, so they follow the theme. You can make looks of your own.
+
+![The gallery of looks on the Look screen: cards for Classic, Soft, Tiles and Crystal, each with the sample ring in that look and a Use for all menus button](images/look-presets.png)
 
 Each card in the gallery shows the sample ring in that look. Marks on a card say how it is used: **Global** (the look for all menus), **This menu**, **2 menus** (how many other menus use it) and **Editing**.
 
