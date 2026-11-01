@@ -20,6 +20,8 @@ All notable changes to this project are listed here. The format follows
   both), and an item can have a `style`. Studio does not edit these yet (#33).
 - `when_full: "more"` in the ring settings or a menu's look keeps a full ring at its radius and ends it with a
   **More** slot, which opens a ring with the rest of the menu. Fans and tag fans are never paged (#33).
+- `when_full: "rings"` keeps a full ring at its radius and puts the items that do not fit on a second ring outside
+  it. Only the outer ring picks on a flick. A slot's `style.size` (0.75 to 1.25) makes one slot bigger or smaller (#33).
 - **Export menu...** puts the looks of your own that the menu uses into the file. **Import menu...** joins a look that
   is the same as one you have, and renames one that differs, such as `Bold 2` (#33).
 - Studio can install an update itself. Click the new version at the top, or **Install update** in **Settings > Studio**,
