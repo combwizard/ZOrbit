@@ -149,7 +149,7 @@ One slot can look unlike the rest. Give its item a `style` (see [Labels and icon
 | `label_color` | The colour of the slot's name. |
 | `glow_color` | The colour of the slot's glow. It wins over the slot's tag colour for the glow only. The tint and the band keep the tag colour. |
 
-The colours take a theme colour or a `#rrggbb` (see [Colour values](#colour-values)). Studio's item panel has a **Glow** field for `glow_color`; the other keys are set in `radial.json`. A value that is not valid is listed as a problem and left out.
+The colours take a theme colour or a `#rrggbb` (see [Colour values](#colour-values)). In Studio, click a slot in the Look screen's preview (Full mode) to set them under **This slot**; the item panel's **Style** field lists what a slot has and has **Edit in Look**. A value that is not valid is listed as a problem and left out.
 
 ```json
 {"brush": "hPolish", "style": {"glow_color": "#7bd88f", "border_color": "#7bd88f"}}
