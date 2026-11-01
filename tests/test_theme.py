@@ -90,8 +90,10 @@ def test_a_rewritten_file_is_read_again(tmp_path):
     p = tmp_path / "studio.json"
     p.write_text('{"theme": "light"}', encoding="utf-8")
     assert theme.read_setting(str(p)) == "light"
-    p.write_text('{"theme": "system", "mode": "full"}', encoding="utf-8")   # another size: the cache misses
+    p.write_text('{"theme": "dark" }', encoding="utf-8")    # the same size and, as a CI runner can, the same time
     os.utime(p, ns=(1, 2))
+    assert theme.read_setting(str(p)) == "dark"
+    p.write_text('{"theme": "system", "mode": "full"}', encoding="utf-8")
     assert theme.read_setting(str(p)) == "system"
     p.unlink()
     assert theme.read_setting(str(p)) == "dark"

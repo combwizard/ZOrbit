@@ -9,6 +9,7 @@ import pytest
 import fsutil
 import paths
 import studio
+import theme
 
 
 @pytest.fixture
@@ -396,3 +397,97 @@ def test_whats_new_all_current_ignores_what_was_seen(api, tmp_path, monkeypatch)
     res = api.get_whats_new(all_current=True)
     assert [s["version"] for s in res["sections"]] == [paths.VERSION]
     assert api.get_prefs()["seen_version"] == paths.VERSION      # asking does not mark it as seen
+
+
+# --- theme --------------------------------------------------------------------------------------------
+
+def test_a_fresh_install_is_dark_and_says_what_is_in_force(api):
+    prefs = api.get_prefs()
+    assert prefs["theme"] == "dark" and prefs["theme_effective"] == "dark"
+
+
+def test_the_theme_is_saved_and_the_effective_one_is_not(api, tmp_path):
+    res = api.set_pref("theme", "light")
+    assert res["theme"] == "light" and res["theme_effective"] == "light"
+    assert _studio_json(tmp_path)["theme"] == "light"
+    assert "theme_effective" not in _studio_json(tmp_path)
+
+
+def test_follow_windows_is_accepted_and_resolved(api, tmp_path, monkeypatch):
+    monkeypatch.setattr(theme, "_apps_use_light", lambda: True)
+    res = api.set_pref("theme", "system")
+    assert res["theme"] == "system" and res["theme_effective"] == "light"
+    assert _studio_json(tmp_path)["theme"] == "system"
+
+
+@pytest.mark.parametrize("value", ["blue", "", "Dark", None, 1, True, ["dark"]])
+def test_an_unknown_theme_is_refused_and_nothing_is_written(api, tmp_path, value):
+    api.set_pref("theme", "light")
+    before = (tmp_path / "studio.json").read_text(encoding="utf-8")
+    assert api.set_pref("theme", value)["theme"] == "light"
+    assert (tmp_path / "studio.json").read_text(encoding="utf-8") == before
+
+
+def test_an_unknown_theme_is_refused_on_a_fresh_install(api, tmp_path):
+    assert api.set_pref("theme", "blue")["theme"] == "dark"
+    assert "theme" not in _studio_json(tmp_path)
+
+
+def test_a_hand_edited_theme_reads_as_dark(api, tmp_path):
+    (tmp_path / "studio.json").write_text('{"theme": "blue", "last_screen": "library"}', encoding="utf-8")
+    prefs = api.get_prefs()
+    assert prefs["theme"] == "dark" and prefs["theme_effective"] == "dark"
+    assert prefs["last_screen"] == "library"
+
+
+def test_the_ring_defaults_follow_the_theme(api, monkeypatch):
+    monkeypatch.setattr(studio, "_theme_now", lambda: "light")
+    light = theme.ring_colors("light")
+    assert api.get_config()["defaults"]["colors"]["bg"] == light["bg"]
+    opts = api.get_options()
+    assert opts["ring_defaults"]["colors"] == light
+    assert opts["theme_ring_colors"] == {"dark": theme.ring_colors("dark"), "light": light}
+    assert opts["themes"] == ["dark", "light", "system"]
+
+
+def test_the_ring_defaults_are_dark_by_default(api):
+    assert api.get_options()["ring_defaults"]["colors"] == theme.ring_colors("dark")
+
+
+def test_previews_and_validation_use_the_theme(api, monkeypatch):
+    monkeypatch.setattr(studio, "_theme_now", lambda: "light")
+    cfg = _default()
+    res = api.preview_ring(cfg, next(iter(cfg["menus"])))
+    assert res["image"] and res["image"].startswith("data:image/png")
+    loaded, _ = api._load_dict(cfg)
+    assert loaded.ring["theme"] == "light"
+    assert loaded.ring["colors"]["bg"] == theme.ring_colors("light")["bg"]
+
+
+def test_setting_the_theme_without_a_window_does_not_fail(api):
+    assert api.set_pref("theme", "light")["theme"] == "light"
+    assert api.theme_changed("light") is True
+    assert api.theme_changed("blue") is True            # ignored
+
+
+def test_the_frame_is_set_when_the_window_is_there(api, monkeypatch):
+    calls = []
+    monkeypatch.setattr(studio.winframe, "apply_theme", lambda hwnd, window: calls.append((hwnd, window)))
+    monkeypatch.setattr(studio, "IsWindow", lambda h: True)
+    api._hwnd_cache = 77
+    api.set_pref("theme", "light")
+    assert calls == [(77, theme.PRESETS["light"]["window"])]
+    api.theme_changed("dark")
+    assert calls[-1] == (77, theme.PRESETS["dark"]["window"])
+    api.theme_changed("system")                          # not a preset: nothing happens
+    assert len(calls) == 2
+
+
+def test_a_failing_frame_call_never_reaches_the_page(api, monkeypatch):
+    def boom(hwnd, window):
+        raise OSError("dwm")
+    monkeypatch.setattr(studio.winframe, "apply_theme", boom)
+    monkeypatch.setattr(studio, "IsWindow", lambda h: True)
+    api._hwnd_cache = 77
+    assert api.set_pref("theme", "light")["theme"] == "light"
+    assert api.theme_changed("light") is True

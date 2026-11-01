@@ -5,6 +5,7 @@ import time
 import pytest
 
 import radiald
+import theme
 import toast
 
 SEGOE = os.path.join(os.environ.get("WINDIR", r"C:\Windows"), "Fonts", "segoeui.ttf")
@@ -45,6 +46,16 @@ def test_render_cuts_a_long_message_short():
 def test_render_uses_the_given_colour():
     im = toast.render("Menus reloaded", 1.0, colour="#00ff00")
     assert any(p[3] > 200 and p[1] > 200 and p[0] < 80 for p in pixels(im))
+
+
+@needs_fonts
+def test_render_takes_the_pill_of_the_theme_and_is_dark_by_default():
+    light = theme.preset("light")["toast"]
+    on_light = toast.render("Menus reloaded", 1.0, colour=light["text"], pill=light["pill"])
+    on_dark = toast.render("Menus reloaded", 1.0)
+    for im, bright in ((on_light, True), (on_dark, False)):
+        red, green, blue, alpha = im.getpixel((4, im.height // 2))      # left of the text, on the pill
+        assert alpha > 200 and (min(red, green, blue) > 200) == bright and (max(red, green, blue) < 60) != bright
 
 
 def test_show_logs_and_does_not_raise_when_it_cannot_draw(monkeypatch):

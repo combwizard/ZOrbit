@@ -8,6 +8,8 @@ All notable changes to this project are listed here. The format follows
 
 ### Added
 
+- A **Theme** setting on Settings: **Dark** (the default), **Light** and **Follow Windows**, for Studio, the browser and the ring.
+  The ring's colour defaults follow it; a colour set under **Colours** still wins.
 - Studio: a short guided tour of the window. It is offered once after Setup, and you can take it again from Setup step 5 or **Settings > Studio** (#41).
 
 ### Fixed

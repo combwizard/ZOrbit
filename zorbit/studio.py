@@ -35,6 +35,7 @@ import paths                # noqa: E402
 import profiles           # noqa: E402
 import radiald              # noqa: E402
 import tags                 # noqa: E402
+import theme                # noqa: E402
 import webapi               # noqa: E402
 import webview2             # noqa: E402
 import win32 as W           # noqa: E402
@@ -49,6 +50,12 @@ TITLE = "ZOrbit Studio"
 VERSION = paths.VERSION
 APP_ID = "ZOrbit.Studio"           # taskbar identity, so the Studio groups under its own icon
 STUDIO_FILE = os.path.join(paths.CONFIG_DIR, "studio.json")   # Studio preferences and window placement
+
+
+def _theme_now():
+    """The theme in force (dark or light), from studio.json. A module function so the tests can swap it."""
+    return theme.current(STUDIO_FILE)
+
 DEFAULT_SIZE = (1320, 860)  # the first window, in logical pixels, when it fits the screen (see _fit_size)
 MIN_SIZE = (980, 560)       # the smallest the window can be made
 START_WAIT = 10.0          # seconds start_app waits for the app's mutex (or, for an older app, its new version)
@@ -207,7 +214,7 @@ class Api(webapi.LibraryApi, webapi.TagApi):
             with os.fdopen(fd, "w", encoding="utf-8") as f:
                 json.dump(cfg, f)
             # tag names are checked like the app does
-            loaded = C.load(tmp, store or tags.TagStore(self._tags_path()).load())
+            loaded = C.load(tmp, store or tags.TagStore(self._tags_path()).load(), theme=_theme_now())
             return loaded, loaded.errors
         except Exception as e:
             return None, [f"config could not be read: {e}"]
@@ -225,7 +232,7 @@ class Api(webapi.LibraryApi, webapi.TagApi):
         made by a newer ZOrbit are not read: config is None, error is the message and too_new is True."""
         name = self._prof(profile)
         path = profiles.config_file(name if profiles.enabled() else None)
-        out = {"config": None, "problems": [], "path": path, "defaults": C.DEFAULT_RING, "mtime_ns": None,
+        out = {"config": None, "problems": [], "path": path, "defaults": C.default_ring(_theme_now()), "mtime_ns": None,
                "backup_exists": os.path.isfile(path + ".bak"), "profile": name, "active": profiles.active(),
                "profiles": profiles.names(), "enabled": profiles.enabled()}
         newer = profiles.too_new()
@@ -665,7 +672,9 @@ class Api(webapi.LibraryApi, webapi.TagApi):
         return {"animations": list(C.ANIMATIONS), "labels": list(C.LABEL_MODES), "actions": list(C.ACTION_KEYS),
                 "asset_kinds": list(C.ASSET_KINDS), "tag_colors": list(C.TAG_COLOR_MODES),
                 "tag_bands": list(C.TAG_BANDS), "favourite_tag": tags.FAVOURITE,
-                "tint_styles": list(C.TINT_STYLES), "tint_blends": list(C.TINT_BLENDS), "ring_defaults": C.DEFAULT_RING, "ring_ranges": C._RING_RANGES}
+                "tint_styles": list(C.TINT_STYLES), "tint_blends": list(C.TINT_BLENDS), "ring_defaults": C.default_ring(_theme_now()),
+                "ring_ranges": C._RING_RANGES, "themes": list(theme.NAMES),
+                "theme_ring_colors": {n: theme.ring_colors(n) for n in theme.CONCRETE}}
 
     # --- suggestions for press/set/toggle targets ------------------------------------------------
     def get_suggestions(self):
@@ -1297,8 +1306,9 @@ class Api(webapi.LibraryApi, webapi.TagApi):
     # mode is "" until Studio decides it at first start (Simple for a fresh install, Full for an existing setup).
     # seen_version is the version whose "What's new" was closed last ("" until it has been shown once).
     # tour_seen is whether the tour of Studio has been offered (a fresh install gets the offer after Setup; an existing user does not).
+    # theme is dark, light or system (follow Windows); get_prefs adds theme_effective, the one in force.
     _PREFS_DEFAULTS = {"check_updates": True, "last_screen": "menus", "setup_done": False, "mode": "",
-                       "seen_version": "", "tour_seen": False}
+                       "seen_version": "", "tour_seen": False, "theme": "dark"}
     # Keys an earlier Studio already wrote: a studio.json with any of them belongs to someone who has used the
     # Studio, so the Setup screen is not forced on them after an update.
     _USED_KEYS = ("window", "last_screen", "check_updates", "zbrush_folders")
@@ -1331,12 +1341,17 @@ class Api(webapi.LibraryApi, webapi.TagApi):
         prefs = dict(self._PREFS_DEFAULTS)
         prefs.update({k: v for k, v in data.items()
                       if k in self._PREFS_DEFAULTS and type(v) is type(self._PREFS_DEFAULTS[k])})   # a hand edit of the wrong type is ignored
+        if prefs["theme"] not in theme.NAMES:
+            prefs["theme"] = theme.DEFAULT            # a hand edit to a name that does not exist
+        prefs["theme_effective"] = theme.effective(prefs["theme"])     # computed, never stored
         return prefs
 
     def set_pref(self, key, value):
         if key not in self._PREFS_DEFAULTS or type(value) is not type(self._PREFS_DEFAULTS[key]):
             return self.get_prefs()
         if key == "mode" and value not in ("", "simple", "full"):
+            return self.get_prefs()
+        if key == "theme" and value not in theme.NAMES:
             return self.get_prefs()
         with _studio_lock:                     # read, change and write as one step
             data = _studio_for_update()            # keeps the other keys (window placement)
@@ -1346,6 +1361,8 @@ class Api(webapi.LibraryApi, webapi.TagApi):
                 data.pop(old, None)
             data[key] = value
             _write_studio_file(data)
+        if key == "theme":
+            self._apply_frame_theme()
         return self.get_prefs()
 
     def check_update(self):
@@ -1446,6 +1463,23 @@ class Api(webapi.LibraryApi, webapi.TagApi):
         if not getattr(self, "_hwnd_cache", None) or not IsWindow(self._hwnd_cache):
             self._hwnd_cache = winframe.main_window(TITLE, os.getpid())
         return self._hwnd_cache
+
+    def _apply_frame_theme(self, window=None):
+        """Sets the frame (dark mode, border) to a theme's window palette; the setting in force when not given.
+        Plain Win32, so it is safe off the UI thread. Does nothing before the window exists; never raises."""
+        try:
+            h = getattr(self, "_hwnd_cache", None)
+            if not h or not IsWindow(h):
+                return
+            winframe.apply_theme(h, window or theme.preset(_theme_now())["window"])
+        except Exception:
+            pass
+
+    def theme_changed(self, effective):
+        """The page saw Windows change its app colour mode (Follow Windows): the frame follows. True."""
+        if effective in theme.CONCRETE:
+            self._apply_frame_theme(theme.PRESETS[effective]["window"])
+        return True
 
     def win_minimize(self):
         h = self._hwnd()
@@ -1671,7 +1705,8 @@ def main():
         geometry = _default_geometry(scale)
     api = Api()
     window = webview.create_window(TITLE, url=UI_INDEX, js_api=api, **geometry, hidden=True,
-                                   min_size=min_size, background_color="#1a1b1e", text_select=False)
+                                   min_size=min_size, text_select=False,
+                                   background_color=theme.preset(_theme_now())["window"]["background"])
     api._window = window
     window.events.closing += lambda: _on_closing(api)
     window.events.loaded += lambda: _startup("page loaded")
@@ -1695,7 +1730,8 @@ def _frame_and_show(window, placement, api=None):
         api._hwnd_cache = hwnd
         winframe.limit_maximise_to_work_area(hwnd, on_query_end=api._on_query_end,
                                              on_end=api._on_end_session)
-    hwnd = winframe.custom_frame(TITLE, placement, pid=os.getpid(), include_hidden=True, on_hwnd=on_hwnd)
+    hwnd = winframe.custom_frame(TITLE, placement, pid=os.getpid(), include_hidden=True, on_hwnd=on_hwnd,
+                                 theme=theme.preset(_theme_now())["window"])
     window.events.loaded.wait(3)
     if hwnd:
         winframe.show_placed(hwnd, bool(placement and placement[4]))

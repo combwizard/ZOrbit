@@ -7,6 +7,7 @@ import pytest
 import config
 import paths
 import tags
+import theme
 
 GOOD_MENUS = {"main": {"title": "Main", "hotkey": "Q", "items": [{"brush": "Standard"}]}}
 
@@ -307,6 +308,47 @@ def test_misspelt_ring_key_suggests_the_right_one(load_menus):
 def test_unrelated_ring_key_is_reported_without_a_suggestion(load_menus):
     cfg = load_menus(GOOD_MENUS, ring={"qqqqqq": 1})
     assert cfg.errors == ["ring.qqqqqq: unknown setting"]
+
+
+# --- the theme ----------------------------------------------------------------------------------
+def test_a_light_theme_gives_the_light_colours_and_says_so(radial_file):
+    cfg = config.load(radial_file({"menus": GOOD_MENUS}), theme="light")
+    assert cfg.ring["colors"] == theme.ring_colors("light")
+    assert cfg.ring["theme"] == "light"
+    assert not cfg.errors
+
+
+def test_a_colour_set_in_the_file_wins_over_the_light_default(radial_file):
+    path = radial_file({"menus": GOOD_MENUS, "ring": {"colors": {"accent": "#123456"}}})
+    cfg = config.load(path, theme="light")
+    assert cfg.ring["colors"]["accent"] == "#123456"
+    assert cfg.ring["colors"]["bg"] == theme.ring_colors("light")["bg"]
+
+
+def test_the_dark_theme_changes_nothing(radial_file):
+    cfg = config.load(radial_file({"menus": GOOD_MENUS}), theme="dark")
+    assert cfg.ring == config.DEFAULT_RING
+    assert "theme" not in cfg.ring
+
+
+def test_a_theme_key_in_the_file_is_an_unknown_setting(load_menus):
+    cfg = load_menus(GOOD_MENUS, ring={"theme": "light"})
+    assert problems(cfg, "ring.theme: unknown setting")
+    assert "theme" not in cfg.ring
+
+
+def test_an_unknown_theme_name_loads_as_dark(radial_file):
+    cfg = config.load(radial_file({"menus": GOOD_MENUS}), theme="blue")
+    assert cfg.ring == config.DEFAULT_RING
+
+
+def test_default_ring_has_the_colours_of_the_theme_and_no_theme_key():
+    light = config.default_ring("light")
+    assert light["colors"] == theme.ring_colors("light")
+    assert "theme" not in light
+    assert {k: v for k, v in light.items() if k != "colors"} == {k: v for k, v in config.DEFAULT_RING.items() if k != "colors"}
+    assert config.default_ring() == config.DEFAULT_RING
+    assert config.default_ring("light") is not config.default_ring("light")
 
 
 # --- menus and their settings -------------------------------------------------------------------

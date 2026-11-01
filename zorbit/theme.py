@@ -42,10 +42,10 @@ PRESETS = {
         "label": "Light",
         "ring": {
             "colors": {"bg": "#f3f4f6",           # the disc
-                       "accent": "#b93d12",       # 5.1:1 on the disc; 4.1 to 5.0:1 on the pill over the canvases
-                       "highlight": "#076e8d",    # 5.3:1 on the disc; 4.2 to 5.1:1 on the pill
+                       "accent": "#a8360f",       # Studio's light accent too. 6.0:1 on the disc; 4.8 to 5.8:1 on the pill over the canvases
+                       "highlight": "#066785",    # 5.8:1 on the disc; 4.7 to 5.7:1 on the pill
                        "text": "#1b1c20",         # 15.5:1 on the disc; 12.4 to 15.1:1 on the pill
-                       "lines": "#b93d12"},
+                       "lines": "#a8360f"},
             "pill": (255, 255, 255, 210),
             "hint": (27, 28, 32, 178),            # 6.0:1 on the disc
             "badge": (255, 255, 255, 230),
@@ -57,7 +57,7 @@ PRESETS = {
 }
 
 _REG_KEY = r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize"
-_cache = {}                               # path -> (mtime_ns, size, setting)
+_cache = {}                               # path -> (bytes, setting): the file is small, and a stat can miss a quick rewrite
 
 
 def effective(name) -> str:
@@ -88,26 +88,26 @@ def _default_path() -> str:
 
 
 def read_setting(path=None) -> str:
-    """What studio.json says: dark, light or system. Missing, unreadable or odd files say dark. Re-read only when
-    the file's time or size changed (the app asks twice a second)."""
+    """What studio.json says: dark, light or system. Missing, unreadable or odd files say dark. The file is read
+    each time (the app asks twice a second; it is a few hundred bytes) and parsed only when its bytes changed."""
     path = path or _default_path()
     try:
-        st = os.stat(path)
+        with open(path, "rb") as f:
+            raw = f.read()
     except OSError:
         _cache.pop(path, None)
         return DEFAULT
     hit = _cache.get(path)
-    if hit and hit[0] == st.st_mtime_ns and hit[1] == st.st_size:
-        return hit[2]
+    if hit and hit[0] == raw:
+        return hit[1]
     setting = DEFAULT
     try:
-        with open(path, encoding="utf-8-sig") as f:
-            data = json.load(f)
+        data = json.loads(raw.decode("utf-8-sig"))
         if isinstance(data, dict) and data.get("theme") in NAMES:
             setting = data["theme"]
-    except (OSError, ValueError):
+    except ValueError:
         pass
-    _cache[path] = (st.st_mtime_ns, st.st_size, setting)
+    _cache[path] = (raw, setting)
     return setting
 
 

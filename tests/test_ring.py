@@ -13,6 +13,7 @@ from PIL import Image, ImageFont
 
 import config
 import ring
+import theme
 
 SEGOE = os.path.join(os.environ.get("WINDIR", r"C:\Windows"), "Fonts", "segoeuib.ttf")
 needs_fonts = pytest.mark.skipif(not os.path.isfile(SEGOE), reason="needs the Windows fonts folder")
@@ -147,6 +148,22 @@ def test_a_label_sits_on_a_soft_dark_pill():
         assert a.getpixel((w // 2, 0)) == 0                  # the sprite keeps a margin above the pill
 
 
+def test_a_label_pill_is_bright_under_the_light_theme():
+    r = prepared(make_menu(), theme="light", colors=theme.ring_colors("light"))
+    for sprite in r.labels[0]:
+        h = sprite.size[1]
+        red, green, blue, alpha = sprite.getpixel((3, h // 2))        # left of the text, on the pill
+        assert min(red, green, blue) > 240 and 180 <= alpha <= 230
+
+
+def test_the_hint_is_dark_under_the_light_theme_and_pale_under_the_dark():
+    for name, dark in (("light", True), ("dark", False)):
+        r = prepared(make_menu(), theme=name, colors=theme.ring_colors(name))
+        draw = ring.ImageDraw.Draw(Image.new("RGBA", (1, 1)))
+        hints = [c for *_, c in r._caption(draw)[1:]]
+        assert hints and all((sum(c[:3]) < 200) == dark for c in hints)
+
+
 def test_every_label_has_the_same_pill_height():
     r = make_ring(make_menu(labels=["Pyg", "Tools", "x"]))
     r._geometry(1.0)
@@ -251,7 +268,8 @@ def test_a_new_label_gives_new_sprites():
 
 
 @pytest.mark.parametrize("over", [{"slot": 60}, {"labels": "none"}, {"tag_colors": "none"},
-                                  {"colors": dict(config.DEFAULT_RING["colors"], accent="#112233")}])
+                                  {"colors": dict(config.DEFAULT_RING["colors"], accent="#112233")},
+                                  {"theme": "light", "colors": theme.ring_colors("light")}])
 def test_settings_that_reach_a_sprite_give_new_sprites(over):
     menu = make_menu()
     a = prepared(menu)

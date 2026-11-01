@@ -1,4 +1,4 @@
-"""Draws the ring pictures in docs/images (ring.png, fan.png, tag-colours.png, animations.png and the two GIFs) with
+"""Draws the ring pictures in docs/images (ring.png, ring-light.png, fan.png, tag-colours.png, animations.png and the two GIFs) with
 the real renderer, zorbit/ring.py, so they follow the ring's look whenever it changes. No window is opened and no
 ZBrush is needed, but the brush pictures come from the installed ZBrush's presets, so a ZBrush has to be installed.
 
@@ -51,6 +51,7 @@ from ring import Ring  # noqa: E402
 
 OUT = os.path.join(ROOT, "docs", "images")
 BG = (27, 28, 32)                              # the docs' dark page colour, as in every picture
+BG_LIGHT = (200, 203, 210)                     # a light ZBrush canvas, behind the Light theme's ring
 TEXT, MUTED = (236, 237, 240), (170, 173, 182)  # caption colours under the animation panels
 FONTS = os.path.expandvars(r"%WINDIR%\Fonts")
 
@@ -69,7 +70,7 @@ FAN_SCALE = 0.95                               # the fan picture is a little sma
 class World:
     """The starter menus and tags in the sandbox, loaded the way Studio's ring preview loads them."""
 
-    def __init__(self):
+    def __init__(self, theme="dark"):
         self.app = radiald.App(paths.ensure_config())
         assert os.path.commonpath([self.app.tags.path, SANDBOX]) == SANDBOX, "the tags file is outside the sandbox"
         store = self.app.tags.load()
@@ -77,7 +78,7 @@ class World:
             if tag:
                 store.set_tags(tags.item_key("brush", brush), [tag])
         plain = tags.TagStore(os.path.join(SANDBOX, "untagged.json")).load()   # the starter tags, nothing tagged
-        cfg = C.load(self.app.cfg_path, store)
+        cfg = C.load(self.app.cfg_path, store, theme=theme)
         assert not cfg.errors, cfg.errors
         self.fan_menus = [cfg.menus[m] for m in ("more", "tools", "subdiv")]
         cfg.menus["tags"] = C.Menu(id="tags", title="Tags", items=[
@@ -112,9 +113,9 @@ def cursor(scale=1.0):
     return im.resize((w // ss, h // ss), Image.LANCZOS), int(pad * scale)
 
 
-def on_background(im, size=None, at=(0, 0)):
-    """The ring picture laid on the page colour, on a canvas of size (the picture's own by default)."""
-    canvas = Image.new("RGBA", size or im.size, BG + (255,))
+def on_background(im, size=None, at=(0, 0), bg=BG):
+    """The ring picture laid on the page colour (or bg), on a canvas of size (the picture's own by default)."""
+    canvas = Image.new("RGBA", size or im.size, bg + (255,))
     canvas.alpha_composite(im, at)
     return canvas
 
@@ -141,6 +142,13 @@ def shot_ring(w):
     w.fans(False)
     im = w.preview("brushes", hover=1, held=True, scale=RING_SCALE)
     return with_cursor(on_background(im), *hovered(im))
+
+
+def shot_ring_light(w):
+    """The same ring as shot_ring, in the Light theme, over a light canvas."""
+    w.fans(False)
+    im = w.preview("brushes", hover=1, held=True, scale=RING_SCALE)
+    return with_cursor(on_background(im, bg=BG_LIGHT), *hovered(im))
 
 
 def shot_fan(w):
@@ -347,6 +355,8 @@ def shot_fan_out(w):
 # name -> (file, function, what it shows)
 SHOTS = {
     "ring": ("ring.png", shot_ring, "the starter Brushes menu in hold mode, ClayBuildup hovered, cursor on it"),
+    "ring-light": ("ring-light.png", shot_ring_light,
+                   "the same ring as ring.png in the Light theme, over a light grey canvas"),
     "fan": ("fan.png", shot_fan, "More Brushes fanned out to the left, ClayTubes in the fan hovered, cursor on it"),
     "tag-colours": ("tag-colours.png", shot_tags, "eight brushes in two tags and two untagged, ClayBuildup hovered"),
     "animations": ("animations.png", shot_animations, "the five open animations part way through opening"),
@@ -368,10 +378,13 @@ def main(argv):
     if unknown:
         sys.exit(f"unknown picture {unknown[0]!r}; the pictures are: {', '.join(SHOTS)}")
     os.makedirs(OUT, exist_ok=True)
-    w = World()
+    worlds = {}
     for name in args or SHOTS:
         file, make, _ = SHOTS[name]
-        result = make(w)
+        theme = "light" if make is shot_ring_light else "dark"
+        if theme not in worlds:                # one world for each theme, made when a picture needs it
+            worlds[theme] = World(theme)
+        result = make(worlds[theme])
         path = os.path.join(OUT, file)
         if isinstance(result, tuple):          # a GIF: (frames, milliseconds for each)
             save_gif(path, *result)

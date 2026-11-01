@@ -50,6 +50,7 @@ import installs             # noqa: E402
 import paths                # noqa: E402
 import profiles             # noqa: E402
 import tags                 # noqa: E402
+import theme                # noqa: E402
 import usage                # noqa: E402
 import win32 as W           # noqa: E402
 import zscript_bridge       # noqa: E402
@@ -310,6 +311,7 @@ class App:
         self.tray = None
         self.cfg = None
         self._bad_mtime = None          # mtime of a radial.json that failed to load
+        self._theme = "dark"            # the theme the config was last loaded under
         self.slots = []                 # menus with hotkeys, indexed for WM_APP_OPEN
         self.ring = None
         # Threads. The keyboard hook runs on its own thread (HookThread). Rules that keep the two safe:
@@ -372,11 +374,15 @@ class App:
             mtime = os.stat(self.cfg_path).st_mtime
         except OSError:
             mtime = None                           # missing: reported once, by the load below
-        if not force and ((self.cfg and mtime == self.cfg.mtime) or mtime == self._bad_mtime):
+        eff = theme.current()                      # a change of theme reloads the config, so the ring is redrawn in it
+        if not force and eff == self._theme and ((self.cfg and mtime == self.cfg.mtime) or mtime == self._bad_mtime):
             return
+        if eff != self._theme:
+            log(f"theme: {eff}")
         try:
-            cfg = C.load(self.cfg_path, self.tags)
+            cfg = C.load(self.cfg_path, self.tags, theme=eff)
         except Exception as e:
+            self._theme = eff                      # a broken file is not loaded again on every tick for the same theme
             fresh = mtime != self._bad_mtime
             self._bad_mtime = mtime                # logged once per broken version, not on every poll
             self._config_error = str(e) or repr(e)
@@ -393,12 +399,13 @@ class App:
         self._config_error = None
         self._menus_problem(clear=True)
         self._have_cfg = True
+        self._theme = eff
         self.cfg = cfg
         self.expander = expand.Expander(cfg, self.usage, self.tags)
         self._set_slots([m for m in cfg.menus.values() if m.hotkey], cfg.browser_key)
         for err in cfg.errors:
             log(f"config: {err}")
-        log(f"config loaded: {len(cfg.menus)} menus, hotkeys: "
+        log(f"config loaded: {len(cfg.menus)} menus, theme={eff}, hotkeys: "
             + ", ".join(f"{m.hotkey.text}->{m.id}" for m in self.slots)
             + f"; bridge mode={cfg.bridge_mode} key={cfg.bridge_key.text if cfg.bridge_key else None}"
             + f"; browser hotkey={cfg.browser_key.text if cfg.browser_key else None}")
@@ -502,8 +509,12 @@ class App:
         """A short message near the cursor. Never raises."""
         try:
             import toast
-            colours = (self.cfg.ring.get("colors") or {}) if self.cfg else {}
-            toast.show(text, log, colour=colours.get("text") or toast.TEXT)
+            ring = self.cfg.ring if self.cfg else {}
+            pre = theme.preset(ring.get("theme", "dark"))["toast"]
+            text_colour = (ring.get("colors") or {}).get("text") or pre["text"]
+            if theme.contrast(text_colour, pre["pill"]) < 3:      # a colour of the other theme: keep the message readable
+                text_colour = pre["text"]
+            toast.show(text, log, colour=text_colour, pill=pre["pill"])
         except Exception:
             log("toast failed:\n" + traceback.format_exc())
 

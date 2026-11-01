@@ -31,7 +31,7 @@
   // Update check (Settings > Studio > Check for updates): "v0.5.1 (dot) v0.5.3" when GitHub has a newer release.
   var UPDATE_DOT = '<svg class="upd-dot" viewBox="0 0 12 12" width="11" height="11" aria-hidden="true">' +
     '<circle cx="6" cy="6" r="6" fill="currentColor"/><path d="M6 8.7V3.6M3.8 5.7L6 3.5l2.2 2.2" fill="none" ' +
-    'stroke="#141416" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    'stroke="var(--on-accent)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
   function checkUpdate() {
     var chip = document.getElementById('versionChip');
     if (!chip) return Promise.resolve(null);

@@ -6,6 +6,8 @@ import ctypes
 import ctypes.wintypes as w
 import time
 
+import theme as _theme          # the importer has put zorbit/ on sys.path
+
 kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
 user32 = ctypes.WinDLL("user32", use_last_error=True)
 
@@ -290,19 +292,33 @@ def placement_record(hwnd):
     return {"x": left, "y": top, "width": right - left, "height": bottom - top, "maximized": maxed}
 
 
+def apply_theme(hwnd, window):
+    """Sets the frame's dark mode, corners and border colour from a theme preset's "window" part. Plain Win32,
+    so it may run on any thread, and again on a window that is already up."""
+    dwm = ctypes.WinDLL("dwmapi")
+    dwm.DwmSetWindowAttribute.argtypes = [w.HWND, w.DWORD, ctypes.c_void_p, w.DWORD]
+    for attr, val in ((20, window["dwm_dark"]),          # immersive dark mode
+                      (33, 2),                           # rounded corners
+                      (34, _theme.colorref(window["border"]))):   # border colour (COLORREF is 0x00bbggrr)
+        v = ctypes.c_int(val)
+        dwm.DwmSetWindowAttribute(hwnd, attr, ctypes.byref(v), 4)
+
+
 def custom_frame(title, placement=None, pid=None, topmost=False, toolwindow=False, maximizable=True,
-                 on_hwnd=None, include_hidden=False):
+                 on_hwnd=None, include_hidden=False, theme=None):
     """Removes the Windows title bar but keeps the resizable frame (native resize and Aero Snap), and
     themes the remaining 1 px border and corners. The page draws its own header (see index.html).
     placement: saved_window()'s result, applied exactly (create_window only gets it to within a pixel).
     pid: only a window of that process counts. topmost: keep the window above others. toolwindow: no taskbar
     button. maximizable=False: no maximise box. on_hwnd(hwnd): called once the window is found, before the
-    frame is changed. include_hidden: also find a window that was created hidden.
+    frame is changed. include_hidden: also find a window that was created hidden. theme: the "window" part of a
+    theme preset (dark mode, border colour); the dark preset when not given.
     A hidden window is not maximised here (that would show it): show it with show_placed. Every size change
     of a visible WebView2 window flashes black, so the Studio applies all this while hidden and shows once.
     Returns the window handle, or None.
     Plain Win32 only: touching window.native (a .NET Form) from pywebview's worker thread deadlocks."""
     try:
+        theme_window = theme or _theme.PRESETS["dark"]["window"]
         hwnd = None
         for _ in range(100):                                                       # up to ~10 s for the window
             hwnd = main_window(title, pid, include_hidden=include_hidden)
@@ -323,13 +339,7 @@ def custom_frame(title, placement=None, pid=None, topmost=False, toolwindow=Fals
             GWL_EXSTYLE, WS_EX_TOOLWINDOW, WS_EX_APPWINDOW = -20, 0x00000080, 0x00040000
             ex = user32.GetWindowLongW(hwnd, GWL_EXSTYLE)
             user32.SetWindowLongW(hwnd, GWL_EXSTYLE, (ex | WS_EX_TOOLWINDOW) & ~WS_EX_APPWINDOW)   # no taskbar button
-        dwm = ctypes.WinDLL("dwmapi")
-        dwm.DwmSetWindowAttribute.argtypes = [w.HWND, w.DWORD, ctypes.c_void_p, w.DWORD]
-        for attr, val in ((20, 1),                       # immersive dark mode
-                          (33, 2),                       # rounded corners
-                          (34, 0x00352F2B)):             # border colour #2b2f35 (COLORREF is 0x00bbggrr)
-            v = ctypes.c_int(val)
-            dwm.DwmSetWindowAttribute(hwnd, attr, ctypes.byref(v), 4)
+        apply_theme(hwnd, theme_window)
         flags = 0x0001 | 0x0002 | 0x0010 | 0x0020                      # NOSIZE NOMOVE NOACTIVATE FRAMECHANGED
         if topmost:
             user32.SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, flags)

@@ -7,7 +7,7 @@ Studio is where you edit everything. Open it from the Start menu (**ZOrbit Studi
 |---|---|---|
 | Menus | Alt+1 | Create and edit menus and their items, with a live ring preview. |
 | Library | Alt+2 | Browse the brushes, alphas, materials and textures ZBrush can load, on four tabs, with search, folders and thumbnails. Click an item and press **Add to <menu>**, or drag it onto a menu, the ring or the item list. **Rescan** picks up items saved since Studio opened. Tag items and filter by tag (see [Tags](tags.md)). Star favourites; Recent lists what you have picked in ZBrush (see [Favourites and Recent](browser.md#favourites-and-recent)). |
-| Settings | Alt+3 | Ring size, animation, labels, flick, the browser hotkey, Studio's own preferences, and Import and export (see [Import and export](files.md#import-and-export)). [Full mode](#simple-and-full-mode) adds separate radius, slot and dead zone sliders, tag colours, colours, hover submenus, tap time, auto-close, tags, the bridge and Older ZBrush. |
+| Settings | Alt+3 | The theme, ring size, animation, labels, flick, the browser hotkey, Studio's own preferences, and Import and export (see [Import and export](files.md#import-and-export)). [Full mode](#simple-and-full-mode) adds separate radius, slot and dead zone sliders, tag colours, colours, hover submenus, tap time, auto-close, tags, the bridge and Older ZBrush. |
 | Status | Alt+4 | Four cards: **ZBrush** (running or not), **ZOrbit app** (running or not, with **Start app** when ZBrush is running, or amber with **Restart app** when the app running is older than Studio: see [Older versions](profiles.md#older-versions)), **Bridge listener** (the small window the plugin keeps inside ZBrush: **Connected**, **Found, unverified**, **Stale** or **Not found**; **ZBrush closed** in grey when ZBrush is not running, since there is nothing to listen in; and **Not needed (key bridge)** when the bridge mode is `key` or only a ZBrush 2022 to 2025 is installed) and **Last pick** (the most recent item sent to ZBrush). Below them the last 40 lines of the app log, with **Copy log**, **Open logs folder** and **Open menus folder** (the folder of the profile you are editing, which holds its `radial.json`). The screen refreshes every 3 seconds. A dot on this button in the rail means the app is not running while ZBrush is. |
 | Setup | Alt+5 | A checklist of five steps: ZBrush found (with the plugin set up for it), plugin loaded in ZBrush, try the ring, your brushes, and what's where. It shows live state and offers one action per step. An amber dot on this button in the rail means no ZBrush that Studio found has the plugin set up, or a running ZBrush does not. Finding no ZBrush at all does not count. |
 
@@ -26,7 +26,7 @@ The mode only changes what Studio shows. The ring, the app, `radial.json`, Save,
 | Menus, **Add item** | Brush, Alpha, Material, Texture and Submenu. | Press, Set, Toggle, Steps, Auto, Tag and Browser. |
 | Menus, **Menu** tab | Title, Hotkey, **Duplicate** and **Delete**. | Id, **Swallow hotkey**, **Used by**, **Open animation** and **Fan out when opened from another menu**. |
 | Library and the dock | Everything, with starring, tag chips and the right-click tag picker. | **Manage tags...**. |
-| Settings | **Ring size**, **Open animation**, **Labels**, **Behaviour** with **Flick to pick**, **Browser**, **Studio** and **Import and export**. | **Ring radius**, **Slot size** and **Dead zone** in place of **Ring size**, **Tag colours**, **Colours**, **Open submenus on hover**, **Tap time**, **Auto-close**, **ZBrush bridge**, **Older ZBrush** and **Tags**. |
+| Settings | **Theme**, **Ring size**, **Open animation**, **Labels**, **Behaviour** with **Flick to pick**, **Browser**, **Studio** and **Import and export**. | **Ring radius**, **Slot size** and **Dead zone** in place of **Ring size**, **Tag colours**, **Colours**, **Open submenus on hover**, **Tap time**, **Auto-close**, **ZBrush bridge**, **Older ZBrush** and **Tags**. |
 | Status and Setup | The same. | The same. |
 
 ![The Settings screen in Simple mode: a shorter list of sections on the left, and a single Ring size slider beside the ring preview, above the Open animation choices](images/studio-settings-simple.png)
@@ -46,6 +46,8 @@ Which mode Studio starts in:
 - After that, Studio opens in the mode you left it in.
 
 The choice is kept in `studio.json` as `mode` (`simple` or `full`). It is a Studio preference, so it is not part of an [export](files.md#import-and-export) and it does not change the ring. The [browser](browser.md) window has no switch and always shows everything.
+
+The **Theme** card on Settings (**Dark**, **Light** or **Follow Windows**) is also a Studio preference, kept in `studio.json` as `theme`. It changes how Studio, the [browser](browser.md) and the ring look, and the window frame (its border and a dark or light title bar) follows it. See [Theme](appearance.md#theme).
 
 ## The tray icon
 

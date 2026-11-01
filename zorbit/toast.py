@@ -1,8 +1,9 @@
 """A one-line message near the cursor, for the moments the app knows why a pick went nowhere.
 
-render() draws the pill (Pillow only, so tests can run it); show() puts it in a layered, topmost tool window that
-never takes focus and ignores the mouse, and destroys it after a while through a WM_TIMER on that window. One toast
-at a time: a new one replaces the old. Everything runs on the app's message-loop thread. show() never raises.
+render() draws the pill (Pillow only, so tests can run it), in the theme's colour when the caller passes one and
+dark otherwise; show() puts it in a layered, topmost tool window that never takes focus and ignores the mouse, and
+destroys it after a while through a WM_TIMER on that window. One toast at a time: a new one replaces the old.
+Everything runs on the app's message-loop thread. show() never raises.
 """
 import ctypes
 import traceback
@@ -23,8 +24,8 @@ _class_registered = False
 _wndproc_ref = None
 
 
-def render(text, scale=1.0, colour=TEXT):
-    """The toast as an RGBA image: text on a rounded dark pill, one line, cut short with an ellipsis if long."""
+def render(text, scale=1.0, colour=TEXT, pill=PILL):
+    """The toast as an RGBA image: text on a rounded pill (dark by default), one line, cut short with an ellipsis if long."""
     import ring as R
     s = scale * SS
     font = R._font_for(text, int(FONT_PX * s), bold=False)
@@ -36,7 +37,7 @@ def render(text, scale=1.0, colour=TEXT):
     wd, ht = r - l + 2 * px, bottom - top + 2 * py
     im = Image.new("RGBA", (wd, ht), (0, 0, 0, 0))
     d = ImageDraw.Draw(im)
-    d.rounded_rectangle((0, 0, wd - 1, ht - 1), radius=ht / 2, fill=PILL)
+    d.rounded_rectangle((0, 0, wd - 1, ht - 1), radius=ht / 2, fill=pill)
     d.text((px - l, py - top), text, font=font, fill=R._rgba(colour, 1.0), anchor="ls")
     return im.resize((max(1, round(wd / SS)), max(1, round(ht / SS))), Image.LANCZOS)
 
@@ -109,13 +110,13 @@ def close():
         W.DestroyWindow(hwnd)
 
 
-def show(text, log, ms=1800, colour=TEXT):
+def show(text, log, ms=1800, colour=TEXT, pill=PILL):
     """Shows text just below the cursor for ms milliseconds. Never raises, never takes the focus."""
     global _hwnd
     try:
         x, y = W.cursor_pos()
         work, scale = W.monitor_for_point(x, y)
-        im = render(text, scale, colour)
+        im = render(text, scale, colour, pill)
         wd, ht = im.size
         left = max(work.left, min(x - wd // 2, work.right - wd))
         top = y + int(26 * scale)                       # clear of the arrow

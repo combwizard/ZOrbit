@@ -52,7 +52,7 @@ The palette was renamed, so a hotkey you bound by hand to the old **Apply** does
 
 ### The ring opens, but picks do nothing
 
-When the app knows why a pick went nowhere, it shows a short message near the cursor for about two seconds. It sits just below the cursor, ignores the mouse, never takes the focus and never shows for a pick that worked. A new message replaces the old one. If one cannot be drawn, `radiald.log` says "toast failed". The messages are:
+When the app knows why a pick went nowhere, it shows a short message near the cursor for about two seconds. It is drawn in the colours of the [theme](appearance.md#theme), sits just below the cursor, ignores the mouse, never takes the focus and never shows for a pick that worked. A new message replaces the old one. If one cannot be drawn, `radiald.log` says "toast failed". The messages are:
 
 - **No plugin listener in ZBrush (bridge mode is Message). Check Zplugin > ZOrbit > Status.** The bridge mode is `message` and the app found no live listener in that ZBrush. Start ZBrush, or load the plugin.
 - **The plugin did not answer (bridge mode is Message). Check Zplugin > ZOrbit > Status.** The listener was there, but did not pick the request up within half a second, and in `message` mode the app never presses the bridge key instead.

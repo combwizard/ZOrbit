@@ -9,7 +9,7 @@ border, spoke and label take the colour too. A band through the slot centres (ri
 colour, faint for one without; it is left out when no slot has a colour. A tag slot is a solid disc in the tag colour with a tag glyph whatever ring.tag_colors says; one with no
 brushes is a faint tag glyph and nothing else of it is coloured.
 All of it is drawn into the sprites when they are built, so a frame costs the same as before.
-Every disc is drawn before any label, and a label sits on a soft dark pill, so a neighbouring disc never hides a name. The radius is
+Every disc is drawn before any label, and a label sits on a soft pill in the theme's colour, so a neighbouring disc never hides a name. The radius is
 a minimum: a ring with many items grows until neighbouring slots are SLOT_GAP slot widths apart.
 Sprites are kept between opens (_sprite_cache), so a menu opened again starts at once.
 Selection is by angle outside a dead zone; a slot covers at most a quarter of the circle, so a ring of one to
@@ -50,6 +50,7 @@ from collections import OrderedDict
 from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageFont
 
 import tags
+import theme
 import win32 as W
 
 SS = 3                      # supersampling for sprites (drawn large, reduced once)
@@ -65,8 +66,6 @@ FAN_TURNS = (0, 15, -15, 30, -30, 45, -45, 60, -60, 75, -75, 90, -90)   # turns 
 FAN_MS = 220                # longest fan open animation (per slot)
 FAN_GRACE = 0.12            # seconds a fan stays open after the cursor leaves it
 SLOT_GAP = 1.25             # neighbouring slot centres are at least this many slot widths apart
-HINT_ALPHA = 140            # opacity (of 255) of the hint text under the title
-PILL_ALPHA = 140            # opacity (of 255) of the dark pill behind a label
 SPRITE_MENUS = 8            # menus whose sprites are kept between opens
 _instances = {}
 _sprite_cache = OrderedDict()   # key (see Ring._sprite_key) -> (sprites, labels, dot), least recently used first
@@ -876,6 +875,7 @@ class Ring:
         col = self.cfg["colors"]
         self.c_bg, self.c_accent, self.c_hi = col["bg"], col["accent"], col["highlight"]
         self.c_text, self.c_lines = col["text"], col.get("lines", col["accent"])
+        self.pre = theme.preset(self.cfg.get("theme", "dark"))["ring"]     # the theme's pill, hint, badge, placeholder
         self.f_glyph = _font(int(15 * self.scale * SS))
         t0 = time.perf_counter()
         key = self._sprite_key()
@@ -910,7 +910,8 @@ class Ring:
                        self._fans_out(it) if it.kind == "menu" else False) for it in self.items)
         look = (c["slot"], col["bg"], col["accent"], col["highlight"], col["text"],
                 c.get("tag_colors", "tint"), c.get("tag_glow_opacity", 0.4), c.get("tag_tint_opacity", 0.3),
-                c.get("tag_tint_style", "gradient"), c.get("tag_tint_blend", "multiply"))
+                c.get("tag_tint_style", "gradient"), c.get("tag_tint_blend", "multiply"),
+                c.get("theme", "dark"))
         return self.menu.id, items, look, self.scale, c.get("labels", "name")
 
     def _slot_sprites(self, it, slot=None):
@@ -977,7 +978,7 @@ class Ring:
                 pd = ImageDraw.Draw(ph)
                 for k in range(12, 0, -1):         # cheap radial gradient
                     t = k / 12
-                    g = tuple(int(a + (b - a) * (1 - t)) for a, b in zip((0x2a, 0x2a, 0x35), (0x5a, 0x5a, 0x6a)))
+                    g = tuple(int(a + (b - a) * (1 - t)) for a, b in zip(*self.pre["placeholder"]))
                     rr = pr * t
                     pd.ellipse((c - rr, c - rr, c + rr, c + rr), fill=g + (255,))
                 im.alpha_composite(ph)
@@ -995,7 +996,7 @@ class Ring:
                 bw = 14 * u
                 bx, by = c + r * 0.62, c + r * 0.62
                 d.rounded_rectangle((bx - bw / 2, by - bw / 2, bx + bw / 2, by + bw / 2), radius=4 * u,
-                                    fill=(0, 0, 0, 217), outline=_rgba(self.c_hi, 1.0), width=max(1, int(u)))
+                                    fill=self.pre["badge"], outline=_rgba(self.c_hi, 1.0), width=max(1, int(u)))
                 if fan:
                     _glyph_fan(d, bx - 4 * u, by + 4 * u, 8 * u, _rgba(self.c_hi, 1.0))
                 else:
@@ -1015,7 +1016,7 @@ class Ring:
         return disc(False), disc(True)
 
     def _label_sprites(self, it, slot=None):
-        """(idle, hover) label sprites: the name on a soft dark pill, so it reads over a neighbouring disc."""
+        """(idle, hover) label sprites: the name on a soft pill in the theme's colour, so it reads over a neighbouring disc."""
         if self.cfg.get("labels", "name") == "none":
             return None
         s = SS
@@ -1033,7 +1034,7 @@ class Ring:
             hue = (_chrome(it) or (self.c_hi if it.kind == "menu" else self.c_accent)) if hover else self.c_text
             im = Image.new("RGBA", (Wd, Hd), (0, 0, 0, 0))
             d = ImageDraw.Draw(im)
-            d.rounded_rectangle(pill, radius=(pill[3] - pill[1]) / 2, fill=(0, 0, 0, PILL_ALPHA))
+            d.rounded_rectangle(pill, radius=(pill[3] - pill[1]) / 2, fill=self.pre["pill"])
             d.text((pad - l, pad - top), text, font=font, fill=_rgba(hue, 1.0), anchor="ls")
             out.append(im.resize((max(1, int(Wd / s)), max(1, int(Hd / s))), Image.LANCZOS))
         return out
@@ -1148,7 +1149,7 @@ class Ring:
                 fonts = [_font_for(t, int(px * self.scale * s)) for t in lines]
                 dys = [30 + 11 * k for k in range(len(lines))]
                 if all(width(t, f) <= room(dy) for t, f, dy in zip(lines, fonts, dys)):
-                    return out + [(t, f, dy, (255, 255, 255, HINT_ALPHA)) for t, f, dy in zip(lines, fonts, dys)]
+                    return out + [(t, f, dy, self.pre["hint"]) for t, f, dy in zip(lines, fonts, dys)]
         return out
 
     def _band(self, im, cx, cy):

@@ -2,7 +2,7 @@
 
 ## Appearance and behaviour settings
 
-These are on the Settings screen in Studio, and under `"ring"` in `radial.json`. Studio shows live previews.
+These are on the Settings screen in Studio, and under `"ring"` in `radial.json`. Studio shows live previews. The [theme](#theme) is on Settings too, but it is a Studio preference and not in `radial.json`.
 
 ![The Settings screen in Studio: a list of sections on the left, and Ring geometry with sliders for ring radius, slot size and dead zone beside a ring preview, above the Open animation choices](images/studio-settings.png)
 
@@ -14,7 +14,7 @@ These are on the Settings screen in Studio, and under `"ring"` in `radial.json`.
 | `tap_ms` (**Tap time**) | 250 | 0 to 1000 | A hotkey press shorter than this is a tap. |
 | `timeout_s` (**Auto-close**) | 20 | 2 to 120 | An open ring closes itself after this many seconds. |
 | `animation` (**Open animation**) | `smooth` | see [Open animations](#open-animations) | The open animation. |
-| `labels` (**Labels**: **Icon and name**, **Icon only**) | `name` | `name`, `none` | Show names under the slots, or icons only. A name sits on a soft dark pill, so it stays readable when a neighbouring slot is close. |
+| `labels` (**Labels**: **Icon and name**, **Icon only**) | `name` | `name`, `none` | Show names under the slots, or icons only. A name sits on a soft pill (dark in the Dark theme, light in the Light theme), so it stays readable when a neighbouring slot is close. |
 | `flick` (**Flick to pick**) | `true` | `true`, `false` | Moving out past a slot picks it without releasing or clicking. |
 | `hover_submenus` (**Open submenus on hover**) | `true` | `true`, `false` | Reaching a submenu slot opens the submenu, centred on that slot. |
 | `tag_colors` (**Tag colours**: the **Icon tint** and **Glow** switches) | `tint` | `none`, `tint`, `glow`, `both` | Whether an item's first tag tints its icon, glows, or both. See [Tag colours](#tag-colours). |
@@ -28,19 +28,37 @@ These are on the Settings screen in Studio, and under `"ring"` in `radial.json`.
 Sizes are scaled for high-DPI screens automatically.
 
 The radius is a minimum. When a menu has so many items that neighbouring slots would sit closer than 1.25 slot widths apart, the ring grows until they do not. With the default slot size that starts at 10 items: 12 items make a ring about 174 pixels in radius, 24 items about 345. The Studio preview grows the same way, so lowering **Ring radius** changes nothing once a menu is past that point. Raise **Slot size** or cut the number of items to keep the ring smaller. Names in Chinese, Japanese or Korean are drawn with Microsoft YaHei, Yu Gothic or Malgun Gothic, whichever Windows has; other names use Segoe UI.
-Studio's [Simple mode](studio.md#simple-and-full-mode) shows only some of these. Its **Ring size** slider moves `radius`, `slot` and `dead_zone` together and keeps their proportions. Full mode has the three separate sliders, and is the only mode that shows `hover_submenus`, `tap_ms`, `timeout_s`, the `tag_` settings and `colors`. The animation, `labels` and `flick` are in both. What Simple hides keeps its value.
+Studio's [Simple mode](studio.md#simple-and-full-mode) shows only some of these. Its **Ring size** slider moves `radius`, `slot` and `dead_zone` together and keeps their proportions. Full mode has the three separate sliders, and is the only mode that shows `hover_submenus`, `tap_ms`, `timeout_s`, the `tag_` settings and `colors`. The animation, `labels`, `flick` and the theme are in both. What Simple hides keeps its value.
+
+### Theme
+
+The **Theme** card is at the top of **Settings**, in Simple and Full mode. It has three choices:
+
+- **Dark** is the default.
+- **Light** is for ZBrush and Windows set to a light theme.
+- **Follow Windows** uses Windows' app colour mode (**Settings > Personalisation > Colours > Choose your default app mode**) and changes with it. The app checks that setting twice a second, so the ring follows within about half a second. Studio and the browser follow as soon as Windows changes.
+
+![The Theme card on Settings: Dark, Light and Follow Windows, with Light picked](images/settings-theme.png)
+
+The theme applies to Studio, the browser and the ring. It belongs to the PC, not to a profile: it is kept as `theme` in `studio.json` (`dark`, `light` or `system`), not in `radial.json`, so it is not part of an [export](files.md#import-and-export). The [browser](browser.md) reads it when it is shown. The plain colour Windows shows for a moment while Studio or the browser is being resized is the one the window started with; it changes when the window is next opened.
+
+![The Brushes ring in the Light theme, over a light grey background: pale slots with dark labels on white pills](images/ring-light.png)
+
+A change shows on the ring within about half a second, or at the next open at the latest.
+
+The theme sets the ring's colour defaults (see the table under [Colours](#colours)), and a colour you set under **Colours** still wins. A dark `bg` kept under Light stays dark. The label pill, the hint text, the submenu badge and the [message near the cursor](troubleshooting.md#the-ring-opens-but-picks-do-nothing) follow the theme and not your colours, so a very light `text` can be hard to read on Light's white pill. There is no setting for the pill and badge colours.
 
 ### Colours
 
-`ring.colors` takes `#rrggbb` values. In Studio they are on the **Colours** card, which needs [Full mode](studio.md#simple-and-full-mode).
+`ring.colors` takes `#rrggbb` values. In Studio they are on the **Colours** card, which needs [Full mode](studio.md#simple-and-full-mode). The defaults depend on the [theme](#theme).
 
-| Colour | Default | Used for |
-|---|---|---|
-| `bg` | `#222327` | Slot fill |
-| `accent` | `#f86b33` | Centre dot, hover, title |
-| `highlight` | `#4dc8e9` | Submenu slots and badges |
-| `text` | `#f0f0f0` | Labels |
-| `lines` | `#f86b33` | Spokes and guide circles |
+| Colour | Dark default | Light default | Used for |
+|---|---|---|---|
+| `bg` | `#222327` | `#f3f4f6` | Slot fill |
+| `accent` | `#f86b33` | `#a8360f` | Centre dot, hover, title |
+| `highlight` | `#4dc8e9` | `#066785` | Submenu slots and badges |
+| `text` | `#f0f0f0` | `#1b1c20` | Labels |
+| `lines` | `#f86b33` | `#a8360f` | Spokes and guide circles |
 
 ![Settings > Colours: swatches and hex values for Background, Accent, Highlight, Text and Lines, a Reset all colours button, and a preview of the Brushes ring](images/settings-colours.png)
 
@@ -52,7 +70,7 @@ Studio's [Simple mode](studio.md#simple-and-full-mode) shows only some of these.
 }
 ```
 
-Anything you leave out keeps its default. Values outside the allowed range are reported as problems and the default is used. In Studio, a slider or switch put back to its default is taken out of the file again, so it counts as no change.
+Anything you leave out keeps the theme's default. Values outside the allowed range are reported as problems and the default is used. In Studio, a slider or switch put back to its default is taken out of the file again, so it counts as no change.
 
 ### Tag colours
 

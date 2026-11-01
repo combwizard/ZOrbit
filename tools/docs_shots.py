@@ -69,6 +69,7 @@ SHOTS = {
     "studio-library": dict(q="screen=library"),
     "studio-settings": dict(q="screen=settings"),
     "studio-settings-simple": dict(q="screen=settings&mode=simple"),
+    "studio-light": dict(q="screen=settings&theme=light"),
     # studio-tour opens the guided tour, waits for its card and clicks Next twice: stop 3 of 9, The ring, lit.
     "studio-tour": dict(q="screen=menus", steps=[
         "startTour()",
@@ -80,8 +81,10 @@ SHOTS = {
     "setup": dict(q="screen=setup&zb=both&ringtried=done"),
     "setup-restart": dict(q="screen=setup&zb=2026&zbstale"),
     "browser": dict(page="popout.html", q="kind=brush", size=(980, 680)),
+    "browser-light": dict(page="popout.html", q="kind=brush&theme=light", size=(980, 680)),
     "library-tag": dict(q="screen=library", steps=["click('Blocking')"]),
     # Details
+    "settings-theme": dict(q="screen=settings&theme=light", clip="card('Theme')"),
     "settings-colours": dict(q="screen=settings", clip="card('Colours')"),
     "settings-behaviour": dict(q="screen=settings", clip="card('Behaviour')"),
     "settings-bridge": dict(q="screen=settings", clip="card('ZBrush bridge')"),

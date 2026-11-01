@@ -51,6 +51,7 @@ import fsutil               # noqa: E402
 import paths                # noqa: E402
 import profiles             # noqa: E402
 import radiald              # noqa: E402
+import theme                # noqa: E402
 import webapi               # noqa: E402
 import webview2              # noqa: E402
 import win32 as W           # noqa: E402
@@ -229,11 +230,20 @@ class PopoutApi(webapi.LibraryApi, webapi.TagApi):
         size = st.get("size")
         kind = self._pop.start_kind or st.get("kind")
         side = "right" if st.get("side") == "right" else "left"
+        setting, effective = theme.read_setting(), theme.current()
+        with self._pop._lock:                              # show() reads and writes it under the same lock
+            self._pop._theme_seen = (setting, effective)   # show() tells the page only when this changes
         return {"on_top": self._pop.on_top, "size": size if isinstance(size, int) else None, "side": side,
                 "column": st.get("column") != "hidden",
                 "tag": self._pop.start_tag,
                 "kind": kind if kind in C.ASSET_KINDS else "brush", "tags_path": profiles.tags_file(),
-                "profile": profiles.active()}
+                "profile": profiles.active(), "theme": setting, "theme_effective": effective}
+
+    def popout_theme_changed(self, effective):
+        """The page saw Windows change its app colour mode (Follow Windows): the frame follows. True."""
+        if effective in theme.CONCRETE:
+            self._pop.apply_frame_theme(theme.PRESETS[effective]["window"])
+        return True
 
     def popout_pick(self, name, kind="brush"):
         """Selects a brush, alpha, material or texture in ZBrush: hands the focus back to ZBrush, then asks the
@@ -318,6 +328,7 @@ class Popout:
         self._ctl_up = threading.Event()
         self._work = queue.SimpleQueue()     # what the control window asks for, done off its thread
         self._refs = []                      # callbacks that must outlive the calls
+        self._theme_seen = None              # (setting, effective) the page was last given
 
     # --- control window: how the app reaches us -------------------------------------------------------
     def start_ctl(self):
@@ -439,7 +450,8 @@ class Popout:
         """webview.start's function: frame first, then wait for the page, then take whatever was asked meanwhile."""
         try:
             winframe.custom_frame(TITLE, placement=None, pid=os.getpid(), topmost=self.on_top, toolwindow=False,
-                                  maximizable=True, include_hidden=True, on_hwnd=self.on_hwnd)
+                                  maximizable=True, include_hidden=True, on_hwnd=self.on_hwnd,
+                                  theme=theme.preset(theme.current())["window"])
             if not self.hwnd:
                 _log("the popout window was not found; giving up")
                 self.quit("no window")
@@ -573,6 +585,29 @@ class Popout:
         W.nudge_mouse()                                # a zero move: the pen and cursor tracking wake up in ZBrush
         return True
 
+    def apply_frame_theme(self, window):
+        """The frame's dark mode and border for a theme's "window" palette, once the window is there. Never raises."""
+        try:
+            if self.hwnd:
+                winframe.apply_theme(self.hwnd, window)
+        except Exception as e:
+            _log(f"frame theme failed: {e!r}")
+
+    def _sync_theme(self):
+        """The theme may have changed while the window was hidden (Studio's setting, or Windows' colour mode under
+        Follow Windows): when it differs from what the page was last given, set the frame and tell the page.
+        Called by show() with the lock held."""
+        now = (theme.read_setting(), theme.current())
+        if now == self._theme_seen:
+            return
+        self.apply_frame_theme(theme.PRESETS[now[1]]["window"])
+        try:
+            arg = json.dumps({"setting": now[0], "effective": now[1]})
+            self.window.evaluate_js("window.__popoutTheme && __popoutTheme(" + arg + ")")
+            self._theme_seen = now                 # a failed call is tried again at the next show
+        except Exception as e:
+            _log(f"__popoutTheme failed: {e!r}")
+
     def show(self, tag=None, zb=0, reset=True, kind=None):
         """Shows the window, takes the focus and puts the cursor in the search box. reset: also tell the page to
         start afresh (empty search, this tag only). Without it the page is left as it is, except that a tag
@@ -582,6 +617,7 @@ class Popout:
                 return
             was_visible = self.visible()
             self._remember_target(zb)
+            self._sync_theme()
             if reset or tag or kind:
                 try:
                     arg = json.dumps({"tag": tag or None, "kind": kind or None, "reset": bool(reset)})
@@ -808,7 +844,8 @@ def _run(opts, mutex) -> int:
     user32.SetProcessDPIAware()                          # as pywebview does: sizes below are logical pixels
     api = PopoutApi(pop)
     window = webview.create_window(TITLE, url=UI_PAGE, js_api=api, width=START_SIZE[0], height=START_SIZE[1],
-                                   min_size=MIN_SIZE, hidden=True, on_top=pop.on_top, background_color="#1a1b1e",
+                                   min_size=MIN_SIZE, hidden=True, on_top=pop.on_top,
+                                   background_color=theme.preset(theme.current())["window"]["background"],
                                    text_select=False)
     pop.window = window
     window.events.closing += pop.on_closing

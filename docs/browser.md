@@ -21,6 +21,8 @@ A browser that was hidden (it starts hidden, and the **X** button hides it again
 
 The Studio button and the Start menu shortcut work without ZBrush running, so you can browse and tag items on their own. The browser has its own icon in the taskbar, different from ZOrbit's. The first time it appears centred on a screen. After that it comes back where, and as large as, you left it, maximised or not.
 
+The browser follows the Theme setting (see [Theme](appearance.md#theme)). It reads the setting when the window is shown, so a change made while the browser was hidden shows the next time it appears. Under **Follow Windows** an open browser changes with Windows.
+
 ## Using it
 
 - The header has four tabs: **Brushes**, **Alphas**, **Materials** and **Textures**. Click a tab, or press **Ctrl+Tab** and **Ctrl+Shift+Tab** to move through them. With a tab focused, **Left** and **Right** move between them too. The search text, the tag filter and the thumbnail size stay when you switch tab. The folder and the selection do not: each tab opens on **All** with nothing selected. The tab you were on last is remembered.

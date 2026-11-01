@@ -38,6 +38,10 @@
    profile's name; the default is the one profile Default), ?profilesoff (enabled: false, as when a menus file is pinned: no picker), ?profilegone (the first save finds its profile deleted:
    save_config answers profile_missing). pick_profile_file follows ?importcancel and ?importfail. Profiles live in this page only: a reload starts again from the defaults.
    Studio mode: ?mode=simple|full (start Studio in that mode; the mock defaults to full so the screenshots keep their content).
+   Theme: ?theme=dark|light|system (start in that theme, on Studio and on popout.html; the mock defaults to dark. The Theme card in Settings changes it
+   in this page only while ?theme= is given, else in localStorage rm_prefs; system follows the browser's prefers-color-scheme, which DevTools can emulate).
+   get_options carries theme_ring_colors and themes, the defaults carry the colours of the theme in force, and the preview_* calls answer with
+   preview_ring_light, preview_ring_hover0_light, preview_tags_light and preview_animation_light under light when the recording has them (else the dark pictures).
    Setup screen (get_setup; state in localStorage rm_env for the registered folder and rm_zscript for the ZScript plugin, which Settings > Older
    ZBrush shares): ?firstrun (setup_done is false until Finish or Skip, so Studio opens on Setup; a reload does it again; tour_seen
    is false until the tour is answered, so the tour is also offered after Finish or Skip),
@@ -398,6 +402,22 @@
   // Under ?firstrun or ?mode= the Studio mode lives only in this page (else one ?firstrun visit would flip every later
   // page to Simple): set_pref keeps it here and every reply reports it, so the app's merge of a reply cannot undo it.
   var pageMode = null;
+  // The theme: stored in rm_prefs like the mode; an explicit ?theme= keeps it in this page only, so a reload goes back to the switch.
+  var THEMES = ['dark', 'light', 'system'], pageTheme = null;
+  var THEME_RING = { dark: { bg: '#222327', accent: '#f86b33', highlight: '#4dc8e9', text: '#f0f0f0', lines: '#f86b33' },     // as theme.py's PRESETS, for a recording that has none
+    light: { bg: '#f3f4f6', accent: '#a8360f', highlight: '#066785', text: '#1b1c20', lines: '#a8360f' } };
+  function themeSetting() {
+    var t = pageTheme !== null ? pageTheme : (q.get('theme') || (function () { try { return JSON.parse(localStorage.getItem('rm_prefs') || '{}').theme; } catch (e) { return null; } })());
+    return THEMES.indexOf(t) >= 0 ? t : 'dark';
+  }
+  function themeEff() {
+    var t = themeSetting();
+    if (t !== 'system') return t;
+    return window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+  }
+  function themeOf(p) { p.theme = themeSetting(); p.theme_effective = themeEff(); return p; }
+  function themeRing() { return clone(((M.get_options || {}).theme_ring_colors) || THEME_RING); }
+  var lightPics = function () { return themeEff() === 'light'; };
   function modeOf(p) { if (pageMode !== null) p.mode = pageMode; else if (q.get('mode')) p.mode = q.get('mode'); else if (firstRun()) p.mode = ''; return p; }
   var lsGet = function (k) { try { return localStorage.getItem(k); } catch (e) { return null; } };
   var envRegistered = function () { return !q.has('noenv') || lsGet('rm_env') === '1'; };
@@ -525,7 +545,7 @@
         }
         var r = clone(M.get_config);
         r.config = clone(saved);                                   // what the last mock save wrote, so Reload from disk is honest
-        r.defaults = Object.assign({}, r.defaults, TAG_DEFAULTS);
+        r.defaults = Object.assign({}, r.defaults, TAG_DEFAULTS, { colors: themeRing()[themeEff()] });
         Object.assign(r, profInfo());
         if (profiles.editing !== P0) r.path = profFolder(profiles.editing) + '\\radial.json';
         if (q.has('broken') && !sessionStorage.getItem('rm_repaired')) return Object.assign({ config: null, error: BROKEN_ERR, path: r.path, backup_exists: true, problems: [], mtime_ns: null }, profInfo());
@@ -695,7 +715,7 @@
     },
     preview_tags: function () {                                   // the backend's sample ring; the recorded data has it once regenerated
       return sleep(60 + lag).then(function () {
-        var res = clone(M.preview_tags || M.preview_ring[Object.keys(M.preview_ring)[0]]);
+        var res = clone((lightPics() && M.preview_tags_light) || M.preview_tags || M.preview_ring[Object.keys(M.preview_ring)[0]]);
         res.width = res.height = res.size; res.centre = [res.size / 2, res.size / 2];
         return res;
       });
@@ -704,7 +724,8 @@
       return sleep(60 + lag).then(function () {
         var m = cfg && cfg.menus && cfg.menus[menuId];
         if (!m || !(m.items || []).length) return { image: null, problems: ['menu ' + menuId + ' has no usable items'] };
-        var res = clone((hover === 0 && menuId === 'brushes' && M.preview_ring_hover0) || M.preview_ring[menuId] || M.preview_ring.brushes);
+        var pics = (lightPics() && M.preview_ring_light) || M.preview_ring, hov0 = (lightPics() && M.preview_ring_hover0_light) || M.preview_ring_hover0;
+        var res = clone((hover === 0 && menuId === 'brushes' && hov0) || pics[menuId] || pics.brushes || M.preview_ring[menuId] || M.preview_ring.brushes);
         res.width = res.height = res.size; res.centre = [res.size / 2, res.size / 2];
         var it = openPath && openPath.length ? usable(m)[openPath[0]] : null, sub = it && it.menu ? cfg.menus[it.menu] : null;
         if (it && it.tag) {                                          // a tag slot with brushes is a fan of them, like the expander makes
@@ -735,7 +756,7 @@
       });
     },
     preview_animation: function (cfg, menuId) {
-      return sleep(350 + lag).then(function () { return M.preview_animation; });
+      return sleep(350 + lag).then(function () { return (lightPics() && M.preview_animation_light) || M.preview_animation; });
     },
     get_options: function () {
       return sleep(10).then(function () {
@@ -743,7 +764,8 @@
         o.favourite_tag = FAV;
         o.actions = KINDS.slice(); o.asset_kinds = ['brush', 'alpha', 'material', 'texture']; o.tag_colors = ['none', 'tint', 'glow', 'both'];
         o.tag_bands = ['none', 'hairline', 'narrow', 'medium', 'wide']; o.tint_styles = ['flat', 'gradient']; o.tint_blends = ['multiply', 'overlay'];
-        o.ring_defaults = Object.assign({}, o.ring_defaults, TAG_DEFAULTS);
+        o.theme_ring_colors = o.theme_ring_colors || THEME_RING; o.themes = o.themes || THEMES.slice();
+        o.ring_defaults = Object.assign({}, o.ring_defaults, TAG_DEFAULTS, { colors: clone(o.theme_ring_colors[themeEff()]) });
         o.ring_ranges = Object.assign({}, o.ring_ranges, { tag_band_opacity: [0, 1], tag_glow_opacity: [0, 1], tag_tint_opacity: [0, 1] });
         return o;
       });
@@ -981,8 +1003,8 @@
       return sleep(100).then(function () { return { ok: true, message: 'Forgot ' + path + '. The folder itself was not touched.' }; });
     },
     // ?firstrun answers setup_done false until Finish or Skip, so a reload goes back to Setup
-    get_prefs: function () { var p = Object.assign({ check_updates: true, last_screen: 'menus', setup_done: true, mode: 'full', seen_version: '', tour_seen: true }, JSON.parse(localStorage.getItem('rm_prefs') || '{}')); if (firstRun()) p.setup_done = false; if (q.has('firstrun') && !tourDone) p.tour_seen = false; return Promise.resolve(modeOf(p)); },
-    set_pref: function (k, v) { if (q.has('prefsfail') && k !== 'last_screen') return sleep(80).then(function () { throw new Error('disk full (mock)'); }); var p = Object.assign({ check_updates: true, last_screen: 'menus', setup_done: true, mode: 'full', seen_version: '', tour_seen: true }, JSON.parse(localStorage.getItem('rm_prefs') || '{}')); p[k] = v; var pageOnly = k === 'mode' && (q.has('firstrun') || q.get('mode')); if (pageOnly) pageMode = v; else try { localStorage.setItem('rm_prefs', JSON.stringify(p)); } catch (e) {} if (k === 'setup_done' && v === true) firstDone = true; if (k === 'tour_seen' && v === true) tourDone = true; if (firstRun()) p.setup_done = false; if (q.has('firstrun') && !tourDone) p.tour_seen = false; return Promise.resolve(modeOf(p)); },
+    get_prefs: function () { var p = Object.assign({ check_updates: true, last_screen: 'menus', setup_done: true, mode: 'full', seen_version: '', tour_seen: true }, JSON.parse(localStorage.getItem('rm_prefs') || '{}')); if (firstRun()) p.setup_done = false; if (q.has('firstrun') && !tourDone) p.tour_seen = false; return Promise.resolve(themeOf(modeOf(p))); },
+    set_pref: function (k, v) { if (q.has('prefsfail') && k !== 'last_screen') return sleep(80).then(function () { throw new Error('disk full (mock)'); }); if (k === 'theme' && THEMES.indexOf(v) < 0) return Promise.reject(new Error('theme: ' + v + ' is not a theme (mock)')); var p = Object.assign({ check_updates: true, last_screen: 'menus', setup_done: true, mode: 'full', seen_version: '', tour_seen: true }, JSON.parse(localStorage.getItem('rm_prefs') || '{}')); p[k] = v; var pageOnly = (k === 'mode' && (q.has('firstrun') || q.get('mode'))) || (k === 'theme' && q.get('theme')); if (pageOnly) { if (k === 'theme') pageTheme = v; else pageMode = v; } else try { localStorage.setItem('rm_prefs', JSON.stringify(p)); } catch (e) {} if (k === 'setup_done' && v === true) firstDone = true; if (k === 'tour_seen' && v === true) tourDone = true; if (firstRun()) p.setup_done = false; if (q.has('firstrun') && !tourDone) p.tour_seen = false; return Promise.resolve(themeOf(modeOf(p))); },
     set_dirty: function () { return Promise.resolve(true); },
     close_now: function () { console.log('[mock] close_now'); return Promise.resolve(true); },
     win_minimize: function () { return Promise.resolve(); },
@@ -1050,10 +1072,12 @@
       return Promise.resolve(true);
     },
     popout_set_size: function (px) { console.log('[mock] popout_set_size', px); return Promise.resolve(true); },
+    theme_changed: function (eff) { console.log('[mock] theme_changed', eff); return Promise.resolve(true); },
+    popout_theme_changed: function (eff) { console.log('[mock] popout_theme_changed', eff); return Promise.resolve(true); },
     popout_get_state: function () {
       var onTop = true, kind = null, side = 'left', column = true;
       try { onTop = localStorage.getItem('rm_pop_on_top') !== '0'; kind = localStorage.getItem('rm_pop_kind'); side = localStorage.getItem('rm_pop_side') || 'left'; column = localStorage.getItem('rm_pop_column') !== '0'; } catch (e) {}
-      return Promise.resolve({ on_top: onTop, size: 96, side: side, column: column, tag: q.get('tag') || null, kind: q.get('kind') || kind || 'brush', tags_path: '', profile: profiles.editing });
+      return Promise.resolve({ on_top: onTop, size: 96, side: side, column: column, tag: q.get('tag') || null, kind: q.get('kind') || kind || 'brush', tags_path: '', profile: profiles.editing, theme: themeSetting(), theme_effective: themeEff() });
     },
     popout_log: function (msg) { console.log('[mock] popout_log', msg); return Promise.resolve(true); },
   };

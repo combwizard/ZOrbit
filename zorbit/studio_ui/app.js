@@ -193,7 +193,7 @@ const S = {
   dock: { kind: 'brush', cat: 'All', q: '' },
   pop: { kind: 'brush', cat: 'All', q: '', size: 96 }, popOnTop: true, popSide: 'left', popColumn: true,   // the popout's browser state, whether its window stays above others, and the side of its folders column
   status: null,
-  prefs: { setup_done: true, mode: '' },   // setup_done: boot tests === false, so a failed get_prefs never sends anyone to Setup
+  prefs: { setup_done: true, mode: '', theme: 'dark', theme_effective: 'dark' },   // setup_done: boot tests === false, so a failed get_prefs never sends anyone to Setup
   ready: false, fatal: false,                 // ready after the first screen is up; fatal when the recovery screen is showing
   saving: false, savePromise: null, mtimeNs: null,
   dirtySent: undefined, dirtySeq: 0, dirtyFlight: null,
@@ -3816,6 +3816,18 @@ function buildSettingsScreen(root) {
     const hiddenSet = full ? [] : fullOnlyChanges(S.cfg);      // not a .card, so it is not in the contents list
     if (hiddenSet.length) page.append(h('div', { class: 'mode-note', role: 'status' }, 'Changed in Full mode and not shown here: ' + hiddenSet.join(', ') + '. ', linkBtn('Switch to Full mode', () => setMode('full'))));
 
+    /* --- theme: a Studio preference kept per PC, not part of S.cfg, so Save, Revert and undo never see it */
+    const themeNote = S.prefs.theme === 'system' ? h('div', { class: 'fhint', role: 'status', style: { marginTop: '6px' } }, 'Windows is set to ' + (S.themeEff === 'light' ? 'Light' : 'Dark') + ' right now, so that is what ZOrbit is using.') : null;
+    page.append(card('Theme', 'How Studio, the browser and the ring look',
+      choiceCards([['dark', 'Dark', 'The default look.'], ['light', 'Light', 'For ZBrush and Windows set to a light theme.'],
+        ['system', 'Follow Windows', 'Uses the Windows app colour mode and changes with it.']], THEMES.includes(S.prefs.theme) ? S.prefs.theme : 'dark', async v => {
+        if (v === S.prefs.theme) return;
+        const ok = await setPref('theme', v);
+        if (!ok) { if (R.settings) R.settings(); return; }             // the pick did not stick: draw the old one again
+        syncTheme();
+      }, 'three', 'Theme'),
+      h('div', { class: 'fhint', style: { marginTop: '8px' } }, 'Applies to Studio, the browser and the ring. A colour you set under Colours still wins.'), themeNote));
+
     /* --- geometry with live preview */
     const pimg = h('img', { class: 'ring-img', alt: 'Ring preview', draggable: false });
     const dz = h('div', { class: 'dz-ring' });
@@ -5575,6 +5587,57 @@ async function setPref(key, value) {
   }
 }
 
+// ---- theme
+/* The setting is S.prefs.theme (dark, light or system, which follows Windows); S.themeEff is the one in force. The CSS is dark until
+   <html data-theme="light"> says otherwise. The ring colours the Colours rows start from belong to the theme, and the cached ring
+   pictures were drawn in the old one (their keys do not say), so both are swapped here. */
+const THEMES = ['dark', 'light', 'system'];
+function applyTheme(eff) {
+  eff = eff === 'light' ? 'light' : 'dark';
+  S.themeEff = eff;
+  document.documentElement.dataset.theme = eff;
+  const tc = S.opts && S.opts.theme_ring_colors && S.opts.theme_ring_colors[eff];
+  if (tc && typeof tc === 'object') S.defaults = Object.assign({}, S.defaults, { colors: Object.assign({}, FALLBACK_DEFAULTS.colors, tc) });
+  RingLoader.cache.clear(); RingLoader.gen++;
+  FrameLoader.cache.clear(); FrameLoader.gen++;
+}
+/* Takes S.prefs.theme_effective in: applies it, tells the backend when it changed (the window frame follows), and redraws what the theme
+   touches in place. Settings is rebuilt even when nothing changed, because its note and Reset titles depend on the setting. */
+function syncTheme(rebuild = true) {
+  const was = S.themeEff;
+  applyTheme(S.prefs.theme_effective);
+  if (S.themeEff !== was) call(POPOUT ? 'popout_theme_changed' : 'theme_changed', S.themeEff).catch(() => {});
+  if (POPOUT) return;                                       // the browser holds no picture drawn from the theme
+  if (rebuild && S.screen === 'settings' && R.settings) {
+    if (openPopover) openPopover();
+    if (comboClose) comboClose();
+    R.settings();                                           // build() ends in R.preview()
+  } else if (R.preview) R.preview();
+}
+/* Follow Windows: the page's colour scheme moves with the Windows app mode, and the pages are told at once. Python reads the same
+   registry value at start and each time the browser is shown, so this is only for a flip while the window is open. */
+function watchSystemTheme() {
+  const mq = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)');
+  if (!mq) return;
+  mq.addEventListener('change', () => {
+    if (S.prefs.theme !== 'system' || !(S.ready || POPOUT) || S.fatal) return;
+    S.prefs.theme_effective = mq.matches ? 'light' : 'dark';
+    // Windows flipped on its own (a schedule, say): the Settings page is only rebuilt when nobody is typing or
+    // recording a key in it, so the flip never throws away what they were doing. The pictures follow either way.
+    const a = document.activeElement;
+    const typing = !!(a && a.closest && a.closest('#screen-settings') && a.matches('input, textarea, select, [contenteditable], .hk-field'));
+    syncTheme(!typing);
+  });
+}
+// The browser: Popout.show() calls this when the setting or Windows' mode changed since it was last shown. It has updated the frame itself.
+window.__popoutTheme = o => {
+  if (!o) return false;
+  if (THEMES.includes(o.setting)) S.prefs.theme = o.setting;
+  S.prefs.theme_effective = o.effective === 'light' ? 'light' : 'dark';
+  applyTheme(S.prefs.theme_effective);
+  return true;
+};
+
 /* Alt+1 to Alt+5: the screen's index, read from the physical digit key so it works on AZERTY (where the row types & and é unshifted), or null. */
 const screenKey = e => { const m = /^Digit([1-5])$/.exec(e.code || ''); return m ? +m[1] - 1 : null; };
 const SCREENS = { menus: buildMenusScreen, library: buildLibraryScreen, settings: buildSettingsScreen, status: buildStatusScreen, setup: buildSetupScreen };
@@ -5936,6 +5999,7 @@ async function offerTour() {
 
 async function boot() {
   const [cfgR, optR, prefR] = await Promise.allSettled([call('get_config'), call('get_options'), call('get_prefs')]);
+  applyTheme(prefR.status === 'fulfilled' && prefR.value ? prefR.value.theme_effective : 'dark');   // before any screen, the recovery one too
   if (cfgR.status === 'rejected') { recovery(cfgR.reason instanceof Error ? cfgR.reason : new Error(String(cfgR.reason))); return; }
   const cfgRes = cfgR.value;
   if (cfgRes && cfgRes.too_new) { recovery(Object.assign({}, cfgRes, { config: null })); return; }
@@ -5946,6 +6010,7 @@ async function boot() {
   if (badMenus) { recovery(Object.assign({}, cfgRes, { config: null, error: badMenus + ' Studio cannot show a file like that.' })); return; }
   S.opts = opts; S.defaults = Object.assign({}, FALLBACK_DEFAULTS, cfgRes.defaults || (opts && opts.ring_defaults) || {});
   S.defaults.colors = Object.assign({}, FALLBACK_DEFAULTS.colors, S.defaults.colors || {});
+  applyTheme(S.prefs.theme_effective);                                  // again, now that the options with each theme's colours are in
   if (prefR.status === 'fulfilled' && prefR.value && S.prefs.mode !== 'simple' && S.prefs.mode !== 'full') {   // first start with this build: new installs get Simple, a config that needs Full gets Full
     S.prefs.mode = S.prefs.setup_done === false ? 'simple' : (needsFull(S.cfg) ? 'full' : 'simple');
     call('set_pref', 'mode', S.prefs.mode).catch(() => {});
@@ -5985,6 +6050,7 @@ function setPathHint(path) {
 }
 
 function init() {
+  watchSystemTheme();
   if (POPOUT) { initPopout(); return; }
   const cp = $('#copyPath');
   if (cp) {
@@ -6113,7 +6179,7 @@ const POP_HOST = {
 function popLogo() {
   const tile = (x, y, c) => `<rect x="${x}" y="${y}" width="4.5" height="4.5" rx=".8" fill="var(--bg1)" stroke="var(${c})" stroke-width="1"/>`;
   const s = h('span', { class: 'pop-logo', 'aria-hidden': 'true' });
-  s.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18"><circle cx="12" cy="12" r="10.85" fill="var(--bg1)" stroke="rgba(255,255,255,.16)" stroke-width=".32"/>'
+  s.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18"><circle cx="12" cy="12" r="10.85" fill="var(--bg1)" stroke="color-mix(in srgb, var(--ink) 16%, transparent)" stroke-width=".32"/>'
     + tile(5.6, 5.6, '--accent') + tile(13.9, 5.6, '--accent') + tile(5.6, 13.9, '--accent') + tile(13.9, 13.9, '--cyan') + '</svg>';
   return s;
 }
@@ -6188,7 +6254,10 @@ async function bootPopout() {
   S.cfg = { menus: {} };                             // the popout has no menus; the tag manager asks get_tag_uses for the ring items that use a tag
   let state = null;
   try { state = await call('popout_get_state'); } catch (e) { state = null; }
+  applyTheme(state && state.theme_effective);
   if (state) {
+    if (THEMES.includes(state.theme)) S.prefs.theme = state.theme;
+    S.prefs.theme_effective = S.themeEff;
     S.popOnTop = state.on_top !== false;
     if (+state.size >= 84) S.pop.size = clamp(+state.size, 84, 220);
     S.popSide = state.side === 'right' ? 'right' : 'left';

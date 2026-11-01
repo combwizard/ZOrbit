@@ -2,6 +2,7 @@
 Studio UI can be developed in a plain browser: open studio_ui/index.html?mock in Edge.
 
 The output contains your own paths, hotkeys and logs. It is git-ignored; never commit it.
+The light previews (preview_*_light) are recorded with the theme set to light, for the Light theme in the mock.
 Run: python tools/make_mock.py [OUT]   (OUT defaults to that file; tools/docs_shots.py records its own elsewhere)
 """
 import json
@@ -34,6 +35,16 @@ def main():
         "preview_animation": a.preview_animation(cfg["config"], first),
         **kinds,
     }
+    # The same four pictures in the Light theme (dev/mock.js answers with these when the theme is light).
+    real_theme_now = studio._theme_now
+    studio._theme_now = lambda: "light"
+    try:
+        mock["preview_ring_light"] = {mid: a.preview_ring(cfg["config"], mid) for mid in cfg["config"]["menus"]}
+        mock["preview_ring_hover0_light"] = a.preview_ring(cfg["config"], first, hover=0)
+        mock["preview_tags_light"] = a.preview_tags(cfg["config"])
+        mock["preview_animation_light"] = a.preview_animation(cfg["config"], first)
+    finally:
+        studio._theme_now = real_theme_now
     out = sys.argv[1] if len(sys.argv) > 1 else os.path.join(ROOT, "zorbit", "studio_ui", "dev", "mock_data.js")
     with open(out, "w", encoding="utf-8") as f:
         f.write("// Recorded Studio API responses from a developer's machine. Generated; git-ignored.\n"
