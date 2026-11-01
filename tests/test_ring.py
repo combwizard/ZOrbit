@@ -215,6 +215,18 @@ def test_hint_wording_follows_the_state():
     assert r._hint_lines()[0] == ("click a slot, centre or right-click cancels",)
 
 
+def test_the_hint_can_be_turned_off():
+    r = make_ring()
+    r._armed, r.mode = True, "click"
+    r.cfg["hint"] = False
+    assert r._hint_lines() == []
+    r._geometry(1.0)
+    r._relayout()
+    r._prepare()
+    d = ImageDraw.Draw(Image.new("RGBA", (10, 10)))
+    assert len(r._caption(d)) == 1                                       # the title stays, the hint goes
+
+
 def test_the_smallest_ring_draws_without_text_across_its_slots():
     r = make_ring(make_menu(6, title="A rather long menu title"), radius=60, slot=32)
     r._geometry(1.0)

@@ -320,7 +320,7 @@ def test_the_default_ring_holds_roles_and_the_loaded_ring_holds_colours():
     assert default_look()["hub_color"] == config.DEFAULT_RING["colors"]["accent"]
 
 
-@pytest.mark.parametrize("key", ["flick", "hover_submenus"])
+@pytest.mark.parametrize("key", ["flick", "hover_submenus", "hint"])
 def test_ring_switches_must_be_booleans(load_menus, key):
     cfg = load_menus(GOOD_MENUS, ring={key: "no"})
     assert cfg.ring[key] is True

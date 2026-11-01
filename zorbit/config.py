@@ -29,6 +29,7 @@ Schema (all keys optional except menus):
            "tag_tint_blend": "multiply",     # multiply | overlay
            "flick": true,                    # moving out past a slot picks it without releasing the hotkey
            "hover_submenus": true,           # reaching a submenu slot opens that submenu, centred on it
+           "hint": true,                     # the line of help under the menu's title; false leaves it out
            "colors": {"bg": "#222327", "accent": "#f86b33", "highlight": "#4dc8e9", "text": "#f0f0f0",
                       "lines": "#f86b33"}},
   "looks": {"My look": {"slot_shape": "hexagon", "hub": 14}},    # named looks: any of the look keys of "ring"

@@ -508,6 +508,7 @@
   "flick": true,
   "glow_color": "",
   "glow_opacity": 0.55,
+  "hint": true,
   "hover_submenus": true,
   "hub": 10,
   "hub_color": "accent",

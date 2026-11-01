@@ -40,7 +40,7 @@ LOOK_KEYS = ("radius", "slot", "dead_zone", "slot_shape", "slot_corner", "border
              "hub_style", "hub_color", "hub_glow", "glow_color", "glow_opacity", "labels", "label_color", "colors",
              "tag_colors", "tag_band", "tag_band_opacity", "tag_glow_opacity", "tag_tint_opacity", "tag_tint_style",
              "tag_tint_blend", "when_full")
-BEHAVIOUR_KEYS = ("tap_ms", "timeout_s", "flick", "hover_submenus", "animation")
+BEHAVIOUR_KEYS = ("tap_ms", "timeout_s", "flick", "hover_submenus", "hint", "animation")
 RING_ONLY_KEYS = BEHAVIOUR_KEYS + ("look",)           # in "ring" only: not part of a look
 RING_KEYS = LOOK_KEYS + BEHAVIOUR_KEYS + ("look",)
 STYLE_KEYS = ("slot_shape", "slot_corner", "border_width", "icon_scale", "label_color", "glow_color", "size",
@@ -55,7 +55,7 @@ RANGES = {"radius": (60, 400), "slot": (32, 160), "dead_zone": (10, 120), "slot_
 CHOICES = {"slot_shape": SLOT_SHAPES, "hub_style": HUB_STYLES, "labels": LABEL_MODES, "tag_colors": TAG_COLOR_MODES,
            "tag_band": TAG_BANDS, "tag_tint_style": TINT_STYLES, "tag_tint_blend": TINT_BLENDS,
            "when_full": WHEN_FULL, "animation": ANIMATIONS}
-SWITCHES = ("flick", "hover_submenus")
+SWITCHES = ("flick", "hover_submenus", "hint")
 
 LOOK_DEFAULTS = {"radius": 145, "slot": 72, "dead_zone": 38, "slot_shape": "circle", "slot_corner": 0.28,
                  "border_width": 2, "icon_scale": 1.0, "hub": 10, "hub_style": "dot", "hub_color": "accent",
@@ -63,7 +63,8 @@ LOOK_DEFAULTS = {"radius": 145, "slot": 72, "dead_zone": 38, "slot_shape": "circ
                  "tag_colors": "tint", "tag_band": "medium", "tag_band_opacity": 0.45, "tag_glow_opacity": 0.4,
                  "tag_tint_opacity": 0.3, "tag_tint_style": "gradient", "tag_tint_blend": "multiply",
                  "when_full": "grow"}
-BEHAVIOUR_DEFAULTS = {"tap_ms": 250, "timeout_s": 20, "flick": True, "hover_submenus": True, "animation": "smooth"}
+BEHAVIOUR_DEFAULTS = {"tap_ms": 250, "timeout_s": 20, "flick": True, "hover_submenus": True, "hint": True,
+                      "animation": "smooth"}
 STYLE_DEFAULTS = {"size": 1.0, "fill_color": "", "border_color": ""}     # the slot-only keys, when a style sets them
 
 _HEX = re.compile(r"#[0-9a-fA-F]{6}")

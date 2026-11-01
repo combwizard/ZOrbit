@@ -292,7 +292,7 @@ def _num(v, default, lo, hi):
 SPRITE_LOOK_KEYS = ("slot", "slot_shape", "slot_corner", "border_width", "icon_scale", "hub", "hub_style",
                     "hub_color", "hub_glow", "glow_color", "glow_opacity", "labels", "label_color", "tag_colors",
                     "tag_glow_opacity", "tag_tint_opacity", "tag_tint_style", "tag_tint_blend", "theme", "colors")
-NOT_IN_SPRITES = frozenset(("radius", "dead_zone", "tap_ms", "timeout_s", "animation", "flick", "hover_submenus",
+NOT_IN_SPRITES = frozenset(("radius", "dead_zone", "tap_ms", "timeout_s", "animation", "flick", "hover_submenus", "hint",
                             "tag_band", "tag_band_opacity", "look", "when_full"))
 HUB_STYLES = ("dot", "disc", "ring", "icon")
 
@@ -1446,7 +1446,10 @@ class Ring:
         return self._static_cache
 
     def _hint_lines(self):
-        """The hint for the ring's state as candidates, longest first: each a tuple of lines."""
+        """The hint for the ring's state as candidates, longest first: each a tuple of lines. None when the
+        ring's hint setting is off."""
+        if not self.cfg.get("hint", True):
+            return []
         if not self._armed:
             return [("move into the ring",)]
         if self.mode == "hold":

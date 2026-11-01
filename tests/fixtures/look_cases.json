@@ -46,6 +46,10 @@
      "from": "default",
      "name": ""
     },
+    "hint": {
+     "from": "default",
+     "name": ""
+    },
     "hover_submenus": {
      "from": "default",
      "name": ""
@@ -150,6 +154,7 @@
     "flick": true,
     "glow_color": "",
     "glow_opacity": 0.55,
+    "hint": true,
     "hover_submenus": true,
     "hub": 10,
     "hub_color": "#f86b33",
@@ -244,6 +249,10 @@
      "from": "default",
      "name": ""
     },
+    "hint": {
+     "from": "default",
+     "name": ""
+    },
     "hover_submenus": {
      "from": "default",
      "name": ""
@@ -348,6 +357,7 @@
     "flick": true,
     "glow_color": "",
     "glow_opacity": 0.55,
+    "hint": true,
     "hover_submenus": true,
     "hub": 20,
     "hub_color": "#f86b33",
@@ -444,6 +454,10 @@
      "name": ""
     },
     "glow_opacity": {
+     "from": "default",
+     "name": ""
+    },
+    "hint": {
      "from": "default",
      "name": ""
     },
@@ -551,6 +565,7 @@
     "flick": true,
     "glow_color": "",
     "glow_opacity": 0.55,
+    "hint": true,
     "hover_submenus": true,
     "hub": 10,
     "hub_color": "#ff8800",
@@ -647,6 +662,10 @@
      "name": ""
     },
     "glow_opacity": {
+     "from": "default",
+     "name": ""
+    },
+    "hint": {
      "from": "default",
      "name": ""
     },
@@ -754,6 +773,7 @@
     "flick": true,
     "glow_color": "",
     "glow_opacity": 0.55,
+    "hint": true,
     "hover_submenus": true,
     "hub": 10,
     "hub_color": "#a8360f",
@@ -846,6 +866,10 @@
      "name": ""
     },
     "glow_opacity": {
+     "from": "default",
+     "name": ""
+    },
+    "hint": {
      "from": "default",
      "name": ""
     },
@@ -953,6 +977,7 @@
     "flick": true,
     "glow_color": "#00aa55",
     "glow_opacity": 0.55,
+    "hint": true,
     "hover_submenus": true,
     "hub": 10,
     "hub_color": "#a8360f",
@@ -1052,6 +1077,10 @@
     "glow_opacity": {
      "from": "global-preset",
      "name": "soft"
+    },
+    "hint": {
+     "from": "default",
+     "name": ""
     },
     "hover_submenus": {
      "from": "default",
@@ -1157,6 +1186,7 @@
     "flick": true,
     "glow_color": "",
     "glow_opacity": 0.7,
+    "hint": true,
     "hover_submenus": true,
     "hub": 10,
     "hub_color": "#f86b33",
@@ -1252,6 +1282,10 @@
     "glow_opacity": {
      "from": "global-preset",
      "name": "crystal"
+    },
+    "hint": {
+     "from": "default",
+     "name": ""
     },
     "hover_submenus": {
      "from": "default",
@@ -1357,6 +1391,7 @@
     "flick": true,
     "glow_color": "#4dc8e9",
     "glow_opacity": 0.8,
+    "hint": true,
     "hover_submenus": true,
     "hub": 30,
     "hub_color": "#4dc8e9",
@@ -1452,6 +1487,10 @@
      "name": ""
     },
     "glow_opacity": {
+     "from": "default",
+     "name": ""
+    },
+    "hint": {
      "from": "default",
      "name": ""
     },
@@ -1559,6 +1598,7 @@
     "flick": true,
     "glow_color": "",
     "glow_opacity": 0.55,
+    "hint": true,
     "hover_submenus": true,
     "hub": 10,
     "hub_color": "#336699",
@@ -1661,6 +1701,10 @@
      "name": ""
     },
     "glow_opacity": {
+     "from": "default",
+     "name": ""
+    },
+    "hint": {
      "from": "default",
      "name": ""
     },
@@ -1770,6 +1814,7 @@
     "flick": true,
     "glow_color": "",
     "glow_opacity": 0.55,
+    "hint": true,
     "hover_submenus": true,
     "hub": 12,
     "hub_color": "#f86b33",
@@ -1864,6 +1909,10 @@
      "name": ""
     },
     "glow_opacity": {
+     "from": "default",
+     "name": ""
+    },
+    "hint": {
      "from": "default",
      "name": ""
     },
@@ -1973,6 +2022,7 @@
     "flick": true,
     "glow_color": "",
     "glow_opacity": 0.55,
+    "hint": true,
     "hover_submenus": true,
     "hub": 10,
     "hub_color": "#f86b33",
@@ -2069,6 +2119,10 @@
     "glow_opacity": {
      "from": "global-preset",
      "name": "tiles"
+    },
+    "hint": {
+     "from": "default",
+     "name": ""
     },
     "hover_submenus": {
      "from": "default",
@@ -2174,6 +2228,7 @@
     "flick": true,
     "glow_color": "",
     "glow_opacity": 0.45,
+    "hint": true,
     "hover_submenus": true,
     "hub": 14,
     "hub_color": "#f86b33",
@@ -2271,6 +2326,10 @@
     "glow_opacity": {
      "from": "menu-preset",
      "name": "minimal"
+    },
+    "hint": {
+     "from": "default",
+     "name": ""
     },
     "hover_submenus": {
      "from": "default",
@@ -2376,6 +2435,7 @@
     "flick": true,
     "glow_color": "",
     "glow_opacity": 0.3,
+    "hint": true,
     "hover_submenus": true,
     "hub": 6,
     "hub_color": "#f86b33",
@@ -2472,6 +2532,10 @@
     "glow_opacity": {
      "from": "menu-preset",
      "name": "tiles"
+    },
+    "hint": {
+     "from": "default",
+     "name": ""
     },
     "hover_submenus": {
      "from": "default",
@@ -2577,6 +2641,7 @@
     "flick": true,
     "glow_color": "",
     "glow_opacity": 0.45,
+    "hint": true,
     "hover_submenus": true,
     "hub": 14,
     "hub_color": "#f86b33",
@@ -2676,6 +2741,10 @@
     "glow_opacity": {
      "from": "menu-preset",
      "name": "crystal"
+    },
+    "hint": {
+     "from": "default",
+     "name": ""
     },
     "hover_submenus": {
      "from": "default",
@@ -2781,6 +2850,7 @@
     "flick": true,
     "glow_color": "#4dc8e9",
     "glow_opacity": 0.8,
+    "hint": true,
     "hover_submenus": true,
     "hub": 40,
     "hub_color": "#4dc8e9",
@@ -2881,6 +2951,10 @@
     "glow_opacity": {
      "from": "global-preset",
      "name": "circuit"
+    },
+    "hint": {
+     "from": "default",
+     "name": ""
     },
     "hover_submenus": {
      "from": "default",
@@ -2986,6 +3060,7 @@
     "flick": true,
     "glow_color": "#f86b33",
     "glow_opacity": 0.4,
+    "hint": true,
     "hover_submenus": true,
     "hub": 12,
     "hub_color": "#f86b33",
@@ -3087,6 +3162,10 @@
      "name": ""
     },
     "glow_opacity": {
+     "from": "default",
+     "name": ""
+    },
+    "hint": {
      "from": "default",
      "name": ""
     },
@@ -3194,6 +3273,7 @@
     "flick": true,
     "glow_color": "#22cc88",
     "glow_opacity": 0.55,
+    "hint": true,
     "hover_submenus": true,
     "hub": 10,
     "hub_color": "#22cc88",
@@ -3296,6 +3376,10 @@
     "glow_opacity": {
      "from": "menu-preset",
      "name": "Bold"
+    },
+    "hint": {
+     "from": "default",
+     "name": ""
     },
     "hover_submenus": {
      "from": "default",
@@ -3401,6 +3485,7 @@
     "flick": true,
     "glow_color": "",
     "glow_opacity": 0.9,
+    "hint": true,
     "hover_submenus": true,
     "hub": 10,
     "hub_color": "#f86b33",
@@ -3501,6 +3586,10 @@
      "name": ""
     },
     "glow_opacity": {
+     "from": "default",
+     "name": ""
+    },
+    "hint": {
      "from": "default",
      "name": ""
     },
@@ -3610,6 +3699,7 @@
     "flick": true,
     "glow_color": "",
     "glow_opacity": 0.55,
+    "hint": true,
     "hover_submenus": true,
     "hub": 22,
     "hub_color": "#f86b33",
@@ -3708,6 +3798,10 @@
     "glow_opacity": {
      "from": "menu-preset",
      "name": "soft"
+    },
+    "hint": {
+     "from": "default",
+     "name": ""
     },
     "hover_submenus": {
      "from": "default",
@@ -3813,6 +3907,7 @@
     "flick": true,
     "glow_color": "",
     "glow_opacity": 0.7,
+    "hint": true,
     "hover_submenus": true,
     "hub": 10,
     "hub_color": "#a8360f",
@@ -3913,6 +4008,10 @@
      "name": ""
     },
     "glow_opacity": {
+     "from": "default",
+     "name": ""
+    },
+    "hint": {
      "from": "default",
      "name": ""
     },
@@ -4020,6 +4119,7 @@
     "flick": true,
     "glow_color": "#ff8800",
     "glow_opacity": 0.55,
+    "hint": true,
     "hover_submenus": true,
     "hub": 10,
     "hub_color": "#f86b33",
@@ -4118,6 +4218,10 @@
      "name": ""
     },
     "glow_opacity": {
+     "from": "default",
+     "name": ""
+    },
+    "hint": {
      "from": "default",
      "name": ""
     },
@@ -4225,6 +4329,7 @@
     "flick": true,
     "glow_color": "#aa44ff",
     "glow_opacity": 0.55,
+    "hint": true,
     "hover_submenus": true,
     "hub": 10,
     "hub_color": "#f86b33",
@@ -4339,6 +4444,10 @@
      "from": "default",
      "name": ""
     },
+    "hint": {
+     "from": "default",
+     "name": ""
+    },
     "hover_submenus": {
      "from": "default",
      "name": ""
@@ -4449,6 +4558,7 @@
     "flick": true,
     "glow_color": "",
     "glow_opacity": 0.55,
+    "hint": true,
     "hover_submenus": true,
     "hub": 10,
     "hub_color": "#f86b33",
@@ -4552,6 +4662,10 @@
     "glow_opacity": {
      "from": "menu-preset",
      "name": "tiles"
+    },
+    "hint": {
+     "from": "default",
+     "name": ""
     },
     "hover_submenus": {
      "from": "default",
@@ -4657,6 +4771,7 @@
     "flick": true,
     "glow_color": "",
     "glow_opacity": 0.45,
+    "hint": true,
     "hover_submenus": true,
     "hub": 18,
     "hub_color": "#f86b33",
@@ -4764,6 +4879,10 @@
      "from": "default",
      "name": ""
     },
+    "hint": {
+     "from": "default",
+     "name": ""
+    },
     "hover_submenus": {
      "from": "default",
      "name": ""
@@ -4868,6 +4987,7 @@
     "flick": true,
     "glow_color": "",
     "glow_opacity": 0.55,
+    "hint": true,
     "hover_submenus": true,
     "hub": 12,
     "hub_color": "#f86b33",

@@ -37,7 +37,7 @@ There are two ways to pick, and the same hotkey does both.
 
 Turn this off with **Open submenus on hover** in Settings, which needs [Full mode](studio.md#simple-and-full-mode) (`"hover_submenus": false`). Submenus then open when you release or click on them, as before.
 
-![Settings > Behaviour in Full mode: switches for Flick to pick and Open submenus on hover, and sliders for Tap time at 250 ms and Auto-close at 20 s](images/settings-behaviour.png)
+![Settings > Behaviour in Full mode: switches for Flick to pick, Show the hint and Open submenus on hover, and sliders for Tap time at 250 ms and Auto-close at 20 s](images/settings-behaviour.png)
 
 **Fans.** A submenu whose menu has `"fan": true` opens as a fan instead of a new ring: its items spread out beyond the submenu's slot with dashed lines to each one, and the ring you came from stays where it is. The rules are the same as above:
 

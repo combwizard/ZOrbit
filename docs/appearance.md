@@ -28,6 +28,7 @@ The look settings are on the Look screen in Studio, the rest on Settings, and al
 | `icon_scale` (**Icon size**) | 1 | 0.5 to 1 | How much of the slot the icon fills. Studio shows it as a percentage. |
 | `flick` (**Flick to pick**) | `true` | `true`, `false` | Moving out past a slot picks it without releasing or clicking. |
 | `hover_submenus` (**Open submenus on hover**) | `true` | `true`, `false` | Reaching a submenu slot opens the submenu, centred on that slot. |
+| `hint` (**Show the hint**) | `true` | `true`, `false` | The line of help under the menu's title, such as "click a slot, centre or right-click cancels". `false` leaves it out and the title stays. |
 | `tag_colors` (**Tag colours**: the **Icon tint** and **Glow** switches) | `tint` | `none`, `tint`, `glow`, `both` | Whether an item's first tag tints its icon, glows, or both. See [Tag colours](#tag-colours). |
 | `tag_band` (**Tag colours > Band**: the switch and **Thickness**) | `medium` | `none`, `hairline`, `narrow`, `medium`, `wide` | Thickness of the band through the slot centres. `none` turns it off. |
 | `tag_band_opacity` (**Band > Opacity**) | 0.45 | 0 to 1 | How solid the band is. |
@@ -78,7 +79,7 @@ Each level is laid over the one before it, and a later layer wins. From the bott
 6. The menu's own settings (the other keys in its `look` object).
 7. The slot's `style`.
 
-A key that a layer leaves out is taken from the layer below. The five `colors` are merged one colour at a time, so a look that sets only `accent` keeps the other four. The ring's behaviour settings (`tap_ms`, `timeout_s`, `flick`, `hover_submenus` and `animation`) are not part of a look; `animation` can still be set for one menu on its own, as it always could.
+A key that a layer leaves out is taken from the layer below. The five `colors` are merged one colour at a time, so a look that sets only `accent` keeps the other four. The ring's behaviour settings (`tap_ms`, `timeout_s`, `flick`, `hover_submenus`, `hint` and `animation`) are not part of a look; `animation` can still be set for one menu on its own, as it always could.
 
 Your own looks are saved under `looks` in `radial.json`, each with a name of 1 to 32 letters, digits, spaces, `-` or `_`. A name cannot be one of the built-in looks, and two looks cannot differ only in their capitals. A look holds look keys and cannot name another look.
 
