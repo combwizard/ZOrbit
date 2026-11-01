@@ -13,13 +13,13 @@ All notable changes to this project are listed here. The format follows
 - **Match ZBrush**, a fourth **Theme** choice that colours the ring, the browser and Studio with the interface colours
   you last stored in ZBrush (**Preferences > Config > Store Config**). It reads ZBrush's own file and never changes it.
   Without a stored scheme it uses Dark (#32).
+- Studio: a short guided tour of the window. It is offered once after Setup, and you can take it again from Setup step 5 or **Settings > Studio** (#41).
+- Docs: a [blog](https://zorbit.lol/docs/blog/) with longer posts about releases, starting with profiles in 0.13.0. A
+  release that has a post links to it from its release notes.
 
 ### Changed
 
 - Studio: the header at the top has the same colour as the bar on the left, in every theme.
-- Studio: a short guided tour of the window. It is offered once after Setup, and you can take it again from Setup step 5 or **Settings > Studio** (#41).
-- Docs: a [blog](https://zorbit.lol/docs/blog/) with longer posts about releases, starting with profiles in 0.13.0. A
-  release that has a post links to it from its release notes.
 
 ### Fixed
 
