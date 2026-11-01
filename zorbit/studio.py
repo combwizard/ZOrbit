@@ -672,7 +672,8 @@ class Api(webapi.LibraryApi, webapi.TagApi):
         return {"animations": list(C.ANIMATIONS), "labels": list(C.LABEL_MODES), "actions": list(C.ACTION_KEYS),
                 "asset_kinds": list(C.ASSET_KINDS), "tag_colors": list(C.TAG_COLOR_MODES),
                 "tag_bands": list(C.TAG_BANDS), "favourite_tag": tags.FAVOURITE,
-                "tint_styles": list(C.TINT_STYLES), "tint_blends": list(C.TINT_BLENDS), "ring_defaults": C.default_ring(_theme_now()),
+                "tint_styles": list(C.TINT_STYLES), "tint_blends": list(C.TINT_BLENDS),
+                "slot_shapes": list(C.SLOT_SHAPES), "ring_defaults": C.default_ring(_theme_now()),
                 "ring_ranges": C._RING_RANGES, "themes": list(theme.NAMES),
                 "theme_ring_colors": {n: theme.ring_colors(n) for n in theme.CONCRETE
                                       + (("zbrush",) if theme.effective("zbrush") == "zbrush" else ())}}

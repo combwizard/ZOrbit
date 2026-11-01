@@ -279,11 +279,16 @@ def test_non_numeric_ring_values_fall_back_to_the_default(load_menus, key, value
 
 @pytest.mark.parametrize("key, value", [
     ("animation", "wobble"), ("labels", "icons"), ("tag_colors", "neon"), ("tag_band", "huge"),
-    ("tag_tint_style", "dotted"), ("tag_tint_blend", "screen")])
+    ("tag_tint_style", "dotted"), ("tag_tint_blend", "screen"), ("slot_shape", "hexagon")])
 def test_unknown_ring_choices_fall_back_to_the_default(load_menus, key, value):
     cfg = load_menus(GOOD_MENUS, ring={key: value})
     assert cfg.ring[key] == config.DEFAULT_RING[key]
     assert problems(cfg, f"ring.{key}: {value!r} unknown")
+
+
+def test_the_slot_shape_is_read_and_defaults_to_a_circle(load_menus):
+    assert load_menus(GOOD_MENUS, ring={"slot_shape": "rounded"}).ring["slot_shape"] == "rounded"
+    assert load_menus(GOOD_MENUS).ring["slot_shape"] == "circle"
 
 
 @pytest.mark.parametrize("key", ["flick", "hover_submenus"])

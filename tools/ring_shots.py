@@ -1,4 +1,4 @@
-"""Draws the ring pictures in docs/images (ring.png, ring-light.png, ring-zbrush.png, fan.png, tag-colours.png, animations.png and the two GIFs) with
+"""Draws the ring pictures in docs/images (ring.png, ring-light.png, ring-zbrush.png, slot-shapes.png, fan.png, tag-colours.png, animations.png and the two GIFs) with
 the real renderer, zorbit/ring.py, so they follow the ring's look whenever it changes. No window is opened and no
 ZBrush is needed, but the brush pictures come from the installed ZBrush's presets, so a ZBrush has to be installed.
 
@@ -95,12 +95,12 @@ class World:
         for m in self.fan_menus:
             m.fan = on
 
-    def preview(self, menu_id, animation="", tagged=False, **kw):
+    def preview(self, menu_id, animation="", tagged=False, ring=None, **kw):
         ex = self.ex[tagged]
         menu = ex.menu(self.cfg.menus[menu_id])
         if animation:
             menu.animation = animation
-        return Ring.preview(menu, self.cfg.ring, self.app.icon_for, submenus=ex.resolve, **kw)
+        return Ring.preview(menu, ring or self.cfg.ring, self.app.icon_for, submenus=ex.resolve, **kw)
 
 
 def cursor(scale=1.0):
@@ -152,6 +152,13 @@ def shot_ring_light(w):
     w.fans(False)
     im = w.preview("brushes", hover=1, held=True, scale=RING_SCALE)
     return with_cursor(on_background(im, bg=BG_LIGHT), *hovered(im))
+
+
+def shot_slot_shapes(w):
+    """The same ring as shot_ring with the Rounded square slot shape."""
+    w.fans(False)
+    im = w.preview("brushes", hover=1, held=True, scale=RING_SCALE, ring=dict(w.cfg.ring, slot_shape="rounded"))
+    return with_cursor(on_background(im), *hovered(im))
 
 
 def stock_scheme():
@@ -385,6 +392,8 @@ SHOTS = {
                    "the same ring as ring.png in the Light theme, over a light grey canvas"),
     "ring-zbrush": ("ring-zbrush.png", shot_ring_zbrush,
                     "the same ring as ring.png in the theme a stock ZBrush scheme gives (Match ZBrush), over a dark grey"),
+    "slot-shapes": ("slot-shapes.png", shot_slot_shapes,
+                    "the same ring as ring.png with the Rounded square slot shape"),
     "fan": ("fan.png", shot_fan, "More Brushes fanned out to the left, ClayTubes in the fan hovered, cursor on it"),
     "tag-colours": ("tag-colours.png", shot_tags, "eight brushes in two tags and two untagged, ClayBuildup hovered"),
     "animations": ("animations.png", shot_animations, "the five open animations part way through opening"),

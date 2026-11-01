@@ -10,6 +10,8 @@ All notable changes to this project are listed here. The format follows
 
 - **Hub** (Full mode) sets the size of the accent dot in the middle of the ring, from 0 to 40 px. It stays 10 unless you
   change it, and 0 hides the dot. The dead zone does not change with it (#33).
+- **Slot shape** (Simple and Full mode) switches every slot between **Circle**, the default, and **Rounded square**.
+  The icon, glow and submenu badge follow the shape (#33).
 
 ## [0.14.0] - 2026-11-01
 

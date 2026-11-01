@@ -255,6 +255,18 @@ def _chrome(it):
     return it.color if it.kind != "tag" else ""
 
 
+SLOT_CORNER = 0.28                              # a rounded slot's corner radius, as a share of its side
+
+
+def _slot_shape(d, box, rounded, **kw):
+    """Draws a slot outline in box: an ellipse, or a rounded square whose corners scale with the box, so a glow
+    or halo drawn around a slot is the same shape grown."""
+    if rounded:
+        d.rounded_rectangle(box, radius=(box[2] - box[0]) * SLOT_CORNER, **kw)
+    else:
+        d.ellipse(box, **kw)
+
+
 def _tint_icon(icon, col, amount, style, blend):
     """icon (RGBA, a disc) with colour col laid over it by multiply or overlay; gradient makes it stronger
     towards the rim and weaker in the middle."""
@@ -589,6 +601,13 @@ class Ring:
         off = abs((ang - i * self.step + 180) % 360 - 180)      # degrees from that slot's direction
         return i if off <= MAX_SECTOR / 2 else None
 
+    def _rounded(self):
+        return self.cfg.get("slot_shape", "circle") == "rounded"
+
+    def _within(self, dx, dy, half):
+        """Whether an offset from a slot's centre is on the slot: a box for rounded slots, a disc otherwise."""
+        return max(abs(dx), abs(dy)) <= half if self._rounded() else math.hypot(dx, dy) <= half
+
     def _hit(self, x, y):
         """(path, how) under window point x, y. how: "disc" (on a slot), "wedge" (inside an open fan but on
         none of its slots), "sector" (in a ring slot's angle) or None (dead zone or nowhere)."""
@@ -597,10 +616,10 @@ class Ring:
         for fan in reversed(fans):                 # deepest first
             rr = fan.cslot / 2 * 1.12 + 4 * self.scale
             for k, (px, py) in enumerate(fan.pos):
-                if math.hypot(rx - px, ry - py) <= rr:
+                if self._within(rx - px, ry - py, rr):
                     return fan.path + (k,), "disc"
         for i, (ux, uy) in enumerate(self.seats):
-            if math.hypot(rx - ux * self.R, ry - uy * self.R) <= self.slot / 2:
+            if self._within(rx - ux * self.R, ry - uy * self.R, self.slot / 2):
                 return (i,), "disc"
         for fan in reversed(fans):
             if self._in_wedge(fan, rx, ry):
@@ -911,7 +930,7 @@ class Ring:
         look = (c["slot"], col["bg"], col["accent"], col["highlight"], col["text"],
                 c.get("tag_colors", "tint"), c.get("tag_glow_opacity", 0.4), c.get("tag_tint_opacity", 0.3),
                 c.get("tag_tint_style", "gradient"), c.get("tag_tint_blend", "multiply"),
-                c.get("theme", "dark"), self._hub())
+                c.get("theme", "dark"), self._hub(), c.get("slot_shape", "circle"))
         return self.menu.id, items, look, self.scale, c.get("labels", "name")
 
     def _slot_sprites(self, it, slot=None):
@@ -923,6 +942,7 @@ class Ring:
         c = C / 2
         sub = it.kind == "menu"
         fan = sub and self._fans_out(it)
+        rd = self._rounded()
         col = _chrome(it)
         hue = col or (self.c_hi if sub else self.c_accent)
         mode = self.cfg.get("tag_colors", "tint")
@@ -934,7 +954,7 @@ class Ring:
         if icon is not None:
             icon = icon.convert("RGBA").resize((ins, ins), Image.LANCZOS)
             mask = Image.new("L", (ins, ins), 0)
-            ImageDraw.Draw(mask).ellipse((0, 0, ins - 1, ins - 1), fill=255)
+            _slot_shape(ImageDraw.Draw(mask), (0, 0, ins - 1, ins - 1), rd, fill=255)
             icon.putalpha(ImageChops.multiply(icon.getchannel("A"), mask))
             amount = self.cfg.get("tag_tint_opacity", 0.3)
             if col and mode in ("tint", "both") and amount > 0:
@@ -949,16 +969,16 @@ class Ring:
             if hover:                              # glow + soft outer ring
                 glow = Image.new("RGBA", (C, C), (0, 0, 0, 0))
                 gr = D / 2 + 4 * self.scale * s
-                ImageDraw.Draw(glow).ellipse((c - gr, c - gr, c + gr, c + gr), fill=_rgba(hue, 0.55))
+                _slot_shape(ImageDraw.Draw(glow), (c - gr, c - gr, c + gr, c + gr), rd, fill=_rgba(hue, 0.55))
                 glow = glow.filter(ImageFilter.GaussianBlur(12 * self.scale * s))
                 im.alpha_composite(glow)
                 rr = D / 2 + 3 * self.scale * s
-                ImageDraw.Draw(im).ellipse((c - rr, c - rr, c + rr, c + rr), fill=_rgba(hue, 0.20))
+                _slot_shape(ImageDraw.Draw(im), (c - rr, c - rr, c + rr, c + rr), rd, fill=_rgba(hue, 0.20))
             d = ImageDraw.Draw(im)
             r = D / 2
             border = _rgba(hue, 1.0) if hover else (_rgba(col, 0.9) if tint else _rgba(self.c_text, 0.10))
-            d.ellipse((c - r, c - r, c + r, c + r), fill=fill, outline=border,
-                      width=max(1, int((3 if tint and not hover else 2) * self.scale * s)))
+            _slot_shape(d, (c - r, c - r, c + r, c + r), rd, fill=fill, outline=border,
+                        width=max(1, int((3 if tint and not hover else 2) * self.scale * s)))
             if icon is not None:
                 im.alpha_composite(icon, (int(c - ins / 2), int(c - ins / 2)))
             elif it.kind == "auto":                # an auto slot nothing has filled yet: faint, no disc
@@ -980,7 +1000,7 @@ class Ring:
                     t = k / 12
                     g = tuple(int(a + (b - a) * (1 - t)) for a, b in zip(*self.pre["placeholder"]))
                     rr = pr * t
-                    pd.ellipse((c - rr, c - rr, c + rr, c + rr), fill=g + (255,))
+                    _slot_shape(pd, (c - rr, c - rr, c + rr, c + rr), rd, fill=g + (255,))
                 im.alpha_composite(ph)
                 gd = ImageDraw.Draw(im)
                 if it.kind == "browser":           # the browser: a 2x2 grid
@@ -994,7 +1014,7 @@ class Ring:
             if sub:                                # submenu badge, bottom-right: a fan, or an arrow for a ring
                 u = self.scale * s
                 bw = 14 * u
-                bx, by = c + r * 0.62, c + r * 0.62
+                bx = by = c + r * (0.66 if rd else 0.62)   # a square's corner is further out than a circle's edge
                 d.rounded_rectangle((bx - bw / 2, by - bw / 2, bx + bw / 2, by + bw / 2), radius=4 * u,
                                     fill=self.pre["badge"], outline=_rgba(self.c_hi, 1.0), width=max(1, int(u)))
                 if fan:
@@ -1008,7 +1028,7 @@ class Ring:
                 n = out.size[0]
                 gr = D / 2 / s + 2 * self.scale
                 halo = Image.new("RGBA", (n, n), (0, 0, 0, 0))
-                ImageDraw.Draw(halo).ellipse((n / 2 - gr, n / 2 - gr, n / 2 + gr, n / 2 + gr), fill=_rgba(col, glow_a))
+                _slot_shape(ImageDraw.Draw(halo), (n / 2 - gr, n / 2 - gr, n / 2 + gr, n / 2 + gr), rd, fill=_rgba(col, glow_a))
                 halo = halo.filter(ImageFilter.GaussianBlur(8 * self.scale))
                 halo.alpha_composite(out)
                 out = halo

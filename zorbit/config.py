@@ -15,6 +15,7 @@ Schema (all keys optional except menus):
            "animation": "smooth",            # smooth bounce pop zoom fade drift fancy spiral ripple breath
                                              # mist snappy
            "labels": "name",                 # name | none
+           "slot_shape": "circle",           # circle | rounded (a rounded square): the shape of every slot
            "tag_colors": "tint",             # none | tint | glow | both: how a brush's first tag shows on its slot
            "tag_band": "medium",             # none | hairline | narrow | medium | wide: a band through the slots,
                                              # coloured per slot by its tag
@@ -78,19 +79,20 @@ TAG_COLOR_MODES = ("none", "tint", "glow", "both")
 TAG_BANDS = ("none", "hairline", "narrow", "medium", "wide")
 TINT_STYLES = ("flat", "gradient")
 TINT_BLENDS = ("multiply", "overlay")
+SLOT_SHAPES = ("circle", "rounded")
 # the names a JavaScript object already has; Studio holds menus in one, so a menu with such an id would break it
 RESERVED_MENU_IDS = frozenset({"__proto__", "constructor", "hasOwnProperty", "isPrototypeOf", "propertyIsEnumerable",
                                "toLocaleString", "toString", "valueOf", "__defineGetter__", "__defineSetter__",
                                "__lookupGetter__", "__lookupSetter__"})
 
 DEFAULT_RING = {"radius": 145, "slot": 72, "dead_zone": 38, "hub": 10, "tap_ms": 250, "timeout_s": 20,
-                "animation": "smooth", "labels": "name", "tag_colors": "tint", "flick": True, "hover_submenus": True,
-                "tag_band": "medium", "tag_band_opacity": 0.45, "tag_glow_opacity": 0.4, "tag_tint_opacity": 0.3,
+                "animation": "smooth", "labels": "name", "slot_shape": "circle", "tag_colors": "tint", "flick": True,
+                "hover_submenus": True, "tag_band": "medium", "tag_band_opacity": 0.45, "tag_glow_opacity": 0.4, "tag_tint_opacity": 0.3,
                 "tag_tint_style": "gradient", "tag_tint_blend": "multiply",
                 "colors": T.ring_colors("dark")}        # the Dark theme's; default_ring() gives another theme's
 _RING_SWITCHES = ("flick", "hover_submenus")
 _RING_CHOICES = {"tag_colors": TAG_COLOR_MODES, "tag_band": TAG_BANDS, "tag_tint_style": TINT_STYLES,
-                 "tag_tint_blend": TINT_BLENDS}
+                 "tag_tint_blend": TINT_BLENDS, "slot_shape": SLOT_SHAPES}
 _RING_RANGES = {"radius": (60, 400), "slot": (32, 160), "dead_zone": (10, 120), "hub": (0, 40), "tap_ms": (0, 1000),
                 "timeout_s": (2, 120), "tag_band_opacity": (0, 1), "tag_glow_opacity": (0, 1),
                 "tag_tint_opacity": (0, 1)}

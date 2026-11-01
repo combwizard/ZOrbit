@@ -172,7 +172,7 @@ const BRIDGE_INFO = {
   message: ['Message', 'Posts a message to a small window the plugin keeps inside ZBrush (its listener). No keystroke is sent, so nothing can collide with your own shortcuts. Needs the ZOrbit plugin loaded in ZBrush. If the plugin is not listening, the pick is dropped and logged.'],
   key: ['Key', 'Presses the bridge key. Bind that key in ZBrush to Zplugin > ZOrbit > Apply (Ctrl+Alt+click the button, press the key, then Preferences > Hotkeys > Store).'],
 };
-const FALLBACK_DEFAULTS = { radius: 145, slot: 72, dead_zone: 38, hub: 10, tap_ms: 250, timeout_s: 20, animation: 'smooth', labels: 'name', tag_colors: 'tint', flick: true, hover_submenus: true,
+const FALLBACK_DEFAULTS = { radius: 145, slot: 72, dead_zone: 38, hub: 10, tap_ms: 250, timeout_s: 20, animation: 'smooth', labels: 'name', slot_shape: 'circle', tag_colors: 'tint', flick: true, hover_submenus: true,
   tag_band: 'medium', tag_band_opacity: 0.45, tag_glow_opacity: 0.4, tag_tint_opacity: 0.3, tag_tint_style: 'gradient', tag_tint_blend: 'multiply',
   colors: { bg: '#222327', accent: '#f86b33', highlight: '#4dc8e9', text: '#f0f0f0', lines: '#f86b33' } };
 const FALLBACK_RANGES = { radius: [60, 400], slot: [32, 160], dead_zone: [10, 120], hub: [0, 40], tap_ms: [0, 1000], timeout_s: [2, 120],
@@ -3899,6 +3899,11 @@ function buildSettingsScreen(root) {
     const LAB = { name: ['Icon and name', 'Each slot shows its label underneath.'], none: ['Icon only', 'A cleaner ring. Names appear only in this Studio.'] };
     page.append(card('Labels', null, choiceCards(labelOpts.map(l => [l, (LAB[l] || [l, ''])[0], (LAB[l] || [l, ''])[1]]), ring().labels || S.defaults.labels, v => setRing('labels', v), 'two', 'Labels')));
 
+    /* --- slot shape */
+    const shapeOpts = (S.opts && S.opts.slot_shapes) || ['circle', 'rounded'];
+    const SHAPE = { circle: ['Circle', 'Round slots.'], rounded: ['Rounded square', 'Square slots with rounded corners, the same size.'] };
+    page.append(card('Slot shape', null, choiceCards(shapeOpts.map(v => [v, (SHAPE[v] || [v, ''])[0], (SHAPE[v] || [v, ''])[1]]), ring().slot_shape || S.defaults.slot_shape, v => setRing('slot_shape', v), 'two', 'Slot shape')));
+
     if (full) {
       /* --- tag colours: how a brush's first tag shows on its slot (tag slots always show their tag's colour).
          Three effects, each a switch with its own controls; tint and glow together are the stored tag_colors. */
@@ -4708,10 +4713,10 @@ function updateDirty() {
 /* Turns one message from the loader (config.py) into plain words plus where to go to fix it.
    Returns { text, raw, target }; target is null when the format is not recognised. */
 const RING_CARD = { radius: 'set-ring-geometry', slot: 'set-ring-geometry', dead_zone: 'set-ring-geometry', hub: 'set-ring-geometry', animation: 'set-open-animation',
-  labels: 'set-labels', tag_colors: 'set-tag-colours', tag_band: 'set-tag-colours', tag_band_opacity: 'set-tag-colours', tag_glow_opacity: 'set-tag-colours',
+  labels: 'set-labels', slot_shape: 'set-slot-shape', tag_colors: 'set-tag-colours', tag_band: 'set-tag-colours', tag_band_opacity: 'set-tag-colours', tag_glow_opacity: 'set-tag-colours',
   tag_tint_opacity: 'set-tag-colours', tag_tint_style: 'set-tag-colours', tag_tint_blend: 'set-tag-colours', colors: 'set-colours', tap_ms: 'set-behaviour', timeout_s: 'set-behaviour', flick: 'set-behaviour', hover_submenus: 'set-behaviour' };
 const RING_NAME = { radius: 'Ring radius', slot: 'Slot size', dead_zone: 'Dead zone', hub: 'Hub', tap_ms: 'Tap time', timeout_s: 'Auto-close', flick: 'Flick to pick',
-  hover_submenus: 'Open submenus on hover', animation: 'Open animation', labels: 'Labels', tag_colors: 'Tag colours',
+  hover_submenus: 'Open submenus on hover', animation: 'Open animation', labels: 'Labels', slot_shape: 'Slot shape', tag_colors: 'Tag colours',
   tag_band: 'Band', tag_band_opacity: 'Band opacity', tag_glow_opacity: 'Glow opacity', tag_tint_opacity: 'Icon tint opacity', tag_tint_style: 'Icon tint style', tag_tint_blend: 'Icon tint blend' };
 const unq = s => String(s).replace(/^(['"])(.*)\1$/, '$2');
 /* "(did you mean mode?)" at the end of a loader message, as a sentence of its own ('' when there is none). */
@@ -5507,7 +5512,7 @@ function describeChanges() {
   for (const id of Object.keys(bm)) if (!am[id]) groups.push({ area: 'Menu ' + q(bm[id].title || id), lines: ['Deleted'] });
   const ringLines = [];
   const br = before.ring || {}, ar = after.ring || {};
-  const NAMES = { radius: 'Ring radius', slot: 'Slot size', dead_zone: 'Dead zone', hub: 'Hub', tap_ms: 'Tap time', timeout_s: 'Auto-close', animation: 'Open animation', labels: 'Labels', tag_colors: 'Tag colours',
+  const NAMES = { radius: 'Ring radius', slot: 'Slot size', dead_zone: 'Dead zone', hub: 'Hub', tap_ms: 'Tap time', timeout_s: 'Auto-close', animation: 'Open animation', labels: 'Labels', slot_shape: 'Slot shape', tag_colors: 'Tag colours',
     tag_band: 'Tag band', tag_band_opacity: 'Tag band opacity', tag_glow_opacity: 'Tag glow opacity', tag_tint_opacity: 'Tag tint opacity', tag_tint_style: 'Tag tint style', tag_tint_blend: 'Tag tint blend',
     flick: 'Flick to pick', hover_submenus: 'Open submenus on hover' };
   for (const k of new Set([...Object.keys(br), ...Object.keys(ar)])) {

@@ -396,6 +396,27 @@ def test_a_big_dot_pushes_the_title_down_to_keep_its_gap():
     assert dys == [18, 18 + 15]
 
 
+def test_a_rounded_slot_is_hit_on_its_corner_where_a_circle_is_not():
+    how = {}
+    for shape in ("circle", "rounded"):
+        r = prepared(make_menu(4), slot_shape=shape)
+        r.centre = (0, 0)
+        cx, cy = r.seats[1][0] * r.R, r.seats[1][1] * r.R    # the slot on the right of the ring
+        assert r._hit(cx, cy) == ((1,), "disc")
+        assert r._hit(cx + r.slot * 0.55, cy)[1] != "disc"   # past the edge either way
+        how[shape] = r._hit(cx + r.slot * 0.45, cy + r.slot * 0.45)[1]   # inside the square, outside its circle
+    assert how == {"circle": "sector", "rounded": "disc"}
+
+
+def test_rounded_slots_render_and_change_the_sprite_key():
+    menu = make_menu(5)
+    a, b = prepared(menu), prepared(menu, slot_shape="rounded")
+    assert a._sprite_key() != b._sprite_key()
+    assert a.sprites[0] is not b.sprites[0] and a.sprites[0][0].tobytes() != b.sprites[0][0].tobytes()
+    shaped = ring.Ring.preview(menu, make_cfg(slot_shape="rounded"), lambda it: None)
+    assert shaped.size == ring.Ring.preview(menu, make_cfg(), lambda it: None).size
+
+
 def test_preview_window_grows_with_the_item_count():
     cfg = make_cfg()
     small = ring.Ring.preview(make_menu(6), cfg, lambda it: None)
