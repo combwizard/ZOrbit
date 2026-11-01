@@ -74,7 +74,7 @@ _FORBIDDEN = re.compile(r'[\\/:*?"<>|\x00-\x1f]')
 _RESERVED = {"CON", "PRN", "AUX", "NUL", *(f"COM{i}" for i in range(1, 10)), *(f"LPT{i}" for i in range(1, 10))}
 _cache = None                          # ((root, pointer signature), active name); only for a pointer that was good
 _staging_seq = 0                       # the counter in .staging-<pid>-<n>; only changed while holding the mutex
-_stamp_cache = None                    # ((stamp path, mtime_ns, size, index), too_new message) of the stamp as last read
+_stamp_cache = None                    # ((stamp path, its bytes), too_new message) of the stamp as last read
 _starter_cache = None                  # ((path, mtime_ns, size), canonical hash) of the shipped default_menus.json
 
 
@@ -234,21 +234,26 @@ def _forget() -> None:
 
 def too_new() -> str:
     """"" normally. When format.json says a newer format than this build knows, the message to show: nothing is
-    written then, and ensure() leaves the files alone. A missing or unreadable stamp is not too new. Remembered
-    until the stamp changes."""
+    written then, and ensure() leaves the files alone. A missing or unreadable stamp is not too new. The file is
+    read on every call (it is a few bytes) and only the answer for the same bytes is remembered: a file's time,
+    size and index can all stay the same across two quick writes on some disks."""
     global _stamp_cache
     if not enabled():
         return ""
     path = stamp_file()
     try:
-        st = os.stat(path)
-    except OSError:
+        with open(path, "rb") as f:
+            raw = f.read(65536)
+    except OSError:                                # missing, or held open: look again next time
         return ""
-    key = (path, st.st_mtime_ns, st.st_size, st.st_ino)     # the index: two writes in one tick
+    key = (path, raw)
     if _stamp_cache and _stamp_cache[0] == key:
         return _stamp_cache[1]
-    data = fsutil.read_json_for_update(path)
-    if data is None:                               # held open or not JSON: look again next time
+    try:
+        data = json.loads(raw.decode("utf-8-sig"))
+    except (ValueError, UnicodeDecodeError):
+        return ""
+    if not isinstance(data, dict):
         return ""
     fmt, version, msg = data.get("format"), data.get("version"), ""
     if isinstance(fmt, int) and not isinstance(fmt, bool) and fmt > FORMAT:
