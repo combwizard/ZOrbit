@@ -14,8 +14,12 @@ All notable changes to this project are listed here. The format follows
 - **Slot shape** (Simple and Full mode) switches every slot between **Circle**, the default, and **Rounded square**.
   `radial.json` also takes `squircle`, `hexagon`, `octagon` and `diamond`. The icon, glow and submenu badge follow
   the shape (#33).
-- **Glow** in the item inspector gives one slot its own glow colour, saved as `style.glow_color` in `radial.json`. It
-  wins over the slot's tag colour for the hover glow, the hover rim and the idle halo only (#33).
+- **This slot**, the third level on the Look screen (Full mode), styles one slot on its own: its shape, corners, rim,
+  icon size, size, fill and rim colours, label colour and glow colour. Click a slot in the preview, use the arrow keys
+  or pick it from the list. It is saved as `style` on the item, and whatever you leave alone follows the menu's look.
+  A glow colour wins over the slot's tag colour for the hover glow, the hover rim and the idle halo only (#33).
+- The item inspector has a **Style** field in place of **Glow**. It lists what the slot sets for itself and has **Edit
+  in Look** and **Reset style**. Simple mode shows it, read-only, when an item has a style (#33).
 - `radial.json` can hold named looks under `looks`, a menu can have its own `look` (a look's name, its own settings, or
   both), and an item can have a `style`. Studio edits the first two, on the Look screen (#33).
 - The **Look** screen has a gallery of looks: seven built in (**Classic**, **Soft**, **Tiles**, **Crystal**,
@@ -49,7 +53,9 @@ All notable changes to this project are listed here. The format follows
 - Studio's note above the item list no longer waits for 12 items. It shows when the ring is full at the current radius,
   says how many items fit and how big the ring grows, and warns when it is too big for the screen (#33).
 - The note above the item list follows the menu's own look and its **When full** choice, and has a **Change in Look**
-  link (#33).
+  link. It says what the ring does: it grows to a radius, a second ring holds the rest, or a More slot does (#33).
+- The outline and the bar in the ring preview on Menus follow the shape of each slot, and the bar works across both
+  rings and beside a **More** slot. The preview on Look lights a slot when you hover it and shows its hover glow (#33).
 - **Unsaved changes** lists looks under **Looks** and ring look settings under **Look**, not **Settings** (#33).
 - Studio's top bar gives way only when it has no room left, not whenever the window is narrower than 1100 px. First
   the **Ctrl+S** hint on **Save** goes, then the word Studio, then **Revert** and **Save** turn into icons, and last

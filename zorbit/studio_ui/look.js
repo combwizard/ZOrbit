@@ -21,6 +21,11 @@
    Editing (they change cfg, never commit, tidy an empty ring object or redraw; the caller does):
              set / clear / isSet / clearAll / usePreset / newPreset / duplicate / rename / remove (delete, optionally baking)
              summary / usersOf / changed. A key is 'radius', or 'colors.bg' for one colour.
+   At the slot level (target.slot is the index of the item in menu.items) the holder is the item's style object, the schema keys
+   are those whose levels include 'slot', and an empty style is removed from the item. A slot-only key (size, fill_color,
+   border_color) that is not set reads as its schema default.
+   Pure helpers for the ring picture's overlay (slotAt, gapAt, layoutFits, shapePoints) take the layout map that preview_ring
+   returns (see Ring.layout_map): they pick as the ring itself does and are shared by the Menus stage and the Look preview.
    Pin or drop: set() drops a value that equals what the level would inherit from the default or the theme; any other value is
    written, even when a preset gives the same, so a later change to the preset does not move it. Only clear() removes it. */
 (function (root) {
@@ -259,14 +264,15 @@
       }
     } else layers = globalLayers(p, set);
     const { vals, org } = fold(layers);
-    let values = finish(vals, p);
+    let values = finish(vals, p), raw = vals;
     if (style) {
       const st = Object.assign({}, style);
       for (const k of COLOUR_VALUE_KEYS) if (has(st, k)) st[k] = colourOf(st[k], values.colors);
       values = Object.assign({}, values, st);
+      raw = Object.assign({}, vals, style);                                  // roles stay roles; the colours are in vals.colors
       for (const k of Object.keys(style)) org[k] = { from: 'slot', name: '' };
     }
-    return { p, set, raw: vals, org, values, level };
+    return { p, set, raw, org, values, level };
   }
   const menuIn = (cfg, target) => (cfg && isObj(cfg.menus) && target && has(cfg.menus, target.menu) && isObj(cfg.menus[target.menu]) ? cfg.menus[target.menu] : null);
 
@@ -276,7 +282,10 @@
     return { values: c.values, origins: c.org };
   }
 
-  const OWN_ORIGIN = { global: 'global', menu: 'menu', preset: 'preset' };
+  const OWN_ORIGIN = { global: 'global', menu: 'menu', preset: 'preset', slot: 'slot' };
+  const isSlot = t => !!t && t.level === 'menu' && Number.isInteger(t.slot);
+  /* The level of a target in the words of the schema: 'global', 'menu', 'slot' or 'preset'. */
+  const levelOf = t => (isSlot(t) ? 'slot' : (t && t.level) || 'global');
   const keysAt = (ctx, level) => prep(ctx).at(level === 'preset' ? 'global' : level);
   const groupId = title => GROUP_ID[title] || String(title).toLowerCase().replace(/[^a-z0-9]+/g, '_');
   /* The groups of a level in schema order: [{ id, title, keys, full }]; full: every key in it is Full-only. */
@@ -296,7 +305,7 @@
   /* What the controls read: { key: { value, origin, name, eff, sub } } for the keys of the target's level. value is the
      look's own value (a role stays a role); eff is a colour key's colour as #rrggbb; 'colors' has sub[name] per colour. */
   function resolve(cfg, target, ctx) {
-    const c = compute(cfg, target, ctx), out = {}, ownFrom = OWN_ORIGIN[c.level];
+    const c = compute(cfg, target, ctx), out = {}, ownFrom = OWN_ORIGIN[levelOf(target)];
     // an own value that says what the level would take anyway (a file written by hand, or by an older Studio) is shown as inherited
     const org = name => {
       const o = c.org[name] || { from: 'default', name: '' };
@@ -306,7 +315,7 @@
       dropKey(sh, target, name);
       return compute(sh, target, ctx).org[name] || { from: 'default', name: '' };
     };
-    for (const k of keysAt(ctx, c.level)) {
+    for (const k of keysAt(ctx, levelOf(target))) {
       const s = c.p.schema[k];
       if (s.kind === 'colors') {
         const sub = {};
@@ -319,8 +328,9 @@
         out.colors = { value: Object.assign({}, c.values.colors), origin: top.from, name: top.name, sub };
       } else {
         const o = org(k);
-        const e = { value: c.raw[k], origin: o.from, name: o.name };
-        if (s.kind === 'colour') e.eff = colourOf(c.raw[k], c.values.colors);
+        const v = has(c.raw, k) ? c.raw[k] : s.default;                // a slot-only key that is not set reads as its default
+        const e = { value: v, origin: o.from, name: o.name };
+        if (s.kind === 'colour') e.eff = colourOf(v, c.values.colors);
         out[k] = e;
       }
     }
@@ -340,6 +350,13 @@
     return [k, sub];
   }
 
+  /* A slot's style takes only the style keys. */
+  function checkAt(key, target, ctx) {
+    const [k, sub] = check(key, ctx);
+    if (isSlot(target) && (sub !== null || !prep(ctx).styleSet.has(k))) throw new Error('not a style key: ' + key);
+    return [k, sub];
+  }
+
   /* The object that holds the look keys of a target; null when there is none yet and create is false. For a menu it is the
      look object itself (a look written as a name becomes {preset: name} when create is true); canon() puts it back. */
   function holder(cfg, target, create) {
@@ -355,6 +372,14 @@
       if (create) throw new Error('no such look: ' + target.name);
       return null;
     }
+    if (isSlot(target)) {
+      const m = menuIn(cfg, target), item = m && Array.isArray(m.items) ? m.items[target.slot] : null;
+      if (!isObj(item)) { if (create) throw new Error('no such item: ' + target.menu + ' ' + target.slot); return null; }
+      if (isObj(item.style)) return item.style;
+      if (!create) return null;
+      item.style = {};
+      return item.style;
+    }
     if (lv === 'menu') {
       const m = menuIn(cfg, target);
       if (!m) { if (create) throw new Error('no such menu: ' + target.menu); return null; }
@@ -369,6 +394,11 @@
   function canon(cfg, target) {
     if (!target || target.level !== 'menu') return;
     const m = menuIn(cfg, target);
+    if (isSlot(target)) {                                      // an item's style: removed when it holds nothing
+      const item = m && Array.isArray(m.items) ? m.items[target.slot] : null;
+      if (isObj(item) && has(item, 'style') && isObj(item.style) && !Object.keys(item.style).length) delete item.style;
+      return;
+    }
     if (!m || !has(m, 'look')) return;
     const v = m.look;
     if (!isObj(v)) { if (v === '' || v === null) delete m.look; return; }
@@ -390,7 +420,11 @@
   /* A copy of the parts of cfg a target's resolution reads, so the level can be looked at as if its own key were not there. */
   function shadow(cfg, target) {
     const s = { ring: clone(cfg.ring), looks: clone(cfg.looks), menus: {} };
-    if (target.level === 'menu' && menuIn(cfg, target)) s.menus[target.menu] = { look: clone(menuIn(cfg, target).look), items: [] };
+    if (target.level === 'menu' && menuIn(cfg, target)) {
+      const m = menuIn(cfg, target), items = [];
+      if (isSlot(target) && Array.isArray(m.items) && isObj(m.items[target.slot])) items[target.slot] = { style: clone(m.items[target.slot].style) };
+      s.menus[target.menu] = { look: clone(m.look), items };
+    }
     return s;
   }
   function dropKey(cfg, target, key) {
@@ -410,14 +444,14 @@
 
   /* Writes a value, or drops the key when it equals what the level would take from the default or the theme anyway. */
   function set(cfg, target, key, value, ctx) {
-    const [k, sub] = check(key, ctx);
+    const [k, sub] = checkAt(key, target, ctx);
     if (k === 'colors' && sub === null) throw new Error('set one colour at a time: colors.<name>');
     const before = JSON.stringify(cfg);
     const sh = shadow(cfg, target);
     dropKey(sh, target, key);
     const c = compute(sh, target, ctx), name = sub ? 'colors.' + sub : k;
     const inh = c.org[name] || { from: 'default' };
-    const inhValue = sub ? c.values.colors[sub] : c.raw[k];
+    const inhValue = inheritedValue(c, k, sub);
     const drop = (inh.from === 'default' || inh.from === 'theme') && (sub ? sameColour(value, inhValue) : same(value, inhValue));
     if (drop) { dropKey(cfg, target, key); return JSON.stringify(cfg) !== before; }
     const o = holder(cfg, target, true);
@@ -425,9 +459,14 @@
     canon(cfg, target);
     return JSON.stringify(cfg) !== before;
   }
+  /* What the level takes when its own key is gone: the value the layers give, else the schema's default (a slot-only key). */
+  function inheritedValue(c, k, sub) {
+    if (sub) return c.values.colors[sub];
+    return has(c.raw, k) ? c.raw[k] : (c.p.schema[k] ? c.p.schema[k].default : undefined);
+  }
   /* Removes the key (all five colours for 'colors'), whatever it holds. Returns true when cfg changed. */
   function clear(cfg, target, key, ctx) {
-    const [k, sub] = check(key, ctx);
+    const [k, sub] = checkAt(key, target, ctx);
     if (sub === null && k === 'colors') {
       const o = holder(cfg, target, false);
       if (!o || !has(o, 'colors')) return false;
@@ -438,7 +477,7 @@
   }
   /* Is the key written at this level? ('colors' when any colour is.) */
   function isSet(cfg, target, key, ctx) {
-    const [k, sub] = check(key, ctx), o = holder(cfg, target, false);
+    const [k, sub] = checkAt(key, target, ctx), o = holder(cfg, target, false);
     if (!o || !has(o, k)) return false;
     if (k === 'colors') { if (!isObj(o.colors)) return false; if (sub === null) return Object.keys(o.colors).some(n => !redundant(cfg, target, 'colors.' + n, ctx)); return has(o.colors, sub) && !redundant(cfg, target, key, ctx); }
     return !redundant(cfg, target, key, ctx);
@@ -453,10 +492,10 @@
     dropKey(sh, target, key);
     const c = compute(sh, target, ctx), name = sub ? 'colors.' + sub : k, inh = c.org[name] || { from: 'default' };
     if (inh.from !== 'default' && inh.from !== 'theme') return false;
-    return sub ? sameColour(o.colors[sub], c.values.colors[sub]) : same(o[k], c.raw[k]);
+    return sub ? sameColour(o.colors[sub], c.values.colors[sub]) : same(o[k], inheritedValue(c, k, null));
   }
   /* The look keys the level writes, whatever their values. */
-  const rawKeys = (cfg, target, ctx) => { const p = prep(ctx), o = holder(cfg, target, false); return o ? Object.keys(o).filter(k => p.lookSet.has(k)) : []; };
+  const rawKeys = (cfg, target, ctx) => { const p = prep(ctx), o = holder(cfg, target, false), ok = isSlot(target) ? p.styleSet : p.lookSet; return o ? Object.keys(o).filter(k => ok.has(k)) : []; };
   /* The settings of its own a level has (each colour is one): ['hub', 'colors.bg', ...]. */
   function settings(cfg, target, ctx) {
     const o = holder(cfg, target, false), out = [];
@@ -626,8 +665,96 @@
     return { preset: name, builtin: has(p.builtin, name), known, count, text };
   }
 
+  /* ---------------------------------------------------------------- the overlay of a ring picture (pure; see Ring.layout_map)
+     layout is the map preview_ring sends with the picture, in the picture's pixels, y down. x and y below are measured from the ring's
+     centre, in the same pixels. These pick the way the ring itself picks (Ring._hit, Ring._index_at), so a click in Studio lands where a
+     click in the app would. */
+  const SIDES = { hexagon: 6, octagon: 8, diamond: 4 }, START = { hexagon: -90, octagon: -67.5, diamond: -90 }, DIAMOND_K = 1.15;
+  const mod = (a, n) => ((a % n) + n) % n;
+  /* shapes.inside: is (dx, dy), measured from a slot's centre, on a slot of half width r? A rounded slot answers anywhere in its box. */
+  function insideShape(shape, dx, dy, r) {
+    const ax = Math.abs(dx), ay = Math.abs(dy);
+    if (shape === 'rounded') return Math.max(ax, ay) <= r;
+    if (shape === 'squircle') return Math.pow(ax, 4) + Math.pow(ay, 4) <= Math.pow(r, 4);
+    if (shape === 'hexagon') return ax <= Math.sqrt(3) / 2 * r && ay + ax / Math.sqrt(3) <= r;
+    if (shape === 'octagon') return ax <= r && ay <= r && ax + ay <= Math.SQRT2 * r;
+    if (shape === 'diamond') return ax + ay <= DIAMOND_K * r;
+    return Math.hypot(dx, dy) <= r;
+  }
+  /* The outline of a squircle, hexagon, octagon or diamond of half width r as [[x, y]...] (shapes._points), pushed out by grow pixels everywhere;
+     null for a circle and a rounded square, which are drawn as they are. */
+  function shapePoints(shape, cx, cy, r, grow) {
+    grow = grow || 0;
+    if (shape === 'squircle') {
+      const R = r + grow, pts = [];
+      for (let k = 0; k < 96; k++) { const t = 2 * Math.PI * k / 96, c = Math.cos(t), s = Math.sin(t); pts.push([cx + R * Math.sign(c) * Math.sqrt(Math.abs(c)), cy + R * Math.sign(s) * Math.sqrt(Math.abs(s))]); }
+      return pts;
+    }
+    const n = SIDES[shape];
+    if (!n) return null;
+    const size = grow && (shape === 'hexagon' || shape === 'diamond') ? r + grow / Math.cos(Math.PI / n) / (shape === 'diamond' ? DIAMOND_K : 1) : r + grow;
+    const big = shape === 'octagon' ? size / Math.cos(Math.PI / 8) : shape === 'diamond' ? size * DIAMOND_K : size, a0 = START[shape] * Math.PI / 180;
+    const pts = [];
+    for (let k = 0; k < n; k++) pts.push([cx + big * Math.cos(a0 + 2 * Math.PI * k / n), cy + big * Math.sin(a0 + 2 * Math.PI * k / n)]);
+    return pts;
+  }
+  /* Does the layout belong to a menu with n usable items? A paged menu (a More slot) draws fewer slots than it has items. */
+  function layoutFits(layout, n) {
+    if (!layout || !Array.isArray(layout.slots) || !layout.slots.length) return false;
+    const k = layout.slots.length, more = !!layout.full && layout.full.more_slot !== null && layout.full.more_slot !== undefined;
+    return k === n || (more && k <= n);
+  }
+  /* The ring a point is in, by distance: the last ring whose band starts at or before it. */
+  function ringAt(layout, d) {
+    const rings = layout.rings || [];
+    let at = 0;
+    for (let r = 1; r < rings.length; r++) if (d >= rings[r].rmin) at = r;
+    return at;
+  }
+  const clockwise = (x, y) => mod(Math.atan2(x, -y) * 180 / Math.PI, 360);           // degrees from 12 o'clock, clockwise
+  /* The ring slot (its index in the ring's order, what hover takes) under a point, or null: on a slot's shape first, else the slot whose
+     angle the point is in, in the ring whose band it is in. Nothing within the dead zone (a slot's own shape still counts). */
+  function slotAt(layout, x, y) {
+    if (!layout || !Array.isArray(layout.slots)) return null;
+    const S = layout.slots;
+    for (let i = 0; i < S.length; i++) if (insideShape(S[i].shape, x - S[i].x, y - S[i].y, S[i].size / 2)) return i;
+    const d = Math.hypot(x, y);
+    if (d < layout.dead || !(layout.rings || []).length) return null;
+    const rp = layout.rings[ringAt(layout, d)];
+    if (!rp.n || !rp.step) return null;
+    const ang = clockwise(x, y), j = mod(Math.round((ang - rp.offset) / rp.step), rp.n);
+    const off = Math.abs(mod(ang - rp.offset - j * rp.step + 180, 360) - 180), slot = S[rp.first + j];
+    return slot && off <= slot.half ? rp.first + j : null;
+  }
+  /* The insertion gap nearest a point: { k, x, y, ang, len, into_more } or null in the dead zone. k: an item dropped here goes in before ring
+     slot k (k === slots.length: after the last). Found as the nearest slot of the ring the point is in, and the side of it the point is on.
+     x, y and ang say where the bar goes (ang: degrees from 12 o'clock; the bar lies along the radius), len how long it is. into_more: the
+     gap is next to a More slot, so an item dropped there goes into the More submenu. */
+  function gapAt(layout, x, y) {
+    if (!layout || !Array.isArray(layout.slots) || !layout.slots.length) return null;
+    const d = Math.hypot(x, y);
+    if (d < layout.dead || !(layout.rings || []).length) return null;
+    const ri = ringAt(layout, d), rp = layout.rings[ri], ang = clockwise(x, y);
+    let best = null;
+    for (let j = 0; j < rp.n; j++) {
+      const s = layout.slots[rp.first + j];
+      if (!s) continue;
+      const sd = mod(ang - s.ang + 180, 360) - 180;                    // 0 or more: the point is clockwise of the slot
+      if (!best || Math.abs(sd) < Math.abs(best.sd)) best = { j, sd, size: s.size };
+    }
+    if (!best) return null;
+    let j = best.sd >= 0 ? best.j + 1 : best.j;                        // the gap before slot j of this ring
+    if (j === 0 && ri === 0) j = rp.n;                                 // before the first slot of the first ring is the wrap: after its last
+    const k = rp.first + j, n = layout.slots.length, a = rp.offset + rp.step * (j - 0.5);
+    const rad = rp.r, listed = (layout.gaps || []).find(g => g.k === k && Math.abs(Math.hypot(g.x, g.y) - rad) < 1.5);
+    const full = layout.full || {}, hasMore = full.more_slot !== null && full.more_slot !== undefined;
+    return { k, x: listed ? listed.x : Math.sin(a * Math.PI / 180) * rad, y: listed ? listed.y : -Math.cos(a * Math.PI / 180) * rad,
+      ang: listed ? listed.ang : mod(a, 360), len: best.size * 1.25, into_more: hasMore && (k >= n || !!(layout.slots[k] && layout.slots[k].more)) };
+  }
+
   const ZLook = { ROLES, GEOMETRY, FALLBACK_SCHEMA, prep, hasPresets, explain, resolve, originOf, problems, groups, groupOf, keysAt, holder, set, clear, clearAll, isSet,
-    changed, settings, redundant, ownCount, usePreset, presetOf, usersOf, userLooks, lookDict, newPreset, duplicate, rename, remove, summary, labelOf, nameProblem, applyClears };
+    changed, settings, redundant, ownCount, usePreset, presetOf, usersOf, userLooks, lookDict, newPreset, duplicate, rename, remove, summary, labelOf, nameProblem, applyClears,
+    levelOf, isSlot, insideShape, shapePoints, layoutFits, slotAt, gapAt };
   if (root) root.ZLook = ZLook;
   if (typeof module !== 'undefined') module.exports = ZLook;
 })(typeof window !== 'undefined' ? window : null);

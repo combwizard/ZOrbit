@@ -75,6 +75,10 @@ SHOTS = {
     "look-presets": dict(q="screen=look", steps=["document.querySelector('.lk-gallery').scrollIntoView({block: 'start'})"]),
     # look-menu: the menu level, after the Tiles look is used for the menu on show (badges say Look: Tiles and This menu).
     "look-menu": dict(q="screen=look", steps=["document.querySelector('[data-level=\"menu\"]').click()", "document.querySelector('[data-fk=\"look:card/tiles/use\"]').click()"]),
+    # look-slot: the slot level for the first slot of the menu, with the hover glow switched on so the picture shows it on that slot.
+    "look-slot": dict(q="screen=look", steps=["document.querySelector('[data-level=\"slot\"]').click()", "document.querySelector('.look-glowsw input').click()"]),
+    # look-full: a menu with more items than its ring holds at its radius, so the note above the items says what the ring does.
+    "look-full": dict(q="screen=menus&menu=tools"),
     "studio-library": dict(q="screen=library"),
     "studio-settings": dict(q="screen=settings"),
     "studio-settings-simple": dict(q="screen=settings&mode=simple"),

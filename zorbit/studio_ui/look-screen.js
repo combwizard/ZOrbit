@@ -13,15 +13,20 @@
      GROUP_BUILD below.
    - The gallery under the preview lists the built-in looks and the user's: Apply (which removes the settings that would hide the
      look, with an undo toast), New from current, Duplicate, Rename, Delete, Edit. Its pictures come from preview_looks.
+   - The preview is a RingView (app.js): the picture with an SVG overlay drawn from the layout map the backend sends, so a slot lights up
+     under the pointer in its own shape. In Full mode a click on a slot opens the slot level for it (view.target.slot is the index of
+     the item in menu.items); Escape or a click on empty space goes back to the menu level, and the arrow keys step through the slots.
    Without get_options().looks (an older backend) only the global level and the first pass's controls are shown. */
 (() => {
   'use strict';
   const K = window.ZStudio, Z = window.ZLook;
   if (!K || !Z) return;                                       // app.js or look.js did not load: app.js shows a note in place of this screen
   const { h, $, $$, S, R, icon, iconBtn, linkBtn, card, choiceCards, sliderRow, toggleSwitch, normHex, commit, tidyRing, usableIdx, menuOf, kindOf,
-    isLib, firstTag, isFull, setMode, fullOnlyChanges, RingLoader, SAMPLE_MENU, COLOR_INFO, lookCtx, clearedText, modal, promptModal, popover, undoToast, plural, hasMenu, clamp } = K;
+    isLib, firstTag, isFull, setMode, fullOnlyChanges, RingLoader, SAMPLE_MENU, COLOR_INFO, lookCtx, clearedText, modal, promptModal, popover, undoToast, plural, hasMenu, clamp,
+    makeRingView, itemLabel } = K;
 
-  const view = { target: { level: 'global' }, menuId: null, back: null, last: null };     // outlives a rebuild of the screen
+  const view = { target: { level: 'global' }, menuId: null, back: null, last: null, pinHover: false, pinOff: false };     // outlives a rebuild of the screen
+  const slotT = () => Z.isSlot(view.target);
   const target = () => view.target;
   const presetsOn = () => Z.hasPresets(lookCtx());
   const own = (o, k) => o != null && Object.prototype.hasOwnProperty.call(o, k);
@@ -32,16 +37,15 @@
   const RANK = { default: 0, theme: 1, 'global-preset': 2, global: 3, 'menu-preset': 4, menu: 5, slot: 6, preset: 7 };
   const badgeText = (o, name) => ({ default: 'Default', theme: 'Theme', 'global-preset': 'Look: ' + lookName(name), global: 'Global', 'menu-preset': 'Look: ' + lookName(name),
     menu: 'This menu', slot: 'This slot', preset: 'This look' }[o] || o);
-  const ownOrigin = () => ({ global: 'global', menu: 'menu', preset: 'preset' }[target().level]);
+  const ownOrigin = () => (slotT() ? 'slot' : { global: 'global', menu: 'menu', preset: 'preset' }[target().level]);
   const badgeTitle = (o, name) => {
     const own1 = o === ownOrigin();
-    if (own1) return o === 'preset' ? 'Set in this look. Reset to go back to the default.' : o === 'menu' ? 'Set for this menu only. Reset to follow the level above.' : 'Set here, for every menu. Reset to go back to what the look or the default gives.';
+    if (own1) return o === 'slot' ? "Set for this slot only. Reset to follow the menu's look." : o === 'preset' ? 'Set in this look. Reset to go back to the default.' : o === 'menu' ? 'Set for this menu only. Reset to follow the level above.' : 'Set here, for every menu. Reset to go back to what the look or the default gives.';
     return ({ default: 'The built-in value. Change the control to set your own.', theme: 'The colour comes from the theme. Change the control to set your own.',
       'global-preset': 'From the look ' + lookName(name) + ', used for all menus. Click to see it.', 'menu-preset': 'From the look ' + lookName(name) + ', used for this menu. Click to see it.',
-      global: 'Set for all menus, in Global. Click to go there.' }[o]) || '';
+      global: 'Set for all menus, in Global. Click to go there.', menu: slotT() ? 'Set for this menu. Click to go there.' : '' }[o]) || '';
   };
   const resetWord = () => (target().level === 'global' ? 'Reset to default' : target().level === 'menu' ? 'Reset to inherited' : 'Reset to default');
-  const whereWord = () => (target().level === 'menu' ? 'this menu' : target().level === 'preset' ? 'this look' : 'all menus');
 
   /* The values of the target, once per change of the config (S.version) and target. */
   let memo = null;
@@ -51,8 +55,20 @@
     return memo.res;
   };
   const schemaOf = () => Z.prep(lookCtx()).schema;
-  const keysHere = () => Z.keysAt(lookCtx(), target().level);
+  const keysHere = () => Z.keysAt(lookCtx(), Z.levelOf(target()));
   const hasKey = k => keysHere().includes(k);
+  /* The values the target's menu gives (a slot inherits them): what the controls of a slot need to know about the menu around it. */
+  let ambientMemo = null;
+  const ambient = () => {
+    const key = S.version + '|' + target().menu + '|' + (S.themeEff || '');
+    if (!ambientMemo || ambientMemo.key !== key) ambientMemo = { key, vals: Z.explain(S.cfg, { level: 'menu', menu: target().menu }, lookCtx()).values };
+    return ambientMemo.vals;
+  };
+  /* The slot's item and its place among the menu's usable items, for the words around the slot level. */
+  const slotInfo = t => {
+    const m = menuOf(t.menu), idxs = usableIdx(t.menu), at = idxs.indexOf(t.slot), it = m && m.items ? m.items[t.slot] : null;
+    return { it, n: idxs.length, pos: at + 1, label: it ? itemLabel(it) : '', idxs };
+  };
 
   /* One look key as the controls see it. key is 'radius', or 'colors.bg' for one colour. */
   function lookAccess(key) {
@@ -87,11 +103,11 @@
     return 'Look for all menus: ' + sum.text + '.' + (names.length ? ' Changed from the default: ' + names.join(', ') + '.' : '') + (menus ? ' ' + plural(menus, 'menu') + ' ' + (menus === 1 ? 'has' : 'have') + ' a look of their own.' : '');
   };
   /* What the screen draws from the config: when this is the same before and after an undo, the screen is left alone (and keeps focus). */
-  window.lookSig = () => JSON.stringify([S.cfg.ring, S.cfg.looks, Object.entries(S.cfg.menus).map(([id, m]) => [id, m && m.title, m && m.look]), S.themeEff]);
+  window.lookSig = () => JSON.stringify([S.cfg.ring, S.cfg.looks, Object.entries(S.cfg.menus).map(([id, m]) => [id, m && m.title, m && m.look, m && Array.isArray(m.items) ? m.items.map(it => it && it.style) : null]), S.themeEff]);
 
   /* Opens the screen at a level: from a problem, the Menu tab's Edit in Look or the ring-full note. rebuild: the screen is showing already. */
   window.lookOpenAt = (t, rebuild) => {
-    if (t.level === 'menu' && hasMenu(t.menuId)) view.target = { level: 'menu', menu: t.menuId };
+    if (t.level === 'menu' && hasMenu(t.menuId)) view.target = Number.isInteger(t.slot) ? { level: 'menu', menu: t.menuId, slot: t.slot } : { level: 'menu', menu: t.menuId };
     else if (t.level === 'preset' && t.name && Z.lookDict(S.cfg, t.name, lookCtx())) view.target = { level: 'preset', name: t.name };
     else view.target = { level: 'global' };
     view.back = null;
@@ -179,7 +195,7 @@
 
   window.buildLookScreen = root => {
     fixTarget();
-    const target0 = view.target, level0 = target0.level;
+    const target0 = view.target, level0 = target0.level, sl0 = Z.isSlot(target0) ? target0.slot : null, curLevel = sl0 !== null ? 'slot' : level0;
     if (Thumbs.theme !== themeNow()) { Thumbs.cache.clear(); Thumbs.shown.clear(); Thumbs.theme = themeNow(); }
     let badges = [];                                          // repaint functions of the source badges
     const repaints = [];                                      // repaint functions of controls whose look depends on other values
@@ -190,17 +206,29 @@
     /* ---- the preview (left column) */
     const img = h('img', { class: 'ring-img', alt: 'Ring preview', draggable: false });
     const dz = h('div', { class: 'dz-ring', 'aria-hidden': 'true' });
-    const wrap = h('div', { class: 'mini-wrap' }, img, dz);
+    const wrap = h('div', { class: 'mini-wrap' }, dz);
     const cap = h('div', { class: 'mini-cap micro' });
-    const stage = h('div', { class: 'mini-stage' }, h('div', { class: 'stage-rings', 'aria-hidden': 'true' }), wrap, cap);
-    let msize = 447, ptok = 0, lastFit = null;
-    const paintDZ = () => { const k = (wrap.clientWidth || 280) / msize, d = (Number(valueNow('dead_zone')) || K.ringNum('dead_zone')) * 2 * k; dz.style.width = dz.style.height = d + 'px'; };
+    const stage = h('div', { class: 'mini-stage look-stage', tabindex: '0', role: 'group', dataset: { fk: 'look:stage' },
+      'aria-label': isFull() ? 'Ring preview. Click a slot to style it on its own. At the slot level the arrow keys move between slots and Escape goes back to the menu.' : 'Ring preview' },
+    h('div', { class: 'stage-rings', 'aria-hidden': 'true' }), wrap, cap);
+    let msize = 447, ptok = 0, lastFit = null, hoverPtr = null, glowInView = false;
+    const previewCount = () => { const id = previewId(); return id === SAMPLE_MENU ? null : usableIdx(id).length; };
+    const ring = makeRingView({ wrap, img, count: previewCount });
+    const paintDZ = () => { const k = (wrap.clientWidth || 280) / msize, d = (Number(valueNow('dead_zone') !== undefined ? valueNow('dead_zone') : ambientDead()) || K.ringNum('dead_zone')) * 2 * k; dz.style.width = dz.style.height = d + 'px'; };
+    const ambientDead = () => (slotT() ? ambient().dead_zone : undefined);
     const live = () => { paintDZ(); paintBadges(); };
     view.touch = () => { paintDZ(); paintBadges(); repaints.forEach(f => f()); if (view.gallery) view.gallery.refresh(); };
     const previewId = () => {
       if (target().level === 'menu') return target().menu;
       return view.menuId === SAMPLE_MENU ? SAMPLE_MENU : (view.menuId && menuOf(view.menuId) ? view.menuId : S.menuId);
     };
+    /* ring slot i is which item of the menu (its index in menu.items)? null for a More slot or when the layout does not fit. */
+    const itemOfSlot = i => { const L = ring.layout(), idxs = usableIdx(previewId()); return L && L.slots[i] && !L.slots[i].more && idxs[i] !== undefined ? idxs[i] : null; };
+    const slotOfItem = ix => { const L = ring.layout(); if (!L || ix === null || ix === undefined) return null; for (let i = 0; i < L.slots.length; i++) if (itemOfSlot(i) === ix) return i; return null; };
+    const glowPinned = () => slotT() && (view.pinHover || (glowInView && !view.pinOff));
+    /* What the picture shows lit: the slot under the pointer, else (when pinned) the selected one. */
+    const hoverNow = () => (hoverPtr !== null ? hoverPtr : glowPinned() ? slotOfItem(target().slot) : null);
+    const paintRing = () => ring.paint({ hover: hoverNow(), sel: slotT() ? slotOfItem(target().slot) : null });
     /* While a look is being edited, the picture shows a copy of the config in which the menu being previewed uses that look. */
     const previewVariant = id => {
       const t = target();
@@ -217,6 +245,12 @@
       const base = id === SAMPLE_MENU ? 'Sample ring' : 'Preview: ' + ((m && m.title) || id || '');
       cap.textContent = t.level === 'preset' ? base + ' with ' + lookName(t.name) : base;
     };
+    const showPicture = res => {
+      if (res.image && img.getAttribute('src') !== res.image) img.src = res.image;
+      ring.setShown(res.layout || null);
+      ring.rebuild();
+      paintRing();
+    };
     R.preview = async () => {
       const id = previewId(), sample = id === SAMPLE_MENU, tok = ++ptok;
       paintCap();
@@ -224,17 +258,42 @@
       stage.classList.toggle('none', none);
       wrap.hidden = none;
       if (none) return;
-      const ver = S.version;
-      const res = await RingLoader.get(id, null, null, sample ? 'tags' : 'main', previewVariant(id));
+      const ver = S.version, want = hoverNow();
+      const res = await RingLoader.get(id, want, null, sample ? 'tags' : 'main', previewVariant(id));
       if (tok !== ptok || ver !== S.version || !res) return;
-      if (res.image) img.src = res.image;
+      if (res.image) showPicture(res);
       else if (res.error || (res.problems || []).length) cap.textContent = 'No preview: ' + (res.problems || [])[0];
       msize = res.size || msize; paintDZ();
       lastFit = res.fit || null;
       if (paintFit) paintFit();
+      paintLive();
     };
     const peek = RingLoader.peek(previewId(), null, null, previewVariant(previewId()));       // a rebuild shows the picture it had at once
-    if (peek && peek.image) { img.src = peek.image; msize = peek.size || msize; lastFit = peek.fit || null; }
+    if (peek && peek.image) { img.src = peek.image; ring.setShown(peek.layout || null); msize = peek.size || msize; lastFit = peek.fit || null; }
+    new ResizeObserver(() => { ring.rebuild(); paintRing(); }).observe(wrap);
+
+    /* Hover lights a slot and shows its picture with the hover glow; in Full mode a click opens the slot level for it. */
+    const setHoverPtr = j => { if (j === hoverPtr) return; hoverPtr = j; stage.classList.toggle('over-slot', j !== null && isFull() && previewId() !== SAMPLE_MENU); paintRing(); R.preview(); };
+    stage.addEventListener('pointermove', e => { if (level0 !== 'preset') setHoverPtr(ring.slotAt(e.clientX, e.clientY)); });
+    stage.addEventListener('pointerleave', () => setHoverPtr(null));
+    const goSlot = (mid, ix) => { view.last = mid; view.target = { level: 'menu', menu: mid, slot: ix }; view.back = null; R.look(); };
+    const goMenuLevel = () => { view.target = { level: 'menu', menu: target().menu }; view.back = null; R.look(); };
+    stage.addEventListener('click', e => {
+      if (!isFull() || level0 === 'preset' || !presetsOn() || previewId() === SAMPLE_MENU || !ring.valid()) return;
+      const j = ring.slotAt(e.clientX, e.clientY);
+      if (j === null) { if (sl0 !== null) goMenuLevel(); return; }       // empty space: back to the menu
+      const ix = itemOfSlot(j);
+      if (ix !== null && !(sl0 !== null && ix === target().slot)) goSlot(previewId(), ix);
+    });
+    stage.addEventListener('keydown', e => {
+      if (sl0 === null || e.target !== stage || e.altKey || e.ctrlKey || e.metaKey) return;
+      if (e.key === 'Escape') { e.preventDefault(); goMenuLevel(); return; }
+      const idxs = usableIdx(target().menu), at = idxs.indexOf(target().slot);
+      const to = e.key === 'ArrowRight' || e.key === 'ArrowDown' ? at + 1 : e.key === 'ArrowLeft' || e.key === 'ArrowUp' ? at - 1 : e.key === 'Home' ? 0 : e.key === 'End' ? idxs.length - 1 : null;
+      if (to === null || !idxs.length) return;
+      e.preventDefault();
+      goSlot(target().menu, idxs[(to + idxs.length) % idxs.length]);
+    });
 
     const menuOptions = sample => [...Object.entries(S.cfg.menus).map(([id, m]) => h('option', { value: id, selected: id === previewId() }, (m && m.title) || id)),
       sample ? h('option', { value: SAMPLE_MENU, selected: previewId() === SAMPLE_MENU }, 'Sample ring with tags') : null];
@@ -243,17 +302,33 @@
     } }, ...menuOptions(true));
     const pickLabel = h('label', { class: 'look-pick' }, h('span', { class: 'micro' }, 'Preview menu'), picker);
     pickLabel.hidden = level0 === 'menu';
-    const left = h('aside', { class: 'look-left', 'aria-label': 'Ring preview and looks' }, stage, pickLabel,
+    /* The slot level's line under the picture (read out when the slot changes) and the switch that keeps the hover glow on show. */
+    const liveLine = h('div', { class: 'fhint look-live', role: 'status', 'aria-live': 'polite' });
+    const glowSw = sl0 !== null ? toggleSwitch(glowPinned(), v => { if (v) { view.pinHover = true; view.pinOff = false; } else { view.pinHover = false; view.pinOff = true; } paintRing(); R.preview(); }, 'Show hover glow') : null;
+    const glowRow = glowSw ? h('div', { class: 'look-glowsw' }, h('span', null, 'Show hover glow'), glowSw) : null;
+    const paintLive = () => {
+      if (sl0 === null) { liveLine.textContent = ''; return; }
+      const i = slotInfo(target()), shape = Z.explain(S.cfg, target(), lookCtx()).values.slot_shape;
+      liveLine.textContent = i.it ? 'Slot ' + i.pos + ' of ' + i.n + ': ' + i.label + ', ' + (shape || 'circle').replace('rounded', 'rounded square') : '';
+    };
+    const syncPin = () => { if (glowSw) { const on = glowPinned(), inp = glowSw.querySelector('input'); if (inp.checked !== on) inp.checked = on; } };
+    const left = h('aside', { class: 'look-left', 'aria-label': 'Ring preview and looks' }, stage, liveLine, glowRow, pickLabel,
       h('div', { class: 'fhint' }, 'The dashed circle is the dead zone: no slot is picked this close to the centre.'));
 
     /* ---- level bar */
     const full = isFull();
     const levelBar = h('div', { class: 'look-levels' }, h('h1', { class: 'look-title' }, 'Look'));
     const goLevel = lv => {
-      if (lv === 'menu') {
+      if (lv === 'menu' || lv === 'slot') {
         const id = view.last && hasMenu(view.last) ? view.last : S.menuId;
         if (!hasMenu(id)) return;
         view.target = { level: 'menu', menu: id };
+        if (lv === 'slot') {                                    // the selected item if it is on the ring, else the first one
+          const idxs = usableIdx(id);
+          const ix = id === S.menuId && idxs.includes(S.itemIdx) ? S.itemIdx : (view.lastSlot && view.lastSlot.menu === id && idxs.includes(view.lastSlot.slot) ? view.lastSlot.slot : idxs[0]);
+          if (ix === undefined) return;
+          view.target = { level: 'menu', menu: id, slot: ix };
+        }
       } else view.target = { level: 'global' };
       view.back = null;
       R.look();
@@ -261,8 +336,12 @@
     if (presetsOn()) {
       const lvls = [['global', full ? 'Global' : 'All menus', full ? 'The look every menu starts from.' : 'The look for every menu.'],
         ['menu', full ? 'This menu' : 'Only', full ? 'Only the menu you pick. Whatever you do not set here follows Global.' : 'Only the menu you pick.']];
-      const chips = lvls.map(([id, label, hint]) => h('button', { class: 'look-chip' + (id === level0 ? ' on' : ''), type: 'button', role: 'radio', 'aria-checked': id === level0 ? 'true' : 'false',
-        tabindex: id === level0 || (level0 === 'preset' && id === 'global') ? '0' : '-1', title: hint, dataset: { level: id, fk: 'look:level/' + id }, onclick: () => { if (id !== level0 || level0 === 'preset') goLevel(id); } }, label));
+      if (full) lvls.push(['slot', 'This slot', 'Only one slot of the menu. Whatever you do not set here follows the menu.']);
+      const noSlots = () => !usableIdx(view.last && hasMenu(view.last) ? view.last : S.menuId).length;
+      const chips = lvls.map(([id, label, hint]) => h('button', { class: 'look-chip' + (id === curLevel ? ' on' : ''), type: 'button', role: 'radio', 'aria-checked': id === curLevel ? 'true' : 'false',
+        tabindex: id === curLevel || (curLevel === 'preset' && id === 'global') ? '0' : '-1', title: id === 'slot' && noSlots() && curLevel !== 'slot' ? 'The menu has no slot to pick yet.' : hint, dataset: { level: id, fk: 'look:level/' + id },
+        'aria-disabled': id === 'slot' && noSlots() && curLevel !== 'slot' ? 'true' : null,
+        onclick: () => { if (id === 'slot' && noSlots() && curLevel !== 'slot') return; if (id !== curLevel || curLevel === 'preset') goLevel(id); } }, label));
       const group = h('div', { class: 'look-chips', role: 'radiogroup', 'aria-label': full ? 'Where the look applies' : 'Applies to' }, ...chips);
       group.addEventListener('keydown', e => {
         const at = chips.indexOf(document.activeElement);
@@ -278,11 +357,21 @@
           ...Object.entries(S.cfg.menus).map(([id, m]) => h('option', { value: id, selected: id === target0.menu }, (m && m.title) || id)));
         levelBar.append(ms);
       }
+      if (sl0 !== null) {
+        const si = slotInfo(target0);
+        const ss = h('select', { class: 'inp sel look-slotsel', 'aria-label': 'Slot the look applies to', dataset: { fk: 'look:level-slot' }, onchange: () => goSlot(target0.menu, +ss.value) },
+          ...si.idxs.map((ix, n) => h('option', { value: ix, selected: ix === target0.slot }, 'Slot ' + (n + 1) + ': ' + itemLabel(menuOf(target0.menu).items[ix]))));
+        const own = Z.ownCount(S.cfg, target0, lookCtx());
+        const rs = h('button', { class: 'btn small', type: 'button', disabled: own === 0, dataset: { fk: 'look:slot-reset' }, title: own ? 'Remove the style of this slot' : 'This slot has no style of its own',
+          onclick: () => { const n = Z.clearAll(S.cfg, target(), lookCtx()); tidyRing(); commit(); undoToast('Cleared the style of ' + itemLabel(menuOf(target0.menu).items[target0.slot]) + (n ? '' : '.')); R.look(); } }, icon('undo', 12), 'Reset slot');
+        levelBar.append(ss, rs);
+      }
       if (level0 === 'preset') {
         levelBar.append(h('span', { class: 'look-chip on look-presetchip', title: 'The look being edited' }, icon('look', 12), 'Look: ' + lookName(target0.name)));
       }
     }
     const levelNote = level0 === 'preset' ? 'You are editing a look. Menus that use it follow your changes.'
+      : sl0 !== null ? "Only this slot. What you leave alone follows the menu's look."
       : level0 === 'menu' ? 'Only this menu. What you leave alone follows the look for all menus.' : presetsOn() ? 'The look every menu starts from.' : 'The look every menu starts from.';
     levelBar.append(h('span', { class: 'look-levelnote' }, levelNote));
 
@@ -295,7 +384,8 @@
       const top = () => accs.map(a => ({ o: a.origin(), n: a.name() })).sort((x, y) => RANK[y.o] - RANK[x.o])[0];
       const b = h('button', { class: 'lk-badge', type: 'button', onclick: () => {
         const { o, n } = top();
-        if (o === 'global' && ownOrigin() !== 'global') jump({ level: 'global' }, keys[0]);
+        if (o === 'menu' && slotT()) jump({ level: 'menu', menu: target().menu }, keys[0]);
+        else if (o === 'global' && ownOrigin() !== 'global') jump({ level: 'global' }, keys[0]);
         else if ((o === 'global-preset' || o === 'menu-preset') && n) jump({ level: 'preset', name: n }, keys[0]);
         else { const c = slabel.closest('.srow, .crow, .tg-head, .lk-stack'); const f = c && $('input:not([disabled]), button.choice.on, button.choice:not([disabled]), button.rc-chip[aria-checked="true"]', c); if (f) f.focus(); }
       } });
@@ -325,7 +415,7 @@
         const m = /\/(range|num|reset)$/.exec(el.dataset.fk);
         el.dataset.fk = m && m[1] === 'range' ? base : base + '/' + (m ? m[1] : 'x');
       }
-      for (const r of $$('.reset', row)) { r.title = r.title.replace(/^Reset to default/, resetWord()); r.setAttribute('aria-label', r.title); }
+      for (const r of $$('.reset', row)) { r.title = S.defaults[keys[0]] === undefined ? resetWord() : r.title.replace(/^Reset to default/, resetWord()); r.setAttribute('aria-label', r.title); }
       return row;
     };
     const limitsOf = key => { const s = schemaOf()[key]; return s && s.min !== undefined ? [s.min, s.max] : null; };
@@ -376,7 +466,7 @@
     /* A colour that is a theme role or a fixed colour: chips Automatic (when the key allows none), the five roles filled with their colour here, and Custom. */
     const roleColorRow = ({ key, label, hint, dim }) => {
       const A = lookAccess(key), allowEmpty = !!(schemaOf()[key] || {}).allow_empty;
-      const pal = () => resolved().colors.value;
+      const pal = () => (slotT() ? ambient().colors : resolved().colors.value);
       const isRole = v => Z.ROLES.includes(v);
       const kindOfValue = v => (v === '' ? '' : isRole(v) ? v : '#');
       const hexInp = h('input', { class: 'inp mono hex', type: 'text', maxlength: '7', spellcheck: 'false', 'aria-label': label + ' hex value', dataset: { fk: 'look:' + key + '/hex' } });
@@ -440,16 +530,21 @@
         slider('dead_zone', { label: 'Dead zone', hint: 'No slot is picked this close to the centre (dashed circle)', unit: 'px' })] : [sizeRowFor()]));
       const shapes = choicesOf('slot_shape');
       const many = shapes.length > 2;
+      const each = slotT() ? 'this slot' : 'each slot';
       rows.push(choiceRow({ label: 'Slot shape', key: 'slot_shape', cls: many ? 'lk-shapes' : 'two', items: itemsOf(shapes, SHAPE) }));
       if (full && hasKey('slot_corner')) {
         const off = () => valueNow('slot_shape') !== 'rounded';
         const r1 = slider('slot_corner', { label: 'Corner roundness', hint: 'How round the corners of a Rounded square are', unit: '%', scale: 100, step: 1 });
         repaints.push(() => { r1.classList.toggle('off', off()); $$('input, button', r1).forEach(c => { c.disabled = off(); }); }); repaints[repaints.length - 1]();
         rows.push(r1,
-          slider('border_width', { label: 'Rim width', hint: 'The outline of each slot. A tag-tinted rim is one pixel wider', unit: 'px' }),
+          slider('border_width', { label: 'Rim width', hint: 'The outline of ' + each + '. A tag-tinted rim is one pixel wider', unit: 'px' }),
           slider('icon_scale', { label: 'Icon size', hint: 'How much of the slot the icon fills', unit: '%', scale: 100, step: 1 }));
       }
-      return card('Slots', full ? 'Size, spacing and shape' : 'How big the ring is, and its shape', ...rows);
+      if (full && hasKey('size')) rows.push(
+        slider('size', { label: 'Size of this slot', hint: 'Bigger or smaller than the ring\'s slot size. 100% is the same', unit: '%', scale: 100, step: 1 }),
+        roleColorRow({ key: 'fill_color', label: 'Fill colour', hint: 'The inside of the slot. Automatic uses the theme\'s background' }),
+        roleColorRow({ key: 'border_color', label: 'Rim colour', hint: 'The outline of the slot. Automatic uses the tag colour, else the accent' }));
+      return card('Slots', slotT() ? 'The shape and size of this slot' : full ? 'Size, spacing and shape' : 'How big the ring is, and its shape', ...rows);
     };
     const groupHub = () => {
       const off = () => !(Number(valueNow('hub')) > 0);
@@ -465,11 +560,11 @@
     };
     const groupGlow = () => card('Glow', 'The halo around a slot',
       roleColorRow({ key: 'glow_color', label: 'Glow colour', hint: 'Automatic uses a tag\'s colour when the slot has one, else the accent or highlight' }),
-      slider('glow_opacity', { label: 'Glow strength', hint: 'How strong the halo is', unit: '%', scale: 100, step: 5 }));
+      ...(hasKey('glow_opacity') ? [slider('glow_opacity', { label: 'Glow strength', hint: 'How strong the halo is', unit: '%', scale: 100, step: 5 })] : []));
     const groupLabels = () => {
       const labelOpts = choicesOf('labels');
-      const rows = [choiceRow({ label: 'Labels', key: 'labels', cls: 'two', items: itemsOf(labelOpts, LABELS) })];
-      if (full && hasKey('label_color')) rows.push(roleColorRow({ key: 'label_color', label: 'Label colour', hint: 'The text under each slot', dim: () => valueNow('labels') === 'none' }));
+      const rows = hasKey('labels') ? [choiceRow({ label: 'Labels', key: 'labels', cls: 'two', items: itemsOf(labelOpts, LABELS) })] : [];
+      if (full && hasKey('label_color')) rows.push(roleColorRow({ key: 'label_color', label: 'Label colour', hint: slotT() ? 'The text under this slot' : 'The text under each slot', dim: () => (slotT() ? ambient().labels : valueNow('labels')) === 'none' }));
       return card('Labels', null, ...rows);
     };
     const colourRow = name => {
@@ -586,7 +681,7 @@
     const whereText = t => (t.level === 'menu' ? menuTitle(t.menu) : 'all menus');
     function applyTarget() { return level0 === 'preset' ? { level: 'global' } : target(); }
     view.gallery = null;
-    const gallery = presetsOn() ? buildGallery() : null;
+    const gallery = presetsOn() && sl0 === null ? buildGallery() : null;
     if (gallery) left.append(gallery.el);
 
     function applyLook(id, keep) {
@@ -770,7 +865,7 @@
     }
     const toast2 = m => K.toast(m, { ms: 3200 });
     if (hidden.length) groupsBox.append(h('div', { class: 'mode-note look-modenote', role: 'status' }, 'Changed in Full mode and not shown here: ' + hidden.join(', ') + '. ', linkBtn('Switch to Full mode', () => setMode('full'))));
-    const shown = Z.groups(lookCtx(), level0).filter(g => full || !g.full);
+    const shown = Z.groups(lookCtx(), curLevel).filter(g => full || !g.full);
     const inner = h('div', { class: 'look-ctl' + (readOnly ? ' ro' : '') });
     if (readOnly) inner.inert = true;
     groupsBox.append(inner);
@@ -797,6 +892,8 @@
         s.btn.classList.toggle('on', on);
         if (on) s.btn.setAttribute('aria-current', 'location'); else s.btn.removeAttribute('aria-current');
       }
+      const g = active.id === 'glow';                       // the hover glow is shown on the selected slot while its group is in view
+      if (g !== glowInView) { glowInView = g; if (!g) view.pinOff = false; if (sl0 !== null) { syncPin(); paintRing(); R.preview(); } }
     };
     const goGroup = (s, flash) => {
       pinned = s; markActive();
@@ -830,6 +927,7 @@
     root.replaceChildren(levelBar, h('div', { class: 'look-body' }, left, scroll));
     paintTagNote();
     markActive();
+    paintLive();
     R.preview();
     if (gallery) wantThumbs();
 
@@ -851,6 +949,8 @@
     if (!Z.hasPresets(c)) { view.target = { level: 'global' }; return; }
     if (t.level === 'menu' && !hasMenu(t.menu)) view.target = { level: 'global' };
     else if (t.level === 'preset' && !Z.lookDict(S.cfg, t.name, c)) view.target = { level: 'global' };
+    else if (Z.isSlot(t) && (!isFull() || !usableIdx(t.menu).includes(t.slot))) view.target = { level: 'menu', menu: t.menu };      // no slot level in Simple, or the item is gone or unusable
     if (view.target.level === 'menu') view.last = view.target.menu;
+    if (Z.isSlot(view.target)) view.lastSlot = { menu: view.target.menu, slot: view.target.slot };
   }
 })();

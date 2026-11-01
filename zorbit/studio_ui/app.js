@@ -267,7 +267,7 @@ const needsFull = cfg => fullOnlyChanges(cfg).length > 0 || Object.values((cfg &
 function targetNeedsFull(t) {
   if (!t) return false;
   if (t.kind === 'settings') return FULL_CARDS.has(t.card) || !!(t.key && FULL_RING[t.key]);
-  if (t.kind === 'look') return !!(t.key && FULL_RING[t.key] && LOOK_FULL_NAMES.has(FULL_RING[t.key]));
+  if (t.kind === 'look') return Number.isInteger(t.slot) || !!(t.key && FULL_RING[t.key] && LOOK_FULL_NAMES.has(FULL_RING[t.key]));      // the slot level is Full only
   if (t.kind === 'menu') return t.field === 'id' || t.field === 'animation';
   if (t.kind === 'item') { const m = menuOf(t.menuId), it = m && m.items && m.items[t.index]; return !!it && kindIsFull(kindOf(it)); }
   return false;
@@ -1769,51 +1769,118 @@ function renderItemList(box, menuId, compact) {
   } else if (switched && !compact) { const sr = $('.irow.sel', box); if (sr) sr.scrollIntoView({ block: 'nearest' }); }
 }
 
-/* ---------- the ring stage (live preview with overlay) */
-// Widest angle (degrees) one slot answers to. A copy of MAX_SECTOR in zorbit/ring.py (Ring._index_at): keep the two in step.
-const MAX_SECTOR = 90;
-// Least distance between neighbouring slot centres, in slot widths. A copy of SLOT_GAP in zorbit/ring.py (Ring._geometry): keep the two in step.
-const SLOT_GAP = 1.25;
-/* Is a ring of n slots full at the radius and slot size in use? ring.py grows the radius until neighbours are SLOT_GAP slot widths
-   apart, so a ring is full when it has to. Returns null when n fits, else { text, tooBig } for the note above the item list;
-   tooBig is true when the grown ring's window would not fit the screen (ring.py pushes it against the edges then). */
-function ringFull(n) {
-  if (n < 2) return null;
-  const slot = ringNum('slot'), radius = ringNum('radius');
-  const need = SLOT_GAP * slot / (2 * Math.sin(Math.PI / n));                       // the radius ring.py grows to
-  if (!(need > radius + 0.5)) return null;
-  const x = SLOT_GAP * slot / (2 * radius);
-  const fit = x < 1 ? Math.max(1, Math.floor(Math.PI / Math.asin(x) + 1e-6)) : 1;   // how many slots fit at this radius
-  const label = isFull() ? 'Ring radius' : 'Ring size';
-  const tooBig = 2 * (need + slot * 0.62 + 34) > Math.min(screen.availWidth || Infinity, screen.availHeight || Infinity);
-  const text = 'At a radius of ' + Math.round(radius) + ' px this ring holds ' + fit + (fit === 1 ? ' item' : ' items') + '. With ' + n + ' it grows to ' + Math.round(need) + ' px. '
-    + (tooBig ? 'It is too big for this screen, so it is pushed against the edges. ' : '')
-    + (isFull() ? 'Raise ' + label + ', lower Slot size or move some items into a submenu.' : 'Raise ' + label + ' or move some items into a submenu.');
-  return { text, tooBig };
+/* ---------- the ring picture and its overlay (the Menus stage and the Look preview) */
+const SVG_NS = 'http://www.w3.org/2000/svg';
+const svgEl = (name, attrs) => { const e = document.createElementNS(SVG_NS, name); for (const k in attrs) e.setAttribute(k, attrs[k]); return e; };
+/* RingView lays a picture of the ring, an SVG overlay and (optionally) number badges in one box, so they move and scale together; the box is
+   the whole picture, which with a fan open is not square and not centred on the ring. The overlay is drawn from the layout map that preview_ring
+   sends with the picture (layout, in the picture's pixels): a mark for each slot in the slot's own shape, and the bar where a dropped item goes.
+   It picks as the ring does (ZLook.slotAt, ZLook.gapAt). While the layout does not fit the menu (count() usable items, a More slot allowing for
+   fewer), the marks are hidden and the hit tests answer null.
+     opts: { wrap, img, count(): usable items or null to trust the layout, badge(slot, i): the text of a number badge or null for none (omit for no badges) }
+     setShown(layout): the layout of the picture now in img.    place(fanBox, D, size): puts the box in wrap (fanBox: { w, h, cx, cy } or null).
+     rebuild(): draws the marks again (after the layout, the size of the box or the number of items changed).
+     paint({ hover, sel, moving, gap }): ring indices (or -1/null) and the gap bar { x, y, ang, len, noop } or null.
+     valid(), layout(), isMore(i), slotAt(clientX, clientY) -> ring index or null, gapAt(clientX, clientY) -> gap or null. */
+function makeRingView({ wrap, img, count, badge = null }) {
+  const box = h('div', { class: 'ring-box' });
+  const svg = svgEl('svg', { class: 'ring-svg', 'aria-hidden': 'true', focusable: 'false' });
+  const ov = h('div', { class: 'ring-ov' }, svg);
+  box.append(img, ov);
+  wrap.prepend(box);
+  let lay = null, marks = [], state = { hover: null, sel: null, moving: null, gap: null };
+  const valid = () => { if (!lay || !Array.isArray(lay.slots) || !lay.slots.length || !Array.isArray(lay.size) || !Array.isArray(lay.centre)) return false; const n = count(); return n === null || ZLook.layoutFits(lay, n); };
+  /* The point in the picture, measured from the ring's centre. */
+  const rel = (cx, cy) => {
+    const r = box.getBoundingClientRect();
+    if (!lay || !r.width || !r.height) return null;
+    return { x: (cx - r.left) / r.width * lay.size[0] - lay.centre[0], y: (cy - r.top) / r.height * lay.size[1] - lay.centre[1] };
+  };
+  const outline = (s, cx, cy, grow, cls) => {
+    const r = s.size / 2 + grow, pts = ZLook.shapePoints(s.shape, cx, cy, s.size / 2, grow);
+    if (pts) return svgEl('polygon', { class: cls, points: pts.map(p => p[0].toFixed(2) + ',' + p[1].toFixed(2)).join(' ') });
+    if (s.shape === 'rounded') return svgEl('rect', { class: cls, x: cx - r, y: cy - r, width: 2 * r, height: 2 * r, rx: 2 * r * (Number.isFinite(s.corner) ? s.corner : 0.28) });
+    return svgEl('circle', { class: cls, cx, cy, r });
+  };
+  function rebuild() {
+    svg.replaceChildren(); marks = [];
+    for (const b of $$('.slot-ov', ov)) b.remove();
+    const ok = valid();
+    ov.classList.toggle('stale', !ok);
+    if (!ok) return;
+    const [w, ht] = lay.size, k = w / (box.clientWidth || w);              // k: picture pixels to a screen pixel
+    svg.setAttribute('viewBox', '0 0 ' + w + ' ' + ht);
+    lay.slots.forEach((s, i) => {
+      const cx = lay.centre[0] + s.x, cy = lay.centre[1] + s.y, g = svgEl('g', { class: 'mk' });
+      g.append(outline(s, cx, cy, 0, 'mk-f'), outline(s, cx, cy, 5 * k, 'mk-h'), outline(s, cx, cy, 5 * k, 'mk-r'));
+      svg.append(g);
+      const text = badge ? badge(s, i) : null;
+      let bd = null;
+      if (text !== null && text !== undefined) {
+        bd = h('div', { class: 'slot-ov', style: { left: cx / w * 100 + '%', top: cy / ht * 100 + '%', width: s.size / w * 100 + '%', height: s.size / ht * 100 + '%' } }, h('span', { class: 'slot-n mono' }, text));
+        ov.append(bd);
+      }
+      marks.push({ g, bd });
+    });
+    paint(state);
+  }
+  function paint(next) {
+    state = Object.assign({ hover: null, sel: null, moving: null, gap: null }, next);
+    const bar = svg.querySelector('.gap-bar'); if (bar) bar.remove();
+    if (!valid()) return;
+    marks.forEach((m, i) => {
+      for (const [cls, on] of [['hov', state.hover === i], ['sel', state.sel === i], ['moving', state.moving === i]]) { m.g.classList.toggle(cls, on); if (m.bd) m.bd.classList.toggle(cls, on); }
+    });
+    const g = state.gap;
+    if (g) {
+      const a = g.ang * Math.PI / 180, ux = Math.sin(a), uy = -Math.cos(a), cx = lay.centre[0] + g.x, cy = lay.centre[1] + g.y, half = g.len / 2;
+      svg.append(svgEl('line', { class: 'gap-bar' + (g.noop ? ' noop' : ''), x1: cx - ux * half, y1: cy - uy * half, x2: cx + ux * half, y2: cy + uy * half }));
+    }
+  }
+  return {
+    box, ov, rebuild, paint, valid,
+    layout: () => (valid() ? lay : null),
+    setShown(layout) { lay = layout || null; },
+    isMore: i => !!(lay && lay.slots[i] && lay.slots[i].more),
+    place(fan, D, size) {
+      const st = box.style;
+      if (!fan) { st.left = st.top = st.width = st.height = ''; return; }          // the stylesheet puts the box over the whole of wrap
+      const k = D / size;
+      st.left = D / 2 - fan.cx * k + 'px'; st.top = D / 2 - fan.cy * k + 'px'; st.width = fan.w * k + 'px'; st.height = fan.h * k + 'px';
+    },
+    slotAt(cx, cy) { if (!valid()) return null; const p = rel(cx, cy); return p ? ZLook.slotAt(lay, p.x, p.y) : null; },
+    gapAt(cx, cy) { if (!valid()) return null; const p = rel(cx, cy); return p ? ZLook.gapAt(lay, p.x, p.y) : null; },
+  };
 }
-/* The note above the item list when a menu has more items than its ring holds at its radius. The preview says how many the menu's own
-   look holds (fit, which follows the menu's look and its When full choice); until it arrives, or from an older backend, the ring's
-   look is used and the ring is assumed to grow. Returns null when the items fit, else { text, tooBig, link }. */
+
+/* The note above the item list when a menu has more items than its ring holds at its radius. What the ring does comes from the layout map of
+   the menu's own picture (layout.full, which follows the menu's look and its When full choice); fit says how many items the menu has. Until the
+   picture arrives the note of the same menu with as many items stays; with none yet there is no note. Returns null when the items fit,
+   else { text, tooBig, link }; tooBig: the grown ring's window would not fit the screen (ring.py pushes it against the edges then). */
+const ringNoteMemo = { menuId: null, n: -1, note: null };
 function ringNote(menuId) {
   const m = menuOf(menuId), n = m && Array.isArray(m.items) ? m.items.length : 0;
-  const res = RingLoader.peek(menuId, null, null);
-  if (!res || !res.image || !('fit' in res)) { const f = ringFull(n); return f ? Object.assign({ link: false }, f) : null; }
-  const fit = res.fit;
-  if (!fit || !fit.full) return null;
-  const v = ZLook.explain(S.cfg, { level: 'menu', menu: menuId }, lookCtx()).values;
-  const radius = Math.round(v.radius || ringNum('radius')), slot = v.slot || ringNum('slot'), k = fit.capacity, mode = fit.when_full || 'grow';
-  const holds = 'At a radius of ' + radius + ' px this ring holds ' + k + (k === 1 ? ' item' : ' items') + '. ';
-  if (mode === 'rings') return { text: holds + 'With ' + n + ' the other ' + (n - k) + ' go in a second ring.', tooBig: false, link: true };
-  if (mode === 'more') return { text: holds + 'With ' + n + ' it shows ' + Math.max(1, k - 1) + ' and a More slot opens the rest.', tooBig: false, link: true };
-  const need = Math.round(fit.needed_radius), label = isFull() ? 'Ring radius' : 'Ring size';
-  const tooBig = 2 * (fit.needed_radius + slot * 0.62 + 34) > Math.min(screen.availWidth || Infinity, screen.availHeight || Infinity);
-  return { text: holds + 'With ' + n + ' it grows to ' + need + ' px. ' + (tooBig ? 'It is too big for this screen, so it is pushed against the edges. ' : '')
-    + (isFull() ? 'Raise ' + label + ', lower Slot size or move some items into a submenu.' : 'Raise ' + label + ' or move some items into a submenu.'), tooBig, link: true };
+  const res = RingLoader.peek(menuId, null, null), lay = res && res.image && res.layout && res.layout.full ? res.layout : null;
+  if (!lay) return ringNoteMemo.menuId === menuId && ringNoteMemo.n === n ? ringNoteMemo.note : null;
+  const f = lay.full, fit = res.fit, count = fit ? fit.items : n, link = !!(S.opts && S.opts.looks);
+  const holds = 'At a radius of ' + Math.round(f.radius) + ' px this ring holds ' + f.capacity + (f.capacity === 1 ? ' item' : ' items') + '. ';
+  let note = null;
+  if (f.mode === 'rings') note = { text: 'This ring is full: ' + plural(Math.max(1, count - f.capacity), 'item') + (count - f.capacity === 1 ? ' goes' : ' go') + ' on a second ring.', tooBig: false };
+  else if (f.more_slot !== null && f.more_slot !== undefined) note = { text: 'This ring is full: ' + plural(Math.max(1, count - (f.n - 1)), 'item') + (count - (f.n - 1) === 1 ? ' is' : ' are') + ' in the More submenu.', tooBig: false };
+  else if (f.grown) {
+    const slot = Math.max(...lay.slots.map(s => s.size)) / (lay.scale || 1);
+    const tooBig = 2 * (f.needed + slot * 0.62 + 34) > Math.min(screen.availWidth || Infinity, screen.availHeight || Infinity);
+    const label = isFull() ? 'Ring radius' : 'Ring size';
+    note = { text: holds + 'With ' + f.n + ' it grows to ' + Math.round(f.needed) + ' px. ' + (tooBig ? 'It is too big for this screen, so it is pushed against the edges. ' : '')
+      + (link ? '' : (isFull() ? 'Raise ' + label + ', lower Slot size or move some items into a submenu.' : 'Raise ' + label + ' or move some items into a submenu.')), tooBig };
+  }
+  if (note) note.link = link;
+  Object.assign(ringNoteMemo, { menuId, n, note });
+  return note;
 }
 function buildStage() {
   const img = h('img', { class: 'ring-img pending', alt: 'Ring preview', draggable: false });     // hidden until the first image has decoded, so no broken-image icon
-  const ov = h('div', { class: 'ring-ov' });
-  const wrap = h('div', { class: 'ring-wrap' }, img, ov);
+  const wrap = h('div', { class: 'ring-wrap' });
   const emptyEl = h('div', { class: 'stage-empty' });
   const errEl = h('div', { class: 'stage-err' });
   const info = h('div', { class: 'stage-info' });
@@ -1824,10 +1891,14 @@ function buildStage() {
   const el = h('div', { class: 'stage', tabindex: '0', 'aria-label': 'Ring preview. Use arrow keys to move between items.' },
     h('div', { class: 'stage-rings', 'aria-hidden': 'true' }), wrap, emptyEl, errEl, info, tip, busy, playBtn, trash);
   el.classList.add('loading');
-  let curSize = 447, hoverRing = null, gap = null, idxs = [], marks = [], haveImage = false;   // gap: {k, text, noop} while a drag is over the ring
+  let curSize = 447, hoverRing = null, gap = null, idxs = [], haveImage = false;   // gap: the bar { x, y, ang, len, k, text, noop } while a drag is over the ring
   let box = null, baseVer = -1, shownPath = '';     // box: size and ring centre of the image while a fan is open (null: square, ring in the middle); baseVer: the version curSize was read at
-
-  const geom = () => ({ R: ringNum('radius'), slot: ringNum('slot'), dead: ringNum('dead_zone') });
+  // number badges: the item's number; the More slot has none
+  const view = makeRingView({ wrap, img, count: () => idxs.length, badge: (s, i) => (s.more || idxs[i] === undefined ? null : String(idxs[i] + 1)) });
+  /* Ring slot i is which item of the menu (its index in menu.items)? null for a More slot. */
+  const itemOf = i => { const L = view.layout(); return L && L.slots[i] && !L.slots[i].more && idxs[i] !== undefined ? idxs[i] : null; };
+  const ringOf = ix => { const L = view.layout(); if (!L || ix === null || ix === undefined) return -1; for (let i = 0; i < L.slots.length; i++) if (itemOf(i) === ix) return i; return -1; };
+  const nSlots = () => { const L = view.layout(); return L ? L.slots.length : idxs.length; };
   const player = makePlayer(() => img, () => requestImage(), st => {
     if (st === 'playing') { box = null; placeImg(); }          // the animation frames are the plain square ring
     el.classList.toggle('playing', st === 'playing');
@@ -1843,98 +1914,58 @@ function buildStage() {
     const D = Math.max(120, Math.min(curSize, avail));
     wrap.style.width = wrap.style.height = D + 'px';
     placeImg();
-    buildMarks();
+    drawMarks();
   }
   /* With a fan open the image is bigger than the ring and not centred on it: it is laid out so its ring centre sits in the middle of wrap. */
-  function placeImg() {
-    const st = img.style;
-    if (!box) { st.position = st.left = st.top = st.width = st.height = st.maxWidth = ''; return; }
-    const D = wrap.clientWidth || curSize, k = D / curSize;
-    st.position = 'absolute'; st.maxWidth = 'none';
-    st.left = D / 2 - box.cx * k + 'px'; st.top = D / 2 - box.cy * k + 'px'; st.width = box.w * k + 'px'; st.height = box.h * k + 'px';
-  }
+  function placeImg() { view.place(box, wrap.clientWidth || curSize, curSize); }
   /* Item indices (in the ring's own order) of the fan to show open: the hovered slot, else the selected one, when it is a submenu whose menu has "fan" or a tag with brushes. */
   function fanPath() {
     const m = curMenu(); if (!m) return null;
-    const at = hoverRing !== null ? idxs[hoverRing] : S.itemIdx, j = idxs.indexOf(at);
+    const at = hoverRing !== null ? itemOf(hoverRing) : S.itemIdx, j = at === null ? -1 : idxs.indexOf(at);
     const it = j >= 0 ? m.items[at] : null, t = it && 'menu' in it ? menuOf(it.menu) : null;
     if (it && 'tag' in it) return tagItemCount(it.tag) > 0 ? [j] : null;     // the expander turns it into a fan submenu of its items
     return t && t.fan === true && it.menu !== S.menuId ? [j] : null;
   }
-  function buildMarks() {
-    ov.replaceChildren(); marks = [];
+  /* The marks again, for the picture and items now. */
+  function drawMarks() {
     idxs = usableIdx(S.menuId);
-    const n = idxs.length;
-    if (hoverRing !== null && hoverRing >= n) { hoverRing = null; wrap.classList.remove('over-slot'); }   // the ring shrank (undo, menu switch)
-    if (gap && gap.k > n) gap = null;
-    if (!n) { info.classList.remove('on'); return; }
-    const g = geom(), D = wrap.clientWidth || curSize, k = D / curSize, c = D / 2, step = (2 * Math.PI) / n;
-    idxs.forEach((itemIndex, j) => {
-      const a = step * j, d = g.slot * k;
-      const m = h('div', { class: 'slot-ov', style: { left: c + Math.sin(a) * g.R * k + 'px', top: c - Math.cos(a) * g.R * k + 'px', width: d + 'px', height: d + 'px' } },
-        h('span', { class: 'slot-n mono' }, String(itemIndex + 1)));
-      marks.push(m); ov.append(m);
-    });
+    if (hoverRing !== null && hoverRing >= nSlots()) { hoverRing = null; wrap.classList.remove('over-slot'); }   // the ring shrank (undo, menu switch)
+    if (gap && gap.k > nSlots()) gap = null;
+    view.rebuild();
     paintMarks();
   }
   function paintMarks() {
     const moving = DnD.active && DnD.active.payload.type === 'item' && DnD.active.payload.menuId === S.menuId ? DnD.active.payload : null;   // the slot being dragged
-    marks.forEach((m, j) => {
-      m.classList.toggle('sel', idxs[j] === S.itemIdx);
-      m.classList.toggle('hov', hoverRing === j);
-      m.classList.toggle('moving', !!moving && idxs[j] === moving.index);
-    });
-    const old = $('.gap-ov', ov); if (old) old.remove();
+    view.paint({ hover: hoverRing, sel: ringOf(S.itemIdx), moving: moving ? ringOf(moving.index) : null, gap });
     const m = curMenu();
+    if (!idxs.length) { info.classList.remove('on'); return; }
     if (trash.classList.contains('over') && moving) {           // over the trash: say what goes, whatever redraws the ring meanwhile
       const it = m && m.items[moving.index];
       info.replaceChildren(h('span', null, 'Release to delete '), h('b', null, it ? itemLabel(it) : 'this item')); info.classList.add('on');
     } else if (gap) {
-      const g = geom(), D = wrap.clientWidth || curSize, sc = D / curSize, c = D / 2, a = (gap.k - 0.5) * ((2 * Math.PI) / idxs.length);
-      ov.append(h('div', { class: 'gap-ov' + (gap.noop ? ' noop' : ''), style: {
-        left: c + Math.sin(a) * g.R * sc + 'px', top: c - Math.cos(a) * g.R * sc + 'px', height: g.slot * sc * 1.25 + 'px',
-        transform: `translate(-50%, -50%) rotate(${a}rad)` } }));
       info.replaceChildren(h('b', null, gap.text)); info.classList.add('on');
-    } else if (hoverRing !== null && m && m.items[idxs[hoverRing]]) {
-      const it = m.items[idxs[hoverRing]];
+    } else if (hoverRing !== null && view.isMore(hoverRing)) {
+      info.replaceChildren(h('b', null, 'More'), h('span', { class: 'mono' }, ' ' + plural(idxs.length - (nSlots() - 1), 'item') + ' in a submenu')); info.classList.add('on');
+    } else if (hoverRing !== null && m && m.items[itemOf(hoverRing)]) {
+      const it = m.items[itemOf(hoverRing)];
       info.replaceChildren(h('b', null, itemLabel(it)), h('span', { class: 'mono' }, ' ' + KIND[kindOf(it)].label.toLowerCase() + (['steps', 'auto'].includes(kindOf(it)) ? '' : kindOf(it) === 'tag' ? ' / ' + tagName(it.tag) : kindOf(it) === 'browser' ? ' / ' + (it.browser ? tagName(it.browser) : 'all ' + K(it.kind).many) : ' / ' + targetOf(it))));
       info.classList.add('on');
     } else info.classList.remove('on');
   }
-  /* Angle of a point in degrees, clockwise from 12 o'clock; null in the dead zone (or with no slots). */
-  function angleAt(x, y) {
-    if (!idxs.length) return null;
-    const r = wrap.getBoundingClientRect();
-    const k = r.width / curSize;
-    const dx = (x - r.left) / k - curSize / 2, dy = (y - r.top) / k - curSize / 2;
-    if (Math.hypot(dx, dy) < geom().dead) return null;
-    let ang = (Math.atan2(dx, -dy) * 180) / Math.PI;
-    if (ang < 0) ang += 360;
-    return ang;
-  }
-  /* The insertion gap nearest a point: k in 1..n, "before ring slot k" (n is the gap before slot 0, so the end of the list). Null in the dead zone. */
-  function gapAt(x, y) {
-    const ang = angleAt(x, y), n = idxs.length;
-    return ang === null ? null : clamp(Math.round(ang / (360 / n) + 0.5), 1, n);
-  }
-  function hitTest(x, y) {
-    const n = idxs.length, ang = angleAt(x, y); if (ang === null) return null;
-    const step = 360 / n, i = Math.round(ang / step) % n;
-    const off = Math.abs((((ang - i * step + 180) % 360) + 360) % 360 - 180);      // degrees from that slot's direction
-    return off <= Math.min(step, MAX_SECTOR) / 2 ? i : null;                       // the app picks nothing in the gaps of a sparse ring
-  }
   let wantedUrl = '';
   const reveal = () => { img.classList.remove('pending'); el.classList.remove('loading'); };   // the shimmer stays until a decoded image can take its place
-  function setImg(url, nextBox) {
-    if (img.getAttribute('src') === url) { wantedUrl = url; box = nextBox; placeImg(); return; }
+  /* The picture and its layout (and the fan box) change together. */
+  function setImg(url, nextBox, lay) {
+    const apply = () => { box = nextBox; view.setShown(lay); placeImg(); drawMarks(); };
+    if (img.getAttribute('src') === url) { wantedUrl = url; apply(); return; }
     wantedUrl = url;
     if (!img.getAttribute('src')) {
-      img.src = url; box = nextBox; placeImg();
+      img.src = url; apply();
       img.decode().catch(() => {}).then(() => { if (wantedUrl === url || img.getAttribute('src') === url) reveal(); });
       return;
     }
     const pre = new Image(); pre.src = url;
-    pre.decode().catch(() => {}).then(() => { if (wantedUrl === url) { img.src = url; box = nextBox; placeImg(); reveal(); } });   // picture and placement change together
+    pre.decode().catch(() => {}).then(() => { if (wantedUrl === url) { img.src = url; apply(); reveal(); } });   // picture, layout and placement change together
   }
   function showRes(res, path) {
     el.classList.remove('busy');
@@ -1943,7 +1974,7 @@ function buildStage() {
       const w = res.width || res.size, ht = res.height || res.size, cx = res.centre ? res.centre[0] : w / 2, cy = res.centre ? res.centre[1] : ht / 2;
       const fanned = !!path && (Math.abs(w - ht) > 1.5 || Math.abs(cx - w / 2) > 1.5 || Math.abs(cy - ht / 2) > 1.5);
       if (!fanned) { if (res.size && res.size !== curSize) curSize = res.size; baseVer = S.version; if (R.itemNote) R.itemNote(); }     // only the plain ring says how big the ring is, and how full it is
-      setImg(res.image, fanned ? { w, h: ht, cx, cy } : null);
+      setImg(res.image, fanned ? { w, h: ht, cx, cy } : null, res.layout || null);
       layout();
     } else if (res) {
       el.classList.add('err'); el.classList.remove('loading');
@@ -1988,10 +2019,10 @@ function buildStage() {
         : emptyState('plus', 'This menu is empty', 'Add an item from the Library tab or create one. The ring appears as soon as it has one.', { text: 'Add item', fn: () => addItem('brush') }));
       return;
     }
-    buildMarks();
+    drawMarks();
   }
 
-  R.overlay = () => { buildMarks(); if (idxs.length && player.state === 'idle' && (fanPath() || []).join() !== shownPath) requestImage(); };      // a new selection may open or close a fan
+  R.overlay = () => { drawMarks(); if (idxs.length && player.state === 'idle' && (fanPath() || []).join() !== shownPath) requestImage(); };      // a new selection may open or close a fan
   R.preview = () => { player.stop(); refresh(); if (idxs.length) requestImage(); };
   el.addEventListener('keydown', e => {
     const m = curMenu(); if (!m || !idxs.length || e.target !== el) return;
@@ -1999,21 +2030,23 @@ function buildStage() {
     if (e.key === 'ArrowRight' || e.key === 'ArrowDown') { e.preventDefault(); selectItem(idxs[(pos + 1) % idxs.length]); el.focus(); }
     else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') { e.preventDefault(); selectItem(idxs[pos < 0 ? idxs.length - 1 : (pos - 1 + idxs.length) % idxs.length]); el.focus(); }
   });
-  wrap.addEventListener('pointermove', e => { if (player.state === 'idle' && !DnD.active) setHover(hitTest(e.clientX, e.clientY)); });
+  wrap.addEventListener('pointermove', e => { if (player.state === 'idle' && !DnD.active) setHover(view.slotAt(e.clientX, e.clientY)); });
   wrap.addEventListener('pointerleave', () => setHover(null));
   wrap.addEventListener('click', e => {
     if (player.state === 'playing') { player.stop(); return; }
-    const j = hitTest(e.clientX, e.clientY);
-    selectItem(j === null ? null : idxs[j], { keepTab: true });     // empty space clears the selection, and the inspector stays on its tab
+    if (!view.valid()) return;                                     // no map of the slots yet (the picture is being redrawn): the list and the arrow keys still select
+    const j = view.slotAt(e.clientX, e.clientY);
+    if (j !== null && view.isMore(j)) { el.focus({ preventScroll: true }); return; }     // More is not an item: it cannot be selected
+    selectItem(j === null ? null : itemOf(j), { keepTab: true });     // empty space clears the selection, and the inspector stays on its tab
     el.focus({ preventScroll: true });
   });
   /* A ring slot is a drag source too: it moves like a row of the item list. A plain click still selects. */
   DnD.source(wrap, e => {
     if (player.state !== 'idle') return null;
-    const j = hitTest(e.clientX, e.clientY);
-    return j === null ? null : { type: 'item', menuId: S.menuId, index: idxs[j] };
+    const j = view.slotAt(e.clientX, e.clientY), ix = j === null ? null : itemOf(j);
+    return ix === null ? null : { type: 'item', menuId: S.menuId, index: ix };
   }, e => {
-    const m = curMenu(), it = m && m.items[idxs[hitTest(e.clientX, e.clientY)]];
+    const m = curMenu(), j = view.slotAt(e.clientX, e.clientY), it = m && j !== null && m.items[itemOf(j)];
     return it ? h('span', { class: 'ghost-chip' }, itemThumb(it, 22), itemLabel(it)) : h('span', null, '...');
   });
   window.addEventListener('zorbit-dnd', function onDnd() {
@@ -2025,30 +2058,38 @@ function buildStage() {
     if (!can) trash.classList.remove('over');
     paintMarks();
   });
-  /* Where a drop at gap k lands in the item list; k === null (the dead zone) and the gap before slot 0 mean the end. */
-  const itemIndexFor = k => { const m = curMenu(); if (!m) return 0; return k === null || k >= idxs.length ? m.items.length : idxs[k]; };
-  const slotLabel = j => { const m = curMenu(), it = m && m.items[idxs[j]]; return it ? itemLabel(it) : ''; };
+  /* Where a drop at gap k lands in the item list; k === null (the dead zone) and the gap after the last slot mean the end. A gap before a More
+     slot is the first item in More, which is the first item the ring does not show. */
+  const itemIndexFor = k => { const m = curMenu(); if (!m) return 0; return k === null || k >= nSlots() ? m.items.length : (idxs[k] === undefined ? m.items.length : idxs[k]); };
+  const slotLabel = j => { const m = curMenu(), ix = itemOf(j), it = m && ix !== null && m.items[ix]; return it ? itemLabel(it) : view.isMore(j) ? 'More' : ''; };
   // Dropping an item where it already is changes nothing: its own two gaps (before it, after it)
-  const staysPut = (p, k) => { const j = p.type === 'item' ? idxs.indexOf(p.index) : -1; return j >= 0 && k !== null && (k === j || k === j + 1); };
-  function gapText(p, k) {
-    const n = idxs.length, move = p.type === 'item';
+  function staysPut(p, k) {
+    if (p.type !== 'item' || k === null) return false;
+    const at = itemIndexFor(k);
+    if (at === p.index || at === p.index + 1) return true;
+    const L = view.layout(), j = idxs.indexOf(p.index), shown = nSlots() - (L && L.full && L.full.more_slot !== null && L.full.more_slot !== undefined ? 1 : 0);
+    return j >= 0 && j < shown && (k === j || k === j + 1);
+  }
+  function gapText(p, g) {
+    const n = nSlots(), move = p.type === 'item', k = g.k;
     if (staysPut(p, k)) return 'Stays in place';
+    if (g.into_more) return move ? 'Move into More' : 'Insert into More';
     if (move && k === n && idxs.indexOf(p.index) === 0) return 'Move to the end';
     return n === 1 ? (move ? 'Move after ' : 'Insert after ') + slotLabel(0) : (move ? 'Move between ' : 'Insert between ') + slotLabel(k - 1) + ' and ' + slotLabel(k % n);
   }
   DnD.zone(el, {
     accept: p => !!curMenu() && (!!idxs.length ? (p.type === 'asset' || (p.type === 'item' && p.menuId === S.menuId)) : p.type === 'asset'),   // no menu: nothing to add to
     over: (p, x, y) => {
-      const k = gapAt(x, y), noop = staysPut(p, k);
+      const g = view.gapAt(x, y), k = g ? g.k : null, noop = !!g && staysPut(p, k);
       if (k !== (gap ? gap.k : null) || (gap && gap.noop !== noop)) {
-        gap = k === null ? null : { k, text: gapText(p, k), noop };
+        gap = g ? Object.assign({}, g, { text: gapText(p, g), noop }) : null;
         paintMarks();
       }
       el.classList.add('drop-over'); el.classList.toggle('drop-end', k === null);
     },
     leave: () => { gap = null; paintMarks(); el.classList.remove('drop-over', 'drop-end'); },
     drop: (p, x, y) => {
-      const k = gapAt(x, y), at = itemIndexFor(k);
+      const g = view.gapAt(x, y), k = g ? g.k : null, at = itemIndexFor(k);
       if (p.type === 'item') {
         if (!staysPut(p, k) && at !== p.index && at !== p.index + 1) moveItem(S.menuId, p.index, at);
         return;
@@ -2205,43 +2246,50 @@ function buildItemInspector() {
     field('Label', labelInp, 'Shown under the icon. Leave empty to use the default.'),
     field('Icon', h('div', { class: 'target-row' }, iconPrev, iconInp), isLib(k)
       ? `By default the icon comes from the ${K(k).one}. Use a brush name or a full path to a .png or .zbp to override it.`
-      : 'Use a brush name or a full path to a .png or .zbp as the icon.'),
-    field('Glow', glowControl(it), 'The glow when the pointer is on this slot. Empty uses the tag colour or the accent.'));
+      : 'Use a brush name or a full path to a .png or .zbp as the icon.'));
+  const style = styleField(m, i, it);
+  if (style) box.append(style);
   return box;
 }
 
-/* The Glow colour of one item: a swatch and a #rrggbb field like the Colours rows, and a button that clears it (the key is then dropped). */
-function glowControl(it) {
-  // kept in style.glow_color (radial.json); the style object is dropped when it empties
-  const cur = () => (it.style && typeof it.style === 'object') ? it.style.glow_color : undefined;
-  const drop = () => { if (it.style) { delete it.style.glow_color; if (!Object.keys(it.style).length) delete it.style; } };
-  const has = () => typeof cur() === 'string' && !!normHex(cur());
-  const sw = h('input', { type: 'color', class: 'swatch', 'aria-label': 'Glow colour' });
-  const hex = h('input', { class: 'inp mono hex', type: 'text', maxlength: '7', placeholder: 'Default', spellcheck: 'false', 'aria-label': 'Glow hex value' });
-  const msg = h('span', { class: 'hex-msg', role: 'status' });
-  const clear = iconBtn('undo', 'Clear the glow colour', () => { drop(); commit(); paint(); }, 'reset');
-  const paint = () => {
-    const on = has();
-    sw.value = on ? cur().toLowerCase() : colorVal('accent'); sw.style.opacity = on ? '1' : '.45';
-    hex.value = on ? cur() : ''; hex.classList.remove('bad'); msg.textContent = '';
-    clear.style.visibility = on ? 'visible' : 'hidden';
-  };
-  const set = n => { if (n !== cur()) { it.style = Object.assign({}, it.style, { glow_color: n }); commit(); } };
-  sw.addEventListener('input', () => { set(sw.value); paint(); });
-  hex.addEventListener('input', () => {
-    const t = hex.value.trim(), n = normHex(t), bad = !!t && !n;
-    hex.classList.toggle('bad', bad); msg.textContent = bad ? 'Use #rrggbb' : '';
-    if (n && t.replace('#', '').length === 6) { set(n); sw.value = n; sw.style.opacity = '1'; clear.style.visibility = 'visible'; }   // short forms wait for Enter or blur
-  });
-  const apply = () => {
-    const t = hex.value.trim(), n = normHex(t);
-    if (!t) { if (cur() !== undefined) { drop(); commit(); } } else if (n) set(n);
-    paint();
-  };
-  hex.addEventListener('blur', apply);
-  hex.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); apply(); } });
-  paint();
-  return h('div', { class: 'target-row glow-row' }, sw, h('div', { class: 'hexwrap' }, hex, msg), clear);
+/* The Style field of an item: what its own style (item.style, the look keys a slot can set) changes, a button to edit it on the Look screen's slot
+   level and one to remove it. Simple mode shows it, read-only, only for an item that has a style (null when there is nothing to show). */
+const SHAPE_NAME = { circle: 'Circle', rounded: 'Rounded square', squircle: 'Squircle', hexagon: 'Hexagon', octagon: 'Octagon', diamond: 'Diamond' };
+function styleChipText(key, v) {
+  const pct = x => Math.round(x * 100) + '%';
+  switch (key) {
+    case 'slot_shape': return SHAPE_NAME[v] || String(v);
+    case 'slot_corner': return 'Corners ' + pct(v);
+    case 'border_width': return 'Rim ' + v + ' px';
+    case 'icon_scale': return 'Icon ' + pct(v);
+    case 'label_color': return 'Label ' + v;
+    case 'glow_color': return 'Glow ' + v;
+    case 'size': return v > 1 ? 'Larger' : v < 1 ? 'Smaller' : 'Size ' + pct(v);
+    case 'fill_color': return 'Fill ' + v;
+    case 'border_color': return 'Rim ' + v;
+    default: return key;
+  }
+}
+/* The settings an item's style has of its own, as chip texts: a value that says what the menu gives anyway is not a setting. */
+function styleChips(menuId, i) {
+  const m = menuOf(menuId), it = m && m.items && m.items[i];
+  if (!it || !isPlainObj(it.style) || !window.ZLook) return [];
+  let keys = [];
+  try { keys = ZLook.settings(S.cfg, { level: 'menu', menu: menuId, slot: i }, lookCtx()); } catch (e) { keys = []; }
+  return keys.filter(k => k !== 'colors' && !(typeof it.style[k] === 'string' && it.style[k] === '')).map(k => styleChipText(k, it.style[k]));
+}
+function styleField(m, i, it) {
+  const chips = styleChips(S.menuId, i), has = isPlainObj(it.style) && Object.keys(it.style).length > 0;
+  const line = chips.length ? h('div', { class: 'style-chips' }, chips.map(t => h('span', { class: 'tag' }, t))) : h('div', { class: 'locked-line' }, has ? 'Its own style says nothing the menu does not already say' : "Follows the menu's look");
+  if (!isFull()) return has ? field('Style', line, ['Set in Full mode. ', linkBtn('Edit in Full mode', () => setMode('full'))]) : null;
+  const usable = usableIdx(S.menuId).includes(i);
+  const edit = h('button', { class: 'btn small', type: 'button', disabled: !usable, title: usable ? 'Open the Look screen at this slot' : 'This item is incomplete, so the ring has no slot for it',
+    onclick: () => goToProblem({ kind: 'look', level: 'menu', menuId: S.menuId, slot: i, key: null, group: null }) }, icon('look', 12), 'Edit in Look');
+  const reset = h('button', { class: 'btn small', type: 'button', disabled: !has, onclick: () => {
+    sealSnap(); delete it.style; commit({ inspector: true });
+    undoToast('Removed the style of "' + itemLabel(it) + '"');
+  } }, icon('undo', 12), 'Reset style');
+  return field('Style', h('div', { class: 'style-box' }, line, h('div', { class: 'btn-row' }, edit, reset)), 'The shape, size, colours and glow of this slot on its own. Anything it does not set follows the look of the menu.');
 }
 
 /* The brush the app puts into auto slot i of menu m at the moment (read from usage.json). */
@@ -4745,7 +4793,7 @@ function updateDirty() {
    Returns { text, raw, target }; target is null when the format is not recognised. */
 const RING_CARD = { animation: 'set-open-animation', tap_ms: 'set-behaviour', timeout_s: 'set-behaviour', flick: 'set-behaviour', hover_submenus: 'set-behaviour' };
 /* The ring keys the Look screen shows, with the group each one is in (look-screen.js has the same groups). */
-const RING_LOOK = { radius: 'slots', slot: 'slots', dead_zone: 'slots', slot_shape: 'slots', slot_corner: 'slots', border_width: 'slots', icon_scale: 'slots',
+const RING_LOOK = { radius: 'slots', slot: 'slots', dead_zone: 'slots', slot_shape: 'slots', slot_corner: 'slots', border_width: 'slots', icon_scale: 'slots', size: 'slots', fill_color: 'slots', border_color: 'slots',
   hub: 'hub', hub_style: 'hub', hub_color: 'hub', hub_glow: 'hub', glow_color: 'glow', glow_opacity: 'glow', labels: 'labels', label_color: 'labels', colors: 'colours',
   tag_colors: 'tags', tag_band: 'tags', tag_band_opacity: 'tags', tag_glow_opacity: 'tags', tag_tint_opacity: 'tags', tag_tint_style: 'tags', tag_tint_blend: 'tags', when_full: 'when_full' };
 /* Where a problem with a look setting leads: the Look screen at a level ('global', 'menu' with menuId, 'preset' with name), at the group and control of key. */
@@ -4753,7 +4801,7 @@ const lookTarget = (key, where = {}) => Object.assign({ kind: 'look', level: 'gl
 const RING_NAME = { radius: 'Ring radius', slot: 'Slot size', dead_zone: 'Dead zone', hub: 'Hub', tap_ms: 'Tap time', timeout_s: 'Auto-close', flick: 'Flick to pick',
   hover_submenus: 'Open submenus on hover', animation: 'Open animation', labels: 'Labels', slot_shape: 'Slot shape', tag_colors: 'Tag colours',
   slot_corner: 'Corner roundness', border_width: 'Rim width', icon_scale: 'Icon size', hub_style: 'Hub style', hub_color: 'Hub colour', hub_glow: 'Hub glow',
-  glow_color: 'Glow colour', glow_opacity: 'Glow opacity', label_color: 'Label colour', when_full: 'When full',
+  glow_color: 'Glow colour', glow_opacity: 'Glow opacity', label_color: 'Label colour', when_full: 'When full', size: 'Size', fill_color: 'Fill colour', border_color: 'Rim colour',
   tag_band: 'Band', tag_band_opacity: 'Band opacity', tag_glow_opacity: 'Glow opacity', tag_tint_opacity: 'Icon tint opacity', tag_tint_style: 'Icon tint style', tag_tint_blend: 'Icon tint blend' };
 const isPlainObj = o => o !== null && typeof o === 'object' && !Array.isArray(o);
 const unq = s => String(s).replace(/^(['"])(.*)\1$/, '$2');
@@ -4800,7 +4848,8 @@ function describeProblem(raw) {
     if ((r = /^: unknown setting (.+)$/s.exec(t))) return `has an unknown setting ${r[1].replace(/\s*\(did you mean .*$/s, '')}.` + didYouMean(r[1]);
     if ((r = /^: tag (.+) does not exist; the slot stays empty$/s.exec(t))) return `uses the tag ${unq(r[1])}, which does not exist, so the slot stays empty`;
     if ((r = /^: tag (.+) does not exist; the browser opens unfiltered$/s.exec(t))) return `filters by the tag ${unq(r[1])}, which does not exist, so the browser opens unfiltered`;
-    if ((r = /^: style\.glow_color: (.+) is not a #rrggbb colour/s.exec(t))) return `has the glow colour ${r[1]}, which is not a #rrggbb value or a theme colour, so it is ignored`;
+    if (t.startsWith(': style must be an object')) return 'has a style that is not an object of look settings, so it is ignored';
+    if ((r = /^: style\.(\w+): (.*)$/s.exec(t))) { const why = lookValueReason(lookLabel(r[1]), r[2]); return 'has a style setting that is ignored: ' + (why || lookLabel(r[1]) + ': ' + r[2]); }
     if (/^: unknown setting 'glow' \(glow is now style\.glow_color\)$/.test(t)) return 'has a glow colour saved the old way. Set it again under Glow';
     if (/^: icon .+ must be a plain file path/s.test(t)) return 'has an icon on a network path. Use a file on this PC';
     if ((r = /^: icon (.+) must be a full path, such as /s.exec(t))) return `has the icon ${r[1]}, which is not a full path. Use a path such as C:\\Art\\clay.png, or a brush name`;
@@ -4814,8 +4863,10 @@ function describeProblem(raw) {
   if (mid !== null) {
     const rest = raw.slice(('menu ' + mid).length);
     if ((m = /^ item (\d+)(.*)$/s.exec(rest))) {
-      const n = +m[1], why = itemReason(m[2]);
-      return out(titleOf(mid) + ' item ' + n + (why ? ' ' + why : m[2]), known(mid) ? { kind: 'item', menuId: mid, index: n - 1 } : null);
+      const n = +m[1], why = itemReason(m[2]), sty = /^: style(?:\.(\w+))?(?::| must be)/.exec(m[2]);
+      // a problem with an item's style leads to the Look screen's slot level, at the control of the key
+      const where = known(mid) ? (sty ? lookTarget(sty[1] || '_style', { level: 'menu', menuId: mid, slot: n - 1 }) : { kind: 'item', menuId: mid, index: n - 1 }) : null;
+      return out(titleOf(mid) + ' item ' + n + (why ? ' ' + why : m[2]), where);
     }
     const tgt = field => (known(mid) ? { kind: 'menu', menuId: mid, field } : null);
     if (rest === ': no usable items') return out(titleOf(mid) + ' has no usable items', tgt());
@@ -4976,9 +5027,10 @@ function renderProblems() {
     const t = e.target;
     if (!t || !t.menuId || t.global) continue;
     menusWith.add(t.menuId); tip(t.menuId, e.text);
-    if (t.kind === 'item') {
+    const ix = t.kind === 'item' ? t.index : t.kind === 'look' && Number.isInteger(t.slot) ? t.slot : null;      // an item's style problem marks the item too
+    if (ix !== null) {
       if (!itemsWith.has(t.menuId)) itemsWith.set(t.menuId, new Set());
-      itemsWith.get(t.menuId).add(t.index); tip(t.menuId + '#' + t.index, e.text);
+      itemsWith.get(t.menuId).add(ix); tip(t.menuId + '#' + ix, e.text);
     }
   }
   S.problemMenus = menusWith; S.problemItems = itemsWith; S.problemTips = tips;
@@ -5582,11 +5634,14 @@ function describeChanges() {
     const changed = [];
     for (const r of removed.slice()) {           // same name on both sides = an edited item
       const i = added.findIndex(x => itemName(x) === itemName(r));
-      if (i >= 0) { changed.push(added[i]); added.splice(i, 1); removed.splice(removed.indexOf(r), 1); }
+      if (i >= 0) { changed.push([added[i], r]); added.splice(i, 1); removed.splice(removed.indexOf(r), 1); }
     }
     for (const it of added) lines.push('Added ' + q(itemName(it)));
     for (const it of removed) lines.push('Removed ' + q(itemName(it)));
-    for (const it of changed) lines.push('Changed ' + q(itemName(it)));
+    for (const [it, was] of changed) {
+      const bare = x => { const c = Object.assign({}, x); delete c.style; return JSON.stringify(c); };
+      lines.push(bare(it) === bare(was) ? 'Style of ' + q(itemName(it)) + ' changed' : 'Changed ' + q(itemName(it)));      // only the style differs
+    }
     // reordered: compare the items present on both sides, one-for-one, in their old and new order
     const left = new Map();
     for (const k of kept) left.set(k, (left.get(k) || 0) + 1);
@@ -5804,7 +5859,7 @@ const buildLookScreenLazy = root => { if (typeof window.buildLookScreen === 'fun
 window.ZStudio = { h, $, $$, S, R, icon, iconBtn, linkBtn, card, choiceCards, sliderRow, sizeRow, toggleSwitch, call, clamp, own, normHex,
   commit, toast, ring, ringNum, ranges, ensureRing, tidyRing, usableIdx, menuOf, kindOf, isLib, firstTag, isFull, setMode, fullOnlyChanges,
   RingLoader, SAMPLE_MENU, COLOR_INFO, FALLBACK_DEFAULTS, showScreen, railTitle,
-  lookCtx, clearedText, modal, promptModal, popover, undoToast, sealSnap, previewSoon, plural, hasMenu, selectMenu, debounce, FALLBACK_RANGES };
+  lookCtx, clearedText, modal, promptModal, popover, undoToast, sealSnap, previewSoon, plural, hasMenu, selectMenu, debounce, FALLBACK_RANGES, makeRingView, itemLabel };
 const SCREEN_BUILD = { menus: buildMenusScreen, look: buildLookScreenLazy, library: buildLibraryScreen, settings: buildSettingsScreen, status: buildStatusScreen, setup: buildSetupScreen };
 const SCREENS = Object.fromEntries(SCREEN_ORDER.map(k => [k, SCREEN_BUILD[k]]));
 // the element that scrolls on each screen (its position is remembered when you leave and put back when you return)

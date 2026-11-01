@@ -27,7 +27,8 @@ The mode only changes what Studio shows. The ring, the app, `radial.json`, Save,
 | Menus, **Add item** | Brush, Alpha, Material, Texture and Submenu. | Press, Set, Toggle, Steps, Auto, Tag and Browser. |
 | Menus, **Menu** tab | Title, Hotkey, **Duplicate** and **Delete**. | Id, **Swallow hotkey**, **Used by**, **Look**, **Open animation** and **Fan out when opened from another menu**. |
 | Library and the dock | Everything, with starring, tag chips and the right-click tag picker. | **Manage tags...**. |
-| Look | **Applies to** (all menus or one), **Ring size**, **Slot shape**, **Labels** and **When full**, and the gallery with **Use for ...** and **New from current**. | **Ring radius**, **Slot size** and **Dead zone** in place of **Ring size**, **Corner roundness**, **Rim width**, **Icon size**, **Hub**, **Glow**, **Label colour**, **Colours** and **Tag colours**, and **Edit**, **Duplicate**, **Rename** and **Delete** on a look. |
+| Look | **Applies to** (all menus or one), **Ring size**, **Slot shape**, **Labels** and **When full**, and the gallery with **Use for ...** and **New from current**. | **Ring radius**, **Slot size** and **Dead zone** in place of **Ring size**, **Corner roundness**, **Rim width**, **Icon size**, **Hub**, **Glow**, **Label colour**, **Colours** and **Tag colours**, **Edit**, **Duplicate**, **Rename** and **Delete** on a look, and the **This slot** level. |
+| Menus, **Item** tab | A read-only **Style** line when the item has a style. | **Style** with **Edit in Look** and **Reset style**. |
 | Settings | **Theme**, **Ring look**, **Open animation**, **Behaviour** with **Flick to pick**, **Browser**, **Studio** and **Import and export**. | **Open submenus on hover**, **Tap time**, **Auto-close**, **ZBrush bridge**, **Older ZBrush** and **Tags**. |
 | Status and Setup | The same. | The same. |
 
@@ -155,10 +156,10 @@ On the Menus screen you can:
 
 - add, duplicate and delete menus (a duplicate has no hotkey, so it starts out as a submenu);
 - add items with **Add item** (in [Simple mode](#simple-and-full-mode) it offers Brush, Alpha, Material, Texture and Submenu; Full mode adds the other types), drag brushes, alphas, materials and textures from the Library onto the ring or the list, reorder items (**Alt+Up/Down** does it from the keyboard), and remove them (you can also drag an item from the [browser](browser.md) window onto a menu in the list, the ring or the item list);
-- drag on the ring to place things exactly: a bright bar shows the gap between two slots a brush, alpha, material or texture (from the Library or the browser) or an item will go into, and dragging a slot itself reorders it. Drag a slot onto another menu in the list to move it there (hold **Ctrl** to copy it instead), or onto the **Delete** target that appears in the corner of the preview to remove it (you can undo that);
+- drag on the ring to place things exactly: a bright bar shows the gap between two slots a brush, alpha, material or texture (from the Library or the browser) or an item will go into, and dragging a slot itself reorders it. On a ring with a second ring, the bar sits on whichever ring the pointer is over. A gap beside a **More** slot says **Move into More**, and an item dropped there goes to the first place in that submenu. Drag a slot onto another menu in the list to move it there (hold **Ctrl** to copy it instead), or onto the **Delete** target that appears in the corner of the preview to remove it (you can undo that);
 - drag an item from the item list onto another menu in the list to move it there, or press **M** on it (or **Move to menu** in the inspector) and pick the menu (hold **Ctrl** while dragging to copy it instead, and press or release Ctrl while you drag to switch). Studio stays on the menu you were editing, the row of the menu it went to flashes, and the toast has **Undo**;
 - open a submenu by double-clicking its item, by pressing the arrow button beside the submenu field in the inspector, or with the **Open it** link under that field; a **Back** chip above the item list returns to the parent menu;
-- click empty space inside the ring to clear the selection (the inspector stays on the **Item** tab);
+- click empty space inside the ring to clear the selection (the inspector stays on the **Item** tab). The outline of a slot you hover or select follows its shape, so a hexagon gets a hexagon. A **More** slot lights up but cannot be selected;
 - edit each item's action, label and icon in the inspector. When you switch an item to another type, anything that cannot come along is dropped, and a toast lists it (**Switched to Press. Dropped the brush "ClayBuildup".**) with **Undo**. Brush, alpha, material and texture items say if the name is not in your brush (or alpha, material, texture) folders, that ZBrush can still select it if it is loaded there, and which kind of file a picture needs; if the library could not be read, or ZBrush was not found, they say that and link to **Library** or **Setup**;
 - record a hotkey by clicking the hotkey field (or focusing it and pressing **Enter**) and pressing the keys. Letters, digits, F1 to F24, the punctuation keys and `space`, `tab`, `enter`, `backspace`, `insert`, `delete`, `home`, `end`, `pageup` and `pagedown` can be recorded; **Esc** cancels. If another menu already uses the key, the field says which one comes first and wins;
 - press the play button to preview the open animation.
@@ -167,11 +168,19 @@ On the Menus screen you can:
 
 The right-hand side has three tabs:
 
-- **Item** edits the selected item: its type, target, label and icon.
+- **Item** edits the selected item: its type, target, label, icon and, in Full mode, its [style](#styling-one-slot). **Style** lists what the slot sets for itself, as chips such as **Hexagon**, **Larger** or **Glow #ff8800**, or says **Follows the menu's look**. **Edit in Look** opens the Look screen at that slot, and **Reset style** removes the item's style, with **Undo**. In Simple mode an item that has a style shows the chips and a link to Full mode.
 - **Menu** edits the selected menu: its title, hotkey, **Duplicate** and **Delete** and, in Full mode, its id, **Swallow hotkey** switch (greyed out until the menu has a hotkey, and showing on unless you switched it off), its [look](#the-look-section-of-the-menu-tab), open animation and **Fan out when opened from another menu**. A new menu takes its id from its title: a menu you call **Sculpting** gets the id `sculpting`, or `sculpting_2` if that is taken. Until you save, renaming it changes the id too. After the first save, or once you type an id yourself, the id stays as it is. Changing the **Id** updates every item that opens the menu. If the menu has auto slots, they forget what they learned, because they are kept under the id. **Used by** lists the items in other menus that open this one; click one to go to it.
 - **Library** is the [browser](browser.md) in a narrow form, to drag items into the ring or the list.
 
-Menu rows show the menu's title, id, hotkey (or a small submenu icon when it has none) and item count. When the window is narrow, hover a row for its full title and hotkey. A menu whose ring is full gets a note above its list. It says how many items fit at the menu's radius and what the menu's **When full** setting does about it: the ring grows (and by how much), the rest go in a second ring, or a **More** slot opens them. A **Change in Look** link opens the **When full** group for that menu.
+Menu rows show the menu's title, id, hotkey (or a small submenu icon when it has none) and item count. When the window is narrow, hover a row for its full title and hotkey. A menu whose ring is full gets a note above its list. It says what the menu's **When full** setting does about it:
+
+- **Grow:** "At a radius of 145 px this ring holds 9 items. With 11 it grows to 160 px." When the grown ring would not fit on your screen, it adds "It is too big for this screen, so it is pushed against the edges." and the note turns amber.
+- **Second ring:** "This ring is full: 3 items go on a second ring."
+- **More slot:** "This ring is full: 4 items are in the More submenu."
+
+A **Change in Look** link opens the **When full** group for that menu.
+
+![The Menus screen for the Tools menu, whose ring holds 9 items at its radius: the note above the 11 items says the ring grows to 160 px, with a Change in Look link](images/look-full.png)
 
 ### The Look section of the Menu tab
 
@@ -191,7 +200,7 @@ The animation list stays below it: a menu's open animation is not part of a look
 
 ![The Look screen: the ring preview of the Brushes menu and a menu picker on the left, and the Slots, Hub and Labels groups on the right, each setting with a Default badge](images/studio-look.png)
 
-On the left is a preview of the real ring, drawn by the same code as the app, with the dead zone as a dashed circle, and under it the [gallery of looks](#looks). The **Preview menu** list picks which menu the preview shows. It only changes the preview, not the menu you are editing on the Menus screen. **Sample ring with tags** shows a ring of library brushes in your tag colours, for the tag settings.
+On the left is a preview of the real ring, drawn by the same code as the app, with the dead zone as a dashed circle, and under it the [gallery of looks](#looks). Hover a slot and it lights up in its own shape and shows the hover glow the app would draw. In Full mode, click a slot to [style it on its own](#styling-one-slot). The **Preview menu** list picks which menu the preview shows. It only changes the preview, not the menu you are editing on the Menus screen. **Sample ring with tags** shows a ring of library brushes in your tag colours, for the tag settings.
 
 ### Levels
 
@@ -199,6 +208,7 @@ The bar at the top says where what you set applies. In Simple mode it reads **Ap
 
 - **Global** is the look every menu starts from. What you set here is used by every menu.
 - **This menu** is the look of one menu, picked in the list beside it. The whole screen then edits that menu and the preview shows it. A setting you leave alone follows Global.
+- **This slot** (Full mode) is the look of one slot of the menu. See [Styling one slot](#styling-one-slot).
 - **Look: Name** appears while you [edit a look](#editing-a-look).
 
 For a menu the layers are, from the bottom: the default, the colours of the [theme](appearance.md#theme), the look chosen for all menus, your own global settings, the look chosen for the menu and your own settings for the menu. A later layer wins over an earlier one.
@@ -219,6 +229,21 @@ In the gallery, Tab goes to the list, the arrow keys move between cards and Ente
 
 A look is a live link. A menu that uses a look follows it when you edit the look, and so do all the menus when it is the look for all menus.
 
+### Styling one slot
+
+**This slot** (Full mode) styles one slot of a menu and leaves the rest alone. Click a slot in the preview, press **This slot** in the bar and pick the slot in the list that appears (**Slot 3: Clay**), or choose **Edit in Look** in the **Style** field of the item inspector. The preview outlines the slot, and a line under it reads out where you are ("Slot 3 of 12: Clay, hexagon").
+
+![The Look screen at the slot level: the first slot of the Brushes menu outlined in the preview with its hover glow on, and the shape, rim, icon size, size and colour settings for that slot](images/look-slot.png)
+
+- With the preview focused, the **arrow keys** move to the next or previous slot, **Home** and **End** jump to the first and last, and **Esc** goes back to **This menu**. Clicking the middle of the ring, or anywhere no slot answers, does the same, and so does **This menu** in the bar.
+- The settings are the ones a slot can have of its own: **Slot shape**, **Corner roundness**, **Rim width** and **Icon size**, **Size of this slot** (75% to 125% of the ring's slot size), **Fill colour** and **Rim colour**, **Glow colour** and **Label colour**. Groups a slot cannot set, such as **Hub**, **Colours**, **Tag colours** and **When full**, are not shown, and neither is the gallery.
+- Each setting has a badge. **This slot** is yours. Any other badge says what the slot follows (**This menu**, **Global**, **Look: Name**, **Default**), and clicking it goes there. The reset button gives the setting back to the menu. **Reset slot** at the top removes everything the slot has of its own.
+- A value is written unless it is what the slot would take from the default or the theme anyway, as at the other levels. Setting the slot's shape to the one the menu has is written, so the slot stays as it is if the menu changes later.
+- **Show hover glow** keeps the hover glow of the selected slot in the picture while you edit it. It turns on by itself while the **Glow** group is on screen.
+- A **More** slot is not an item, so it cannot be styled. An item in the More submenu has no slot on the ring, so the preview outlines nothing for it. Pick it from the list.
+
+The settings are saved as `style` on the item in `radial.json`, which holds only what you changed. A problem in one (`menu brushes item 9: style.size: ...`) appears in the problems list and opens the Look screen at that slot and setting. Undo, Save and **Unsaved changes** treat it like any other change, and the last lists it as **Style of "Clay" changed**.
+
 ### Editing a look
 
 **Edit** opens a look in the screen. The bar shows **Look: Name**, and a banner says "Editing look Name. 2 menus use it." with a **Done** button that returns to where you were. Every setting you change is saved in that look. The preview shows the menu you picked drawn with it. A built-in look is shown read-only, and its banner has **Duplicate to edit**.
@@ -227,7 +252,7 @@ A look is a live link. A menu that uses a look follows it when you edit the look
 
 On the right are the settings, in groups. The buttons above them (**Slots**, **Hub**, **Glow**, **Labels**, **Colours**, **Tag colours**, **When full**) jump to a group, and the one you are reading is highlighted. Simple mode shows only some of them.
 
-- **Slots:** **Ring radius**, **Slot size** and **Dead zone** (one **Ring size** slider in Simple mode), **Slot shape** (**Circle**, **Rounded square**, **Squircle**, **Hexagon**, **Octagon** or **Diamond**), and in Full mode **Corner roundness** (it only changes a Rounded square), **Rim width** and **Icon size**.
+- **Slots:** **Ring radius**, **Slot size** and **Dead zone** (one **Ring size** slider in Simple mode), **Slot shape** (**Circle**, **Rounded square**, **Squircle**, **Hexagon**, **Octagon** or **Diamond**), and in Full mode **Corner roundness** (it only changes a Rounded square), **Rim width** and **Icon size**. At the slot level they come with **Size of this slot**, **Fill colour** and **Rim colour**.
 - **Hub** (Full mode): **Hub size** (0 to 64 px, 0 for none), **Hub style** (**Dot**, **Disc**, **Ring** or **Menu icon**), **Hub colour** and **Hub glow**.
 - **Glow** (Full mode): **Glow colour** and **Glow strength**.
 - **Labels:** **Icon and name** or **Icon only**, and in Full mode **Label colour**.
@@ -235,7 +260,7 @@ On the right are the settings, in groups. The buttons above them (**Slots**, **H
 - **Tag colours** (Full mode): the **Icon tint**, **Glow** and **Band** switches and their settings (see [Tag colours](appearance.md#tag-colours)). When the preview menu has no tagged brush, a note offers the sample ring.
 - **When full:** what a ring does when a menu has more items than fit at its radius. **Grow** makes the ring bigger until every slot fits. **Second ring** puts the slots that do not fit in an outer ring. **More slot** ends the ring with a **More** slot that opens the rest as a submenu. A line under the cards says whether the menu in the preview is full.
 
-**Hub colour**, **Glow colour** and **Label colour** are a row of chips. **Background**, **Accent**, **Highlight**, **Text** and **Lines** are theme colours, each drawn in the colour it has at that level, so they follow the theme and any colours you set under **Colours**. **Custom** shows a swatch and a hex value for any `#rrggbb` colour. **Automatic**, for **Glow colour**, uses the slot's tag colour when it has one, and the accent or highlight when it has not.
+**Hub colour**, **Glow colour**, **Label colour**, **Fill colour** and **Rim colour** are a row of chips. **Background**, **Accent**, **Highlight**, **Text** and **Lines** are theme colours, each drawn in the colour it has at that level, so they follow the theme and any colours you set under **Colours**. **Custom** shows a swatch and a hex value for any `#rrggbb` colour. **Automatic**, for **Glow colour**, uses the slot's tag colour when it has one, and the accent or highlight when it has not.
 
 ### Where a value comes from
 
@@ -246,13 +271,14 @@ Each setting has a badge beside its name that says where its value comes from:
 - **Look: Name** comes from a look, the one for all menus or the one for the menu.
 - **Global** is a value you set for all menus.
 - **This menu** is a value you set for the menu you are on.
+- **This slot** is a value you set for the slot you are on.
 
 Clicking a badge that shows a value from another level goes to that level (Global, or the look), with the setting selected. Clicking one at the level you are on moves the focus to its setting. A badge for a value from another level has a dashed outline.
 
-The reset button at the right of a setting (it appears once you have set it) is **Reset to default** at the Global level and **Reset to inherited** on a menu.
+The reset button at the right of a setting (it appears once you have set it) is **Reset to default** at the Global level and **Reset to inherited** on a menu or a slot.
 
 When you set a value, Studio writes it unless it is what the level would take from the default or the theme anyway. Setting the hub of a menu to 10, the default, when nothing above sets it, writes nothing. A value that equals what a look gives is written, so the menu stays as it is if the look changes later. Only the reset button removes it.
 
 ### Saved in `radial.json`
 
-Your looks are saved under `"looks"` in `radial.json`. The look for all menus is `"look"` under `"ring"`, and the look of a menu is `"look"` in the menu: a look's name, or an object with the name as `"preset"` and the menu's own settings. The settings are the same ones `radial.json` keeps under `"ring"` (see [Appearance and behaviour settings](appearance.md#appearance-and-behaviour-settings)). Save, Revert and undo treat them like any other change, and **Unsaved changes** lists them under **Looks** and **Look**. Settings that only Full shows keep their value in Simple mode. If one is not at its default, the top of the page names it and has a **Switch to Full mode** link.
+Your looks are saved under `"looks"` in `radial.json`. A slot's own settings are `"style"` on its item. The look for all menus is `"look"` under `"ring"`, and the look of a menu is `"look"` in the menu: a look's name, or an object with the name as `"preset"` and the menu's own settings. The settings are the same ones `radial.json` keeps under `"ring"` (see [Appearance and behaviour settings](appearance.md#appearance-and-behaviour-settings)). Save, Revert and undo treat them like any other change, and **Unsaved changes** lists them under **Looks** and **Look**. Settings that only Full shows keep their value in Simple mode. If one is not at its default, the top of the page names it and has a **Switch to Full mode** link.

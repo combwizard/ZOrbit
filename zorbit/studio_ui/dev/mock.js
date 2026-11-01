@@ -125,13 +125,16 @@
   function pyr(v) { return typeof v === 'string' ? "'" + v + "'" : String(v); }
 
   // The items the ring would draw: one action each, submenu targets that exist (the order preview_ring's indices count in)
-  function usable(m) {
-    return (m.items || []).filter(function (it) {
+  function usable(m) { return usableAt(m).map(function (i) { return m.items[i]; }); }
+  function usableAt(m) {                    // their indices in m.items
+    var out = [];
+    (m.items || []).forEach(function (it, i) {
       var ks = KINDS.filter(function (k) { return k in it; });
-      if (ks.length !== 1) return false;
+      if (ks.length !== 1) return;
       var k = ks[0];                       // config.py: every string target but a browser's must be non-empty
-      return k === 'steps' || k === 'auto' || k === 'browser' || (typeof it[k] === 'string' && it[k].trim() !== '');
+      if (k === 'steps' || k === 'auto' || k === 'browser' || (typeof it[k] === 'string' && it[k].trim() !== '')) out.push(i);
     });
+    return out;
   }
 
   // One of every message config.py can produce (menu ids are the recorded ones), for ?allproblems
@@ -150,6 +153,10 @@
     "menu brushes item 6: 'press' must be a non-empty string", "menu brushes item 6: brush name 'C:\\x\\Clay' must not contain \\ / : or ..", "menu brushes item 7: submenu 'nope' does not exist",
     "menu brushes item 7: unknown setting 'lable' (did you mean label?)", "menu brushes item 8: tag 'gone' does not exist; the slot stays empty", "menu brushes item 8: tag 'gone' does not exist; the browser opens unfiltered",
     "menu brushes item 9: icon '\\\\pc\\share\\a.png' must be a plain file path on this PC, not a network path", "menu brushes item 9: style.glow_color: 'orange' is not a #rrggbb colour or a theme colour (bg, accent, highlight, text, lines)", "menu brushes item 9: submenu 'tools' has no usable items",
+    "menu brushes item 2: style.size: 3 must be a number from 0.75 to 1.25", "menu brushes item 2: style.slot_shape: 'star' unknown; one of circle, rounded, squircle, hexagon, octagon, diamond",
+    "menu brushes item 2: style.slot_shap: unknown setting (did you mean slot_shape?)", "menu brushes item 3: style.tap_ms: is a ring setting, not part of a look; ignored",
+    "menu brushes item 3: style.fill_color: 'red' is not a #rrggbb colour or a theme colour (bg, accent, highlight, text, lines)", 'menu brushes item 4: style must be an object like {"slot_shape": "hexagon"}; ignored',
+    "menu brushes item 5: unknown setting 'glow' (glow is now style.glow_color)",
     'looks: must be an object like {"My look": {"slot_shape": "hexagon"}}; ignored', 'looks.Mine: not an object; ignored',
     'looks.My look!: name must be 1 to 32 letters, digits, spaces, - or _; ignored', 'looks.soft: that name is a built-in look or is reserved, give it another; ignored',
     "looks.mine: same name as 'Mine' apart from capitals; ignored", 'looks.Mine.preset: a look cannot be based on another look; ignored',
@@ -302,6 +309,27 @@
     var v = window.ZLook.explain(cfg, { level: 'menu', menu: menuId }, mockCtx()).values, n = usable(m).length, x = 1.25 * v.slot / (2 * v.radius);
     var cap = x < 1 ? Math.max(1, Math.floor(Math.PI / Math.asin(x) + 1e-6)) : 1;
     return { items: n, capacity: cap, needed_radius: n < 2 ? 0 : 1.25 * v.slot / (2 * Math.sin(Math.PI / n)), full: n > cap, when_full: v.when_full || 'grow' };
+  }
+
+  // The layout map of preview_ring (Ring.layout_map) for the ring picture the mock hands out. The recorded map is used when it fits the menu; otherwise
+  // a single ring is made up from the item count and the look in the config (mock only: the picture itself is the recorded one, so it does not
+  // follow a changed radius, slot size, shape or a second ring or More slot, but the overlay and the notes do, which is what the mock is for).
+  function mockLayout(cfg, menuId, res) {
+    var m = cfg.menus[menuId], at = usableAt(m), n = at.length, Z = window.ZLook;
+    if (res.layout && res.layout.slots && res.layout.slots.length === n) return res.layout;
+    if (!Z || !n) return null;
+    var ctx = mockCtx(), v = Z.explain(cfg, { level: 'menu', menu: menuId }, ctx).values, size = res.size || 447;
+    var R = Math.max(v.radius, n >= 2 ? 1.25 * v.slot / (2 * Math.sin(Math.PI / n)) : 0), step = 360 / n, half = Math.min(step, 90) / 2;
+    var cap = mockFit(cfg, menuId), r2 = function (x) { return Math.round(x * 100) / 100; }, slots = [], gaps = [];
+    at.forEach(function (ix, i) {
+      var sv = Z.explain(cfg, { level: 'menu', menu: menuId, slot: ix }, ctx).values, a = step * i * Math.PI / 180;
+      slots.push({ i: i, ring: 0, x: r2(Math.sin(a) * R), y: r2(-Math.cos(a) * R), size: r2(v.slot * (sv.size || 1)), shape: sv.slot_shape || 'circle', corner: sv.slot_corner === undefined ? 0.28 : sv.slot_corner,
+        ang: r2(step * i), half: half, more: false });
+    });
+    for (var k = 1; k <= n; k++) { var g = (step * (k - 0.5)) * Math.PI / 180; gaps.push({ k: k, x: r2(Math.sin(g) * R), y: r2(-Math.cos(g) * R), ang: r2(step * (k - 0.5)) }); }
+    return { scale: 1, size: [size, size], centre: [size / 2, size / 2], dead: v.dead_zone, hub: { style: v.hub_style || 'dot', r: r2((v.hub === undefined ? 10 : v.hub) / 2) },
+      rings: [{ r: r2(R), first: 0, n: n, offset: 0, step: r2(step), rmin: v.dead_zone }], slots: slots, gaps: gaps,
+      full: { mode: 'grow', when_full: v.when_full || 'grow', n: n, capacity: cap ? cap.capacity : n, needed: r2(cap ? cap.needed_radius : R), radius: v.radius, grown: R > v.radius + 0.5, rings: 1, more_slot: null }, fans: [] };
   }
 
   // 'YYYY-MM-DD HH:MM:SS.mmm' in local time, like the app's log
@@ -830,6 +858,7 @@
       return sleep(60 + lag).then(function () {
         var res = clone((lightPics() && M.preview_tags_light) || M.preview_tags || M.preview_ring[Object.keys(M.preview_ring)[0]]);
         res.width = res.height = res.size; res.centre = [res.size / 2, res.size / 2];
+        if (!res.layout) delete res.layout;                       // the recording of an older backend has none: no overlay
         return res;
       });
     },
@@ -841,6 +870,7 @@
         var res = clone((hover === 0 && menuId === 'brushes' && hov0) || pics[menuId] || pics.brushes || M.preview_ring[menuId] || M.preview_ring.brushes);
         res.width = res.height = res.size; res.centre = [res.size / 2, res.size / 2];
         res.fit = mockFit(cfg, menuId);
+        res.layout = mockLayout(cfg, menuId, res) || undefined;
         var it = openPath && openPath.length ? usable(m)[openPath[0]] : null, sub = it && it.menu ? cfg.menus[it.menu] : null;
         if (it && it.tag) {                                          // a tag slot with brushes is a fan of them, like the expander makes
           var tn = (tagSnapshot().tags.filter(function (t) { return t.key === it.tag; })[0] || {}).count || 0;
