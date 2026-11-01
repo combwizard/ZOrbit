@@ -8,10 +8,12 @@ All notable changes to this project are listed here. The format follows
 
 ### Added
 
-- **Hub** (Full mode) sets the size of the accent dot in the middle of the ring, from 0 to 40 px. It stays 10 unless you
-  change it, and 0 hides the dot. The dead zone does not change with it (#33).
+- **Hub** (Full mode) sets the size of the hub in the middle of the ring, from 0 to 64 px. It stays 10 unless you
+  change it, and 0 hides it. The dead zone does not change with it. `hub_style` draws it as a dot (as before), a
+  disc, a ring or the menu's icon (#33).
 - **Slot shape** (Simple and Full mode) switches every slot between **Circle**, the default, and **Rounded square**.
-  The icon, glow and submenu badge follow the shape (#33).
+  `radial.json` also takes `squircle`, `hexagon`, `octagon` and `diamond`. The icon, glow and submenu badge follow
+  the shape (#33).
 - **Glow** in the item inspector gives one slot its own glow colour, saved as `style.glow_color` in `radial.json`. It
   wins over the slot's tag colour for the hover glow, the hover rim and the idle halo only (#33).
 - `radial.json` can hold named looks under `looks`, a menu can have its own `look` (a look's name, its own settings, or

@@ -11,7 +11,7 @@ These are on the Settings screen in Studio, and under `"ring"` in `radial.json`.
 | `radius` (**Ring radius**; **Ring size** in Simple mode) | 145 | 60 to 400 | Distance from the centre to the slots, in pixels. This is the smallest the ring gets: a menu with many items spreads wider. |
 | `slot` (**Slot size**) | 72 | 32 to 160 | Diameter of each icon disc, or the side of a rounded square. |
 | `dead_zone` (**Dead zone**) | 38 | 10 to 120 | Radius around the centre where no slot is picked. |
-| `hub` (**Hub**) | 10 | 0 to 40 | Diameter of the hub in the middle of the ring, in pixels. 0 draws no hub. A larger hub moves the menu title and hint down to keep clear of it. It does not change the dead zone. See [Hub styles](#hub-styles). |
+| `hub` (**Hub**) | 10 | 0 to 64 | Diameter of the hub in the middle of the ring, in pixels. 0 draws no hub. A larger hub moves the menu title and hint down to keep clear of it. It does not change the dead zone. See [Hub styles](#hub-styles). |
 | `tap_ms` (**Tap time**) | 250 | 0 to 1000 | A hotkey press shorter than this is a tap. |
 | `timeout_s` (**Auto-close**) | 20 | 2 to 120 | An open ring closes itself after this many seconds. |
 | `animation` (**Open animation**) | `smooth` | see [Open animations](#open-animations) | The open animation. |
