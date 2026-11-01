@@ -830,6 +830,10 @@ body.dragging .irow:hover { background: transparent; }
 .choices.two { grid-template-columns: repeat(2, 1fr); }
 .choices.anim-cards { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
 .choices.bridge-cards, .choices.three { grid-template-columns: repeat(3, 1fr); }
+.choices.four { grid-template-columns: repeat(4, 1fr); }
+.zb-src { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin-top: 6px; }
+.zb-sws { display: inline-flex; gap: 4px; }
+.zb-sw { display: block; width: 18px; height: 18px; border-radius: 4px; border: 1px solid var(--line2); }
 .choices.seg { grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); gap: 4px; }
 .choices.seg .choice { align-items: center; padding: 6px 4px; }
 .choices.seg .choice b { font-size: 12px; }
@@ -958,6 +962,7 @@ body.dragging .irow:hover { background: transparent; }
   .browser.full { grid-template-columns: 190px minmax(0, 1fr); }
   .library-screen { grid-template-columns: minmax(0, 1fr) 240px; }
   .choices.bridge-cards, .choices.three { grid-template-columns: 1fr; }
+  .choices.four { grid-template-columns: repeat(2, 1fr); }
 }
 @media (prefers-reduced-motion: reduce) {
   /* Nothing loops: an infinite animation at .01ms would flicker, so each one stops in its settled look (a steady dot, a still ring, a flat placeholder). */

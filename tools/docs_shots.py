@@ -84,7 +84,7 @@ SHOTS = {
     "browser-light": dict(page="popout.html", q="kind=brush&theme=light", size=(980, 680)),
     "library-tag": dict(q="screen=library", steps=["click('Blocking')"]),
     # Details
-    "settings-theme": dict(q="screen=settings&theme=light", clip="card('Theme')"),
+    "settings-theme": dict(q="screen=settings&theme=zbrush", clip="card('Theme')"),
     "settings-colours": dict(q="screen=settings", clip="card('Colours')"),
     "settings-behaviour": dict(q="screen=settings", clip="card('Behaviour')"),
     "settings-bridge": dict(q="screen=settings", clip="card('ZBrush bridge')"),

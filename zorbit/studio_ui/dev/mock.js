@@ -38,8 +38,10 @@
    profile's name; the default is the one profile Default), ?profilesoff (enabled: false, as when a menus file is pinned: no picker), ?profilegone (the first save finds its profile deleted:
    save_config answers profile_missing). pick_profile_file follows ?importcancel and ?importfail. Profiles live in this page only: a reload starts again from the defaults.
    Studio mode: ?mode=simple|full (start Studio in that mode; the mock defaults to full so the screenshots keep their content).
-   Theme: ?theme=dark|light|system (start in that theme, on Studio and on popout.html; the mock defaults to dark. The Theme card in Settings changes it
+   Theme: ?theme=dark|light|system|zbrush (start in that theme, on Studio and on popout.html; the mock defaults to dark. The Theme card in Settings changes it
    in this page only while ?theme= is given, else in localStorage rm_prefs; system follows the browser's prefers-color-scheme, which DevTools can emulate).
+   zbrush uses a fixed sample scheme (the stock ZBrush grey) for theme_tokens, the ring colours and theme_source; ?zbnone says ZBrush has stored nothing,
+   so zbrush resolves to dark with theme_source null (the "No stored ZBrush colours" line).
    get_options carries theme_ring_colors and themes, the defaults carry the colours of the theme in force, and the preview_* calls answer with
    preview_ring_light, preview_ring_hover0_light, preview_tags_light and preview_animation_light under light when the recording has them (else the dark pictures).
    Setup screen (get_setup; state in localStorage rm_env for the registered folder and rm_zscript for the ZScript plugin, which Settings > Older
@@ -403,7 +405,13 @@
   // page to Simple): set_pref keeps it here and every reply reports it, so the app's merge of a reply cannot undo it.
   var pageMode = null;
   // The theme: stored in rm_prefs like the mode; an explicit ?theme= keeps it in this page only, so a reload goes back to the switch.
-  var THEMES = ['dark', 'light', 'system'], pageTheme = null;
+  var THEMES = ['dark', 'light', 'system', 'zbrush'], pageTheme = null;
+  // Match ZBrush: a fixed sample scheme (the stock ZBrush grey). ?zbnone means ZBrush has stored nothing, so zbrush resolves to dark.
+  var ZB_TOKENS = { '--bg0': '#1a1a1a', '--bg1': '#242424', '--bg2': '#3e3e3e', '--bg3': '#444444', '--text': '#e9eceb', '--sub': '#b8bab9', '--muted': '#b8bab9',
+    '--accent': '#ff7700', '--on-accent': '#141416', '--cyan': '#4dc8e9' };
+  var ZB_RING = { bg: '#444444', accent: '#ff7700', highlight: '#4dc8e9', text: '#e9eceb', lines: '#ff7700' };
+  var ZB_SOURCE = { year: 2022, path: '%PUBLIC%\\Documents\\ZBrushData2022\\ZStartup\\CustomUserInterface2022.cfg', stored: 1793053562 };
+  var zbNone = function () { return q.has('zbnone'); };
   var THEME_RING = { dark: { bg: '#222327', accent: '#f86b33', highlight: '#4dc8e9', text: '#f0f0f0', lines: '#f86b33' },     // as theme.py's PRESETS, for a recording that has none
     light: { bg: '#f3f4f6', accent: '#a8360f', highlight: '#066785', text: '#1b1c20', lines: '#a8360f' } };
   function themeSetting() {
@@ -412,11 +420,25 @@
   }
   function themeEff() {
     var t = themeSetting();
+    if (t === 'zbrush') return zbNone() ? 'dark' : 'zbrush';
     if (t !== 'system') return t;
     return window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
   }
-  function themeOf(p) { p.theme = themeSetting(); p.theme_effective = themeEff(); return p; }
-  function themeRing() { return clone(((M.get_options || {}).theme_ring_colors) || THEME_RING); }
+  function themeBase() { var e = themeEff(); return e === 'zbrush' ? 'dark' : e; }
+  // theme_sig changes when ZBrush stores a new scheme; the mock's never does.
+  function themeOf(p) {
+    var e = themeEff(), s = themeSetting();
+    p.theme = s; p.theme_effective = e; p.theme_base = themeBase();
+    p.theme_tokens = e === 'zbrush' ? clone(ZB_TOKENS) : {};
+    p.theme_sig = e + ':' + (e === 'zbrush' ? 'sample' : '');
+    p.theme_source = s === 'zbrush' && !zbNone() ? clone(ZB_SOURCE) : null;
+    return p;
+  }
+  function themeRing() {
+    var r = clone(((M.get_options || {}).theme_ring_colors) || THEME_RING);
+    if (!zbNone()) r.zbrush = clone(ZB_RING);
+    return r;
+  }
   var lightPics = function () { return themeEff() === 'light'; };
   function modeOf(p) { if (pageMode !== null) p.mode = pageMode; else if (q.get('mode')) p.mode = q.get('mode'); else if (firstRun()) p.mode = ''; return p; }
   var lsGet = function (k) { try { return localStorage.getItem(k); } catch (e) { return null; } };
@@ -764,7 +786,7 @@
         o.favourite_tag = FAV;
         o.actions = KINDS.slice(); o.asset_kinds = ['brush', 'alpha', 'material', 'texture']; o.tag_colors = ['none', 'tint', 'glow', 'both'];
         o.tag_bands = ['none', 'hairline', 'narrow', 'medium', 'wide']; o.tint_styles = ['flat', 'gradient']; o.tint_blends = ['multiply', 'overlay'];
-        o.theme_ring_colors = o.theme_ring_colors || THEME_RING; o.themes = o.themes || THEMES.slice();
+        o.theme_ring_colors = themeRing(); o.themes = o.themes || THEMES.slice();
         o.ring_defaults = Object.assign({}, o.ring_defaults, TAG_DEFAULTS, { colors: clone(o.theme_ring_colors[themeEff()]) });
         o.ring_ranges = Object.assign({}, o.ring_ranges, { tag_band_opacity: [0, 1], tag_glow_opacity: [0, 1], tag_tint_opacity: [0, 1] });
         return o;
@@ -1077,7 +1099,7 @@
     popout_get_state: function () {
       var onTop = true, kind = null, side = 'left', column = true;
       try { onTop = localStorage.getItem('rm_pop_on_top') !== '0'; kind = localStorage.getItem('rm_pop_kind'); side = localStorage.getItem('rm_pop_side') || 'left'; column = localStorage.getItem('rm_pop_column') !== '0'; } catch (e) {}
-      return Promise.resolve({ on_top: onTop, size: 96, side: side, column: column, tag: q.get('tag') || null, kind: q.get('kind') || kind || 'brush', tags_path: '', profile: profiles.editing, theme: themeSetting(), theme_effective: themeEff() });
+      return Promise.resolve({ on_top: onTop, size: 96, side: side, column: column, tag: q.get('tag') || null, kind: q.get('kind') || kind || 'brush', tags_path: '', profile: profiles.editing, theme: themeSetting(), theme_effective: themeEff(), theme_base: themeBase(), theme_tokens: themeEff() === 'zbrush' ? clone(ZB_TOKENS) : {} });
     },
     popout_log: function (msg) { console.log('[mock] popout_log', msg); return Promise.resolve(true); },
   };

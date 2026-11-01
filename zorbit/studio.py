@@ -53,7 +53,7 @@ STUDIO_FILE = os.path.join(paths.CONFIG_DIR, "studio.json")   # Studio preferenc
 
 
 def _theme_now():
-    """The theme in force (dark or light), from studio.json. A module function so the tests can swap it."""
+    """The theme in force (dark, light or zbrush), from studio.json. A module function so the tests can swap it."""
     return theme.current(STUDIO_FILE)
 
 DEFAULT_SIZE = (1320, 860)  # the first window, in logical pixels, when it fits the screen (see _fit_size)
@@ -674,7 +674,8 @@ class Api(webapi.LibraryApi, webapi.TagApi):
                 "tag_bands": list(C.TAG_BANDS), "favourite_tag": tags.FAVOURITE,
                 "tint_styles": list(C.TINT_STYLES), "tint_blends": list(C.TINT_BLENDS), "ring_defaults": C.default_ring(_theme_now()),
                 "ring_ranges": C._RING_RANGES, "themes": list(theme.NAMES),
-                "theme_ring_colors": {n: theme.ring_colors(n) for n in theme.CONCRETE}}
+                "theme_ring_colors": {n: theme.ring_colors(n) for n in theme.CONCRETE
+                                      + (("zbrush",) if theme.effective("zbrush") == "zbrush" else ())}}
 
     # --- suggestions for press/set/toggle targets ------------------------------------------------
     def get_suggestions(self):
@@ -1306,7 +1307,8 @@ class Api(webapi.LibraryApi, webapi.TagApi):
     # mode is "" until Studio decides it at first start (Simple for a fresh install, Full for an existing setup).
     # seen_version is the version whose "What's new" was closed last ("" until it has been shown once).
     # tour_seen is whether the tour of Studio has been offered (a fresh install gets the offer after Setup; an existing user does not).
-    # theme is dark, light or system (follow Windows); get_prefs adds theme_effective, the one in force.
+    # theme is dark, light, system (follow Windows) or zbrush; get_prefs adds theme_effective (the one in force),
+    # theme_base, theme_tokens, theme_sig and theme_source.
     _PREFS_DEFAULTS = {"check_updates": True, "last_screen": "menus", "setup_done": False, "mode": "",
                        "seen_version": "", "tour_seen": False, "theme": "dark"}
     # Keys an earlier Studio already wrote: a studio.json with any of them belongs to someone who has used the
@@ -1344,6 +1346,12 @@ class Api(webapi.LibraryApi, webapi.TagApi):
         if prefs["theme"] not in theme.NAMES:
             prefs["theme"] = theme.DEFAULT            # a hand edit to a name that does not exist
         prefs["theme_effective"] = theme.effective(prefs["theme"])     # computed, never stored
+        look = theme.preset(prefs["theme"])
+        prefs["theme_base"] = look["base"]                             # dark or light: the page's data-theme
+        prefs["theme_tokens"] = look["web"] if prefs["theme_effective"] == "zbrush" else {}
+        prefs["theme_sig"] = theme.signature(STUDIO_FILE)[1]           # the scheme's digest, "" unless zbrush
+        src = theme.source() if prefs["theme"] == "zbrush" else None   # what Match ZBrush reads, for the Settings line
+        prefs["theme_source"] = dict(src, stored=int(src["stored"])) if src else None
         return prefs
 
     def set_pref(self, key, value):
@@ -1477,8 +1485,8 @@ class Api(webapi.LibraryApi, webapi.TagApi):
 
     def theme_changed(self, effective):
         """The page saw Windows change its app colour mode (Follow Windows): the frame follows. True."""
-        if effective in theme.CONCRETE:
-            self._apply_frame_theme(theme.PRESETS[effective]["window"])
+        if effective in theme.EFFECTIVE:
+            self._apply_frame_theme(theme.preset(effective)["window"])
         return True
 
     def win_minimize(self):

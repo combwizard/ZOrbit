@@ -10,6 +10,9 @@ All notable changes to this project are listed here. The format follows
 
 - A **Theme** setting on Settings: **Dark** (the default), **Light** and **Follow Windows**, for Studio, the browser and the ring.
   The ring's colour defaults follow it; a colour set under **Colours** still wins.
+- **Match ZBrush**, a fourth **Theme** choice that colours the ring, the browser and Studio with the interface colours
+  you last stored in ZBrush (**Preferences > Config > Store Config**). It reads ZBrush's own file and never changes it.
+  Without a stored scheme it uses Dark (#32).
 - Studio: a short guided tour of the window. It is offered once after Setup, and you can take it again from Setup step 5 or **Settings > Studio** (#41).
 - Docs: a [blog](https://zorbit.lol/docs/blog/) with longer posts about releases, starting with profiles in 0.13.0. A
   release that has a post links to it from its release notes.

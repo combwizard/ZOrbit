@@ -2,6 +2,7 @@
 and the import numbers. Nothing here opens a window or touches the real %APPDATA%."""
 import json
 import os
+import struct
 import types
 
 import pytest
@@ -10,6 +11,7 @@ import fsutil
 import paths
 import studio
 import theme
+import zbrush_colors
 
 
 @pytest.fixture
@@ -440,7 +442,7 @@ def test_a_hand_edited_theme_reads_as_dark(api, tmp_path):
     assert prefs["last_screen"] == "library"
 
 
-def test_the_ring_defaults_follow_the_theme(api, monkeypatch):
+def test_the_ring_defaults_follow_the_theme(api, zb, monkeypatch):
     monkeypatch.setattr(studio, "_theme_now", lambda: "light")
     light = theme.ring_colors("light")
     assert api.get_config()["defaults"]["colors"]["bg"] == light["bg"]
@@ -491,3 +493,85 @@ def test_a_failing_frame_call_never_reaches_the_page(api, monkeypatch):
     api._hwnd_cache = 77
     assert api.set_pref("theme", "light")["theme"] == "light"
     assert api.theme_changed("light") is True
+
+
+# --- Match ZBrush --------------------------------------------------------------------------------------------------
+
+def _scheme_bytes(colours, count=57):
+    """A UI colours chunk in the layout tools/icolors_probe.py found: tag, 2 bytes, length, 10 floats, count, colours."""
+    values = [(128, 128, 128)] * count
+    for name, rgb in colours.items():
+        values[zbrush_colors.PATCHES[name]] = rgb
+    body = struct.pack("<10f", *([0.5] * 10)) + struct.pack("<I", count)
+    body += struct.pack(f"<{count}f", *(r + g / 256 + b / 65536 for r, g, b in values))
+    return b"junk before the block" + zbrush_colors.TAG + b"\x01\x00" + struct.pack("<I", len(body)) + body
+
+
+@pytest.fixture
+def zb(tmp_path, monkeypatch):
+    """PUBLIC and APPDATA in tmp_path, no ZBrush running; store(year, colours) writes a stored scheme."""
+    monkeypatch.setenv("PUBLIC", str(tmp_path / "Public"))
+    monkeypatch.setenv("APPDATA", str(tmp_path / "Roaming"))
+    monkeypatch.setattr(zbrush_colors, "running_year", lambda: None)
+    zbrush_colors._reset()
+
+    def store(year=2026, colours=None):
+        folder = tmp_path / "Public" / "Documents" / f"ZBrushData{year}" / "ZStartup"
+        folder.mkdir(parents=True, exist_ok=True)
+        path = folder / f"CustomUserInterface{year}.cfg"
+        path.write_bytes(_scheme_bytes(colours or {"main": (19, 9, 9), "bt1": (23, 18, 18), "sw1": (255, 104, 0),
+                                                  "text2": (236, 238, 238), "palette1": (67, 67, 67)}))
+        zbrush_colors._reset()
+        return path
+    yield store
+    zbrush_colors._reset()
+
+
+def test_match_zbrush_with_a_stored_scheme(api, zb):
+    zb(2026)
+    res = api.set_pref("theme", "zbrush")
+    assert res["theme"] == "zbrush" and res["theme_effective"] == "zbrush"
+    assert res["theme_base"] == "dark" and "--bg1" in res["theme_tokens"]
+    assert res["theme_source"]["year"] == 2026 and isinstance(res["theme_source"]["stored"], int)
+    assert res["theme_sig"] and res["theme_sig"] == api.get_prefs()["theme_sig"]
+
+
+def test_match_zbrush_without_a_stored_scheme_is_dark(api, zb):
+    res = api.set_pref("theme", "zbrush")
+    assert res["theme"] == "zbrush" and res["theme_effective"] == "dark"
+    assert res["theme_base"] == "dark" and res["theme_tokens"] == {}
+    assert res["theme_source"] is None and res["theme_sig"] == ""
+
+
+def test_the_fixed_themes_carry_no_tokens_or_source(api, zb):
+    zb(2026)
+    res = api.set_pref("theme", "light")
+    assert res["theme_base"] == "light" and res["theme_tokens"] == {} and res["theme_source"] is None
+    assert res["theme_sig"] == ""
+
+
+def test_a_new_stored_scheme_changes_the_signature(api, zb):
+    zb(2026)
+    api.set_pref("theme", "zbrush")
+    first = api.get_prefs()
+    zb(2026, {"main": (30, 30, 60), "bt1": (50, 50, 90), "sw1": (0, 200, 255), "text2": (240, 240, 240)})
+    second = api.get_prefs()
+    assert second["theme_sig"] != first["theme_sig"] and second["theme_tokens"]["--bg1"] != first["theme_tokens"]["--bg1"]
+
+
+def test_the_options_offer_zbrush_colours_only_with_a_scheme(api, zb):
+    assert "zbrush" not in api.get_options()["theme_ring_colors"]
+    zb(2026)
+    colours = api.get_options()["theme_ring_colors"]
+    assert colours["zbrush"] == theme.ring_colors("zbrush") and set(colours) == {"dark", "light", "zbrush"}
+
+
+def test_theme_changed_accepts_zbrush(api, zb, monkeypatch):
+    assert api.theme_changed("zbrush") is True          # no window: nothing to do
+    zb(2026)
+    calls = []
+    monkeypatch.setattr(studio, "IsWindow", lambda h: True)
+    monkeypatch.setattr(studio.winframe, "apply_theme", lambda hwnd, window: calls.append((hwnd, window)))
+    api._hwnd_cache = 77
+    assert api.theme_changed("zbrush") is True
+    assert calls == [(77, theme.preset("zbrush")["window"])]

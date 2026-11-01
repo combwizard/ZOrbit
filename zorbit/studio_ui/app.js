@@ -3818,15 +3818,28 @@ function buildSettingsScreen(root) {
 
     /* --- theme: a Studio preference kept per PC, not part of S.cfg, so Save, Revert and undo never see it */
     const themeNote = S.prefs.theme === 'system' ? h('div', { class: 'fhint', role: 'status', style: { marginTop: '6px' } }, 'Windows is set to ' + (S.themeEff === 'light' ? 'Light' : 'Dark') + ' right now, so that is what ZOrbit is using.') : null;
+    let zbNote = null;                                         // Match ZBrush: which stored scheme is in use, with its colours
+    if (S.prefs.theme === 'zbrush') {
+      const src = S.prefs.theme_source, tk = S.prefs.theme_tokens || {};
+      if (src && typeof src === 'object') {
+        const d = new Date(src.stored * 1000), ok = !isNaN(d);
+        const when = ok ? d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) + ' ' + pad2(d.getHours()) + ':' + pad2(d.getMinutes()) : '';
+        const sw = [['--bg1', 'Main'], ['--bg2', 'Palette'], ['--bg3', 'Button'], ['--text', 'Text'], ['--accent', 'Switch']]
+          .filter(([k]) => tk[k]).map(([k, name]) => h('i', { class: 'zb-sw', title: name + ' ' + tk[k], style: { background: tk[k] } }));
+        zbNote = h('div', { class: 'fhint zb-src', role: 'status', title: src.path || null }, h('span', null, 'ZBrush ' + src.year + (when ? ', stored ' + when : '')),
+          sw.length ? h('span', { class: 'zb-sws', role: 'img', 'aria-label': 'Main, Palette, Button, Text and Switch colours' }, sw) : null);
+      } else zbNote = h('div', { class: 'fhint zb-src', role: 'status' }, 'No stored ZBrush colours found, so Dark is used. In ZBrush: Preferences > Config > Store Config.');
+    }
     page.append(card('Theme', 'How Studio, the browser and the ring look',
       choiceCards([['dark', 'Dark', 'The default look.'], ['light', 'Light', 'For ZBrush and Windows set to a light theme.'],
-        ['system', 'Follow Windows', 'Uses the Windows app colour mode and changes with it.']], THEMES.includes(S.prefs.theme) ? S.prefs.theme : 'dark', async v => {
+        ['system', 'Follow Windows', 'Uses the Windows app colour mode and changes with it.'],
+        ['zbrush', 'Match ZBrush', 'Uses the colours you last stored in ZBrush.']], THEMES.includes(S.prefs.theme) ? S.prefs.theme : 'dark', async v => {
         if (v === S.prefs.theme) return;
         const ok = await setPref('theme', v);
         if (!ok) { if (R.settings) R.settings(); return; }             // the pick did not stick: draw the old one again
         syncTheme();
-      }, 'three', 'Theme'),
-      h('div', { class: 'fhint', style: { marginTop: '8px' } }, 'Applies to Studio, the browser and the ring. A colour you set under Colours still wins.'), themeNote));
+      }, 'four', 'Theme'),
+      h('div', { class: 'fhint', style: { marginTop: '8px' } }, 'Applies to Studio, the browser and the ring. A colour you set under Colours still wins.'), zbNote, themeNote));
 
     /* --- geometry with live preview */
     const pimg = h('img', { class: 'ring-img', alt: 'Ring preview', draggable: false });
@@ -5588,25 +5601,41 @@ async function setPref(key, value) {
 }
 
 // ---- theme
-/* The setting is S.prefs.theme (dark, light or system, which follows Windows); S.themeEff is the one in force. The CSS is dark until
+/* The setting is S.prefs.theme (dark, light, system, which follows Windows, or zbrush, which takes the colours ZBrush stored); S.themeEff
+   is the one in force (dark, light or zbrush). The CSS is dark until
    <html data-theme="light"> says otherwise. The ring colours the Colours rows start from belong to the theme, and the cached ring
    pictures were drawn in the old one (their keys do not say), so both are swapped here. */
-const THEMES = ['dark', 'light', 'system'];
-function applyTheme(eff) {
-  eff = eff === 'light' ? 'light' : 'dark';
+const THEMES = ['dark', 'light', 'system', 'zbrush'];
+/* Match ZBrush: data-theme is the base (dark or light) the scheme sits on, and its colours are inline custom properties on <html>, which
+   the washes in styles.css (colour-mix of --accent, --cyan and --ink) follow. themeVars remembers which, so another theme can take them off. */
+let themeVars = [];
+const tokenKey = t => (t && typeof t === 'object') ? JSON.stringify(Object.entries(t).sort()) : '';   // what the popout compares to see a changed scheme
+function applyTheme(eff, base, tokens) {
+  eff = eff === 'light' || eff === 'zbrush' ? eff : 'dark';
   S.themeEff = eff;
-  document.documentElement.dataset.theme = eff;
+  const root = document.documentElement;
+  root.dataset.theme = eff === 'zbrush' ? (base === 'light' ? 'light' : 'dark') : eff;
+  themeVars.forEach(k => root.style.removeProperty(k));
+  themeVars = [];
+  if (eff === 'zbrush' && tokens && typeof tokens === 'object') {
+    for (const [k, v] of Object.entries(tokens)) {
+      if (!/^--[a-z0-9-]+$/.test(k) || typeof v !== 'string') continue;
+      root.style.setProperty(k, v); themeVars.push(k);
+    }
+  }
+  S.themeTokens = tokenKey(eff === 'zbrush' ? tokens : null);
   const tc = S.opts && S.opts.theme_ring_colors && S.opts.theme_ring_colors[eff];
   if (tc && typeof tc === 'object') S.defaults = Object.assign({}, S.defaults, { colors: Object.assign({}, FALLBACK_DEFAULTS.colors, tc) });
   RingLoader.cache.clear(); RingLoader.gen++;
   FrameLoader.cache.clear(); FrameLoader.gen++;
 }
-/* Takes S.prefs.theme_effective in: applies it, tells the backend when it changed (the window frame follows), and redraws what the theme
-   touches in place. Settings is rebuilt even when nothing changed, because its note and Reset titles depend on the setting. */
+/* Takes S.prefs.theme_effective, theme_base and theme_tokens in: applies them, tells the backend when the theme or a Match ZBrush scheme
+   changed (the window frame follows), and redraws what the theme touches in place. Settings is rebuilt even when nothing changed,
+   because its note and Reset titles depend on the setting. */
 function syncTheme(rebuild = true) {
-  const was = S.themeEff;
-  applyTheme(S.prefs.theme_effective);
-  if (S.themeEff !== was) call(POPOUT ? 'popout_theme_changed' : 'theme_changed', S.themeEff).catch(() => {});
+  const was = S.themeEff, wasTokens = S.themeTokens;
+  applyTheme(S.prefs.theme_effective, S.prefs.theme_base, S.prefs.theme_tokens);
+  if (S.themeEff !== was || S.themeTokens !== wasTokens) call(POPOUT ? 'popout_theme_changed' : 'theme_changed', S.themeEff).catch(() => {});
   if (POPOUT) return;                                       // the browser holds no picture drawn from the theme
   if (rebuild && S.screen === 'settings' && R.settings) {
     if (openPopover) openPopover();
@@ -5621,20 +5650,43 @@ function watchSystemTheme() {
   if (!mq) return;
   mq.addEventListener('change', () => {
     if (S.prefs.theme !== 'system' || !(S.ready || POPOUT) || S.fatal) return;
-    S.prefs.theme_effective = mq.matches ? 'light' : 'dark';
+    S.prefs.theme_effective = S.prefs.theme_base = mq.matches ? 'light' : 'dark';
+    S.prefs.theme_tokens = {};
     // Windows flipped on its own (a schedule, say): the Settings page is only rebuilt when nobody is typing or
     // recording a key in it, so the flip never throws away what they were doing. The pictures follow either way.
-    const a = document.activeElement;
-    const typing = !!(a && a.closest && a.closest('#screen-settings') && a.matches('input, textarea, select, [contenteditable], .hk-field'));
-    syncTheme(!typing);
+    syncTheme(!typingInSettings());
+  });
+}
+const typingInSettings = () => {
+  const a = document.activeElement;
+  return !!(a && a.closest && a.closest('#screen-settings') && a.matches('input, textarea, select, [contenteditable], .hk-field'));
+};
+/* Match ZBrush: a Store Config in ZBrush changes the colours while the setting stays "zbrush", so the page asks again when its window
+   gets the focus. Studio compares theme_sig; the browser has no signature in its state, so it compares the tokens. */
+function watchZbrushTheme() {
+  let busy = false;
+  window.addEventListener('focus', async () => {
+    if (S.prefs.theme !== 'zbrush' || !(S.ready || POPOUT) || S.fatal || busy) return;
+    busy = true;
+    try {
+      const p = await call(POPOUT ? 'popout_get_state' : 'get_prefs');
+      if (!p || typeof p !== 'object' || S.prefs.theme !== 'zbrush') return;
+      const same = POPOUT ? p.theme_effective === S.themeEff && tokenKey(p.theme_tokens) === S.themeTokens
+        : p.theme_sig === S.prefs.theme_sig && p.theme_effective === S.themeEff;
+      if (same) return;
+      for (const k of ['theme_effective', 'theme_base', 'theme_tokens', 'theme_sig', 'theme_source']) if (k in p) S.prefs[k] = p[k];
+      if (THEMES.includes(p.theme)) S.prefs.theme = p.theme;
+      syncTheme(!typingInSettings());
+    } catch (e) { /* the colours stay as they are */ }
+    finally { busy = false; }
   });
 }
 // The browser: Popout.show() calls this when the setting or Windows' mode changed since it was last shown. It has updated the frame itself.
 window.__popoutTheme = o => {
   if (!o) return false;
   if (THEMES.includes(o.setting)) S.prefs.theme = o.setting;
-  S.prefs.theme_effective = o.effective === 'light' ? 'light' : 'dark';
-  applyTheme(S.prefs.theme_effective);
+  applyTheme(o.effective, o.base, o.tokens);
+  S.prefs.theme_effective = S.themeEff;
   return true;
 };
 
@@ -5999,7 +6051,8 @@ async function offerTour() {
 
 async function boot() {
   const [cfgR, optR, prefR] = await Promise.allSettled([call('get_config'), call('get_options'), call('get_prefs')]);
-  applyTheme(prefR.status === 'fulfilled' && prefR.value ? prefR.value.theme_effective : 'dark');   // before any screen, the recovery one too
+  const pv = prefR.status === 'fulfilled' && prefR.value ? prefR.value : {};
+  applyTheme(pv.theme_effective, pv.theme_base, pv.theme_tokens);   // before any screen, the recovery one too
   if (cfgR.status === 'rejected') { recovery(cfgR.reason instanceof Error ? cfgR.reason : new Error(String(cfgR.reason))); return; }
   const cfgRes = cfgR.value;
   if (cfgRes && cfgRes.too_new) { recovery(Object.assign({}, cfgRes, { config: null })); return; }
@@ -6010,7 +6063,7 @@ async function boot() {
   if (badMenus) { recovery(Object.assign({}, cfgRes, { config: null, error: badMenus + ' Studio cannot show a file like that.' })); return; }
   S.opts = opts; S.defaults = Object.assign({}, FALLBACK_DEFAULTS, cfgRes.defaults || (opts && opts.ring_defaults) || {});
   S.defaults.colors = Object.assign({}, FALLBACK_DEFAULTS.colors, S.defaults.colors || {});
-  applyTheme(S.prefs.theme_effective);                                  // again, now that the options with each theme's colours are in
+  applyTheme(S.prefs.theme_effective, S.prefs.theme_base, S.prefs.theme_tokens);   // again, now that the options with each theme's colours are in
   if (prefR.status === 'fulfilled' && prefR.value && S.prefs.mode !== 'simple' && S.prefs.mode !== 'full') {   // first start with this build: new installs get Simple, a config that needs Full gets Full
     S.prefs.mode = S.prefs.setup_done === false ? 'simple' : (needsFull(S.cfg) ? 'full' : 'simple');
     call('set_pref', 'mode', S.prefs.mode).catch(() => {});
@@ -6051,6 +6104,7 @@ function setPathHint(path) {
 
 function init() {
   watchSystemTheme();
+  watchZbrushTheme();
   if (POPOUT) { initPopout(); return; }
   const cp = $('#copyPath');
   if (cp) {
@@ -6254,7 +6308,7 @@ async function bootPopout() {
   S.cfg = { menus: {} };                             // the popout has no menus; the tag manager asks get_tag_uses for the ring items that use a tag
   let state = null;
   try { state = await call('popout_get_state'); } catch (e) { state = null; }
-  applyTheme(state && state.theme_effective);
+  applyTheme(state && state.theme_effective, state && state.theme_base, state && state.theme_tokens);
   if (state) {
     if (THEMES.includes(state.theme)) S.prefs.theme = state.theme;
     S.prefs.theme_effective = S.themeEff;

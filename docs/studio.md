@@ -47,7 +47,7 @@ Which mode Studio starts in:
 
 The choice is kept in `studio.json` as `mode` (`simple` or `full`). It is a Studio preference, so it is not part of an [export](files.md#import-and-export) and it does not change the ring. The [browser](browser.md) window has no switch and always shows everything.
 
-The **Theme** card on Settings (**Dark**, **Light** or **Follow Windows**) is also a Studio preference, kept in `studio.json` as `theme`. It changes how Studio, the [browser](browser.md) and the ring look, and the window frame (its border and a dark or light title bar) follows it. See [Theme](appearance.md#theme).
+The **Theme** card on Settings (**Dark**, **Light**, **Follow Windows** or **Match ZBrush**) is also a Studio preference, kept in `studio.json` as `theme`. It changes how Studio, the [browser](browser.md) and the ring look, and the window frame (its border and a dark or light title bar) follows it. See [Theme](appearance.md#theme).
 
 ## The tray icon
 

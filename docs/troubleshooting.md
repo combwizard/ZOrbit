@@ -156,6 +156,10 @@ The `usage.json` an older ZOrbit kept, which holds the brushes that fill the aut
 
 Studio may be in Simple mode, which hides some settings and item types. Press **Full** in the top bar. A hidden setting keeps its value, so nothing is lost by switching. If a Full-only setting is not at its default, the top of the Settings page names it and has a **Switch to Full mode** link. [Simple and Full mode](studio.md#simple-and-full-mode) lists what each mode shows.
 
+### Match ZBrush shows the Dark colours
+
+ZOrbit found no stored colour scheme, or could not read the file, so **Match ZBrush** uses Dark and **Settings > Theme** says so. ZOrbit reads the scheme ZBrush saves when you press **Preferences > Config > Store Config**, so colours changed under **Preferences > Icolors** and not stored are not seen. Press **Store Config** in ZBrush and the ring follows within about half a second. With several ZBrush versions installed, ZOrbit uses the running one, otherwise the newest with a stored scheme. The card shows which version and when it was stored. See [Match ZBrush](appearance.md#match-zbrush).
+
 ## Your menus file
 
 ### I broke my menus file

@@ -15,6 +15,7 @@ import pytest
 _SANDBOX = tempfile.mkdtemp(prefix="zorbit-tests-")
 os.environ["APPDATA"] = os.path.join(_SANDBOX, "Roaming")
 os.environ["LOCALAPPDATA"] = os.path.join(_SANDBOX, "Local")
+os.environ["PUBLIC"] = os.path.join(_SANDBOX, "Public")     # Match ZBrush reads ZBrush's stored colours from %PUBLIC%
 os.environ["ZORBIT_TAGS_FILE"] = os.path.join(_SANDBOX, "Roaming", "ZOrbit", "tags.json")
 os.environ["ZORBIT_USAGE_FILE"] = os.path.join(_SANDBOX, "Local", "ZOrbit", "usage.json")
 atexit.register(shutil.rmtree, _SANDBOX, ignore_errors=True)

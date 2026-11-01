@@ -1,4 +1,4 @@
-"""Draws the ring pictures in docs/images (ring.png, ring-light.png, fan.png, tag-colours.png, animations.png and the two GIFs) with
+"""Draws the ring pictures in docs/images (ring.png, ring-light.png, ring-zbrush.png, fan.png, tag-colours.png, animations.png and the two GIFs) with
 the real renderer, zorbit/ring.py, so they follow the ring's look whenever it changes. No window is opened and no
 ZBrush is needed, but the brush pictures come from the installed ZBrush's presets, so a ZBrush has to be installed.
 
@@ -45,13 +45,16 @@ assert os.path.commonpath([paths.DATA_DIR, SANDBOX]) == SANDBOX, "the data folde
 
 import config as C  # noqa: E402
 import expand  # noqa: E402
+import installs  # noqa: E402
 import radiald  # noqa: E402
 import tags  # noqa: E402
+import zbrush_colors  # noqa: E402
 from ring import Ring  # noqa: E402
 
 OUT = os.path.join(ROOT, "docs", "images")
 BG = (27, 28, 32)                              # the docs' dark page colour, as in every picture
 BG_LIGHT = (200, 203, 210)                     # a light ZBrush canvas, behind the Light theme's ring
+BG_ZBRUSH = (52, 52, 52)                       # close to ZBrush's document colour, behind the Match ZBrush ring
 TEXT, MUTED = (236, 237, 240), (170, 173, 182)  # caption colours under the animation panels
 FONTS = os.path.expandvars(r"%WINDIR%\Fonts")
 
@@ -149,6 +152,29 @@ def shot_ring_light(w):
     w.fans(False)
     im = w.preview("brushes", hover=1, held=True, scale=RING_SCALE)
     return with_cursor(on_background(im, bg=BG_LIGHT), *hovered(im))
+
+
+def stock_scheme():
+    """ZBrush's stock colours as a zbrush_colors.Scheme, read from the newest installed ZBrush that ships
+    ZStartup/UserInterfaceColors/Z4R8_default.cfg, or None (with a message) when there is none. Nothing from
+    Maxon is kept in the repository."""
+    for e in sorted(installs.find_installs(), key=lambda e: e["year"] or 0, reverse=True):
+        path = os.path.join(e["path"], "ZStartup", "UserInterfaceColors", "Z4R8_default.cfg")
+        try:
+            with open(path, "rb") as f:
+                colours = zbrush_colors.decode(f.read())
+        except OSError:
+            continue
+        if colours:
+            return zbrush_colors.Scheme(e["year"] or 0, path, os.path.getmtime(path), colours, "stock")
+    return None
+
+
+def shot_ring_zbrush(w):
+    """The same ring as shot_ring, in the theme a stock ZBrush scheme gives, over a mid-dark grey canvas."""
+    w.fans(False)
+    im = w.preview("brushes", hover=1, held=True, scale=RING_SCALE)
+    return with_cursor(on_background(im, bg=BG_ZBRUSH), *hovered(im))
 
 
 def shot_fan(w):
@@ -357,6 +383,8 @@ SHOTS = {
     "ring": ("ring.png", shot_ring, "the starter Brushes menu in hold mode, ClayBuildup hovered, cursor on it"),
     "ring-light": ("ring-light.png", shot_ring_light,
                    "the same ring as ring.png in the Light theme, over a light grey canvas"),
+    "ring-zbrush": ("ring-zbrush.png", shot_ring_zbrush,
+                    "the same ring as ring.png in the theme a stock ZBrush scheme gives (Match ZBrush), over a dark grey"),
     "fan": ("fan.png", shot_fan, "More Brushes fanned out to the left, ClayTubes in the fan hovered, cursor on it"),
     "tag-colours": ("tag-colours.png", shot_tags, "eight brushes in two tags and two untagged, ClayBuildup hovered"),
     "animations": ("animations.png", shot_animations, "the five open animations part way through opening"),
@@ -381,7 +409,13 @@ def main(argv):
     worlds = {}
     for name in args or SHOTS:
         file, make, _ = SHOTS[name]
-        theme = "light" if make is shot_ring_light else "dark"
+        theme = "light" if make is shot_ring_light else "zbrush" if make is shot_ring_zbrush else "dark"
+        if theme == "zbrush" and theme not in worlds:
+            scheme = stock_scheme()
+            if scheme is None:
+                print("skipped", file, "- no installed ZBrush has ZStartup/UserInterfaceColors/Z4R8_default.cfg")
+                continue
+            zbrush_colors.current = lambda: scheme     # theme.py asks here for the colours Match ZBrush uses
         if theme not in worlds:                # one world for each theme, made when a picture needs it
             worlds[theme] = World(theme)
         result = make(worlds[theme])

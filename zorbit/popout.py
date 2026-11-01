@@ -230,19 +230,22 @@ class PopoutApi(webapi.LibraryApi, webapi.TagApi):
         size = st.get("size")
         kind = self._pop.start_kind or st.get("kind")
         side = "right" if st.get("side") == "right" else "left"
-        setting, effective = theme.read_setting(), theme.current()
+        setting, sig = theme.read_setting(), theme.signature()
+        effective = sig[0]
+        look = theme.preset(effective)                     # Match ZBrush: the scheme's tokens for the page
         with self._pop._lock:                              # show() reads and writes it under the same lock
-            self._pop._theme_seen = (setting, effective)   # show() tells the page only when this changes
+            self._pop._theme_seen = (setting, sig)         # show() tells the page only when this changes
         return {"on_top": self._pop.on_top, "size": size if isinstance(size, int) else None, "side": side,
                 "column": st.get("column") != "hidden",
                 "tag": self._pop.start_tag,
                 "kind": kind if kind in C.ASSET_KINDS else "brush", "tags_path": profiles.tags_file(),
-                "profile": profiles.active(), "theme": setting, "theme_effective": effective}
+                "profile": profiles.active(), "theme": setting, "theme_effective": effective,
+                "theme_base": look["base"], "theme_tokens": look["web"]}
 
     def popout_theme_changed(self, effective):
         """The page saw Windows change its app colour mode (Follow Windows): the frame follows. True."""
-        if effective in theme.CONCRETE:
-            self._pop.apply_frame_theme(theme.PRESETS[effective]["window"])
+        if effective in theme.EFFECTIVE:
+            self._pop.apply_frame_theme(theme.preset(effective)["window"])
         return True
 
     def popout_pick(self, name, kind="brush"):
@@ -328,7 +331,7 @@ class Popout:
         self._ctl_up = threading.Event()
         self._work = queue.SimpleQueue()     # what the control window asks for, done off its thread
         self._refs = []                      # callbacks that must outlive the calls
-        self._theme_seen = None              # (setting, effective) the page was last given
+        self._theme_seen = None              # (setting, theme.signature()) the page was last given
 
     # --- control window: how the app reaches us -------------------------------------------------------
     def start_ctl(self):
@@ -597,12 +600,13 @@ class Popout:
         """The theme may have changed while the window was hidden (Studio's setting, or Windows' colour mode under
         Follow Windows): when it differs from what the page was last given, set the frame and tell the page.
         Called by show() with the lock held."""
-        now = (theme.read_setting(), theme.current())
+        now = (theme.read_setting(), theme.signature())   # a new stored ZBrush scheme changes the digest, not the name
         if now == self._theme_seen:
             return
-        self.apply_frame_theme(theme.PRESETS[now[1]]["window"])
+        look = theme.preset(now[1][0])
+        self.apply_frame_theme(look["window"])
         try:
-            arg = json.dumps({"setting": now[0], "effective": now[1]})
+            arg = json.dumps({"setting": now[0], "effective": now[1][0], "base": look["base"], "tokens": look["web"]})
             self.window.evaluate_js("window.__popoutTheme && __popoutTheme(" + arg + ")")
             self._theme_seen = now                 # a failed call is tried again at the next show
         except Exception as e:

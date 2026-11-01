@@ -32,21 +32,45 @@ Studio's [Simple mode](studio.md#simple-and-full-mode) shows only some of these.
 
 ### Theme
 
-The **Theme** card is at the top of **Settings**, in Simple and Full mode. It has three choices:
+The **Theme** card is at the top of **Settings**, in Simple and Full mode. It has four choices:
 
 - **Dark** is the default.
 - **Light** is for ZBrush and Windows set to a light theme.
 - **Follow Windows** uses Windows' app colour mode (**Settings > Personalisation > Colours > Choose your default app mode**) and changes with it. The app checks that setting twice a second, so the ring follows within about half a second. Studio and the browser follow as soon as Windows changes.
+- **Match ZBrush** uses the colours you last stored in ZBrush. See [Match ZBrush](#match-zbrush).
 
-![The Theme card on Settings: Dark, Light and Follow Windows, with Light picked](images/settings-theme.png)
+![The Theme card on Settings: Dark, Light, Follow Windows and Match ZBrush, with Match ZBrush picked and the ZBrush version it reads shown under it](images/settings-theme.png)
 
-The theme applies to Studio, the browser and the ring. It belongs to the PC, not to a profile: it is kept as `theme` in `studio.json` (`dark`, `light` or `system`), not in `radial.json`, so it is not part of an [export](files.md#import-and-export). The [browser](browser.md) reads it when it is shown. The plain colour Windows shows for a moment while Studio or the browser is being resized is the one the window started with; it changes when the window is next opened.
+The theme applies to Studio, the browser and the ring. It belongs to the PC, not to a profile: it is kept as `theme` in `studio.json` (`dark`, `light`, `system` or `zbrush`), not in `radial.json`, so it is not part of an [export](files.md#import-and-export). The [browser](browser.md) reads it when it is shown. The plain colour Windows shows for a moment while Studio or the browser is being resized is the one the window started with; it changes when the window is next opened.
 
 ![The Brushes ring in the Light theme, over a light grey background: pale slots with dark labels on white pills](images/ring-light.png)
 
 A change shows on the ring within about half a second, or at the next open at the latest.
 
 The theme sets the ring's colour defaults (see the table under [Colours](#colours)), and a colour you set under **Colours** still wins. A dark `bg` kept under Light stays dark. The label pill, the hint text, the submenu badge and the [message near the cursor](troubleshooting.md#the-ring-opens-but-picks-do-nothing) follow the theme and not your colours, so a very light `text` can be hard to read on Light's white pill. There is no setting for the pill and badge colours.
+
+#### Match ZBrush
+
+**Match ZBrush** colours the ring, the browser and Studio with the interface colours you set in ZBrush under **Preferences > Icolors**. ZOrbit reads the scheme ZBrush stores when you press **Preferences > Config > Store Config**. ZBrush keeps it in `ZStartup\CustomUserInterface<year>.cfg`, in `%PUBLIC%\Documents\ZBrushData<year>` and, for ZBrush 2026.1 and newer, also in `%APPDATA%\Maxon\ZBrush <year>_<id>\ZStartup\UserInterfaceLayouts` (see [Files and logs](files.md#files-and-logs)). ZOrbit only reads it and never changes it. A colour you changed in ZBrush but did not store is not seen, so press **Store Config**. It works the same on ZBrush 2022 and 2026.
+
+If ZBrush is running, ZOrbit uses that version. Otherwise it uses the newest installed version that has a stored scheme. The card says which: the version and when it was stored, with swatches of five of its colours.
+
+![The Brushes ring in the Match ZBrush theme with ZBrush's stock colours: grey slots with white labels, and an orange centre, lines and hovered slot](images/ring-zbrush.png)
+
+| ZBrush colour (**Preferences > Icolors**) | Used for |
+|---|---|
+| Bt1 (button) | The ring's slot fill (`bg`), and buttons in Studio and the browser |
+| Text2, else Text1 | The ring's label colour (`text`), and text in Studio and the browser |
+| Sw1 (a switch that is on) | The ring's `accent` and `lines`, and the accent in Studio and the browser |
+| K1 | The ring's `highlight`, unless it is the same hue as Sw1 (in stock ZBrush both are orange), then Dark's or Light's cyan |
+| Main | The window background of Studio and the browser |
+| Palette1, Palette2 | The panels of Studio and the browser |
+
+The rest of the look (the label pill, the hints, and everything the scheme does not give) comes from Dark or Light, whichever is closer to ZBrush's Main colour. Any colour that would be hard to read on what it sits on is replaced by the Dark or Light one. A colour you set under **Colours** still wins, as with the other themes.
+
+After a new **Store Config** the ring follows within about half a second. Studio and the browser follow when their window next gets the focus, or when the browser is next shown.
+
+If ZOrbit finds no stored scheme, it uses Dark and the card says so. See [Match ZBrush shows the Dark colours](troubleshooting.md#match-zbrush-shows-the-dark-colours).
 
 ### Colours
 
