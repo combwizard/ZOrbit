@@ -8,6 +8,8 @@ import types
 import pytest
 
 import assets
+import config
+import looks
 import menushare
 import tags
 import webapi
@@ -428,3 +430,168 @@ def test_plan_import_a_submenu_label_that_showed_the_title_follows_the_rename():
     out, _, _ = menushare.plan_import(menus, "a", {"menus": {"tools": {"title": "Tools"}}})
     assert out["a"]["items"] == [{"menu": "b", "label": "Tools 2"}, {"menu": "b", "label": "Mine"}, {"menu": "b"}]
     assert menus["a"]["items"][0]["label"] == "Tools"     # the input is left alone
+
+
+# --- looks: the user looks a menu uses travel with it ------------------------------------------------
+
+def _looky():
+    cfg = _cfg()
+    cfg["looks"] = {"Bold": {"border_width": 5}, "Soft hex": {"slot_shape": "hexagon"}, "Unused": {"hub": 20}}
+    cfg["menus"]["sculpt"]["look"] = "Bold"
+    cfg["menus"]["detail"]["look"] = {"preset": "Soft hex", "hub": 30}
+    cfg["menus"]["hard"]["look"] = "soft"               # a built-in look: nothing to carry
+    return cfg
+
+
+def test_looks_used_names_the_user_looks_of_the_menus_in_order_of_use():
+    cfg = _looky()
+    menus = {k: cfg["menus"][k] for k in ("sculpt", "detail", "hard")}
+    used = menushare.looks_used(cfg, menus)
+    assert list(used) == ["Bold", "Soft hex"] and used["Bold"] == {"border_width": 5}
+    used["Bold"]["border_width"] = 1
+    assert cfg["looks"]["Bold"] == {"border_width": 5}      # a copy
+
+
+def test_looks_used_skips_built_in_missing_and_malformed_looks():
+    cfg = {"looks": {"Odd": "x"}, "menus": {}}
+    menus = {"a": {"look": "soft"}, "b": {"look": "Nope"}, "c": {"look": "Odd"}, "d": {"look": 5}, "e": "junk",
+             "f": {"look": {"hub": 3}}}
+    assert menushare.looks_used(cfg, menus) == {}
+    assert menushare.looks_used({"menus": {}}, menus) == {}
+
+
+def test_build_carries_a_look_only_when_a_menu_in_the_file_uses_it():
+    cfg = _looky()
+    b = menushare.build(cfg, "sculpt", None, "1")
+    assert b["looks"] == {"Bold": {"border_width": 5}, "Soft hex": {"slot_shape": "hexagon"}}
+    assert "Unused" not in b["looks"]
+    assert "looks" not in menushare.build(cfg, "other", None, "1")      # "other" and its menus use none
+    assert "looks" not in menushare.build(cfg, "hard", None, "1")       # a built-in look is not carried
+
+
+def test_collect_and_plan_import_leave_more_ids_out():
+    cfg = {"menus": {"a": {"items": [{"menu": "more:a"}, {"menu": "b"}]}, "b": {"items": []}}}
+    assert menushare.collect(cfg, "a") == ["a", "b"] and menushare.collect(cfg, "more:a") == []
+    out, root, _ = menushare.plan_import({"more:x": {"title": "Rest", "items": []}}, "more:x", {"menus": {}})
+    assert root == "rest" and list(out) == ["rest"]
+
+
+def test_plan_looks_adds_a_new_look_and_joins_an_identical_one():
+    out, renamed, joined = menushare.plan_looks({"A": {"hub": 5}, "B": {"hub": 6}}, {"B": {"hub": 6}})
+    assert out == {"A": {"hub": 5}} and renamed == {} and joined == ["B"]
+
+
+def test_plan_looks_joins_whatever_the_key_order_and_capitals():
+    out, renamed, joined = menushare.plan_looks({"mine": {"hub": 6, "labels": "none"}},
+                                                {"Mine": {"labels": "none", "hub": 6}})
+    assert out == {} and renamed == {"mine": "Mine"} and joined == ["Mine"]
+
+
+def test_plan_looks_renames_a_look_with_the_same_name_and_other_contents():
+    out, renamed, joined = menushare.plan_looks({"Bold": {"hub": 5}}, {"Bold": {"hub": 9}, "Bold 2": {"hub": 1}})
+    assert out == {"Bold 3": {"hub": 5}} and renamed == {"Bold": "Bold 3"} and joined == []
+
+
+def test_plan_looks_renames_the_name_of_a_built_in_look():
+    out, renamed, _ = menushare.plan_looks({"Soft": {"hub": 5}, "TILES": {"hub": 6}}, {})
+    assert out == {"Soft 2": {"hub": 5}, "TILES 2": {"hub": 6}} and renamed == {"Soft": "Soft 2", "TILES": "TILES 2"}
+
+
+def test_plan_looks_makes_an_invalid_name_valid_and_keeps_it_short():
+    out, renamed, _ = menushare.plan_looks({"a/b!": {"hub": 1}, "": {"hub": 2}, "x" * 40: {"hub": 3}}, {})
+    assert set(out) == {"a b", "Look", "x" * 32}
+    assert renamed == {"a/b!": "a b", "": "Look", "x" * 40: "x" * 32}
+    for name in out:
+        assert looks.valid_name(name) == ""
+    out, renamed, _ = menushare.plan_looks({"y" * 40: {"hub": 1}}, {"y" * 32: {"hub": 2}})
+    assert list(out) == ["y" * 30 + " 2"] and len(next(iter(out))) == 32
+
+
+def test_plan_looks_ignores_what_is_not_a_look():
+    assert menushare.plan_looks({"A": "x", "B": None}, {}) == ({}, {}, [])
+    assert menushare.plan_looks(None, None) == ({}, {}, [])
+
+
+def test_plan_looks_does_not_change_its_input():
+    bundle, mine = {"Bold": {"hub": 5}}, {"Bold": {"hub": 9}}
+    menushare.plan_looks(bundle, mine)
+    assert bundle == {"Bold": {"hub": 5}} and mine == {"Bold": {"hub": 9}}
+
+
+def test_relook_follows_the_renamed_looks_in_plan_import_output():
+    out, root, _ = menushare.plan_import({"a": {"title": "A", "look": "Bold", "items": []},
+                                          "b": {"title": "B", "look": {"preset": "Bold", "hub": 3}, "items": []}},
+                                         "a", {"menus": {}})
+    assert config.relook(out, {"Bold": "Bold 2"}) == 2
+    assert out["a"]["look"] == "Bold 2" and out["b"]["look"] == {"preset": "Bold 2", "hub": 3}
+
+
+def test_export_menu_writes_the_looks_the_menus_use(api, tmp_path, monkeypatch):
+    _save_to(api, monkeypatch, tmp_path / "out.json")
+    assert api.export_menu(_looky(), "sculpt")["ok"]
+    bundle = json.loads((tmp_path / "out.json").read_text(encoding="utf-8"))
+    assert list(bundle["looks"]) == ["Bold", "Soft hex"]
+    assert bundle["menus"]["sculpt"]["look"] == "Bold"
+
+
+def test_export_menu_refuses_a_more_id(api, tmp_path, monkeypatch):
+    _save_to(api, monkeypatch, tmp_path / "out.json")
+    assert api.export_menu(_cfg(), "more:sculpt")["ok"] is False
+
+
+def _looky_bundle(**over):
+    b = {"zorbit_menu": 1, "version": "1", "menu": "m",
+         "menus": {"m": {"title": "M", "look": "Bold", "items": [{"brush": "A"}, {"menu": "n"}]},
+                   "n": {"title": "N", "look": {"preset": "Same", "hub": 20}, "items": [{"brush": "B"}]}},
+         "looks": {"Bold": {"border_width": 5}, "Same": {"slot_shape": "hexagon"}}}
+    b.update(over)
+    return b
+
+
+def test_pick_menu_import_reports_the_looks_and_changes_nothing(api, tmp_path, monkeypatch, tagfile):
+    cfg = {"looks": {"Bold": {"border_width": 1}, "Same": {"slot_shape": "hexagon"}}, "menus": {}}
+    before = copy.deepcopy(cfg)
+    res = _pick(api, monkeypatch, _file(tmp_path, _looky_bundle()), cfg)
+    assert res["ok"] and res["problems"] == []
+    assert res["looks"] == {"added": ["Bold 2"], "joined": ["Same"], "renamed": {"Bold": "Bold 2"}}
+    assert cfg == before
+
+
+def test_apply_menu_import_gives_the_looks_to_merge_and_points_the_menus_at_them(api, tmp_path, monkeypatch, tagfile):
+    cfg = {"looks": {"Bold": {"border_width": 1}, "Same": {"slot_shape": "hexagon"}}, "menus": {}}
+    assert _pick(api, monkeypatch, _file(tmp_path, _looky_bundle()), cfg)["ok"]
+    res = api.apply_menu_import(cfg)
+    assert res["ok"] and res["problems"] == []
+    assert res["looks"] == {"Bold 2": {"border_width": 5}}
+    assert res["looks_renamed"] == {"Bold": "Bold 2"} and res["looks_joined"] == ["Same"]
+    assert res["menus"]["m"]["look"] == "Bold 2" and res["menus"]["n"]["look"] == {"preset": "Same", "hub": 20}
+    assert res["looks_message"] == ("Added 1 look to yours; 1 look got a new name because yours has one with that "
+                                    "name; 1 look matched one of yours.")
+    assert cfg["looks"] == {"Bold": {"border_width": 1}, "Same": {"slot_shape": "hexagon"}}
+
+
+def test_the_imported_menus_load_with_the_merged_looks(api, tmp_path, monkeypatch, tagfile):
+    cfg = {"looks": {"Bold": {"border_width": 1}}, "menus": {}}
+    assert _pick(api, monkeypatch, _file(tmp_path, _looky_bundle()), cfg)["ok"]
+    res = api.apply_menu_import(cfg)
+    merged = {"looks": {**cfg["looks"], **res["looks"]}, "menus": res["menus"]}
+    loaded, errors = api._load_dict(merged)
+    assert [e for e in errors if not e.startswith("no menu has a hotkey")] == []
+    assert loaded.menus["m"].look_spec["preset"] == "Bold 2" and loaded.menus["m"].look["border_width"] == 5
+    assert loaded.menus["n"].look["slot_shape"] == "hexagon" and loaded.menus["n"].look["hub"] == 20
+
+
+def test_a_look_nobody_has_is_a_problem_of_the_imported_menu(api, tmp_path, monkeypatch, tagfile):
+    b = _looky_bundle()
+    del b["looks"]
+    res = _pick(api, monkeypatch, _file(tmp_path, b), {"menus": {}})
+    assert res["ok"] and res["looks"] == {"added": [], "joined": [], "renamed": {}}
+    assert any("look 'Bold' unknown" in p for p in res["problems"])
+    assert api.apply_menu_import({"menus": {}})["looks"] == {}
+
+
+def test_a_file_from_before_looks_still_imports(api, tmp_path, monkeypatch, tagfile):
+    res = _pick(api, monkeypatch, _file(tmp_path, _bundle()), {"menus": {}})
+    assert res["ok"] and res["looks"] == {"added": [], "joined": [], "renamed": {}}
+    done = api.apply_menu_import({"menus": {}})
+    assert done["looks"] == {} and done["looks_message"] == ""

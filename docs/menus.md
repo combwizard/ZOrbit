@@ -6,7 +6,7 @@ A menu is a named list of items shown as one ring. Menus live in one file, `%APP
 
 - A menu **with a hotkey** can be opened from ZBrush.
 - A menu **without a hotkey** is a submenu: it opens when you pick an item of type `menu` in another ring.
-- Items are spread evenly around the circle. **Ring radius** is a minimum: when a menu has more items than fit at that radius, the ring grows so the slots keep a gap (see [Appearance](appearance.md#appearance-and-behaviour-settings)). With the default sizes that starts at 10 items. The more items, the smaller the angle between neighbouring slots, so they get harder to hit. Studio shows a note above the item list when the ring is full, saying how many items fit and how big the ring grows. Raise **Ring radius**, lower **Slot size** or split the menu into submenus.
+- Items are spread evenly around the circle. **Ring radius** is a minimum: when a menu has more items than fit at that radius, the ring grows so the slots keep a gap (see [Appearance](appearance.md#appearance-and-behaviour-settings)). With the default sizes that starts at 10 items. The more items, the smaller the angle between neighbouring slots, so they get harder to hit. Studio shows a note above the item list when the ring is full, saying how many items fit and how big the ring grows. Raise **Ring radius**, lower **Slot size** or split the menu into submenus, or choose what a full ring does instead of growing (see [When a ring is full](#when-a-ring-is-full)).
 - At least one menu needs a hotkey, otherwise nothing can open the ring.
 - A menu can have its own open animation (`"animation": "spiral"`, or pick one in the menu settings in Studio's Full mode). Without one it uses `ring.animation`. See [Open animations](appearance.md#open-animations).
 - A menu can **fan out** when it is opened as a submenu (`"fan": true`, or switch on **Fan out when opened from another menu** in the menu settings in Studio's Full mode). See [Submenu](#submenu).
@@ -29,6 +29,22 @@ A new menu's id comes from its title in Studio. **Sculpting** becomes `sculpting
 
 Starter menus ship with ZOrbit: **Brushes** (Q), with submenus **More Brushes** (its slot shows the ClayTubes picture) and **Tools** (masking, symmetry, PolyFrame, LazyMouse and other switches, a **Browser** slot that opens the [browser](browser.md), a **Favourites** slot, and a **SubDivide** submenu with a row of stroke subdivide sizes). **SubDivide** opens from **Tools**, not from **Brushes**. They use only brushes that come with ZBrush. **Swallow hotkey** is off for the starter **Brushes** menu, so ZBrush still sees **Q** and goes to Draw mode as the ring opens. New installs get the **Favourites** slot in **Tools**; existing menus are not changed.
 
+## When a ring is full
+
+A ring is full when its slots would sit closer than 1.25 slot widths apart at the ring's radius. With the default sizes that is 9 slots at a radius of 145. What happens then is the `when_full` setting. It is one of the look keys, so it can be set for the whole ring (`ring.when_full`) or for one menu (`look.when_full`).
+
+| `when_full` | What the ring does |
+|---|---|
+| `grow` | The default. The ring gets bigger until the slots fit. |
+| `rings` | The ring keeps its radius. The slots that do not fit go on a second ring outside the first. |
+| `more` | The ring keeps its radius and shows as many slots as fit, less one. The last slot is **More**, drawn with three dots, and it opens another ring with the rest. |
+
+With `more`, a menu of 12 items at the defaults shows 8 items and **More**, and **More** opens a ring with the other 4. A very long menu pages again: the second ring has its own **More**. Auto slots are filled before the menu is cut, so an auto slot on a later page holds the brush it would have held anyway. The **More** slot always looks like the rest of its menu.
+
+Two kinds of menu are never paged: a menu that fans out (`"fan": true`) and the fan a tag slot opens. A ring with room for fewer than three slots is not cut either, because **More** and one item would be all it could show.
+
+The rest of the menu is a menu with an id that starts with `more:` (`more:main`, then `more:more:main`). These ids are made when the ring opens. They are never saved, they cannot be a menu's id and a menu file does not hold them, in the same way as the `tag:` ids of tag fans.
+
 ## Share a menu
 
 **Export menu...** in the **Manage** row of the **Menu** tab saves one menu as a small `.json` file you can send to someone. The file is named after the menu, such as `Sculpt menu.json`.
@@ -36,13 +52,16 @@ Starter menus ship with ZOrbit: **Brushes** (Q), with submenus **More Brushes** 
 The file holds:
 
 - the menu, every submenu it opens, and the submenus those open;
-- the tags its **Tag** and **Browser** items use, with their labels and colours, and the brushes, alphas, materials and textures that carry them, so a tag fan is not empty on the other PC.
+- the tags its **Tag** and **Browser** items use, with their labels and colours, and the brushes, alphas, materials and textures that carry them, so a tag fan is not empty on the other PC;
+- the looks of your own that these menus use (the `looks` section of `radial.json`, for any menu whose `look` names one). The built-in looks are in every copy of ZOrbit, so they are not in the file.
 
 The hotkey, the ring settings and the bridge and browser settings stay behind, and so do the brush, alpha, material and texture files themselves. An icon that is a full path to a file on your PC shows as a problem on the other PC.
 
 **Import menu...**, under **Add menu** at the foot of the **Menus** list, asks for the file and shows what it holds before anything changes: the menu and its submenus, any title or id that is already taken, the tags it brings, and any brushes, alphas, materials or textures this PC does not have. Those still import, and show as missing until you install them.
 
 **Import** adds the menus after your current ones and overwrites nothing. A title that is taken gets a number, such as Sculpt 2, and a taken id gets one too, such as `sculpt_2`. The menus have no hotkey: give one in the **Menu** tab, or open the menu from another one. The menus are an unsaved change, so **Undo** takes them out and **Save** keeps them. The tags are saved straight away and merged with yours, as **Merge tags** does in [Import and export](files.md#import-and-export), and **Undo** leaves them.
+
+The looks come in with the menus, as part of the same unsaved change, so **Undo** takes them out too. A look of the file that has the same name as one of yours and the same settings joins yours, so nothing is added twice. A look with the same name and other settings is added under a new name, such as `Bold 2`, and the imported menus use that one. A look whose name is one of the built-in looks (`soft`, `tiles` and the rest) gets a number in the same way, and so does one whose name is not valid for a look.
 
 ## Item types
 

@@ -379,6 +379,23 @@ def test_create_empty_has_one_empty_menu_on_the_first_hotkey_and_the_ring(active
     assert cfg["ring"] == RING and cfg["bridge"] == BRIDGE and cfg["browser"] == BROWSER
 
 
+def test_create_empty_keeps_the_looks_the_ring_may_name(active_profile):
+    cfg_dir, folder = active_profile
+    raw = json.loads((folder / "radial.json").read_text(encoding="utf-8"))
+    raw["looks"] = {"Mine": {"slot_shape": "hexagon"}}
+    raw["ring"] = {**raw.get("ring", {}), "look": "Mine"}
+    put(folder / "radial.json", json.dumps(raw))
+    profiles.create("Blank", "empty")
+    cfg = read(cfg_dir / "profiles" / "Blank" / "radial.json")
+    assert cfg["looks"] == {"Mine": {"slot_shape": "hexagon"}} and cfg["ring"]["look"] == "Mine"
+
+
+def test_create_empty_without_looks_has_no_looks_section(active_profile):
+    cfg_dir, _ = active_profile
+    profiles.create("Blank", "empty")
+    assert "looks" not in read(cfg_dir / "profiles" / "Blank" / "radial.json")
+
+
 def test_create_empty_falls_back_to_q_when_no_menu_has_a_hotkey(active_profile):
     cfg_dir, folder = active_profile
     put(folder / "radial.json", json.dumps({"menus": {"a": {"items": []}}}))

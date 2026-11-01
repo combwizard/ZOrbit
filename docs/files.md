@@ -6,7 +6,7 @@
 
 ![Settings > Import and export: the Settings file section with Export and Import buttons, and a note on what the file holds](images/settings-import-export.png)
 
-**Export...** writes the profile you are editing as one `.json` file: its menus and settings (everything in `radial.json`) and its tags. It saves what is on screen, including edits you have not saved yet. It leaves out Studio's window placement and preferences, the ZBrush folders you added by hand and the usage counts, which stay with the profile on this PC.
+**Export...** writes the profile you are editing as one `.json` file: its menus and settings (everything in `radial.json`, the looks you saved under `looks` included) and its tags. It saves what is on screen, including edits you have not saved yet. It leaves out Studio's window placement and preferences, the ZBrush folders you added by hand and the usage counts, which stay with the profile on this PC.
 
 **Import...** reads a file and shows what it holds before anything changes. It also accepts a plain `radial.json` or a plain `tags.json`, such as one you copied by hand. It loads the file into the profile you are editing. To make a new profile from a file instead, use **New profile... > From a file...** (see [Sharing a profile](profiles.md#sharing-a-profile)).
 
@@ -16,7 +16,7 @@
   - **Replace tags** swaps your tags for the file's. Your old `tags.json` is kept as `tags.json.bak` first.
 - Tags save straight away, as tag edits always do, so they are not part of **Undo**.
 
-To share one menu, use **Export menu...** in the **Menu** tab. It writes the menu, its submenus and their tags to a small file, which **Import menu...** in the **Menus** list adds to someone else's setup. See [Share a menu](menus.md#share-a-menu).
+To share one menu, use **Export menu...** in the **Menu** tab. It writes the menu, its submenus, their tags and the looks of your own that they use to a small file, which **Import menu...** in the **Menus** list adds to someone else's setup. See [Share a menu](menus.md#share-a-menu).
 
 ## Files and logs
 

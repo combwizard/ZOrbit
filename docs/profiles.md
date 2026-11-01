@@ -21,7 +21,7 @@ If the profile is switched from the tray while Studio is open, Studio follows wh
 Click the profile button and choose **New profile...**. Type a name, then pick where the new profile's menus, settings and tags come from:
 
 - **Starter menus**: the menus a fresh install has.
-- **Empty**: one menu called **Main**, with the first hotkey of the current profile and no items. The ring opens nothing until you add an item.
+- **Empty**: one menu called **Main**, with the first hotkey of the current profile and no items. The ring opens nothing until you add an item. It keeps the ring settings of the current profile and the looks you saved under `looks`, so the ring looks the same.
 - **Copy of** the current profile: its menus, tags and usage.
 - **From a file...**: a settings file from **Export...** (see [Sharing a profile](#sharing-a-profile)), or a plain `radial.json`. Its tags come along. A menu file from **Export menu...** is refused.
 

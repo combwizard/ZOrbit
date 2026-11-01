@@ -1,19 +1,22 @@
 """Sharing one menu: the pure parts of Export menu... and Import menu... (no dialogs, no window).
 
-A menu file holds one menu, the submenus it opens, and the tags its Tag and Browser items name, so it works on its
-own on another PC. studio.py does the dialogs and the writing; this module builds the file's contents, plans the
+A menu file holds one menu, the submenus it opens, the tags its Tag and Browser items name and the looks (the
+user's named presets) those menus use, so it works on its own on another PC. studio.py does the dialogs and the writing; this module builds the file's contents, plans the
 ids and titles the menus get when they come in, and looks for brushes the PC does not have.
 """
 import copy
+import json
 import re
 import time
 import unicodedata
 
 import config as C
+import looks as L
 import tags as T
 
 MENU_FORMAT = 1              # the "zorbit_menu" number of a menu file
 _VALID_ID = re.compile(r"[A-Za-z0-9_-]+")
+_SYNTHETIC = ("tag:", "more:")        # menu ids the app makes up: never in a file
 _PC_KEYS = ("hotkey", "swallow")      # belong to one PC's keyboard: never in a menu file, never imported
 
 
@@ -37,13 +40,13 @@ def _items(menu) -> list:
 
 def collect(cfg, menu_id) -> list:
     """The menu and every submenu it opens (items of type menu, followed down, each once), in file order: the root
-    first, then submenus as the walk first meets them (depth first, item order). Ids that start with 'tag:' and ids
-    that are not in the config are skipped."""
+    first, then submenus as the walk first meets them (depth first, item order). Ids that start with 'tag:' or
+    'more:' and ids that are not in the config are skipped."""
     menus = _menus(cfg)
     seen, order = set(), []
 
     def walk(mid):
-        if mid in seen or not isinstance(mid, str) or mid.startswith("tag:") or mid not in menus:
+        if mid in seen or not isinstance(mid, str) or mid.startswith(_SYNTHETIC) or mid not in menus:
             return
         seen.add(mid)
         order.append(mid)
@@ -90,6 +93,75 @@ def _tags_for(menus, store):
             "items": items}
 
 
+def _look_names(menu) -> list:
+    """The preset name a raw menu's "look" names (the string, or the "preset" of the object), as a list of 0 or 1."""
+    v = menu.get("look") if isinstance(menu, dict) else None
+    if isinstance(v, dict):
+        v = v.get("preset")
+    return [v] if isinstance(v, str) and v else []
+
+
+def looks_used(cfg, menus) -> dict:
+    """{name: look dict} of the user looks in cfg["looks"] that these menus (a dict of raw menus) name, in order of
+    first use. A built-in look, or a name cfg has no look for, is left out: there is nothing to carry."""
+    have = cfg.get("looks") if isinstance(cfg, dict) else None
+    have = have if isinstance(have, dict) else {}
+    out = {}
+    for m in menus.values():
+        for name in _look_names(m):
+            if name not in out and isinstance(have.get(name), dict):
+                out[name] = copy.deepcopy(have[name])
+    return out
+
+
+def _usable_look_name(name) -> str:
+    """name as a name a user look can have: other characters become spaces and it is cut to 32 characters. A name
+    that is a built-in or reserved one is numbered later (see plan_looks). "Look" when nothing is left."""
+    text = re.sub(r"[^\w -]+", " ", str(name or ""))
+    text = re.sub(r"\s+", " ", text).strip(" -")[:32].strip(" -")
+    return text or "Look"
+
+
+def _same_look(a, b) -> bool:
+    return json.dumps(a, sort_keys=True) == json.dumps(b, sort_keys=True)
+
+
+def plan_looks(bundle_looks, cfg_looks):
+    """How the looks of a menu file come in next to the user looks the editor has (cfg_looks).
+    Returns (looks_out, renamed, joined):
+      * looks_out: {name: look dict} the editor has to add, under the names they get here;
+      * renamed: {name in the file: name it gets} for every look whose name changed (one that joined a look of
+        the editor with other capitals included);
+      * joined: the names, as the editor has them, of the looks that are the same as one it already has.
+    A look with the same name and the same contents joins the one the editor has. The same name with other contents,
+    or the name of a built-in look, becomes "Name 2", "Name 3"...; a name that is not valid is made valid first."""
+    have = cfg_looks if isinstance(cfg_looks, dict) else {}
+    taken = {k.casefold(): k for k in have}
+    out, renamed, joined = {}, {}, []
+    for old, look in (bundle_looks.items() if isinstance(bundle_looks, dict) else ()):
+        if not isinstance(look, dict):
+            continue
+        name = old if not L.valid_name(old) else _usable_look_name(old)
+        mine = taken.get(name.casefold())
+        if mine is not None and name.casefold() not in L.BUILTIN:
+            theirs = have.get(mine) if mine in have else out.get(mine)
+            if _same_look(theirs, look):
+                if mine in have and mine not in joined:
+                    joined.append(mine)
+                if mine != old:
+                    renamed[old] = mine
+                continue
+        base, n = name, 2
+        while name.casefold() in taken or L.valid_name(name):
+            suffix = f" {n}"
+            name, n = f"{base[:32 - len(suffix)].rstrip(' -')}{suffix}", n + 1
+        taken[name.casefold()] = name
+        out[name] = copy.deepcopy(look)
+        if name != old:
+            renamed[old] = name
+    return out, renamed, joined
+
+
 def build(cfg, menu_id, store, version) -> dict:
     """The contents of a menu file. store: a loaded tags.TagStore, or None (then there is no 'tags' section)."""
     menus = _menus(cfg)
@@ -100,6 +172,9 @@ def build(cfg, menu_id, store, version) -> dict:
     tag_part = _tags_for(out_menus, store)
     if tag_part:
         bundle["tags"] = tag_part
+    used = looks_used(cfg, out_menus)
+    if used:
+        bundle["looks"] = used
     return bundle
 
 
@@ -120,7 +195,7 @@ def plan_import(bundle_menus, root, cfg):
         m = m if isinstance(m, dict) else {}
         title = m.get("title") if isinstance(m.get("title"), str) else ""
         nid = old
-        valid = (bool(_VALID_ID.fullmatch(old)) and not old.isdigit() and not old.startswith("tag:")
+        valid = (bool(_VALID_ID.fullmatch(old)) and not old.isdigit() and not old.startswith(_SYNTHETIC)
                  and old not in C.RESERVED_MENU_IDS)
         if not valid or old in taken:
             base = old if valid else menu_slug(title or old)      # a taken id is numbered, a bad one made anew

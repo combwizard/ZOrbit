@@ -1,0 +1,4927 @@
+[
+ {
+  "expected": {
+   "origins": {
+    "animation": {
+     "from": "default",
+     "name": ""
+    },
+    "border_width": {
+     "from": "default",
+     "name": ""
+    },
+    "colors.accent": {
+     "from": "default",
+     "name": ""
+    },
+    "colors.bg": {
+     "from": "default",
+     "name": ""
+    },
+    "colors.highlight": {
+     "from": "default",
+     "name": ""
+    },
+    "colors.lines": {
+     "from": "default",
+     "name": ""
+    },
+    "colors.text": {
+     "from": "default",
+     "name": ""
+    },
+    "dead_zone": {
+     "from": "default",
+     "name": ""
+    },
+    "flick": {
+     "from": "default",
+     "name": ""
+    },
+    "glow_color": {
+     "from": "default",
+     "name": ""
+    },
+    "glow_opacity": {
+     "from": "default",
+     "name": ""
+    },
+    "hover_submenus": {
+     "from": "default",
+     "name": ""
+    },
+    "hub": {
+     "from": "default",
+     "name": ""
+    },
+    "hub_color": {
+     "from": "default",
+     "name": ""
+    },
+    "hub_glow": {
+     "from": "default",
+     "name": ""
+    },
+    "hub_style": {
+     "from": "default",
+     "name": ""
+    },
+    "icon_scale": {
+     "from": "default",
+     "name": ""
+    },
+    "label_color": {
+     "from": "default",
+     "name": ""
+    },
+    "labels": {
+     "from": "default",
+     "name": ""
+    },
+    "radius": {
+     "from": "default",
+     "name": ""
+    },
+    "slot": {
+     "from": "default",
+     "name": ""
+    },
+    "slot_corner": {
+     "from": "default",
+     "name": ""
+    },
+    "slot_shape": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_band": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_band_opacity": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_colors": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_glow_opacity": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_tint_blend": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_tint_opacity": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_tint_style": {
+     "from": "default",
+     "name": ""
+    },
+    "tap_ms": {
+     "from": "default",
+     "name": ""
+    },
+    "timeout_s": {
+     "from": "default",
+     "name": ""
+    },
+    "when_full": {
+     "from": "default",
+     "name": ""
+    }
+   },
+   "problems": [],
+   "values": {
+    "animation": "smooth",
+    "border_width": 2,
+    "colors": {
+     "accent": "#f86b33",
+     "bg": "#222327",
+     "highlight": "#4dc8e9",
+     "lines": "#f86b33",
+     "text": "#f0f0f0"
+    },
+    "dead_zone": 38,
+    "flick": true,
+    "glow_color": "",
+    "glow_opacity": 0.55,
+    "hover_submenus": true,
+    "hub": 10,
+    "hub_color": "#f86b33",
+    "hub_glow": 1.0,
+    "hub_style": "dot",
+    "icon_scale": 1.0,
+    "label_color": "#f0f0f0",
+    "labels": "name",
+    "radius": 145,
+    "slot": 72,
+    "slot_corner": 0.28,
+    "slot_shape": "circle",
+    "tag_band": "medium",
+    "tag_band_opacity": 0.45,
+    "tag_colors": "tint",
+    "tag_glow_opacity": 0.4,
+    "tag_tint_blend": "multiply",
+    "tag_tint_opacity": 0.3,
+    "tag_tint_style": "gradient",
+    "tap_ms": 250,
+    "timeout_s": 20,
+    "when_full": "grow"
+   }
+  },
+  "looks": {},
+  "menus": {
+   "main": {
+    "hotkey": "Q",
+    "items": [
+     {
+      "brush": "ClayBuildup"
+     },
+     {
+      "brush": "Move"
+     },
+     {
+      "brush": "Standard"
+     }
+    ],
+    "title": "Main"
+   }
+  },
+  "name": "ring at the defaults",
+  "ring": {},
+  "target": {},
+  "theme": "dark"
+ },
+ {
+  "expected": {
+   "origins": {
+    "animation": {
+     "from": "default",
+     "name": ""
+    },
+    "border_width": {
+     "from": "default",
+     "name": ""
+    },
+    "colors.accent": {
+     "from": "default",
+     "name": ""
+    },
+    "colors.bg": {
+     "from": "default",
+     "name": ""
+    },
+    "colors.highlight": {
+     "from": "default",
+     "name": ""
+    },
+    "colors.lines": {
+     "from": "default",
+     "name": ""
+    },
+    "colors.text": {
+     "from": "default",
+     "name": ""
+    },
+    "dead_zone": {
+     "from": "default",
+     "name": ""
+    },
+    "flick": {
+     "from": "default",
+     "name": ""
+    },
+    "glow_color": {
+     "from": "default",
+     "name": ""
+    },
+    "glow_opacity": {
+     "from": "default",
+     "name": ""
+    },
+    "hover_submenus": {
+     "from": "default",
+     "name": ""
+    },
+    "hub": {
+     "from": "global",
+     "name": ""
+    },
+    "hub_color": {
+     "from": "default",
+     "name": ""
+    },
+    "hub_glow": {
+     "from": "default",
+     "name": ""
+    },
+    "hub_style": {
+     "from": "default",
+     "name": ""
+    },
+    "icon_scale": {
+     "from": "default",
+     "name": ""
+    },
+    "label_color": {
+     "from": "default",
+     "name": ""
+    },
+    "labels": {
+     "from": "default",
+     "name": ""
+    },
+    "radius": {
+     "from": "global",
+     "name": ""
+    },
+    "slot": {
+     "from": "global",
+     "name": ""
+    },
+    "slot_corner": {
+     "from": "default",
+     "name": ""
+    },
+    "slot_shape": {
+     "from": "global",
+     "name": ""
+    },
+    "tag_band": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_band_opacity": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_colors": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_glow_opacity": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_tint_blend": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_tint_opacity": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_tint_style": {
+     "from": "default",
+     "name": ""
+    },
+    "tap_ms": {
+     "from": "default",
+     "name": ""
+    },
+    "timeout_s": {
+     "from": "default",
+     "name": ""
+    },
+    "when_full": {
+     "from": "default",
+     "name": ""
+    }
+   },
+   "problems": [],
+   "values": {
+    "animation": "smooth",
+    "border_width": 2,
+    "colors": {
+     "accent": "#f86b33",
+     "bg": "#222327",
+     "highlight": "#4dc8e9",
+     "lines": "#f86b33",
+     "text": "#f0f0f0"
+    },
+    "dead_zone": 38,
+    "flick": true,
+    "glow_color": "",
+    "glow_opacity": 0.55,
+    "hover_submenus": true,
+    "hub": 20,
+    "hub_color": "#f86b33",
+    "hub_glow": 1.0,
+    "hub_style": "dot",
+    "icon_scale": 1.0,
+    "label_color": "#f0f0f0",
+    "labels": "name",
+    "radius": 180,
+    "slot": 80,
+    "slot_corner": 0.28,
+    "slot_shape": "hexagon",
+    "tag_band": "medium",
+    "tag_band_opacity": 0.45,
+    "tag_colors": "tint",
+    "tag_glow_opacity": 0.4,
+    "tag_tint_blend": "multiply",
+    "tag_tint_opacity": 0.3,
+    "tag_tint_style": "gradient",
+    "tap_ms": 250,
+    "timeout_s": 20,
+    "when_full": "grow"
+   }
+  },
+  "looks": {},
+  "menus": {
+   "main": {
+    "hotkey": "Q",
+    "items": [
+     {
+      "brush": "ClayBuildup"
+     },
+     {
+      "brush": "Move"
+     },
+     {
+      "brush": "Standard"
+     }
+    ],
+    "title": "Main"
+   }
+  },
+  "name": "ring size and shape keys",
+  "ring": {
+   "hub": 20,
+   "radius": 180,
+   "slot": 80,
+   "slot_shape": "hexagon"
+  },
+  "target": {},
+  "theme": "dark"
+ },
+ {
+  "expected": {
+   "origins": {
+    "animation": {
+     "from": "default",
+     "name": ""
+    },
+    "border_width": {
+     "from": "default",
+     "name": ""
+    },
+    "colors.accent": {
+     "from": "global",
+     "name": ""
+    },
+    "colors.bg": {
+     "from": "default",
+     "name": ""
+    },
+    "colors.highlight": {
+     "from": "default",
+     "name": ""
+    },
+    "colors.lines": {
+     "from": "default",
+     "name": ""
+    },
+    "colors.text": {
+     "from": "default",
+     "name": ""
+    },
+    "dead_zone": {
+     "from": "default",
+     "name": ""
+    },
+    "flick": {
+     "from": "default",
+     "name": ""
+    },
+    "glow_color": {
+     "from": "default",
+     "name": ""
+    },
+    "glow_opacity": {
+     "from": "default",
+     "name": ""
+    },
+    "hover_submenus": {
+     "from": "default",
+     "name": ""
+    },
+    "hub": {
+     "from": "default",
+     "name": ""
+    },
+    "hub_color": {
+     "from": "global",
+     "name": ""
+    },
+    "hub_glow": {
+     "from": "default",
+     "name": ""
+    },
+    "hub_style": {
+     "from": "default",
+     "name": ""
+    },
+    "icon_scale": {
+     "from": "default",
+     "name": ""
+    },
+    "label_color": {
+     "from": "default",
+     "name": ""
+    },
+    "labels": {
+     "from": "default",
+     "name": ""
+    },
+    "radius": {
+     "from": "default",
+     "name": ""
+    },
+    "slot": {
+     "from": "default",
+     "name": ""
+    },
+    "slot_corner": {
+     "from": "default",
+     "name": ""
+    },
+    "slot_shape": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_band": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_band_opacity": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_colors": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_glow_opacity": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_tint_blend": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_tint_opacity": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_tint_style": {
+     "from": "default",
+     "name": ""
+    },
+    "tap_ms": {
+     "from": "default",
+     "name": ""
+    },
+    "timeout_s": {
+     "from": "default",
+     "name": ""
+    },
+    "when_full": {
+     "from": "default",
+     "name": ""
+    }
+   },
+   "problems": [],
+   "values": {
+    "animation": "smooth",
+    "border_width": 2,
+    "colors": {
+     "accent": "#ff8800",
+     "bg": "#222327",
+     "highlight": "#4dc8e9",
+     "lines": "#f86b33",
+     "text": "#f0f0f0"
+    },
+    "dead_zone": 38,
+    "flick": true,
+    "glow_color": "",
+    "glow_opacity": 0.55,
+    "hover_submenus": true,
+    "hub": 10,
+    "hub_color": "#ff8800",
+    "hub_glow": 1.0,
+    "hub_style": "dot",
+    "icon_scale": 1.0,
+    "label_color": "#f0f0f0",
+    "labels": "name",
+    "radius": 145,
+    "slot": 72,
+    "slot_corner": 0.28,
+    "slot_shape": "circle",
+    "tag_band": "medium",
+    "tag_band_opacity": 0.45,
+    "tag_colors": "tint",
+    "tag_glow_opacity": 0.4,
+    "tag_tint_blend": "multiply",
+    "tag_tint_opacity": 0.3,
+    "tag_tint_style": "gradient",
+    "tap_ms": 250,
+    "timeout_s": 20,
+    "when_full": "grow"
+   }
+  },
+  "looks": {},
+  "menus": {
+   "main": {
+    "hotkey": "Q",
+    "items": [
+     {
+      "brush": "ClayBuildup"
+     },
+     {
+      "brush": "Move"
+     },
+     {
+      "brush": "Standard"
+     }
+    ],
+    "title": "Main"
+   }
+  },
+  "name": "ring colours merge key by key",
+  "ring": {
+   "colors": {
+    "accent": "#ff8800"
+   },
+   "hub_color": "accent"
+  },
+  "target": {},
+  "theme": "dark"
+ },
+ {
+  "expected": {
+   "origins": {
+    "animation": {
+     "from": "default",
+     "name": ""
+    },
+    "border_width": {
+     "from": "default",
+     "name": ""
+    },
+    "colors.accent": {
+     "from": "theme",
+     "name": ""
+    },
+    "colors.bg": {
+     "from": "theme",
+     "name": ""
+    },
+    "colors.highlight": {
+     "from": "theme",
+     "name": ""
+    },
+    "colors.lines": {
+     "from": "theme",
+     "name": ""
+    },
+    "colors.text": {
+     "from": "theme",
+     "name": ""
+    },
+    "dead_zone": {
+     "from": "default",
+     "name": ""
+    },
+    "flick": {
+     "from": "default",
+     "name": ""
+    },
+    "glow_color": {
+     "from": "default",
+     "name": ""
+    },
+    "glow_opacity": {
+     "from": "default",
+     "name": ""
+    },
+    "hover_submenus": {
+     "from": "default",
+     "name": ""
+    },
+    "hub": {
+     "from": "default",
+     "name": ""
+    },
+    "hub_color": {
+     "from": "default",
+     "name": ""
+    },
+    "hub_glow": {
+     "from": "default",
+     "name": ""
+    },
+    "hub_style": {
+     "from": "default",
+     "name": ""
+    },
+    "icon_scale": {
+     "from": "default",
+     "name": ""
+    },
+    "label_color": {
+     "from": "default",
+     "name": ""
+    },
+    "labels": {
+     "from": "default",
+     "name": ""
+    },
+    "radius": {
+     "from": "default",
+     "name": ""
+    },
+    "slot": {
+     "from": "default",
+     "name": ""
+    },
+    "slot_corner": {
+     "from": "default",
+     "name": ""
+    },
+    "slot_shape": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_band": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_band_opacity": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_colors": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_glow_opacity": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_tint_blend": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_tint_opacity": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_tint_style": {
+     "from": "default",
+     "name": ""
+    },
+    "tap_ms": {
+     "from": "default",
+     "name": ""
+    },
+    "timeout_s": {
+     "from": "default",
+     "name": ""
+    },
+    "when_full": {
+     "from": "default",
+     "name": ""
+    }
+   },
+   "problems": [],
+   "values": {
+    "animation": "smooth",
+    "border_width": 2,
+    "colors": {
+     "accent": "#a8360f",
+     "bg": "#f3f4f6",
+     "highlight": "#066785",
+     "lines": "#a8360f",
+     "text": "#1b1c20"
+    },
+    "dead_zone": 38,
+    "flick": true,
+    "glow_color": "",
+    "glow_opacity": 0.55,
+    "hover_submenus": true,
+    "hub": 10,
+    "hub_color": "#a8360f",
+    "hub_glow": 1.0,
+    "hub_style": "dot",
+    "icon_scale": 1.0,
+    "label_color": "#1b1c20",
+    "labels": "name",
+    "radius": 145,
+    "slot": 72,
+    "slot_corner": 0.28,
+    "slot_shape": "circle",
+    "tag_band": "medium",
+    "tag_band_opacity": 0.45,
+    "tag_colors": "tint",
+    "tag_glow_opacity": 0.4,
+    "tag_tint_blend": "multiply",
+    "tag_tint_opacity": 0.3,
+    "tag_tint_style": "gradient",
+    "tap_ms": 250,
+    "theme": "light",
+    "timeout_s": 20,
+    "when_full": "grow"
+   }
+  },
+  "looks": {},
+  "menus": {
+   "main": {
+    "hotkey": "Q",
+    "items": [
+     {
+      "brush": "ClayBuildup"
+     },
+     {
+      "brush": "Move"
+     },
+     {
+      "brush": "Standard"
+     }
+    ],
+    "title": "Main"
+   }
+  },
+  "name": "light theme",
+  "ring": {},
+  "target": {},
+  "theme": "light"
+ },
+ {
+  "expected": {
+   "origins": {
+    "animation": {
+     "from": "default",
+     "name": ""
+    },
+    "border_width": {
+     "from": "default",
+     "name": ""
+    },
+    "colors.accent": {
+     "from": "theme",
+     "name": ""
+    },
+    "colors.bg": {
+     "from": "theme",
+     "name": ""
+    },
+    "colors.highlight": {
+     "from": "global",
+     "name": ""
+    },
+    "colors.lines": {
+     "from": "theme",
+     "name": ""
+    },
+    "colors.text": {
+     "from": "theme",
+     "name": ""
+    },
+    "dead_zone": {
+     "from": "default",
+     "name": ""
+    },
+    "flick": {
+     "from": "default",
+     "name": ""
+    },
+    "glow_color": {
+     "from": "global",
+     "name": ""
+    },
+    "glow_opacity": {
+     "from": "default",
+     "name": ""
+    },
+    "hover_submenus": {
+     "from": "default",
+     "name": ""
+    },
+    "hub": {
+     "from": "default",
+     "name": ""
+    },
+    "hub_color": {
+     "from": "default",
+     "name": ""
+    },
+    "hub_glow": {
+     "from": "default",
+     "name": ""
+    },
+    "hub_style": {
+     "from": "default",
+     "name": ""
+    },
+    "icon_scale": {
+     "from": "default",
+     "name": ""
+    },
+    "label_color": {
+     "from": "default",
+     "name": ""
+    },
+    "labels": {
+     "from": "default",
+     "name": ""
+    },
+    "radius": {
+     "from": "default",
+     "name": ""
+    },
+    "slot": {
+     "from": "default",
+     "name": ""
+    },
+    "slot_corner": {
+     "from": "default",
+     "name": ""
+    },
+    "slot_shape": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_band": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_band_opacity": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_colors": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_glow_opacity": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_tint_blend": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_tint_opacity": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_tint_style": {
+     "from": "default",
+     "name": ""
+    },
+    "tap_ms": {
+     "from": "default",
+     "name": ""
+    },
+    "timeout_s": {
+     "from": "default",
+     "name": ""
+    },
+    "when_full": {
+     "from": "default",
+     "name": ""
+    }
+   },
+   "problems": [],
+   "values": {
+    "animation": "smooth",
+    "border_width": 2,
+    "colors": {
+     "accent": "#a8360f",
+     "bg": "#f3f4f6",
+     "highlight": "#00aa55",
+     "lines": "#a8360f",
+     "text": "#1b1c20"
+    },
+    "dead_zone": 38,
+    "flick": true,
+    "glow_color": "#00aa55",
+    "glow_opacity": 0.55,
+    "hover_submenus": true,
+    "hub": 10,
+    "hub_color": "#a8360f",
+    "hub_glow": 1.0,
+    "hub_style": "dot",
+    "icon_scale": 1.0,
+    "label_color": "#1b1c20",
+    "labels": "name",
+    "radius": 145,
+    "slot": 72,
+    "slot_corner": 0.28,
+    "slot_shape": "circle",
+    "tag_band": "medium",
+    "tag_band_opacity": 0.45,
+    "tag_colors": "tint",
+    "tag_glow_opacity": 0.4,
+    "tag_tint_blend": "multiply",
+    "tag_tint_opacity": 0.3,
+    "tag_tint_style": "gradient",
+    "tap_ms": 250,
+    "theme": "light",
+    "timeout_s": 20,
+    "when_full": "grow"
+   }
+  },
+  "looks": {},
+  "menus": {
+   "main": {
+    "hotkey": "Q",
+    "items": [
+     {
+      "brush": "ClayBuildup"
+     },
+     {
+      "brush": "Move"
+     },
+     {
+      "brush": "Standard"
+     }
+    ],
+    "title": "Main"
+   }
+  },
+  "name": "light theme with a ring colour",
+  "ring": {
+   "colors": {
+    "highlight": "#00aa55"
+   },
+   "glow_color": "highlight"
+  },
+  "target": {},
+  "theme": "light"
+ },
+ {
+  "expected": {
+   "origins": {
+    "animation": {
+     "from": "default",
+     "name": ""
+    },
+    "border_width": {
+     "from": "global-preset",
+     "name": "soft"
+    },
+    "colors.accent": {
+     "from": "default",
+     "name": ""
+    },
+    "colors.bg": {
+     "from": "default",
+     "name": ""
+    },
+    "colors.highlight": {
+     "from": "default",
+     "name": ""
+    },
+    "colors.lines": {
+     "from": "default",
+     "name": ""
+    },
+    "colors.text": {
+     "from": "default",
+     "name": ""
+    },
+    "dead_zone": {
+     "from": "default",
+     "name": ""
+    },
+    "flick": {
+     "from": "default",
+     "name": ""
+    },
+    "glow_color": {
+     "from": "default",
+     "name": ""
+    },
+    "glow_opacity": {
+     "from": "global-preset",
+     "name": "soft"
+    },
+    "hover_submenus": {
+     "from": "default",
+     "name": ""
+    },
+    "hub": {
+     "from": "default",
+     "name": ""
+    },
+    "hub_color": {
+     "from": "default",
+     "name": ""
+    },
+    "hub_glow": {
+     "from": "global-preset",
+     "name": "soft"
+    },
+    "hub_style": {
+     "from": "global-preset",
+     "name": "soft"
+    },
+    "icon_scale": {
+     "from": "global-preset",
+     "name": "soft"
+    },
+    "label_color": {
+     "from": "default",
+     "name": ""
+    },
+    "labels": {
+     "from": "default",
+     "name": ""
+    },
+    "radius": {
+     "from": "default",
+     "name": ""
+    },
+    "slot": {
+     "from": "default",
+     "name": ""
+    },
+    "slot_corner": {
+     "from": "default",
+     "name": ""
+    },
+    "slot_shape": {
+     "from": "global-preset",
+     "name": "soft"
+    },
+    "tag_band": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_band_opacity": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_colors": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_glow_opacity": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_tint_blend": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_tint_opacity": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_tint_style": {
+     "from": "default",
+     "name": ""
+    },
+    "tap_ms": {
+     "from": "default",
+     "name": ""
+    },
+    "timeout_s": {
+     "from": "default",
+     "name": ""
+    },
+    "when_full": {
+     "from": "default",
+     "name": ""
+    }
+   },
+   "problems": [],
+   "values": {
+    "animation": "smooth",
+    "border_width": 1,
+    "colors": {
+     "accent": "#f86b33",
+     "bg": "#222327",
+     "highlight": "#4dc8e9",
+     "lines": "#f86b33",
+     "text": "#f0f0f0"
+    },
+    "dead_zone": 38,
+    "flick": true,
+    "glow_color": "",
+    "glow_opacity": 0.7,
+    "hover_submenus": true,
+    "hub": 10,
+    "hub_color": "#f86b33",
+    "hub_glow": 0.6,
+    "hub_style": "disc",
+    "icon_scale": 0.92,
+    "label_color": "#f0f0f0",
+    "labels": "name",
+    "radius": 145,
+    "slot": 72,
+    "slot_corner": 0.28,
+    "slot_shape": "squircle",
+    "tag_band": "medium",
+    "tag_band_opacity": 0.45,
+    "tag_colors": "tint",
+    "tag_glow_opacity": 0.4,
+    "tag_tint_blend": "multiply",
+    "tag_tint_opacity": 0.3,
+    "tag_tint_style": "gradient",
+    "tap_ms": 250,
+    "timeout_s": 20,
+    "when_full": "grow"
+   }
+  },
+  "looks": {},
+  "menus": {
+   "main": {
+    "hotkey": "Q",
+    "items": [
+     {
+      "brush": "ClayBuildup"
+     },
+     {
+      "brush": "Move"
+     },
+     {
+      "brush": "Standard"
+     }
+    ],
+    "title": "Main"
+   }
+  },
+  "name": "ring with a built-in look",
+  "ring": {
+   "look": "soft"
+  },
+  "target": {},
+  "theme": "dark"
+ },
+ {
+  "expected": {
+   "origins": {
+    "animation": {
+     "from": "default",
+     "name": ""
+    },
+    "border_width": {
+     "from": "default",
+     "name": ""
+    },
+    "colors.accent": {
+     "from": "default",
+     "name": ""
+    },
+    "colors.bg": {
+     "from": "default",
+     "name": ""
+    },
+    "colors.highlight": {
+     "from": "default",
+     "name": ""
+    },
+    "colors.lines": {
+     "from": "default",
+     "name": ""
+    },
+    "colors.text": {
+     "from": "default",
+     "name": ""
+    },
+    "dead_zone": {
+     "from": "default",
+     "name": ""
+    },
+    "flick": {
+     "from": "default",
+     "name": ""
+    },
+    "glow_color": {
+     "from": "global-preset",
+     "name": "crystal"
+    },
+    "glow_opacity": {
+     "from": "global-preset",
+     "name": "crystal"
+    },
+    "hover_submenus": {
+     "from": "default",
+     "name": ""
+    },
+    "hub": {
+     "from": "global",
+     "name": ""
+    },
+    "hub_color": {
+     "from": "global-preset",
+     "name": "crystal"
+    },
+    "hub_glow": {
+     "from": "default",
+     "name": ""
+    },
+    "hub_style": {
+     "from": "global-preset",
+     "name": "crystal"
+    },
+    "icon_scale": {
+     "from": "global-preset",
+     "name": "crystal"
+    },
+    "label_color": {
+     "from": "default",
+     "name": ""
+    },
+    "labels": {
+     "from": "default",
+     "name": ""
+    },
+    "radius": {
+     "from": "default",
+     "name": ""
+    },
+    "slot": {
+     "from": "default",
+     "name": ""
+    },
+    "slot_corner": {
+     "from": "default",
+     "name": ""
+    },
+    "slot_shape": {
+     "from": "global",
+     "name": ""
+    },
+    "tag_band": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_band_opacity": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_colors": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_glow_opacity": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_tint_blend": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_tint_opacity": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_tint_style": {
+     "from": "default",
+     "name": ""
+    },
+    "tap_ms": {
+     "from": "default",
+     "name": ""
+    },
+    "timeout_s": {
+     "from": "default",
+     "name": ""
+    },
+    "when_full": {
+     "from": "default",
+     "name": ""
+    }
+   },
+   "problems": [],
+   "values": {
+    "animation": "smooth",
+    "border_width": 2,
+    "colors": {
+     "accent": "#f86b33",
+     "bg": "#222327",
+     "highlight": "#4dc8e9",
+     "lines": "#f86b33",
+     "text": "#f0f0f0"
+    },
+    "dead_zone": 38,
+    "flick": true,
+    "glow_color": "#4dc8e9",
+    "glow_opacity": 0.8,
+    "hover_submenus": true,
+    "hub": 30,
+    "hub_color": "#4dc8e9",
+    "hub_glow": 1.0,
+    "hub_style": "ring",
+    "icon_scale": 0.85,
+    "label_color": "#f0f0f0",
+    "labels": "name",
+    "radius": 145,
+    "slot": 72,
+    "slot_corner": 0.28,
+    "slot_shape": "circle",
+    "tag_band": "medium",
+    "tag_band_opacity": 0.45,
+    "tag_colors": "tint",
+    "tag_glow_opacity": 0.4,
+    "tag_tint_blend": "multiply",
+    "tag_tint_opacity": 0.3,
+    "tag_tint_style": "gradient",
+    "tap_ms": 250,
+    "timeout_s": 20,
+    "when_full": "grow"
+   }
+  },
+  "looks": {},
+  "menus": {
+   "main": {
+    "hotkey": "Q",
+    "items": [
+     {
+      "brush": "ClayBuildup"
+     },
+     {
+      "brush": "Move"
+     },
+     {
+      "brush": "Standard"
+     }
+    ],
+    "title": "Main"
+   }
+  },
+  "name": "ring keys win over the ring's look",
+  "ring": {
+   "hub": 30,
+   "look": "crystal",
+   "slot_shape": "circle"
+  },
+  "target": {},
+  "theme": "dark"
+ },
+ {
+  "expected": {
+   "origins": {
+    "animation": {
+     "from": "default",
+     "name": ""
+    },
+    "border_width": {
+     "from": "default",
+     "name": ""
+    },
+    "colors.accent": {
+     "from": "default",
+     "name": ""
+    },
+    "colors.bg": {
+     "from": "default",
+     "name": ""
+    },
+    "colors.highlight": {
+     "from": "default",
+     "name": ""
+    },
+    "colors.lines": {
+     "from": "global-preset",
+     "name": "Mine"
+    },
+    "colors.text": {
+     "from": "default",
+     "name": ""
+    },
+    "dead_zone": {
+     "from": "default",
+     "name": ""
+    },
+    "flick": {
+     "from": "default",
+     "name": ""
+    },
+    "glow_color": {
+     "from": "default",
+     "name": ""
+    },
+    "glow_opacity": {
+     "from": "default",
+     "name": ""
+    },
+    "hover_submenus": {
+     "from": "default",
+     "name": ""
+    },
+    "hub": {
+     "from": "default",
+     "name": ""
+    },
+    "hub_color": {
+     "from": "global-preset",
+     "name": "Mine"
+    },
+    "hub_glow": {
+     "from": "default",
+     "name": ""
+    },
+    "hub_style": {
+     "from": "global-preset",
+     "name": "Mine"
+    },
+    "icon_scale": {
+     "from": "default",
+     "name": ""
+    },
+    "label_color": {
+     "from": "default",
+     "name": ""
+    },
+    "labels": {
+     "from": "default",
+     "name": ""
+    },
+    "radius": {
+     "from": "default",
+     "name": ""
+    },
+    "slot": {
+     "from": "default",
+     "name": ""
+    },
+    "slot_corner": {
+     "from": "default",
+     "name": ""
+    },
+    "slot_shape": {
+     "from": "global-preset",
+     "name": "Mine"
+    },
+    "tag_band": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_band_opacity": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_colors": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_glow_opacity": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_tint_blend": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_tint_opacity": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_tint_style": {
+     "from": "default",
+     "name": ""
+    },
+    "tap_ms": {
+     "from": "default",
+     "name": ""
+    },
+    "timeout_s": {
+     "from": "default",
+     "name": ""
+    },
+    "when_full": {
+     "from": "default",
+     "name": ""
+    }
+   },
+   "problems": [],
+   "values": {
+    "animation": "smooth",
+    "border_width": 2,
+    "colors": {
+     "accent": "#f86b33",
+     "bg": "#222327",
+     "highlight": "#4dc8e9",
+     "lines": "#336699",
+     "text": "#f0f0f0"
+    },
+    "dead_zone": 38,
+    "flick": true,
+    "glow_color": "",
+    "glow_opacity": 0.55,
+    "hover_submenus": true,
+    "hub": 10,
+    "hub_color": "#336699",
+    "hub_glow": 1.0,
+    "hub_style": "ring",
+    "icon_scale": 1.0,
+    "label_color": "#f0f0f0",
+    "labels": "name",
+    "radius": 145,
+    "slot": 72,
+    "slot_corner": 0.28,
+    "slot_shape": "octagon",
+    "tag_band": "medium",
+    "tag_band_opacity": 0.45,
+    "tag_colors": "tint",
+    "tag_glow_opacity": 0.4,
+    "tag_tint_blend": "multiply",
+    "tag_tint_opacity": 0.3,
+    "tag_tint_style": "gradient",
+    "tap_ms": 250,
+    "timeout_s": 20,
+    "when_full": "grow"
+   }
+  },
+  "looks": {
+   "Mine": {
+    "colors": {
+     "lines": "#336699"
+    },
+    "hub_color": "lines",
+    "hub_style": "ring",
+    "slot_shape": "octagon"
+   }
+  },
+  "menus": {
+   "main": {
+    "hotkey": "Q",
+    "items": [
+     {
+      "brush": "ClayBuildup"
+     },
+     {
+      "brush": "Move"
+     },
+     {
+      "brush": "Standard"
+     }
+    ],
+    "title": "Main"
+   }
+  },
+  "name": "ring with a user look",
+  "ring": {
+   "look": "Mine"
+  },
+  "target": {},
+  "theme": "dark"
+ },
+ {
+  "expected": {
+   "origins": {
+    "animation": {
+     "from": "default",
+     "name": ""
+    },
+    "border_width": {
+     "from": "default",
+     "name": ""
+    },
+    "colors.accent": {
+     "from": "default",
+     "name": ""
+    },
+    "colors.bg": {
+     "from": "default",
+     "name": ""
+    },
+    "colors.highlight": {
+     "from": "default",
+     "name": ""
+    },
+    "colors.lines": {
+     "from": "default",
+     "name": ""
+    },
+    "colors.text": {
+     "from": "default",
+     "name": ""
+    },
+    "dead_zone": {
+     "from": "default",
+     "name": ""
+    },
+    "flick": {
+     "from": "default",
+     "name": ""
+    },
+    "glow_color": {
+     "from": "default",
+     "name": ""
+    },
+    "glow_opacity": {
+     "from": "default",
+     "name": ""
+    },
+    "hover_submenus": {
+     "from": "default",
+     "name": ""
+    },
+    "hub": {
+     "from": "global",
+     "name": ""
+    },
+    "hub_color": {
+     "from": "default",
+     "name": ""
+    },
+    "hub_glow": {
+     "from": "default",
+     "name": ""
+    },
+    "hub_style": {
+     "from": "default",
+     "name": ""
+    },
+    "icon_scale": {
+     "from": "default",
+     "name": ""
+    },
+    "label_color": {
+     "from": "default",
+     "name": ""
+    },
+    "labels": {
+     "from": "default",
+     "name": ""
+    },
+    "radius": {
+     "from": "default",
+     "name": ""
+    },
+    "slot": {
+     "from": "default",
+     "name": ""
+    },
+    "slot_corner": {
+     "from": "default",
+     "name": ""
+    },
+    "slot_shape": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_band": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_band_opacity": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_colors": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_glow_opacity": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_tint_blend": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_tint_opacity": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_tint_style": {
+     "from": "default",
+     "name": ""
+    },
+    "tap_ms": {
+     "from": "default",
+     "name": ""
+    },
+    "timeout_s": {
+     "from": "default",
+     "name": ""
+    },
+    "when_full": {
+     "from": "default",
+     "name": ""
+    }
+   },
+   "problems": [
+    "ring.look: 'Gone' unknown; one of classic, soft, tiles, crystal, circuit, diamonds, minimal"
+   ],
+   "values": {
+    "animation": "smooth",
+    "border_width": 2,
+    "colors": {
+     "accent": "#f86b33",
+     "bg": "#222327",
+     "highlight": "#4dc8e9",
+     "lines": "#f86b33",
+     "text": "#f0f0f0"
+    },
+    "dead_zone": 38,
+    "flick": true,
+    "glow_color": "",
+    "glow_opacity": 0.55,
+    "hover_submenus": true,
+    "hub": 12,
+    "hub_color": "#f86b33",
+    "hub_glow": 1.0,
+    "hub_style": "dot",
+    "icon_scale": 1.0,
+    "label_color": "#f0f0f0",
+    "labels": "name",
+    "radius": 145,
+    "slot": 72,
+    "slot_corner": 0.28,
+    "slot_shape": "circle",
+    "tag_band": "medium",
+    "tag_band_opacity": 0.45,
+    "tag_colors": "tint",
+    "tag_glow_opacity": 0.4,
+    "tag_tint_blend": "multiply",
+    "tag_tint_opacity": 0.3,
+    "tag_tint_style": "gradient",
+    "tap_ms": 250,
+    "timeout_s": 20,
+    "when_full": "grow"
+   }
+  },
+  "looks": {},
+  "menus": {
+   "main": {
+    "hotkey": "Q",
+    "items": [
+     {
+      "brush": "ClayBuildup"
+     },
+     {
+      "brush": "Move"
+     },
+     {
+      "brush": "Standard"
+     }
+    ],
+    "title": "Main"
+   }
+  },
+  "name": "ring with a look nobody has",
+  "ring": {
+   "hub": 12,
+   "look": "Gone"
+  },
+  "target": {},
+  "theme": "dark"
+ },
+ {
+  "expected": {
+   "origins": {
+    "animation": {
+     "from": "default",
+     "name": ""
+    },
+    "border_width": {
+     "from": "default",
+     "name": ""
+    },
+    "colors.accent": {
+     "from": "default",
+     "name": ""
+    },
+    "colors.bg": {
+     "from": "default",
+     "name": ""
+    },
+    "colors.highlight": {
+     "from": "default",
+     "name": ""
+    },
+    "colors.lines": {
+     "from": "default",
+     "name": ""
+    },
+    "colors.text": {
+     "from": "default",
+     "name": ""
+    },
+    "dead_zone": {
+     "from": "default",
+     "name": ""
+    },
+    "flick": {
+     "from": "default",
+     "name": ""
+    },
+    "glow_color": {
+     "from": "default",
+     "name": ""
+    },
+    "glow_opacity": {
+     "from": "default",
+     "name": ""
+    },
+    "hover_submenus": {
+     "from": "default",
+     "name": ""
+    },
+    "hub": {
+     "from": "default",
+     "name": ""
+    },
+    "hub_color": {
+     "from": "default",
+     "name": ""
+    },
+    "hub_glow": {
+     "from": "default",
+     "name": ""
+    },
+    "hub_style": {
+     "from": "default",
+     "name": ""
+    },
+    "icon_scale": {
+     "from": "default",
+     "name": ""
+    },
+    "label_color": {
+     "from": "default",
+     "name": ""
+    },
+    "labels": {
+     "from": "default",
+     "name": ""
+    },
+    "radius": {
+     "from": "default",
+     "name": ""
+    },
+    "slot": {
+     "from": "global",
+     "name": ""
+    },
+    "slot_corner": {
+     "from": "default",
+     "name": ""
+    },
+    "slot_shape": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_band": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_band_opacity": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_colors": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_glow_opacity": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_tint_blend": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_tint_opacity": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_tint_style": {
+     "from": "default",
+     "name": ""
+    },
+    "tap_ms": {
+     "from": "default",
+     "name": ""
+    },
+    "timeout_s": {
+     "from": "default",
+     "name": ""
+    },
+    "when_full": {
+     "from": "default",
+     "name": ""
+    }
+   },
+   "problems": [
+    "ring.radius: 5000 must be a number from 60 to 400"
+   ],
+   "values": {
+    "animation": "smooth",
+    "border_width": 2,
+    "colors": {
+     "accent": "#f86b33",
+     "bg": "#222327",
+     "highlight": "#4dc8e9",
+     "lines": "#f86b33",
+     "text": "#f0f0f0"
+    },
+    "dead_zone": 38,
+    "flick": true,
+    "glow_color": "",
+    "glow_opacity": 0.55,
+    "hover_submenus": true,
+    "hub": 10,
+    "hub_color": "#f86b33",
+    "hub_glow": 1.0,
+    "hub_style": "dot",
+    "icon_scale": 1.0,
+    "label_color": "#f0f0f0",
+    "labels": "name",
+    "radius": 145,
+    "slot": 90,
+    "slot_corner": 0.28,
+    "slot_shape": "circle",
+    "tag_band": "medium",
+    "tag_band_opacity": 0.45,
+    "tag_colors": "tint",
+    "tag_glow_opacity": 0.4,
+    "tag_tint_blend": "multiply",
+    "tag_tint_opacity": 0.3,
+    "tag_tint_style": "gradient",
+    "tap_ms": 250,
+    "timeout_s": 20,
+    "when_full": "grow"
+   }
+  },
+  "looks": {},
+  "menus": {
+   "main": {
+    "hotkey": "Q",
+    "items": [
+     {
+      "brush": "ClayBuildup"
+     },
+     {
+      "brush": "Move"
+     },
+     {
+      "brush": "Standard"
+     }
+    ],
+    "title": "Main"
+   }
+  },
+  "name": "ring with a value out of range",
+  "ring": {
+   "radius": 5000,
+   "slot": 90
+  },
+  "target": {},
+  "theme": "dark"
+ },
+ {
+  "expected": {
+   "origins": {
+    "animation": {
+     "from": "default",
+     "name": ""
+    },
+    "border_width": {
+     "from": "default",
+     "name": ""
+    },
+    "colors.accent": {
+     "from": "default",
+     "name": ""
+    },
+    "colors.bg": {
+     "from": "default",
+     "name": ""
+    },
+    "colors.highlight": {
+     "from": "default",
+     "name": ""
+    },
+    "colors.lines": {
+     "from": "default",
+     "name": ""
+    },
+    "colors.text": {
+     "from": "default",
+     "name": ""
+    },
+    "dead_zone": {
+     "from": "default",
+     "name": ""
+    },
+    "flick": {
+     "from": "default",
+     "name": ""
+    },
+    "glow_color": {
+     "from": "default",
+     "name": ""
+    },
+    "glow_opacity": {
+     "from": "global-preset",
+     "name": "tiles"
+    },
+    "hover_submenus": {
+     "from": "default",
+     "name": ""
+    },
+    "hub": {
+     "from": "global-preset",
+     "name": "tiles"
+    },
+    "hub_color": {
+     "from": "default",
+     "name": ""
+    },
+    "hub_glow": {
+     "from": "default",
+     "name": ""
+    },
+    "hub_style": {
+     "from": "global-preset",
+     "name": "tiles"
+    },
+    "icon_scale": {
+     "from": "global-preset",
+     "name": "tiles"
+    },
+    "label_color": {
+     "from": "default",
+     "name": ""
+    },
+    "labels": {
+     "from": "default",
+     "name": ""
+    },
+    "radius": {
+     "from": "default",
+     "name": ""
+    },
+    "slot": {
+     "from": "default",
+     "name": ""
+    },
+    "slot_corner": {
+     "from": "global-preset",
+     "name": "tiles"
+    },
+    "slot_shape": {
+     "from": "global-preset",
+     "name": "tiles"
+    },
+    "tag_band": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_band_opacity": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_colors": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_glow_opacity": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_tint_blend": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_tint_opacity": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_tint_style": {
+     "from": "default",
+     "name": ""
+    },
+    "tap_ms": {
+     "from": "default",
+     "name": ""
+    },
+    "timeout_s": {
+     "from": "default",
+     "name": ""
+    },
+    "when_full": {
+     "from": "default",
+     "name": ""
+    }
+   },
+   "problems": [],
+   "values": {
+    "animation": "smooth",
+    "border_width": 2,
+    "colors": {
+     "accent": "#f86b33",
+     "bg": "#222327",
+     "highlight": "#4dc8e9",
+     "lines": "#f86b33",
+     "text": "#f0f0f0"
+    },
+    "dead_zone": 38,
+    "flick": true,
+    "glow_color": "",
+    "glow_opacity": 0.45,
+    "hover_submenus": true,
+    "hub": 14,
+    "hub_color": "#f86b33",
+    "hub_glow": 1.0,
+    "hub_style": "ring",
+    "icon_scale": 0.9,
+    "label_color": "#f0f0f0",
+    "labels": "name",
+    "radius": 145,
+    "slot": 72,
+    "slot_corner": 0.22,
+    "slot_shape": "rounded",
+    "tag_band": "medium",
+    "tag_band_opacity": 0.45,
+    "tag_colors": "tint",
+    "tag_glow_opacity": 0.4,
+    "tag_tint_blend": "multiply",
+    "tag_tint_opacity": 0.3,
+    "tag_tint_style": "gradient",
+    "tap_ms": 250,
+    "timeout_s": 20,
+    "when_full": "grow"
+   }
+  },
+  "looks": {},
+  "menus": {
+   "main": {
+    "hotkey": "Q",
+    "items": [
+     {
+      "brush": "ClayBuildup"
+     },
+     {
+      "brush": "Move"
+     },
+     {
+      "brush": "Standard"
+     }
+    ],
+    "title": "Main"
+   }
+  },
+  "name": "menu with no look of its own",
+  "ring": {
+   "look": "tiles"
+  },
+  "target": {
+   "menu": "main"
+  },
+  "theme": "dark"
+ },
+ {
+  "expected": {
+   "origins": {
+    "animation": {
+     "from": "default",
+     "name": ""
+    },
+    "border_width": {
+     "from": "menu-preset",
+     "name": "minimal"
+    },
+    "colors.accent": {
+     "from": "default",
+     "name": ""
+    },
+    "colors.bg": {
+     "from": "default",
+     "name": ""
+    },
+    "colors.highlight": {
+     "from": "default",
+     "name": ""
+    },
+    "colors.lines": {
+     "from": "default",
+     "name": ""
+    },
+    "colors.text": {
+     "from": "default",
+     "name": ""
+    },
+    "dead_zone": {
+     "from": "default",
+     "name": ""
+    },
+    "flick": {
+     "from": "default",
+     "name": ""
+    },
+    "glow_color": {
+     "from": "default",
+     "name": ""
+    },
+    "glow_opacity": {
+     "from": "menu-preset",
+     "name": "minimal"
+    },
+    "hover_submenus": {
+     "from": "default",
+     "name": ""
+    },
+    "hub": {
+     "from": "menu-preset",
+     "name": "minimal"
+    },
+    "hub_color": {
+     "from": "default",
+     "name": ""
+    },
+    "hub_glow": {
+     "from": "menu-preset",
+     "name": "minimal"
+    },
+    "hub_style": {
+     "from": "default",
+     "name": ""
+    },
+    "icon_scale": {
+     "from": "default",
+     "name": ""
+    },
+    "label_color": {
+     "from": "default",
+     "name": ""
+    },
+    "labels": {
+     "from": "default",
+     "name": ""
+    },
+    "radius": {
+     "from": "default",
+     "name": ""
+    },
+    "slot": {
+     "from": "default",
+     "name": ""
+    },
+    "slot_corner": {
+     "from": "default",
+     "name": ""
+    },
+    "slot_shape": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_band": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_band_opacity": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_colors": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_glow_opacity": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_tint_blend": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_tint_opacity": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_tint_style": {
+     "from": "default",
+     "name": ""
+    },
+    "tap_ms": {
+     "from": "default",
+     "name": ""
+    },
+    "timeout_s": {
+     "from": "default",
+     "name": ""
+    },
+    "when_full": {
+     "from": "default",
+     "name": ""
+    }
+   },
+   "problems": [],
+   "values": {
+    "animation": "smooth",
+    "border_width": 0,
+    "colors": {
+     "accent": "#f86b33",
+     "bg": "#222327",
+     "highlight": "#4dc8e9",
+     "lines": "#f86b33",
+     "text": "#f0f0f0"
+    },
+    "dead_zone": 38,
+    "flick": true,
+    "glow_color": "",
+    "glow_opacity": 0.3,
+    "hover_submenus": true,
+    "hub": 6,
+    "hub_color": "#f86b33",
+    "hub_glow": 0,
+    "hub_style": "dot",
+    "icon_scale": 1.0,
+    "label_color": "#f0f0f0",
+    "labels": "name",
+    "radius": 145,
+    "slot": 72,
+    "slot_corner": 0.28,
+    "slot_shape": "circle",
+    "tag_band": "medium",
+    "tag_band_opacity": 0.45,
+    "tag_colors": "tint",
+    "tag_glow_opacity": 0.4,
+    "tag_tint_blend": "multiply",
+    "tag_tint_opacity": 0.3,
+    "tag_tint_style": "gradient",
+    "tap_ms": 250,
+    "timeout_s": 20,
+    "when_full": "grow"
+   }
+  },
+  "looks": {},
+  "menus": {
+   "main": {
+    "hotkey": "Q",
+    "items": [
+     {
+      "brush": "ClayBuildup"
+     },
+     {
+      "brush": "Move"
+     },
+     {
+      "brush": "Standard"
+     }
+    ],
+    "look": "minimal",
+    "title": "Main"
+   }
+  },
+  "name": "menu named after a built-in look",
+  "ring": {},
+  "target": {
+   "menu": "main"
+  },
+  "theme": "dark"
+ },
+ {
+  "expected": {
+   "origins": {
+    "animation": {
+     "from": "default",
+     "name": ""
+    },
+    "border_width": {
+     "from": "global-preset",
+     "name": "soft"
+    },
+    "colors.accent": {
+     "from": "default",
+     "name": ""
+    },
+    "colors.bg": {
+     "from": "default",
+     "name": ""
+    },
+    "colors.highlight": {
+     "from": "default",
+     "name": ""
+    },
+    "colors.lines": {
+     "from": "default",
+     "name": ""
+    },
+    "colors.text": {
+     "from": "default",
+     "name": ""
+    },
+    "dead_zone": {
+     "from": "default",
+     "name": ""
+    },
+    "flick": {
+     "from": "default",
+     "name": ""
+    },
+    "glow_color": {
+     "from": "default",
+     "name": ""
+    },
+    "glow_opacity": {
+     "from": "menu-preset",
+     "name": "tiles"
+    },
+    "hover_submenus": {
+     "from": "default",
+     "name": ""
+    },
+    "hub": {
+     "from": "menu-preset",
+     "name": "tiles"
+    },
+    "hub_color": {
+     "from": "default",
+     "name": ""
+    },
+    "hub_glow": {
+     "from": "global-preset",
+     "name": "soft"
+    },
+    "hub_style": {
+     "from": "menu-preset",
+     "name": "tiles"
+    },
+    "icon_scale": {
+     "from": "menu-preset",
+     "name": "tiles"
+    },
+    "label_color": {
+     "from": "default",
+     "name": ""
+    },
+    "labels": {
+     "from": "default",
+     "name": ""
+    },
+    "radius": {
+     "from": "default",
+     "name": ""
+    },
+    "slot": {
+     "from": "default",
+     "name": ""
+    },
+    "slot_corner": {
+     "from": "menu-preset",
+     "name": "tiles"
+    },
+    "slot_shape": {
+     "from": "menu-preset",
+     "name": "tiles"
+    },
+    "tag_band": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_band_opacity": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_colors": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_glow_opacity": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_tint_blend": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_tint_opacity": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_tint_style": {
+     "from": "default",
+     "name": ""
+    },
+    "tap_ms": {
+     "from": "default",
+     "name": ""
+    },
+    "timeout_s": {
+     "from": "default",
+     "name": ""
+    },
+    "when_full": {
+     "from": "default",
+     "name": ""
+    }
+   },
+   "problems": [],
+   "values": {
+    "animation": "smooth",
+    "border_width": 1,
+    "colors": {
+     "accent": "#f86b33",
+     "bg": "#222327",
+     "highlight": "#4dc8e9",
+     "lines": "#f86b33",
+     "text": "#f0f0f0"
+    },
+    "dead_zone": 38,
+    "flick": true,
+    "glow_color": "",
+    "glow_opacity": 0.45,
+    "hover_submenus": true,
+    "hub": 14,
+    "hub_color": "#f86b33",
+    "hub_glow": 0.6,
+    "hub_style": "ring",
+    "icon_scale": 0.9,
+    "label_color": "#f0f0f0",
+    "labels": "name",
+    "radius": 145,
+    "slot": 72,
+    "slot_corner": 0.22,
+    "slot_shape": "rounded",
+    "tag_band": "medium",
+    "tag_band_opacity": 0.45,
+    "tag_colors": "tint",
+    "tag_glow_opacity": 0.4,
+    "tag_tint_blend": "multiply",
+    "tag_tint_opacity": 0.3,
+    "tag_tint_style": "gradient",
+    "tap_ms": 250,
+    "timeout_s": 20,
+    "when_full": "grow"
+   }
+  },
+  "looks": {},
+  "menus": {
+   "main": {
+    "hotkey": "Q",
+    "items": [
+     {
+      "brush": "ClayBuildup"
+     },
+     {
+      "brush": "Move"
+     },
+     {
+      "brush": "Standard"
+     }
+    ],
+    "look": "tiles",
+    "title": "Main"
+   }
+  },
+  "name": "menu look over the ring's look",
+  "ring": {
+   "hub": 14,
+   "look": "soft"
+  },
+  "target": {
+   "menu": "main"
+  },
+  "theme": "dark"
+ },
+ {
+  "expected": {
+   "origins": {
+    "animation": {
+     "from": "default",
+     "name": ""
+    },
+    "border_width": {
+     "from": "default",
+     "name": ""
+    },
+    "colors.accent": {
+     "from": "default",
+     "name": ""
+    },
+    "colors.bg": {
+     "from": "default",
+     "name": ""
+    },
+    "colors.highlight": {
+     "from": "default",
+     "name": ""
+    },
+    "colors.lines": {
+     "from": "default",
+     "name": ""
+    },
+    "colors.text": {
+     "from": "default",
+     "name": ""
+    },
+    "dead_zone": {
+     "from": "default",
+     "name": ""
+    },
+    "flick": {
+     "from": "default",
+     "name": ""
+    },
+    "glow_color": {
+     "from": "menu-preset",
+     "name": "crystal"
+    },
+    "glow_opacity": {
+     "from": "menu-preset",
+     "name": "crystal"
+    },
+    "hover_submenus": {
+     "from": "default",
+     "name": ""
+    },
+    "hub": {
+     "from": "menu",
+     "name": ""
+    },
+    "hub_color": {
+     "from": "menu-preset",
+     "name": "crystal"
+    },
+    "hub_glow": {
+     "from": "default",
+     "name": ""
+    },
+    "hub_style": {
+     "from": "menu-preset",
+     "name": "crystal"
+    },
+    "icon_scale": {
+     "from": "menu-preset",
+     "name": "crystal"
+    },
+    "label_color": {
+     "from": "default",
+     "name": ""
+    },
+    "labels": {
+     "from": "default",
+     "name": ""
+    },
+    "radius": {
+     "from": "default",
+     "name": ""
+    },
+    "slot": {
+     "from": "default",
+     "name": ""
+    },
+    "slot_corner": {
+     "from": "default",
+     "name": ""
+    },
+    "slot_shape": {
+     "from": "menu",
+     "name": ""
+    },
+    "tag_band": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_band_opacity": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_colors": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_glow_opacity": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_tint_blend": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_tint_opacity": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_tint_style": {
+     "from": "default",
+     "name": ""
+    },
+    "tap_ms": {
+     "from": "default",
+     "name": ""
+    },
+    "timeout_s": {
+     "from": "default",
+     "name": ""
+    },
+    "when_full": {
+     "from": "default",
+     "name": ""
+    }
+   },
+   "problems": [],
+   "values": {
+    "animation": "smooth",
+    "border_width": 2,
+    "colors": {
+     "accent": "#f86b33",
+     "bg": "#222327",
+     "highlight": "#4dc8e9",
+     "lines": "#f86b33",
+     "text": "#f0f0f0"
+    },
+    "dead_zone": 38,
+    "flick": true,
+    "glow_color": "#4dc8e9",
+    "glow_opacity": 0.8,
+    "hover_submenus": true,
+    "hub": 40,
+    "hub_color": "#4dc8e9",
+    "hub_glow": 1.0,
+    "hub_style": "ring",
+    "icon_scale": 0.85,
+    "label_color": "#f0f0f0",
+    "labels": "name",
+    "radius": 145,
+    "slot": 72,
+    "slot_corner": 0.28,
+    "slot_shape": "diamond",
+    "tag_band": "medium",
+    "tag_band_opacity": 0.45,
+    "tag_colors": "tint",
+    "tag_glow_opacity": 0.4,
+    "tag_tint_blend": "multiply",
+    "tag_tint_opacity": 0.3,
+    "tag_tint_style": "gradient",
+    "tap_ms": 250,
+    "timeout_s": 20,
+    "when_full": "grow"
+   }
+  },
+  "looks": {},
+  "menus": {
+   "main": {
+    "hotkey": "Q",
+    "items": [
+     {
+      "brush": "ClayBuildup"
+     },
+     {
+      "brush": "Move"
+     },
+     {
+      "brush": "Standard"
+     }
+    ],
+    "look": {
+     "hub": 40,
+     "preset": "crystal",
+     "slot_shape": "diamond"
+    },
+    "title": "Main"
+   }
+  },
+  "name": "menu with a preset and keys of its own",
+  "ring": {},
+  "target": {
+   "menu": "main"
+  },
+  "theme": "dark"
+ },
+ {
+  "expected": {
+   "origins": {
+    "animation": {
+     "from": "default",
+     "name": ""
+    },
+    "border_width": {
+     "from": "global-preset",
+     "name": "circuit"
+    },
+    "colors.accent": {
+     "from": "menu",
+     "name": ""
+    },
+    "colors.bg": {
+     "from": "default",
+     "name": ""
+    },
+    "colors.highlight": {
+     "from": "default",
+     "name": ""
+    },
+    "colors.lines": {
+     "from": "default",
+     "name": ""
+    },
+    "colors.text": {
+     "from": "default",
+     "name": ""
+    },
+    "dead_zone": {
+     "from": "default",
+     "name": ""
+    },
+    "flick": {
+     "from": "default",
+     "name": ""
+    },
+    "glow_color": {
+     "from": "global-preset",
+     "name": "circuit"
+    },
+    "glow_opacity": {
+     "from": "global-preset",
+     "name": "circuit"
+    },
+    "hover_submenus": {
+     "from": "default",
+     "name": ""
+    },
+    "hub": {
+     "from": "global-preset",
+     "name": "circuit"
+    },
+    "hub_color": {
+     "from": "global-preset",
+     "name": "circuit"
+    },
+    "hub_glow": {
+     "from": "default",
+     "name": ""
+    },
+    "hub_style": {
+     "from": "global-preset",
+     "name": "circuit"
+    },
+    "icon_scale": {
+     "from": "default",
+     "name": ""
+    },
+    "label_color": {
+     "from": "global-preset",
+     "name": "circuit"
+    },
+    "labels": {
+     "from": "menu",
+     "name": ""
+    },
+    "radius": {
+     "from": "default",
+     "name": ""
+    },
+    "slot": {
+     "from": "default",
+     "name": ""
+    },
+    "slot_corner": {
+     "from": "default",
+     "name": ""
+    },
+    "slot_shape": {
+     "from": "global-preset",
+     "name": "circuit"
+    },
+    "tag_band": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_band_opacity": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_colors": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_glow_opacity": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_tint_blend": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_tint_opacity": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_tint_style": {
+     "from": "default",
+     "name": ""
+    },
+    "tap_ms": {
+     "from": "default",
+     "name": ""
+    },
+    "timeout_s": {
+     "from": "default",
+     "name": ""
+    },
+    "when_full": {
+     "from": "default",
+     "name": ""
+    }
+   },
+   "problems": [],
+   "values": {
+    "animation": "smooth",
+    "border_width": 1,
+    "colors": {
+     "accent": "#ff00aa",
+     "bg": "#222327",
+     "highlight": "#4dc8e9",
+     "lines": "#f86b33",
+     "text": "#f0f0f0"
+    },
+    "dead_zone": 38,
+    "flick": true,
+    "glow_color": "#f86b33",
+    "glow_opacity": 0.4,
+    "hover_submenus": true,
+    "hub": 12,
+    "hub_color": "#f86b33",
+    "hub_glow": 1.0,
+    "hub_style": "ring",
+    "icon_scale": 1.0,
+    "label_color": "#4dc8e9",
+    "labels": "none",
+    "radius": 145,
+    "slot": 72,
+    "slot_corner": 0.28,
+    "slot_shape": "octagon",
+    "tag_band": "medium",
+    "tag_band_opacity": 0.45,
+    "tag_colors": "tint",
+    "tag_glow_opacity": 0.4,
+    "tag_tint_blend": "multiply",
+    "tag_tint_opacity": 0.3,
+    "tag_tint_style": "gradient",
+    "tap_ms": 250,
+    "timeout_s": 20,
+    "when_full": "grow"
+   }
+  },
+  "looks": {},
+  "menus": {
+   "main": {
+    "hotkey": "Q",
+    "items": [
+     {
+      "brush": "ClayBuildup"
+     },
+     {
+      "brush": "Move"
+     },
+     {
+      "brush": "Standard"
+     }
+    ],
+    "look": {
+     "colors": {
+      "accent": "#ff00aa"
+     },
+     "labels": "none"
+    },
+    "title": "Main"
+   }
+  },
+  "name": "menu with keys and no preset",
+  "ring": {
+   "look": "circuit"
+  },
+  "target": {
+   "menu": "main"
+  },
+  "theme": "dark"
+ },
+ {
+  "expected": {
+   "origins": {
+    "animation": {
+     "from": "default",
+     "name": ""
+    },
+    "border_width": {
+     "from": "default",
+     "name": ""
+    },
+    "colors.accent": {
+     "from": "menu",
+     "name": ""
+    },
+    "colors.bg": {
+     "from": "default",
+     "name": ""
+    },
+    "colors.highlight": {
+     "from": "default",
+     "name": ""
+    },
+    "colors.lines": {
+     "from": "default",
+     "name": ""
+    },
+    "colors.text": {
+     "from": "default",
+     "name": ""
+    },
+    "dead_zone": {
+     "from": "default",
+     "name": ""
+    },
+    "flick": {
+     "from": "default",
+     "name": ""
+    },
+    "glow_color": {
+     "from": "menu",
+     "name": ""
+    },
+    "glow_opacity": {
+     "from": "default",
+     "name": ""
+    },
+    "hover_submenus": {
+     "from": "default",
+     "name": ""
+    },
+    "hub": {
+     "from": "default",
+     "name": ""
+    },
+    "hub_color": {
+     "from": "menu",
+     "name": ""
+    },
+    "hub_glow": {
+     "from": "default",
+     "name": ""
+    },
+    "hub_style": {
+     "from": "default",
+     "name": ""
+    },
+    "icon_scale": {
+     "from": "default",
+     "name": ""
+    },
+    "label_color": {
+     "from": "default",
+     "name": ""
+    },
+    "labels": {
+     "from": "default",
+     "name": ""
+    },
+    "radius": {
+     "from": "default",
+     "name": ""
+    },
+    "slot": {
+     "from": "default",
+     "name": ""
+    },
+    "slot_corner": {
+     "from": "default",
+     "name": ""
+    },
+    "slot_shape": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_band": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_band_opacity": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_colors": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_glow_opacity": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_tint_blend": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_tint_opacity": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_tint_style": {
+     "from": "default",
+     "name": ""
+    },
+    "tap_ms": {
+     "from": "default",
+     "name": ""
+    },
+    "timeout_s": {
+     "from": "default",
+     "name": ""
+    },
+    "when_full": {
+     "from": "default",
+     "name": ""
+    }
+   },
+   "problems": [],
+   "values": {
+    "animation": "smooth",
+    "border_width": 2,
+    "colors": {
+     "accent": "#22cc88",
+     "bg": "#222327",
+     "highlight": "#4dc8e9",
+     "lines": "#f86b33",
+     "text": "#f0f0f0"
+    },
+    "dead_zone": 38,
+    "flick": true,
+    "glow_color": "#22cc88",
+    "glow_opacity": 0.55,
+    "hover_submenus": true,
+    "hub": 10,
+    "hub_color": "#22cc88",
+    "hub_glow": 1.0,
+    "hub_style": "dot",
+    "icon_scale": 1.0,
+    "label_color": "#f0f0f0",
+    "labels": "name",
+    "radius": 145,
+    "slot": 72,
+    "slot_corner": 0.28,
+    "slot_shape": "circle",
+    "tag_band": "medium",
+    "tag_band_opacity": 0.45,
+    "tag_colors": "tint",
+    "tag_glow_opacity": 0.4,
+    "tag_tint_blend": "multiply",
+    "tag_tint_opacity": 0.3,
+    "tag_tint_style": "gradient",
+    "tap_ms": 250,
+    "timeout_s": 20,
+    "when_full": "grow"
+   }
+  },
+  "looks": {},
+  "menus": {
+   "main": {
+    "hotkey": "Q",
+    "items": [
+     {
+      "brush": "ClayBuildup"
+     },
+     {
+      "brush": "Move"
+     },
+     {
+      "brush": "Standard"
+     }
+    ],
+    "look": {
+     "colors": {
+      "accent": "#22cc88"
+     },
+     "glow_color": "accent",
+     "hub_color": "accent"
+    },
+    "title": "Main"
+   }
+  },
+  "name": "menu colours move a role",
+  "ring": {},
+  "target": {
+   "menu": "main"
+  },
+  "theme": "dark"
+ },
+ {
+  "expected": {
+   "origins": {
+    "animation": {
+     "from": "default",
+     "name": ""
+    },
+    "border_width": {
+     "from": "menu-preset",
+     "name": "Bold"
+    },
+    "colors.accent": {
+     "from": "default",
+     "name": ""
+    },
+    "colors.bg": {
+     "from": "default",
+     "name": ""
+    },
+    "colors.highlight": {
+     "from": "default",
+     "name": ""
+    },
+    "colors.lines": {
+     "from": "default",
+     "name": ""
+    },
+    "colors.text": {
+     "from": "default",
+     "name": ""
+    },
+    "dead_zone": {
+     "from": "default",
+     "name": ""
+    },
+    "flick": {
+     "from": "default",
+     "name": ""
+    },
+    "glow_color": {
+     "from": "default",
+     "name": ""
+    },
+    "glow_opacity": {
+     "from": "menu-preset",
+     "name": "Bold"
+    },
+    "hover_submenus": {
+     "from": "default",
+     "name": ""
+    },
+    "hub": {
+     "from": "default",
+     "name": ""
+    },
+    "hub_color": {
+     "from": "default",
+     "name": ""
+    },
+    "hub_glow": {
+     "from": "default",
+     "name": ""
+    },
+    "hub_style": {
+     "from": "default",
+     "name": ""
+    },
+    "icon_scale": {
+     "from": "default",
+     "name": ""
+    },
+    "label_color": {
+     "from": "default",
+     "name": ""
+    },
+    "labels": {
+     "from": "default",
+     "name": ""
+    },
+    "radius": {
+     "from": "default",
+     "name": ""
+    },
+    "slot": {
+     "from": "default",
+     "name": ""
+    },
+    "slot_corner": {
+     "from": "default",
+     "name": ""
+    },
+    "slot_shape": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_band": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_band_opacity": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_colors": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_glow_opacity": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_tint_blend": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_tint_opacity": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_tint_style": {
+     "from": "default",
+     "name": ""
+    },
+    "tap_ms": {
+     "from": "default",
+     "name": ""
+    },
+    "timeout_s": {
+     "from": "default",
+     "name": ""
+    },
+    "when_full": {
+     "from": "menu-preset",
+     "name": "Bold"
+    }
+   },
+   "problems": [],
+   "values": {
+    "animation": "smooth",
+    "border_width": 5,
+    "colors": {
+     "accent": "#f86b33",
+     "bg": "#222327",
+     "highlight": "#4dc8e9",
+     "lines": "#f86b33",
+     "text": "#f0f0f0"
+    },
+    "dead_zone": 38,
+    "flick": true,
+    "glow_color": "",
+    "glow_opacity": 0.9,
+    "hover_submenus": true,
+    "hub": 10,
+    "hub_color": "#f86b33",
+    "hub_glow": 1.0,
+    "hub_style": "dot",
+    "icon_scale": 1.0,
+    "label_color": "#f0f0f0",
+    "labels": "name",
+    "radius": 145,
+    "slot": 72,
+    "slot_corner": 0.28,
+    "slot_shape": "circle",
+    "tag_band": "medium",
+    "tag_band_opacity": 0.45,
+    "tag_colors": "tint",
+    "tag_glow_opacity": 0.4,
+    "tag_tint_blend": "multiply",
+    "tag_tint_opacity": 0.3,
+    "tag_tint_style": "gradient",
+    "tap_ms": 250,
+    "timeout_s": 20,
+    "when_full": "more"
+   }
+  },
+  "looks": {
+   "Bold": {
+    "border_width": 5,
+    "glow_opacity": 0.9,
+    "when_full": "more"
+   }
+  },
+  "menus": {
+   "main": {
+    "hotkey": "Q",
+    "items": [
+     {
+      "brush": "ClayBuildup"
+     },
+     {
+      "brush": "Move"
+     },
+     {
+      "brush": "Standard"
+     }
+    ],
+    "look": "Bold",
+    "title": "Main"
+   }
+  },
+  "name": "menu with a user look",
+  "ring": {},
+  "target": {
+   "menu": "main"
+  },
+  "theme": "dark"
+ },
+ {
+  "expected": {
+   "origins": {
+    "animation": {
+     "from": "default",
+     "name": ""
+    },
+    "border_width": {
+     "from": "default",
+     "name": ""
+    },
+    "colors.accent": {
+     "from": "default",
+     "name": ""
+    },
+    "colors.bg": {
+     "from": "default",
+     "name": ""
+    },
+    "colors.highlight": {
+     "from": "default",
+     "name": ""
+    },
+    "colors.lines": {
+     "from": "default",
+     "name": ""
+    },
+    "colors.text": {
+     "from": "default",
+     "name": ""
+    },
+    "dead_zone": {
+     "from": "default",
+     "name": ""
+    },
+    "flick": {
+     "from": "default",
+     "name": ""
+    },
+    "glow_color": {
+     "from": "default",
+     "name": ""
+    },
+    "glow_opacity": {
+     "from": "default",
+     "name": ""
+    },
+    "hover_submenus": {
+     "from": "default",
+     "name": ""
+    },
+    "hub": {
+     "from": "global",
+     "name": ""
+    },
+    "hub_color": {
+     "from": "default",
+     "name": ""
+    },
+    "hub_glow": {
+     "from": "default",
+     "name": ""
+    },
+    "hub_style": {
+     "from": "default",
+     "name": ""
+    },
+    "icon_scale": {
+     "from": "default",
+     "name": ""
+    },
+    "label_color": {
+     "from": "default",
+     "name": ""
+    },
+    "labels": {
+     "from": "default",
+     "name": ""
+    },
+    "radius": {
+     "from": "default",
+     "name": ""
+    },
+    "slot": {
+     "from": "default",
+     "name": ""
+    },
+    "slot_corner": {
+     "from": "default",
+     "name": ""
+    },
+    "slot_shape": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_band": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_band_opacity": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_colors": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_glow_opacity": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_tint_blend": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_tint_opacity": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_tint_style": {
+     "from": "default",
+     "name": ""
+    },
+    "tap_ms": {
+     "from": "default",
+     "name": ""
+    },
+    "timeout_s": {
+     "from": "default",
+     "name": ""
+    },
+    "when_full": {
+     "from": "default",
+     "name": ""
+    }
+   },
+   "problems": [
+    "menu main: look 'Nope' unknown; using the ring's look"
+   ],
+   "values": {
+    "animation": "smooth",
+    "border_width": 2,
+    "colors": {
+     "accent": "#f86b33",
+     "bg": "#222327",
+     "highlight": "#4dc8e9",
+     "lines": "#f86b33",
+     "text": "#f0f0f0"
+    },
+    "dead_zone": 38,
+    "flick": true,
+    "glow_color": "",
+    "glow_opacity": 0.55,
+    "hover_submenus": true,
+    "hub": 22,
+    "hub_color": "#f86b33",
+    "hub_glow": 1.0,
+    "hub_style": "dot",
+    "icon_scale": 1.0,
+    "label_color": "#f0f0f0",
+    "labels": "name",
+    "radius": 145,
+    "slot": 72,
+    "slot_corner": 0.28,
+    "slot_shape": "circle",
+    "tag_band": "medium",
+    "tag_band_opacity": 0.45,
+    "tag_colors": "tint",
+    "tag_glow_opacity": 0.4,
+    "tag_tint_blend": "multiply",
+    "tag_tint_opacity": 0.3,
+    "tag_tint_style": "gradient",
+    "tap_ms": 250,
+    "timeout_s": 20,
+    "when_full": "grow"
+   }
+  },
+  "looks": {},
+  "menus": {
+   "main": {
+    "hotkey": "Q",
+    "items": [
+     {
+      "brush": "ClayBuildup"
+     },
+     {
+      "brush": "Move"
+     },
+     {
+      "brush": "Standard"
+     }
+    ],
+    "look": "Nope",
+    "title": "Main"
+   }
+  },
+  "name": "menu look nobody has",
+  "ring": {
+   "hub": 22
+  },
+  "target": {
+   "menu": "main"
+  },
+  "theme": "dark"
+ },
+ {
+  "expected": {
+   "origins": {
+    "animation": {
+     "from": "default",
+     "name": ""
+    },
+    "border_width": {
+     "from": "menu-preset",
+     "name": "soft"
+    },
+    "colors.accent": {
+     "from": "theme",
+     "name": ""
+    },
+    "colors.bg": {
+     "from": "menu",
+     "name": ""
+    },
+    "colors.highlight": {
+     "from": "theme",
+     "name": ""
+    },
+    "colors.lines": {
+     "from": "theme",
+     "name": ""
+    },
+    "colors.text": {
+     "from": "theme",
+     "name": ""
+    },
+    "dead_zone": {
+     "from": "default",
+     "name": ""
+    },
+    "flick": {
+     "from": "default",
+     "name": ""
+    },
+    "glow_color": {
+     "from": "default",
+     "name": ""
+    },
+    "glow_opacity": {
+     "from": "menu-preset",
+     "name": "soft"
+    },
+    "hover_submenus": {
+     "from": "default",
+     "name": ""
+    },
+    "hub": {
+     "from": "default",
+     "name": ""
+    },
+    "hub_color": {
+     "from": "default",
+     "name": ""
+    },
+    "hub_glow": {
+     "from": "menu-preset",
+     "name": "soft"
+    },
+    "hub_style": {
+     "from": "menu-preset",
+     "name": "soft"
+    },
+    "icon_scale": {
+     "from": "menu-preset",
+     "name": "soft"
+    },
+    "label_color": {
+     "from": "default",
+     "name": ""
+    },
+    "labels": {
+     "from": "default",
+     "name": ""
+    },
+    "radius": {
+     "from": "default",
+     "name": ""
+    },
+    "slot": {
+     "from": "default",
+     "name": ""
+    },
+    "slot_corner": {
+     "from": "default",
+     "name": ""
+    },
+    "slot_shape": {
+     "from": "menu-preset",
+     "name": "soft"
+    },
+    "tag_band": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_band_opacity": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_colors": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_glow_opacity": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_tint_blend": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_tint_opacity": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_tint_style": {
+     "from": "default",
+     "name": ""
+    },
+    "tap_ms": {
+     "from": "default",
+     "name": ""
+    },
+    "timeout_s": {
+     "from": "default",
+     "name": ""
+    },
+    "when_full": {
+     "from": "default",
+     "name": ""
+    }
+   },
+   "problems": [],
+   "values": {
+    "animation": "smooth",
+    "border_width": 1,
+    "colors": {
+     "accent": "#a8360f",
+     "bg": "#ffffff",
+     "highlight": "#066785",
+     "lines": "#a8360f",
+     "text": "#1b1c20"
+    },
+    "dead_zone": 38,
+    "flick": true,
+    "glow_color": "",
+    "glow_opacity": 0.7,
+    "hover_submenus": true,
+    "hub": 10,
+    "hub_color": "#a8360f",
+    "hub_glow": 0.6,
+    "hub_style": "disc",
+    "icon_scale": 0.92,
+    "label_color": "#1b1c20",
+    "labels": "name",
+    "radius": 145,
+    "slot": 72,
+    "slot_corner": 0.28,
+    "slot_shape": "squircle",
+    "tag_band": "medium",
+    "tag_band_opacity": 0.45,
+    "tag_colors": "tint",
+    "tag_glow_opacity": 0.4,
+    "tag_tint_blend": "multiply",
+    "tag_tint_opacity": 0.3,
+    "tag_tint_style": "gradient",
+    "tap_ms": 250,
+    "theme": "light",
+    "timeout_s": 20,
+    "when_full": "grow"
+   }
+  },
+  "looks": {},
+  "menus": {
+   "main": {
+    "hotkey": "Q",
+    "items": [
+     {
+      "brush": "ClayBuildup"
+     },
+     {
+      "brush": "Move"
+     },
+     {
+      "brush": "Standard"
+     }
+    ],
+    "look": {
+     "colors": {
+      "bg": "#ffffff"
+     },
+     "preset": "soft"
+    },
+    "title": "Main"
+   }
+  },
+  "name": "menu on the light theme",
+  "ring": {},
+  "target": {
+   "menu": "main"
+  },
+  "theme": "light"
+ },
+ {
+  "expected": {
+   "origins": {
+    "animation": {
+     "from": "default",
+     "name": ""
+    },
+    "border_width": {
+     "from": "default",
+     "name": ""
+    },
+    "colors.accent": {
+     "from": "default",
+     "name": ""
+    },
+    "colors.bg": {
+     "from": "default",
+     "name": ""
+    },
+    "colors.highlight": {
+     "from": "default",
+     "name": ""
+    },
+    "colors.lines": {
+     "from": "default",
+     "name": ""
+    },
+    "colors.text": {
+     "from": "default",
+     "name": ""
+    },
+    "dead_zone": {
+     "from": "default",
+     "name": ""
+    },
+    "flick": {
+     "from": "default",
+     "name": ""
+    },
+    "glow_color": {
+     "from": "slot",
+     "name": ""
+    },
+    "glow_opacity": {
+     "from": "default",
+     "name": ""
+    },
+    "hover_submenus": {
+     "from": "default",
+     "name": ""
+    },
+    "hub": {
+     "from": "default",
+     "name": ""
+    },
+    "hub_color": {
+     "from": "default",
+     "name": ""
+    },
+    "hub_glow": {
+     "from": "default",
+     "name": ""
+    },
+    "hub_style": {
+     "from": "default",
+     "name": ""
+    },
+    "icon_scale": {
+     "from": "default",
+     "name": ""
+    },
+    "label_color": {
+     "from": "default",
+     "name": ""
+    },
+    "labels": {
+     "from": "default",
+     "name": ""
+    },
+    "radius": {
+     "from": "default",
+     "name": ""
+    },
+    "slot": {
+     "from": "default",
+     "name": ""
+    },
+    "slot_corner": {
+     "from": "default",
+     "name": ""
+    },
+    "slot_shape": {
+     "from": "slot",
+     "name": ""
+    },
+    "tag_band": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_band_opacity": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_colors": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_glow_opacity": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_tint_blend": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_tint_opacity": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_tint_style": {
+     "from": "default",
+     "name": ""
+    },
+    "tap_ms": {
+     "from": "default",
+     "name": ""
+    },
+    "timeout_s": {
+     "from": "default",
+     "name": ""
+    },
+    "when_full": {
+     "from": "default",
+     "name": ""
+    }
+   },
+   "problems": [],
+   "values": {
+    "animation": "smooth",
+    "border_width": 2,
+    "colors": {
+     "accent": "#f86b33",
+     "bg": "#222327",
+     "highlight": "#4dc8e9",
+     "lines": "#f86b33",
+     "text": "#f0f0f0"
+    },
+    "dead_zone": 38,
+    "flick": true,
+    "glow_color": "#ff8800",
+    "glow_opacity": 0.55,
+    "hover_submenus": true,
+    "hub": 10,
+    "hub_color": "#f86b33",
+    "hub_glow": 1.0,
+    "hub_style": "dot",
+    "icon_scale": 1.0,
+    "label_color": "#f0f0f0",
+    "labels": "name",
+    "radius": 145,
+    "slot": 72,
+    "slot_corner": 0.28,
+    "slot_shape": "hexagon",
+    "tag_band": "medium",
+    "tag_band_opacity": 0.45,
+    "tag_colors": "tint",
+    "tag_glow_opacity": 0.4,
+    "tag_tint_blend": "multiply",
+    "tag_tint_opacity": 0.3,
+    "tag_tint_style": "gradient",
+    "tap_ms": 250,
+    "timeout_s": 20,
+    "when_full": "grow"
+   }
+  },
+  "looks": {},
+  "menus": {
+   "main": {
+    "hotkey": "Q",
+    "items": [
+     {
+      "brush": "ClayBuildup",
+      "style": {
+       "glow_color": "#ff8800",
+       "slot_shape": "hexagon"
+      }
+     },
+     {
+      "brush": "Move"
+     },
+     {
+      "brush": "Standard"
+     }
+    ],
+    "title": "Main"
+   }
+  },
+  "name": "slot with a shape and a glow",
+  "ring": {},
+  "target": {
+   "menu": "main",
+   "slot": 0
+  },
+  "theme": "dark"
+ },
+ {
+  "expected": {
+   "origins": {
+    "animation": {
+     "from": "default",
+     "name": ""
+    },
+    "border_width": {
+     "from": "default",
+     "name": ""
+    },
+    "colors.accent": {
+     "from": "default",
+     "name": ""
+    },
+    "colors.bg": {
+     "from": "default",
+     "name": ""
+    },
+    "colors.highlight": {
+     "from": "menu",
+     "name": ""
+    },
+    "colors.lines": {
+     "from": "default",
+     "name": ""
+    },
+    "colors.text": {
+     "from": "default",
+     "name": ""
+    },
+    "dead_zone": {
+     "from": "default",
+     "name": ""
+    },
+    "flick": {
+     "from": "default",
+     "name": ""
+    },
+    "glow_color": {
+     "from": "slot",
+     "name": ""
+    },
+    "glow_opacity": {
+     "from": "default",
+     "name": ""
+    },
+    "hover_submenus": {
+     "from": "default",
+     "name": ""
+    },
+    "hub": {
+     "from": "default",
+     "name": ""
+    },
+    "hub_color": {
+     "from": "default",
+     "name": ""
+    },
+    "hub_glow": {
+     "from": "default",
+     "name": ""
+    },
+    "hub_style": {
+     "from": "default",
+     "name": ""
+    },
+    "icon_scale": {
+     "from": "default",
+     "name": ""
+    },
+    "label_color": {
+     "from": "slot",
+     "name": ""
+    },
+    "labels": {
+     "from": "default",
+     "name": ""
+    },
+    "radius": {
+     "from": "default",
+     "name": ""
+    },
+    "slot": {
+     "from": "default",
+     "name": ""
+    },
+    "slot_corner": {
+     "from": "default",
+     "name": ""
+    },
+    "slot_shape": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_band": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_band_opacity": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_colors": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_glow_opacity": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_tint_blend": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_tint_opacity": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_tint_style": {
+     "from": "default",
+     "name": ""
+    },
+    "tap_ms": {
+     "from": "default",
+     "name": ""
+    },
+    "timeout_s": {
+     "from": "default",
+     "name": ""
+    },
+    "when_full": {
+     "from": "default",
+     "name": ""
+    }
+   },
+   "problems": [],
+   "values": {
+    "animation": "smooth",
+    "border_width": 2,
+    "colors": {
+     "accent": "#f86b33",
+     "bg": "#222327",
+     "highlight": "#aa44ff",
+     "lines": "#f86b33",
+     "text": "#f0f0f0"
+    },
+    "dead_zone": 38,
+    "flick": true,
+    "glow_color": "#aa44ff",
+    "glow_opacity": 0.55,
+    "hover_submenus": true,
+    "hub": 10,
+    "hub_color": "#f86b33",
+    "hub_glow": 1.0,
+    "hub_style": "dot",
+    "icon_scale": 1.0,
+    "label_color": "#f86b33",
+    "labels": "name",
+    "radius": 145,
+    "slot": 72,
+    "slot_corner": 0.28,
+    "slot_shape": "circle",
+    "tag_band": "medium",
+    "tag_band_opacity": 0.45,
+    "tag_colors": "tint",
+    "tag_glow_opacity": 0.4,
+    "tag_tint_blend": "multiply",
+    "tag_tint_opacity": 0.3,
+    "tag_tint_style": "gradient",
+    "tap_ms": 250,
+    "timeout_s": 20,
+    "when_full": "grow"
+   }
+  },
+  "looks": {},
+  "menus": {
+   "main": {
+    "hotkey": "Q",
+    "items": [
+     {
+      "brush": "ClayBuildup",
+      "style": {
+       "glow_color": "highlight",
+       "label_color": "accent"
+      }
+     },
+     {
+      "brush": "Move"
+     },
+     {
+      "brush": "Standard"
+     }
+    ],
+    "look": {
+     "colors": {
+      "highlight": "#aa44ff"
+     }
+    },
+    "title": "Main"
+   }
+  },
+  "name": "slot style roles follow the menu colours",
+  "ring": {},
+  "target": {
+   "menu": "main",
+   "slot": 0
+  },
+  "theme": "dark"
+ },
+ {
+  "expected": {
+   "origins": {
+    "animation": {
+     "from": "default",
+     "name": ""
+    },
+    "border_color": {
+     "from": "slot",
+     "name": ""
+    },
+    "border_width": {
+     "from": "default",
+     "name": ""
+    },
+    "colors.accent": {
+     "from": "default",
+     "name": ""
+    },
+    "colors.bg": {
+     "from": "default",
+     "name": ""
+    },
+    "colors.highlight": {
+     "from": "default",
+     "name": ""
+    },
+    "colors.lines": {
+     "from": "default",
+     "name": ""
+    },
+    "colors.text": {
+     "from": "default",
+     "name": ""
+    },
+    "dead_zone": {
+     "from": "default",
+     "name": ""
+    },
+    "fill_color": {
+     "from": "slot",
+     "name": ""
+    },
+    "flick": {
+     "from": "default",
+     "name": ""
+    },
+    "glow_color": {
+     "from": "default",
+     "name": ""
+    },
+    "glow_opacity": {
+     "from": "default",
+     "name": ""
+    },
+    "hover_submenus": {
+     "from": "default",
+     "name": ""
+    },
+    "hub": {
+     "from": "default",
+     "name": ""
+    },
+    "hub_color": {
+     "from": "default",
+     "name": ""
+    },
+    "hub_glow": {
+     "from": "default",
+     "name": ""
+    },
+    "hub_style": {
+     "from": "default",
+     "name": ""
+    },
+    "icon_scale": {
+     "from": "slot",
+     "name": ""
+    },
+    "label_color": {
+     "from": "default",
+     "name": ""
+    },
+    "labels": {
+     "from": "default",
+     "name": ""
+    },
+    "radius": {
+     "from": "default",
+     "name": ""
+    },
+    "size": {
+     "from": "slot",
+     "name": ""
+    },
+    "slot": {
+     "from": "default",
+     "name": ""
+    },
+    "slot_corner": {
+     "from": "default",
+     "name": ""
+    },
+    "slot_shape": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_band": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_band_opacity": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_colors": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_glow_opacity": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_tint_blend": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_tint_opacity": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_tint_style": {
+     "from": "default",
+     "name": ""
+    },
+    "tap_ms": {
+     "from": "default",
+     "name": ""
+    },
+    "timeout_s": {
+     "from": "default",
+     "name": ""
+    },
+    "when_full": {
+     "from": "default",
+     "name": ""
+    }
+   },
+   "problems": [],
+   "values": {
+    "animation": "smooth",
+    "border_color": "#f86b33",
+    "border_width": 2,
+    "colors": {
+     "accent": "#f86b33",
+     "bg": "#222327",
+     "highlight": "#4dc8e9",
+     "lines": "#f86b33",
+     "text": "#f0f0f0"
+    },
+    "dead_zone": 38,
+    "fill_color": "#112233",
+    "flick": true,
+    "glow_color": "",
+    "glow_opacity": 0.55,
+    "hover_submenus": true,
+    "hub": 10,
+    "hub_color": "#f86b33",
+    "hub_glow": 1.0,
+    "hub_style": "dot",
+    "icon_scale": 0.8,
+    "label_color": "#f0f0f0",
+    "labels": "name",
+    "radius": 145,
+    "size": 1.2,
+    "slot": 72,
+    "slot_corner": 0.28,
+    "slot_shape": "circle",
+    "tag_band": "medium",
+    "tag_band_opacity": 0.45,
+    "tag_colors": "tint",
+    "tag_glow_opacity": 0.4,
+    "tag_tint_blend": "multiply",
+    "tag_tint_opacity": 0.3,
+    "tag_tint_style": "gradient",
+    "tap_ms": 250,
+    "timeout_s": 20,
+    "when_full": "grow"
+   }
+  },
+  "looks": {},
+  "menus": {
+   "main": {
+    "hotkey": "Q",
+    "items": [
+     {
+      "brush": "ClayBuildup"
+     },
+     {
+      "brush": "Move",
+      "style": {
+       "border_color": "lines",
+       "fill_color": "#112233",
+       "icon_scale": 0.8,
+       "size": 1.2
+      }
+     },
+     {
+      "brush": "Standard"
+     }
+    ],
+    "title": "Main"
+   }
+  },
+  "name": "slot with the slot-only keys",
+  "ring": {},
+  "target": {
+   "menu": "main",
+   "slot": 1
+  },
+  "theme": "dark"
+ },
+ {
+  "expected": {
+   "origins": {
+    "animation": {
+     "from": "default",
+     "name": ""
+    },
+    "border_width": {
+     "from": "slot",
+     "name": ""
+    },
+    "colors.accent": {
+     "from": "default",
+     "name": ""
+    },
+    "colors.bg": {
+     "from": "default",
+     "name": ""
+    },
+    "colors.highlight": {
+     "from": "default",
+     "name": ""
+    },
+    "colors.lines": {
+     "from": "default",
+     "name": ""
+    },
+    "colors.text": {
+     "from": "default",
+     "name": ""
+    },
+    "dead_zone": {
+     "from": "default",
+     "name": ""
+    },
+    "flick": {
+     "from": "default",
+     "name": ""
+    },
+    "glow_color": {
+     "from": "default",
+     "name": ""
+    },
+    "glow_opacity": {
+     "from": "menu-preset",
+     "name": "tiles"
+    },
+    "hover_submenus": {
+     "from": "default",
+     "name": ""
+    },
+    "hub": {
+     "from": "menu",
+     "name": ""
+    },
+    "hub_color": {
+     "from": "default",
+     "name": ""
+    },
+    "hub_glow": {
+     "from": "global-preset",
+     "name": "soft"
+    },
+    "hub_style": {
+     "from": "menu-preset",
+     "name": "tiles"
+    },
+    "icon_scale": {
+     "from": "menu-preset",
+     "name": "tiles"
+    },
+    "label_color": {
+     "from": "default",
+     "name": ""
+    },
+    "labels": {
+     "from": "default",
+     "name": ""
+    },
+    "radius": {
+     "from": "default",
+     "name": ""
+    },
+    "slot": {
+     "from": "default",
+     "name": ""
+    },
+    "slot_corner": {
+     "from": "slot",
+     "name": ""
+    },
+    "slot_shape": {
+     "from": "menu-preset",
+     "name": "tiles"
+    },
+    "tag_band": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_band_opacity": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_colors": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_glow_opacity": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_tint_blend": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_tint_opacity": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_tint_style": {
+     "from": "default",
+     "name": ""
+    },
+    "tap_ms": {
+     "from": "default",
+     "name": ""
+    },
+    "timeout_s": {
+     "from": "default",
+     "name": ""
+    },
+    "when_full": {
+     "from": "default",
+     "name": ""
+    }
+   },
+   "problems": [],
+   "values": {
+    "animation": "smooth",
+    "border_width": 0,
+    "colors": {
+     "accent": "#f86b33",
+     "bg": "#222327",
+     "highlight": "#4dc8e9",
+     "lines": "#f86b33",
+     "text": "#f0f0f0"
+    },
+    "dead_zone": 38,
+    "flick": true,
+    "glow_color": "",
+    "glow_opacity": 0.45,
+    "hover_submenus": true,
+    "hub": 18,
+    "hub_color": "#f86b33",
+    "hub_glow": 0.6,
+    "hub_style": "ring",
+    "icon_scale": 0.9,
+    "label_color": "#f0f0f0",
+    "labels": "name",
+    "radius": 145,
+    "slot": 72,
+    "slot_corner": 0.4,
+    "slot_shape": "rounded",
+    "tag_band": "medium",
+    "tag_band_opacity": 0.45,
+    "tag_colors": "tint",
+    "tag_glow_opacity": 0.4,
+    "tag_tint_blend": "multiply",
+    "tag_tint_opacity": 0.3,
+    "tag_tint_style": "gradient",
+    "tap_ms": 250,
+    "timeout_s": 20,
+    "when_full": "grow"
+   }
+  },
+  "looks": {},
+  "menus": {
+   "main": {
+    "hotkey": "Q",
+    "items": [
+     {
+      "brush": "ClayBuildup",
+      "style": {
+       "border_width": 0,
+       "slot_corner": 0.4
+      }
+     },
+     {
+      "brush": "Move"
+     },
+     {
+      "brush": "Standard"
+     }
+    ],
+    "look": {
+     "hub": 18,
+     "preset": "tiles"
+    },
+    "title": "Main"
+   }
+  },
+  "name": "slot over a menu preset",
+  "ring": {
+   "look": "soft"
+  },
+  "target": {
+   "menu": "main",
+   "slot": 0
+  },
+  "theme": "dark"
+ },
+ {
+  "expected": {
+   "origins": {
+    "animation": {
+     "from": "default",
+     "name": ""
+    },
+    "border_width": {
+     "from": "menu-preset",
+     "name": "diamonds"
+    },
+    "colors.accent": {
+     "from": "default",
+     "name": ""
+    },
+    "colors.bg": {
+     "from": "default",
+     "name": ""
+    },
+    "colors.highlight": {
+     "from": "default",
+     "name": ""
+    },
+    "colors.lines": {
+     "from": "default",
+     "name": ""
+    },
+    "colors.text": {
+     "from": "default",
+     "name": ""
+    },
+    "dead_zone": {
+     "from": "default",
+     "name": ""
+    },
+    "flick": {
+     "from": "default",
+     "name": ""
+    },
+    "glow_color": {
+     "from": "default",
+     "name": ""
+    },
+    "glow_opacity": {
+     "from": "default",
+     "name": ""
+    },
+    "hover_submenus": {
+     "from": "default",
+     "name": ""
+    },
+    "hub": {
+     "from": "menu-preset",
+     "name": "diamonds"
+    },
+    "hub_color": {
+     "from": "default",
+     "name": ""
+    },
+    "hub_glow": {
+     "from": "default",
+     "name": ""
+    },
+    "hub_style": {
+     "from": "menu-preset",
+     "name": "diamonds"
+    },
+    "icon_scale": {
+     "from": "menu-preset",
+     "name": "diamonds"
+    },
+    "label_color": {
+     "from": "default",
+     "name": ""
+    },
+    "labels": {
+     "from": "default",
+     "name": ""
+    },
+    "radius": {
+     "from": "default",
+     "name": ""
+    },
+    "slot": {
+     "from": "default",
+     "name": ""
+    },
+    "slot_corner": {
+     "from": "default",
+     "name": ""
+    },
+    "slot_shape": {
+     "from": "menu-preset",
+     "name": "diamonds"
+    },
+    "tag_band": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_band_opacity": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_colors": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_glow_opacity": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_tint_blend": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_tint_opacity": {
+     "from": "default",
+     "name": ""
+    },
+    "tag_tint_style": {
+     "from": "default",
+     "name": ""
+    },
+    "tap_ms": {
+     "from": "default",
+     "name": ""
+    },
+    "timeout_s": {
+     "from": "default",
+     "name": ""
+    },
+    "when_full": {
+     "from": "default",
+     "name": ""
+    }
+   },
+   "problems": [],
+   "values": {
+    "animation": "smooth",
+    "border_width": 2,
+    "colors": {
+     "accent": "#f86b33",
+     "bg": "#222327",
+     "highlight": "#4dc8e9",
+     "lines": "#f86b33",
+     "text": "#f0f0f0"
+    },
+    "dead_zone": 38,
+    "flick": true,
+    "glow_color": "",
+    "glow_opacity": 0.55,
+    "hover_submenus": true,
+    "hub": 12,
+    "hub_color": "#f86b33",
+    "hub_glow": 1.0,
+    "hub_style": "disc",
+    "icon_scale": 0.7,
+    "label_color": "#f0f0f0",
+    "labels": "name",
+    "radius": 145,
+    "slot": 72,
+    "slot_corner": 0.28,
+    "slot_shape": "diamond",
+    "tag_band": "medium",
+    "tag_band_opacity": 0.45,
+    "tag_colors": "tint",
+    "tag_glow_opacity": 0.4,
+    "tag_tint_blend": "multiply",
+    "tag_tint_opacity": 0.3,
+    "tag_tint_style": "gradient",
+    "tap_ms": 250,
+    "timeout_s": 20,
+    "when_full": "grow"
+   }
+  },
+  "looks": {},
+  "menus": {
+   "main": {
+    "hotkey": "Q",
+    "items": [
+     {
+      "brush": "ClayBuildup",
+      "style": {
+       "slot_shape": "circle"
+      }
+     },
+     {
+      "brush": "Move"
+     },
+     {
+      "brush": "Standard"
+     }
+    ],
+    "look": {
+     "preset": "diamonds"
+    },
+    "title": "Main"
+   }
+  },
+  "name": "another slot has no style",
+  "ring": {},
+  "target": {
+   "menu": "main",
+   "slot": 2
+  },
+  "theme": "dark"
+ }
+]

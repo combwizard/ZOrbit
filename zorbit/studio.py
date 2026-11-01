@@ -19,6 +19,7 @@ import sys
 import tempfile
 import threading
 import time
+from collections import OrderedDict
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
@@ -29,6 +30,7 @@ import changelog            # noqa: E402
 import expand               # noqa: E402
 import fsutil               # noqa: E402
 import installs             # noqa: E402
+import looks as L           # noqa: E402
 import menushare            # noqa: E402
 import onboarding           # noqa: E402
 import paths                # noqa: E402
@@ -59,7 +61,9 @@ def _theme_now():
 DEFAULT_SIZE = (1320, 860)  # the first window, in logical pixels, when it fits the screen (see _fit_size)
 MIN_SIZE = (980, 560)       # the smallest the window can be made
 START_WAIT = 10.0          # seconds start_app waits for the app's mutex (or, for an older app, its new version)
-SAMPLE_SLOTS = 8           # brushes on the tag colours sample ring (preview_tags)
+SAMPLE_SLOTS = 8           # slots on the sample ring (preview_tags, preview_look): 7 brushes and a submenu
+SAMPLE_BRUSHES = ("ClayBuildup", "Move", "hPolish", "Standard", "DamStandard", "Inflat", "TrimDynamic")  # no library
+LOOK_IMAGES = 64           # look pictures kept for the next preview_look(s) with the same look, theme and size
 SETTINGS_FORMAT = 1         # the "zorbit_settings" number of an exported settings file
 IMPORT_MAX_BYTES = 5 * 1024 * 1024    # a settings file is a few hundred KB at most; refuse anything bigger
 RELEASES_API = "https://api.github.com/repos/combwizard/zorbit/releases/latest"
@@ -221,6 +225,25 @@ def _png_data_url(im) -> str:
     buf = io.BytesIO()
     im.save(buf, format="PNG", optimize=False)
     return "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode("ascii")
+
+
+_look_images = OrderedDict()             # (look json, theme, scale, hover, sample) -> the preview_look dict
+_look_images_lock = threading.Lock()
+
+
+def _look_image(key, make):
+    """The cached picture for key, else make() (a dict) stored under it. Oldest first out past LOOK_IMAGES."""
+    with _look_images_lock:
+        hit = _look_images.get(key)
+        if hit is not None:
+            _look_images.move_to_end(key)
+            return dict(hit)
+    out = make()
+    with _look_images_lock:
+        _look_images[key] = out
+        while len(_look_images) > LOOK_IMAGES:
+            _look_images.popitem(last=False)
+    return dict(out)
 
 
 def _title_path(p: str) -> str:
@@ -686,32 +709,53 @@ class Api(webapi.LibraryApi, webapi.TagApi):
     def preview_ring(self, cfg, menu_id, hover=None, scale=1.0, open_path=None):
         """PNG data URL of the ring exactly as the app draws it. hover: item index or None. open_path: item
         indices of the fan submenus to show open ([2], or [2, 1] for a fan inside it). With a fan open the
-        image is not square around the ring: width, height and centre (x, y) place the ring in it."""
+        image is not square around the ring: width, height and centre (x, y) place the ring in it. menu_id may be
+        a "more:<id>" menu (the rest of a paged menu). fit: how the items compare with what the ring holds at its
+        radius (see _fit); layout: the renderer's layout map when it gives one."""
         loaded, problems = self._load_dict(cfg)
-        if loaded is None or menu_id not in loaded.menus:
+        paged = isinstance(menu_id, str) and menu_id.startswith(expand.MORE_PREFIX)
+        if loaded is None or not isinstance(menu_id, str) or (menu_id not in loaded.menus and not paged):
             return {"image": None, "problems": problems or [f"menu {menu_id!r} has no usable items"]}
         from ring import Ring
         app = self._preview_app()
         app.cfg = loaded
         ex = expand.Expander(loaded, app.usage, app.tags.load())
-        menu = ex.menu(loaded.menus[menu_id])             # as the app would fill it now; nothing is saved
+        menu = ex.resolve(menu_id) if paged else ex.menu(loaded.menus[menu_id])   # as the app would fill it now
+        if menu is None:
+            return {"image": None, "problems": problems or [f"menu {menu_id!r} has no usable items"]}
+        count = len(ex._whole(menu_id).items) if paged else len(loaded.menus[menu_id].items)
         im = Ring.preview(menu, loaded.ring, app.icon_for, hover=hover, scale=float(scale),
                           submenus=ex.resolve,
                           open_path=[int(i) for i in open_path] if open_path else None)
-        cx, cy = im.info.get("centre", (im.size[0] / 2, im.size[1] / 2))
-        return {"image": _png_data_url(im), "size": im.size[0], "width": im.size[0], "height": im.size[1],
-                "centre": [cx, cy], "problems": problems}
+        out = self._ring_result(im, problems)
+        out["fit"] = self._fit(menu.look or loaded.ring, menu.fan, count)
+        return out
 
-    def preview_tags(self, cfg, hover=None, scale=1.0):
-        """preview_ring of a sample ring for the tag colour settings: SAMPLE_SLOTS installed brushes, the
-        user's tagged ones first, coloured with the user's tags (two slots per tag, one slot left plain) so
-        every tag setting shows even when no menu has a tagged brush."""
-        loaded, problems = self._load_dict(cfg)
-        if loaded is None:
-            return {"image": None, "problems": problems}
-        from ring import Ring
-        app = self._preview_app()
-        app.cfg = loaded
+    @staticmethod
+    def _ring_result(im, problems):
+        """The common part of the ring previews: the picture, its size, where the ring's centre is, the layout map."""
+        cx, cy = im.info.get("centre", (im.size[0] / 2, im.size[1] / 2))
+        out = {"image": _png_data_url(im), "size": im.size[0], "width": im.size[0], "height": im.size[1],
+               "centre": [cx, cy], "problems": problems}
+        if im.info.get("layout") is not None:
+            out["layout"] = im.info["layout"]
+        return out
+
+    @staticmethod
+    def _fit(look, fan, count):
+        """How many items a ring of this look holds at its radius against how many the menu has: {"items",
+        "capacity", "needed_radius", "full", "when_full"}; None for a fan (it is not laid out as a ring)."""
+        if fan:
+            return None
+        k = expand._capacity(look.get("radius", 145), look.get("slot", 72))
+        return {"items": count, "capacity": k, "needed_radius": expand.needed_radius(count, look.get("slot", 72)),
+                "full": count > k, "when_full": look.get("when_full", "grow")}
+
+    def _sample_menu(self, loaded, app, mid="sample", look=None):
+        """The ring the look previews draw: SAMPLE_SLOTS - 1 brushes (the user's tagged ones first, then others from
+        the library, else fixed names) and a submenu slot. The brushes carry the user's tag colours, two slots
+        to a tag, so every tag setting shows even when no menu has a tagged brush; the submenu slot is plain.
+        look: the resolved look the menu is drawn with (None: the ring's own)."""
         store = app.tags.load()
         index = {k.replace(" ", ""): p for k, p in brushes.brush_index().items()}
         names = []
@@ -719,25 +763,141 @@ class Api(webapi.LibraryApi, webapi.TagApi):
             if ik.split(":", 1)[1] in index:
                 names.append(index[ik.split(":", 1)[1]].stem)
         for p in index.values():
-            if len(names) >= SAMPLE_SLOTS:
+            if len(names) >= SAMPLE_SLOTS - 1:
                 break
             if p.stem not in names:
                 names.append(p.stem)
-        if not names:
-            return {"image": None, "problems": problems + ["no brushes found to draw a sample ring"]}
-        names = names[:SAMPLE_SLOTS]
+        names = (names or list(SAMPLE_BRUSHES))[:SAMPLE_SLOTS - 1]
         colors = [t["color"] for t in store.tags()] or [tags.PALETTE[0]]
-        on = loaded.ring.get("tag_colors", "tint") != "none" or loaded.ring.get("tag_band", "medium") != "none"
-        items = []
-        for i, n in enumerate(names):
-            color = store.color_of_item(tags.item_key("brush", n)) or (
-                "" if i == len(names) - 1 else colors[(i // 2) % len(colors)])
-            items.append(C.Item(label=n, kind="brush", data={"brush": n}, color=color if on else ""))
-        menu = C.Menu(id="sample", title="Sample", items=items)
+        items = [C.Item(label=n, kind="brush", data={"brush": n},
+                        color=store.color_of_item(tags.item_key("brush", n)) or colors[(i // 2) % len(colors)])
+                 for i, n in enumerate(names)]
+        items.append(C.Item(label="Sculpt", kind="menu", data={"menu": "sample_sub"}))
+        return C.Menu(id=mid, title="Sample", items=items, look=look)
+
+    def preview_tags(self, cfg, hover=None, scale=1.0, menu_id=None):
+        """preview_ring of a sample ring for the tag colour settings (see _sample_menu). menu_id: a menu of cfg
+        whose look the sample is drawn with, else the ring's."""
+        loaded, problems = self._load_dict(cfg)
+        if loaded is None:
+            return {"image": None, "problems": problems}
+        from ring import Ring
+        app = self._preview_app()
+        app.cfg = loaded
+        mine = loaded.menus.get(menu_id) if isinstance(menu_id, str) else None
+        menu = self._sample_menu(loaded, app, look=mine.look if mine is not None else None)
         im = Ring.preview(menu, loaded.ring, app.icon_for, hover=hover, scale=float(scale))
-        cx, cy = im.info.get("centre", (im.size[0] / 2, im.size[1] / 2))
-        return {"image": _png_data_url(im), "size": im.size[0], "width": im.size[0], "height": im.size[1],
-                "centre": [cx, cy], "problems": problems}
+        return self._ring_result(im, problems)
+
+    # --- looks: the previews and the numbers behind the Look screen ------------------------------
+    def _look_spec(self, loaded, preset, look, base, problems):
+        """The look_spec ({"preset": name or "", **keys}) that preview_look draws: the preset and the raw look keys
+        over the base ("global", or the id of a menu whose own look keys stay)."""
+        spec = {}
+        if isinstance(base, str) and base != "global":
+            if base in loaded.menus:
+                spec = dict(loaded.menus[base].look_spec)
+            else:
+                problems.append(f"menu {base!r} not found; using the ring's look")
+        if preset:
+            if isinstance(preset, str) and loaded.looks.preset(preset) is not None:
+                spec["preset"] = preset
+            else:
+                problems.append(f"look {preset!r} unknown")
+        if isinstance(look, dict):
+            errors = []
+            spec.update(L.check_look({k: v for k, v in look.items() if k != "preset"}, errors, "look.", L.LOOK_KEYS))
+            problems.extend(errors)
+        spec.setdefault("preset", "")
+        return spec
+
+    def _render_look(self, loaded, app, sample, spec, mid, hover, scale):
+        """One look picture: {"image", "size", "width", "height", "centre"} of the sample ring drawn with the
+        look the spec resolves to. Pictures are kept for the next call with the same look, theme and size."""
+        from ring import Ring
+        import dataclasses
+        resolved = loaded.looks.menu_look(spec)
+        sig = tuple((it.label, it.kind, it.color) for it in sample.items)
+        hover = tuple(hover) if isinstance(hover, (list, tuple)) else hover
+        key = (json.dumps(resolved, sort_keys=True), resolved.get("theme", "dark"), round(float(scale), 3), hover, sig)
+
+        def make():
+            menu = dataclasses.replace(sample, id=mid, look=resolved)
+            im = Ring.preview(menu, loaded.ring, app.icon_for, hover=hover, scale=float(scale))
+            out = self._ring_result(im, [])
+            del out["problems"]
+            return out
+
+        return _look_image(key, make)
+
+    def preview_look(self, cfg, preset=None, look=None, base="global", hover=None, scale=0.5):
+        """The sample ring drawn with a look: preset (a built-in or user look name) and/or look (a raw dict of look
+        keys) laid over base ("global": the ring's look, or a menu id: that menu's own look keys stay). Returns
+        {"image", "size", "width", "height", "centre", "problems"}."""
+        loaded, problems = self._load_dict(cfg)
+        if loaded is None:
+            return {"image": None, "problems": problems}
+        app = self._preview_app()
+        app.cfg = loaded
+        sample = self._sample_menu(loaded, app)
+        spec = self._look_spec(loaded, preset, look, base, problems)
+        live = isinstance(look, dict) and bool(look)
+        mid = "preset:" + (spec["preset"] or "~live") + ("~live" if live and spec["preset"] else "")
+        if isinstance(base, str) and base in loaded.menus:
+            mid += "@" + base
+        out = self._render_look(loaded, app, sample, spec, mid, hover, scale)
+        out["problems"] = problems
+        return out
+
+    def preview_looks(self, cfg, names=None, base="global", scale=0.5):
+        """preview_look for several looks at once, for the gallery: {"looks": {name: {"image", "size", "width",
+        "height", "centre"}}, "problems"}. names: the looks to draw (the built-in ones and the user's when not
+        given); a name that is no look is left out and reported."""
+        loaded, problems = self._load_dict(cfg)
+        if loaded is None:
+            return {"looks": {}, "problems": problems}
+        app = self._preview_app()
+        app.cfg = loaded
+        sample = self._sample_menu(loaded, app)
+        out, notes = {}, []
+        for name in (loaded.looks.names() if names is None else names):
+            spec = self._look_spec(loaded, name, None, base, notes)
+            if not spec["preset"]:
+                continue
+            out[name] = self._render_look(loaded, app, sample, spec, "preset:" + name, None, scale)
+        return {"looks": out, "problems": problems + list(dict.fromkeys(notes))}
+
+    def resolve_look(self, cfg, menu_id=None, slot=None):
+        """The look at one level of cfg, with where each value comes from. No menu_id: the ring's look; a menu_id: that
+        menu's; a slot as well (an index into the menu's items in radial.json): that slot's, its style over the
+        menu's. Returns {"values": the resolved look (roles as #rrggbb), "origins": {key: {"from": default | theme |
+        global-preset | global | menu-preset | menu | slot, "name": the preset's name for the two preset origins},
+        colours as "colors.accent"}, "preset": {"name", "builtin"} of the preset set at that level or None,
+        "fit": {"items", "capacity", "needed_radius", "full", "when_full"} for a menu (None otherwise, and for a
+        fan), "problems": the loader's}."""
+        loaded, problems = self._load_dict(cfg)
+        if loaded is None:
+            return {"values": {}, "origins": {}, "preset": None, "fit": None, "problems": problems}
+        menu = loaded.menus.get(menu_id) if isinstance(menu_id, str) else None
+        if menu_id is not None and menu is None:
+            problems = problems + [f"menu {menu_id!r} not found"]
+        if menu is None:
+            name = loaded.looks.ring.get("look") or ""
+            res = loaded.looks.explain()
+            fit = None
+        else:
+            style = None
+            raw_items = (cfg.get("menus") or {}).get(menu_id, {}).get("items") if isinstance(cfg, dict) else None
+            if isinstance(slot, int) and not isinstance(slot, bool) and isinstance(raw_items, list) \
+                    and 0 <= slot < len(raw_items):
+                raw = raw_items[slot].get("style") if isinstance(raw_items[slot], dict) else None
+                style = L.check_style(raw, [], "") if raw is not None else {}
+            res = loaded.looks.explain(menu.look_spec, style)
+            name = (menu.look_spec.get("preset") or "") if style is None else ""
+            fit = self._fit(menu.look or loaded.ring, menu.fan, len(menu.items))
+        preset = {"name": name, "builtin": name in L.BUILTIN} if name and loaded.looks.preset(name) is not None else None
+        return {"values": res["values"], "origins": res["origins"], "preset": preset, "fit": fit,
+                "problems": problems}
 
     def preview_animation(self, cfg, menu_id, fps=30, ring_anim=False):
         """Open-animation frames as PNG data URLs (played back by the Studio), plus the frame interval.
@@ -765,9 +925,52 @@ class Api(webapi.LibraryApi, webapi.TagApi):
         import usage
         return {"slots": usage.Usage(self._usage_path()).load().slots(loaded.menus[menu_id])}
 
+    # the look keys by group, in the order the Look screen shows them; "full" keys are left out of the Simple mode
+    _LOOK_GROUPS = (
+        ("Slots", ("radius", "slot", "dead_zone", "slot_shape", "slot_corner", "border_width", "icon_scale", "size",
+                   "fill_color", "border_color")),
+        ("Hub", ("hub", "hub_style", "hub_color", "hub_glow")),
+        ("Glow", ("glow_color", "glow_opacity")),
+        ("Labels", ("labels", "label_color")),
+        ("Colours", ("colors",)),
+        ("Tag colours", ("tag_colors", "tag_band", "tag_band_opacity", "tag_glow_opacity", "tag_tint_opacity",
+                         "tag_tint_style", "tag_tint_blend")),
+        ("When full", ("when_full",)))
+    _SIMPLE_LOOK_KEYS = ("radius", "slot", "dead_zone", "slot_shape", "labels", "when_full")
+
+    def _look_options(self):
+        """get_options()["looks"]: what the Look screen builds its controls from (see get_options)."""
+        ring = C.default_ring(_theme_now())
+        defaults = {**L.STYLE_DEFAULTS, **{k: ring[k] for k in L.LOOK_KEYS if k in ring}}
+        schema = {}
+        for group, keys in self._LOOK_GROUPS:
+            for k in keys:
+                spec = {"group": group, "default": defaults.get(k), "full": k not in self._SIMPLE_LOOK_KEYS}
+                if k == "colors":
+                    spec.update(kind="colors", choices=list(L.ROLES))
+                elif k in L.COLOUR_KEYS:
+                    spec.update(kind="colour", allow_empty=k in L.EMPTY_COLOUR_KEYS)
+                elif k in L.RANGES:
+                    spec.update(kind="range", min=L.RANGES[k][0], max=L.RANGES[k][1])
+                else:
+                    spec.update(kind="choice", choices=list(L.CHOICES[k]))
+                spec["levels"] = ["slot"] if k in L.STYLE_DEFAULTS else \
+                    ["global", "menu"] + (["slot"] if k in L.STYLE_KEYS else [])
+                schema[k] = spec
+        return {"schema": schema, "roles": list(L.ROLES),
+                "builtin": [{"id": k, "label": v["label"], "blurb": v["blurb"], "look": dict(v["look"])}
+                            for k, v in L.BUILTIN.items()],
+                "reserved": sorted(L.RESERVED_MENU_IDS), "menu_prefixes": ["tag:", "more:"],
+                "name": {"max": 32, "pattern": r"^[\p{L}\p{N}_](?:[\p{L}\p{N}_ -]{0,30}[\p{L}\p{N}_])?$",
+                         "flags": "u"}}
+
     def get_options(self):
-        """Choices the UI offers: animation modes, label modes, action kinds, defaults."""
-        return {"animations": list(C.ANIMATIONS), "labels": list(C.LABEL_MODES), "actions": list(C.ACTION_KEYS),
+        """Choices the UI offers: animation modes, label modes, action kinds, defaults. "looks" describes the look
+        keys (schema: per key its group, kind range | choice | colour | colors, min and max, choices, default, the
+        levels it can be set at and whether it is shown in Full mode only), the theme roles, the built-in looks,
+        the reserved names and what a look's name may be."""
+        return {"looks": self._look_options(), "hub_styles": list(L.HUB_STYLES), "when_full": list(L.WHEN_FULL),
+                "animations": list(C.ANIMATIONS), "labels": list(C.LABEL_MODES), "actions": list(C.ACTION_KEYS),
                 "asset_kinds": list(C.ASSET_KINDS), "tag_colors": list(C.TAG_COLOR_MODES),
                 "tag_bands": list(C.TAG_BANDS), "favourite_tag": tags.FAVOURITE,
                 "tint_styles": list(C.TINT_STYLES), "tint_blends": list(C.TINT_BLENDS),
@@ -1284,7 +1487,7 @@ class Api(webapi.LibraryApi, webapi.TagApi):
         place the user picks. See menushare.build for what the file holds."""
         import webview
         menus = cfg.get("menus") if isinstance(cfg, dict) else None
-        if not isinstance(menus, dict) or not isinstance(menu_id, str) or menu_id.startswith("tag:") \
+        if not isinstance(menus, dict) or not isinstance(menu_id, str) or menu_id.startswith(("tag:", "more:")) \
                 or not isinstance(menus.get(menu_id), dict):
             return {"ok": False, "message": "There is no such menu to export."}
         title = str(menus[menu_id].get("title") or menu_id)
@@ -1312,6 +1515,34 @@ class Api(webapi.LibraryApi, webapi.TagApi):
         'no menu has a hotkey' is left out: it says nothing about the menus the user already has."""
         _, problems = self._load_dict(cfg, store)
         return [p for p in problems if not p.startswith("no menu has a hotkey")]
+
+    @staticmethod
+    def _import_looks(menus_out, bundle_looks, cfg):
+        """How the looks of a menu file come in next to the looks of cfg: (looks_out, renamed, joined) as
+        menushare.plan_looks gives them. The imported menus (menus_out) are pointed at the names the looks get."""
+        mine = cfg.get("looks") if isinstance(cfg, dict) and isinstance(cfg.get("looks"), dict) else {}
+        looks_out, renamed, joined = menushare.plan_looks(bundle_looks, mine)
+        C.relook(menus_out, renamed)
+        return looks_out, renamed, joined
+
+    @staticmethod
+    def _looks_message(looks_out, renamed, joined) -> str:
+        """One sentence on the looks a menu file brought, "" when it brought none."""
+        bits = []
+        if looks_out:
+            bits.append(f"Added {_plural(len(looks_out), 'look')} to yours")
+        n = sum(1 for new in renamed.values() if new in looks_out)
+        if n:
+            bits.append(f"{_plural(n, 'look')} got a new name because yours has one with that name")
+        if joined:
+            bits.append(f"{_plural(len(joined), 'look')} matched one of yours")
+        return ("; ".join(bits) + ".") if bits else ""
+
+    @staticmethod
+    def _looks_for(cfg, menus_out, looks_out):
+        """The looks that checking imported menus needs: those of cfg and the new ones that the menus name."""
+        mine = cfg.get("looks") if isinstance(cfg, dict) and isinstance(cfg.get("looks"), dict) else {}
+        return menushare.looks_used({"looks": {**mine, **looks_out}}, menus_out)
 
     def pick_menu_import(self, cfg):
         """Asks for a menu file, reads and checks it and returns what it holds and how it would come in next to the
@@ -1344,7 +1575,9 @@ class Api(webapi.LibraryApi, webapi.TagApi):
         tags_raw = raw.get("tags") if isinstance(raw.get("tags"), dict) else None
         if tags_raw is not None and not tags._parse(tags_raw)[0]:
             tags_raw = None
+        looks_raw = raw.get("looks") if isinstance(raw.get("looks"), dict) else {}
         menus_out, root_out, renames = menushare.plan_import(menus, root, cfg if isinstance(cfg, dict) else {})
+        looks_out, looks_renamed, looks_joined = self._import_looks(menus_out, looks_raw, cfg)
         store = tags.TagStore(self._tags_path()).load()
         counts, known = {"tags": 0, "new_tags": 0, "items": 0}, store
         if tags_raw is not None:
@@ -1353,9 +1586,9 @@ class Api(webapi.LibraryApi, webapi.TagApi):
             for k, t in tags._parse(tags_raw)[0].items():
                 merged["tags"].setdefault(k, t)
             known = tags.TagStore.from_raw(merged)       # the user's tags plus the file's: none reads as unknown
-        problems = self._menu_problems({"menus": menus_out}, known)
+        problems = self._menu_problems({"menus": menus_out, "looks": self._looks_for(cfg, menus_out, looks_out)}, known)
         self._pending_menu_import = {"path": path, "menus": menus, "root": root, "tags": tags_raw,
-                                     "profile": self._prof()}
+                                     "looks": looks_raw, "profile": self._prof()}
         return {"ok": True, "path": path, "version": version, "root": root_out,
                 "title": menus_out[root_out].get("title") or root_out,
                 "menus": [{"id": mid, "title": m.get("title") or mid,
@@ -1363,6 +1596,7 @@ class Api(webapi.LibraryApi, webapi.TagApi):
                           for mid, m in menus_out.items()],
                 "renames": renames, "tags": counts["tags"], "new_tags": counts["new_tags"],
                 "tagged_items": counts["items"], "missing": menushare.missing_assets(menus_out),
+                "looks": {"added": list(looks_out), "joined": looks_joined, "renamed": looks_renamed},
                 "problems": problems}
 
     def apply_menu_import(self, cfg):
@@ -1379,6 +1613,7 @@ class Api(webapi.LibraryApi, webapi.TagApi):
             return {"ok": False, "message": "The profile changed. Pick the file again."}
         menus_out, root_out, _ = menushare.plan_import(pend["menus"], pend["root"],
                                                        cfg if isinstance(cfg, dict) else {})
+        looks_out, looks_renamed, looks_joined = self._import_looks(menus_out, pend.get("looks") or {}, cfg)
         renamed, tags_message = {}, ""
         if pend["tags"] is not None:
             res = webapi.store().import_tags(pend["tags"], "merge")
@@ -1394,13 +1629,16 @@ class Api(webapi.LibraryApi, webapi.TagApi):
             else:
                 tags_message = f"The tags were not added: {res.get('error') or 'they could not be imported'}."
             C.retag({"menus": menus_out}, renamed)
-        problems = self._menu_problems({"menus": menus_out})        # against the tags as they are now
+        problems = self._menu_problems({"menus": menus_out, "looks": self._looks_for(cfg, menus_out, looks_out)})
+        # (against the tags as they are now)
         self._pending_menu_import = None
         title = menus_out[root_out].get("title") or root_out
         subs = len(menus_out) - 1
         message = f'Added "{title}"' + (f" and its {_plural(subs, 'submenu')}" if subs else "") + " to the editor."
         return {"ok": True, "menus": menus_out, "root": root_out, "title": title, "problems": problems,
-                "tags_message": tags_message, "message": message}
+                "tags_message": tags_message, "message": message, "looks": looks_out,
+                "looks_renamed": looks_renamed, "looks_joined": looks_joined,
+                "looks_message": self._looks_message(looks_out, looks_renamed, looks_joined)}
 
     # --- Studio preferences (not part of the menus; saved straight away) --------------------------
     # mode is "" until Studio decides it at first start (Simple for a fresh install, Full for an existing setup).

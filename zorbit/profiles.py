@@ -749,6 +749,8 @@ def _build(stage, source, bundle) -> list:
         cfg = dict(mine)
         if isinstance(raw.get("ring"), dict):
             cfg["ring"] = raw["ring"]
+        if isinstance(raw.get("looks"), dict):          # the ring's look may name them
+            cfg["looks"] = raw["looks"]
         cfg["menus"] = {"main": {"title": "Main", "hotkey": _first_hotkey(raw), "items": []}}
         _dump(out, cfg, 2)
     elif source == "copy":

@@ -3,10 +3,14 @@ slots opened up. Used by the app and by the Studio's previews, so both show the 
 
   * auto slots become the brushes usage.py picked for them (an empty slot stays a placeholder);
   * a brush, alpha, material or texture slot gets the colour of the item's first tag (also a steps slot that
-    starts with one, since the ring shows that item's icon), unless ring.tag_colors and ring.tag_band are both
-    "none";
+    starts with one, since the ring shows that item's icon). The colour is always stamped; whether it shows is the
+    ring's call, made per look (tag_colors and tag_band);
   * a {"tag": key} slot whose tag exists and has installed items becomes an ordinary submenu slot, pointing
     at the synthetic menu "tag:<key>"; with no items (or no tag) it stays a "tag" slot and is drawn faint.
+
+  * a menu whose look has when_full "more" and more items than fit its ring at the radius shows the first
+    capacity - 1 of them and a "More" slot that opens the synthetic menu "more:<id>" with the rest (paged again
+    in the same way when that is too long: "more:more:<id>"). Fan menus and tag menus are never paged.
 
 A tag menu lists the tag's installed items as a fan: brushes first, most used first, then alphas, materials
 and textures by name. With more than TAG_SLOTS the last slot is "More..." and opens the browser on that tag
@@ -15,6 +19,7 @@ The tag menus are cached until a pick, a usage.json change, a tags.json change o
 app builds a new Expander whenever it reloads radial.json or tags.json.
 """
 import dataclasses
+import math
 import threading
 import time
 
@@ -29,6 +34,25 @@ except Exception:                  # thumbnails and the asset index are optional
 
 TAG_SLOTS = 12
 RESCAN_ASK_S = 5.0                 # a tag fan asks for a library rescan of a kind at most this often
+MORE_PREFIX = "more:"              # the id prefix of the menu a More slot opens
+SLOT_GAP = 1.25                    # TODO: use layout.SLOT_GAP and layout.fit_count once layout.py is merged
+
+
+def _capacity(radius, slot) -> int:
+    """How many slots of this size sit round a ring of this radius with the gap the ring keeps between neighbours.
+    At least 1. TODO: layout.fit_count(sizes, radius) replaces this (it also reads a slot's style size)."""
+    arg = SLOT_GAP * slot / (2 * radius) if radius > 0 else 1.0
+    if arg >= 1:
+        return 1
+    return max(1, int(math.floor(math.pi / math.asin(arg) + 1e-6)))
+
+
+def needed_radius(count, slot) -> int:
+    """The smallest radius (whole pixels) at which count slots of this size sit round a ring with the usual gap.
+    TODO: layout.needed_radius(sizes) replaces this."""
+    if count < 2:
+        return 0
+    return int(math.ceil(SLOT_GAP * slot / (2 * math.sin(math.pi / count)) - 1e-6))
 
 
 class Expander:
@@ -41,7 +65,14 @@ class Expander:
         self._asked = {}               # kind -> when a rescan was last asked for (time.monotonic)
 
     def menu(self, menu):
-        """The menu as the ring draws it now. Nothing is saved."""
+        """The menu as the ring draws it now. Nothing is saved. A paged menu (when_full "more") comes back with its
+        More slot; a "more:" menu comes back as it is, already filled and cut."""
+        if menu.id.startswith(MORE_PREFIX):
+            return menu
+        return self._page(self._fill(menu))
+
+    def _fill(self, menu):
+        """The menu with its auto slots filled and its tag colours stamped, not yet cut to a page."""
         filled = iter(self.usage.load().slots(menu)) if U.auto_count(menu) else None
         items = []
         for it in menu.items:
@@ -52,10 +83,41 @@ class Expander:
             items.append(self._stamp(it))
         return dataclasses.replace(menu, items=items)
 
+    def _page_size(self, menu) -> int:
+        """How many slots one page of the menu holds, the More slot included; 0 when the menu is not paged."""
+        look = menu.look or self.cfg.ring
+        if look.get("when_full", "grow") != "more" or menu.fan:
+            return 0
+        k = _capacity(look.get("radius", 145), look.get("slot", 72))
+        return k if k >= 3 else 0
+
+    def _page(self, whole):
+        """A filled menu cut to its first page: K - 1 items and a More slot that opens more:<id>."""
+        k = self._page_size(whole)
+        if not k or len(whole.items) <= k:
+            return whole
+        more = C.Item(label="More", kind="menu", data={"menu": MORE_PREFIX + whole.id})
+        return dataclasses.replace(whole, items=whole.items[:k - 1] + [more])
+
+    def _whole(self, mid):
+        """The menu with this id and all its items, filled and stamped, before any cut; None if there is none. For
+        "more:<id>" that is what the page before it left out."""
+        if mid.startswith(MORE_PREFIX):
+            parent = self._whole(mid[len(MORE_PREFIX):])
+            k = self._page_size(parent) if parent is not None else 0
+            if not k or len(parent.items) <= k:
+                return None                              # the parent has no More slot
+            return dataclasses.replace(parent, id=mid, hotkey=None, items=parent.items[k - 1:])
+        m = self.cfg.menus.get(mid)
+        return self._fill(m) if m is not None else None
+
     def resolve(self, mid):
         """The menu with this id for the ring to open as a submenu; None if there is none."""
         if mid.startswith("tag:"):
             return self.tag_menu(mid[4:])
+        if mid.startswith(MORE_PREFIX):
+            whole = self._whole(mid)
+            return self._page(whole) if whole is not None else None
         m = self.cfg.menus.get(mid)
         return self.menu(m) if m is not None else None
 
@@ -84,7 +146,7 @@ class Expander:
         if found:
             color = self.tags.color(key)
             more = len(found) > TAG_SLOTS
-            fill = color if self._colours_on() else ""   # the fan's tag, not each item's own
+            fill = color                                 # the fan's tag, not each item's own
             items = [C.Item(label=n, kind=k, data={k: n}, color=fill)
                      for k, n in found[:TAG_SLOTS - 1 if more else TAG_SLOTS]]
             if more:
@@ -118,14 +180,7 @@ class Expander:
         threading.Thread(target=run, daemon=True).start()
 
     # --- colours and tag slots -------------------------------------------------------------------
-    def _colours_on(self):
-        """Slots carry their tag colour unless every way of showing it is off."""
-        r = self.cfg.ring
-        return r.get("tag_colors", "tint") != "none" or r.get("tag_band", "medium") != "none"
-
     def _asset_color(self, kind, name):
-        if not self._colours_on():
-            return ""
         return self.tags.color_of_item(item_key(kind, name))
 
     def _stamp(self, it):

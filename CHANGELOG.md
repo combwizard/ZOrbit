@@ -18,6 +18,10 @@ All notable changes to this project are listed here. The format follows
   wins over the slot's tag colour for the hover glow, the hover rim and the idle halo only (#33).
 - `radial.json` can hold named looks under `looks`, a menu can have its own `look` (a look's name, its own settings, or
   both), and an item can have a `style`. Studio does not edit these yet (#33).
+- `when_full: "more"` in the ring settings or a menu's look keeps a full ring at its radius and ends it with a
+  **More** slot, which opens a ring with the rest of the menu. Fans and tag fans are never paged (#33).
+- **Export menu...** puts the looks of your own that the menu uses into the file. **Import menu...** joins a look that
+  is the same as one you have, and renames one that differs, such as `Bold 2` (#33).
 - Studio can install an update itself. Click the new version at the top, or **Install update** in **Settings > Studio**,
   to see the new version's release notes. **Download and install** fetches the installer from GitHub and checks its
   SHA-256. It then runs Setup, and Setup
