@@ -6,10 +6,11 @@ Studio is where you edit everything. Open it from the Start menu (**ZOrbit Studi
 | Screen | Shortcut | What it does |
 |---|---|---|
 | Menus | Alt+1 | Create and edit menus and their items, with a live ring preview. |
-| Library | Alt+2 | Browse the brushes, alphas, materials and textures ZBrush can load, on four tabs, with search, folders and thumbnails. Click an item and press **Add to <menu>**, or drag it onto a menu, the ring or the item list. **Rescan** picks up items saved since Studio opened. Tag items and filter by tag (see [Tags](tags.md)). Star favourites; Recent lists what you have picked in ZBrush (see [Favourites and Recent](browser.md#favourites-and-recent)). |
-| Settings | Alt+3 | The theme, ring size, animation, labels, slot shape, flick, the browser hotkey, Studio's own preferences, and Import and export (see [Import and export](files.md#import-and-export)). [Full mode](#simple-and-full-mode) adds separate radius, slot, dead zone and hub sliders, tag colours, colours, hover submenus, tap time, auto-close, tags, the bridge and Older ZBrush. |
-| Status | Alt+4 | Four cards: **ZBrush** (running or not), **ZOrbit app** (running or not, with **Start app** when ZBrush is running, or amber with **Restart app** when the app running is older than Studio: see [Older versions](profiles.md#older-versions)), **Bridge listener** (the small window the plugin keeps inside ZBrush: **Connected**, **Found, unverified**, **Stale** or **Not found**; **ZBrush closed** in grey when ZBrush is not running, since there is nothing to listen in; and **Not needed (key bridge)** when the bridge mode is `key` or only a ZBrush 2022 to 2025 is installed) and **Last pick** (the most recent item sent to ZBrush). Below them the last 40 lines of the app log, with **Copy log**, **Open logs folder** and **Open menus folder** (the folder of the profile you are editing, which holds its `radial.json`). The screen refreshes every 3 seconds. A dot on this button in the rail means the app is not running while ZBrush is. |
-| Setup | Alt+5 | A checklist of five steps: ZBrush found (with the plugin set up for it), plugin loaded in ZBrush, try the ring, your brushes, and what's where. It shows live state and offers one action per step. An amber dot on this button in the rail means no ZBrush that Studio found has the plugin set up, or a running ZBrush does not. Finding no ZBrush at all does not count. |
+| Look | Alt+2 | How the ring looks for every menu: its size, slot shape, hub, labels, colours and tag colours, with a live preview of any menu you pick. See [The Look screen](#the-look-screen). |
+| Library | Alt+3 | Browse the brushes, alphas, materials and textures ZBrush can load, on four tabs, with search, folders and thumbnails. Click an item and press **Add to <menu>**, or drag it onto a menu, the ring or the item list. **Rescan** picks up items saved since Studio opened. Tag items and filter by tag (see [Tags](tags.md)). Star favourites; Recent lists what you have picked in ZBrush (see [Favourites and Recent](browser.md#favourites-and-recent)). |
+| Settings | Alt+4 | The theme, a **Ring look** card with a button that opens Look, the open animation, flick, the browser hotkey, Studio's own preferences, and Import and export (see [Import and export](files.md#import-and-export)). [Full mode](#simple-and-full-mode) adds hover submenus, tap time, auto-close, tags, the bridge and Older ZBrush. |
+| Status | Alt+5 | Four cards: **ZBrush** (running or not), **ZOrbit app** (running or not, with **Start app** when ZBrush is running, or amber with **Restart app** when the app running is older than Studio: see [Older versions](profiles.md#older-versions)), **Bridge listener** (the small window the plugin keeps inside ZBrush: **Connected**, **Found, unverified**, **Stale** or **Not found**; **ZBrush closed** in grey when ZBrush is not running, since there is nothing to listen in; and **Not needed (key bridge)** when the bridge mode is `key` or only a ZBrush 2022 to 2025 is installed) and **Last pick** (the most recent item sent to ZBrush). Below them the last 40 lines of the app log, with **Copy log**, **Open logs folder** and **Open menus folder** (the folder of the profile you are editing, which holds its `radial.json`). The screen refreshes every 3 seconds. A dot on this button in the rail means the app is not running while ZBrush is. |
+| Setup | Alt+6 | A checklist of five steps: ZBrush found (with the plugin set up for it), plugin loaded in ZBrush, try the ring, your brushes, and what's where. It shows live state and offers one action per step. An amber dot on this button in the rail means no ZBrush that Studio found has the plugin set up, or a running ZBrush does not. Finding no ZBrush at all does not count. |
 
 ![The Library screen on the Brushes tab: folders and tags on the left, a grid of brush thumbnails, and the Add to Brushes panel on the right](images/studio-library.png)
 
@@ -26,16 +27,17 @@ The mode only changes what Studio shows. The ring, the app, `radial.json`, Save,
 | Menus, **Add item** | Brush, Alpha, Material, Texture and Submenu. | Press, Set, Toggle, Steps, Auto, Tag and Browser. |
 | Menus, **Menu** tab | Title, Hotkey, **Duplicate** and **Delete**. | Id, **Swallow hotkey**, **Used by**, **Open animation** and **Fan out when opened from another menu**. |
 | Library and the dock | Everything, with starring, tag chips and the right-click tag picker. | **Manage tags...**. |
-| Settings | **Theme**, **Ring size**, **Open animation**, **Labels**, **Behaviour** with **Flick to pick**, **Browser**, **Studio** and **Import and export**. | **Ring radius**, **Slot size** and **Dead zone** in place of **Ring size**, **Tag colours**, **Colours**, **Open submenus on hover**, **Tap time**, **Auto-close**, **ZBrush bridge**, **Older ZBrush** and **Tags**. |
+| Look | **Ring size**, **Slot shape** and **Labels**. | **Ring radius**, **Slot size** and **Dead zone** in place of **Ring size**, **Hub**, **Colours** and **Tag colours**. |
+| Settings | **Theme**, **Ring look**, **Open animation**, **Behaviour** with **Flick to pick**, **Browser**, **Studio** and **Import and export**. | **Open submenus on hover**, **Tap time**, **Auto-close**, **ZBrush bridge**, **Older ZBrush** and **Tags**. |
 | Status and Setup | The same. | The same. |
 
-![The Settings screen in Simple mode: a shorter list of sections on the left, and a single Ring size slider beside the ring preview, above the Open animation choices](images/studio-settings-simple.png)
+![The Settings screen in Simple mode: a shorter list of sections on the left, with the Theme, Ring look and Open animation cards](images/studio-settings-simple.png)
 
-In Simple, the **Ring size** slider moves **Ring radius**, **Slot size** and **Dead zone** together and keeps their proportions. **Reset** puts all three back to their defaults.
+In Simple, the **Ring size** slider on **Look** moves **Ring radius**, **Slot size** and **Dead zone** together and keeps their proportions. Its reset button puts all three back to their defaults.
 
 An item of a type Simple does not offer still appears in the list and on the ring. The starter **Tools** and **SubDivide** menus are full of them. Select one and the inspector shows its type and what it does on one line, with an **Edit in Full mode** link. You can still change its **Label** and **Icon**, except on an Auto slot. You can move, duplicate and delete it as usual.
 
-A menu with an open animation, **Fan out when opened from another menu** or **Swallow hotkey** switched off says so on its **Menu** tab, with a **Switch to Full mode** link. When a setting that only Full shows is not at its default, the top of the Settings page says so: "Changed in Full mode and not shown here: Colours, Auto-close." It has a **Switch to Full mode** link too.
+A menu with an open animation, **Fan out when opened from another menu** or **Swallow hotkey** switched off says so on its **Menu** tab, with a **Switch to Full mode** link. When a setting that only Full shows is not at its default, the top of the Look or Settings page says so: "Changed in Full mode and not shown here: Colours." It has a **Switch to Full mode** link too.
 
 Studio switches to Full by itself when you ask for something Simple hides. Clicking a problem in the **problems** list that points at a hidden setting or item switches first and shows "Switched to Full mode to show this." Setup step 3's **Open Settings** button does the same.
 
@@ -71,29 +73,30 @@ The steps:
 2. **Plugin loaded in ZBrush.** Live: whether ZBrush is running, which version, whether it loaded the plugin, and whether it needs a restart because it was started before the plugin was set up. When it did not load the plugin, the line under it says what to do: press **Fix** in step 1 and restart ZBrush, or close ZBrush completely and start it from the Start menu (a ZBrush started from a program that was already open does not get the new setting), and read `bridge.log` or `zscript_launch.log` if that does not help. A ZBrush running as administrator cannot be read, so Studio says the ring will not open and asks you to start ZBrush without **Run as administrator**; if the plugin's listener is up in it, the plugin still counts as loaded. A ZBrush running from a folder Studio does not know gets a note to add that folder with **Add a ZBrush folder** in step 1. If the check itself fails, Setup says so and keeps showing the last steps that worked. It also shows whether the app is running, with **Start app**.
 3. **Try the ring.** Hover ZBrush's canvas, press Q and flick to a brush. Three checks tick off as it happens: ring opened, pick sent, ZBrush did it. If the app could not send the pick, the hint says why and what to do: the bridge mode is **Message** and the plugin is not answering, no bridge key is set, ZBrush was not the front window, or the app could not write its request file. If ZBrush does not confirm a pick that was sent, the hint says what to look at for the route it took, naming your bridge key (F9 unless you changed it). If ZBrush answered with a failure, the hint is that line from the log instead. **Start over** forgets the try so far. This step reads `activity.json` (see [Files and logs](files.md#files-and-logs)).
 4. **Your brushes.** A preview of the Q ring, and **Change these brushes**, which opens it on the Menus screen.
-5. **What's where.** A line on each of Menus, Library, Settings, Status and the user guide, which links to these pages. It also says that Studio starts in Simple mode and that the switch at the top turns on Full mode (see [Simple and Full mode](#simple-and-full-mode)). **Take the tour** starts [the tour](#the-tour) of the window.
+5. **What's where.** A line on each of Menus, Look, Library, Settings, Status and the user guide, which links to these pages. It also says that Studio starts in Simple mode and that the switch at the top turns on Full mode (see [Simple and Full mode](#simple-and-full-mode)). **Take the tour** starts [the tour](#the-tour) of the window.
 
 ## The tour
 
-The tour walks you round the Studio window. It lights up one part at a time and puts a card beside it with a title, a sentence or two and a count such as "3 of 9". **Next** moves on (it reads **Done** on the last stop), **Back** goes back, and **End tour** stops at any point.
+The tour walks you round the Studio window. It lights up one part at a time and puts a card beside it with a title, a sentence or two and a count such as "3 of 10". **Next** moves on (it reads **Done** on the last stop), **Back** goes back, and **End tour** stops at any point.
 
 ![The tour on its third stop, the ring, with the card beside the ring preview](images/studio-tour.png)
 
-The tour switches to the Menus screen and stops at:
+The tour starts on the Menus screen and stops at:
 
-1. The rail of screens (**Alt+1** to **Alt+5**).
+1. The rail of screens (**Alt+1** to **Alt+6**).
 2. The list of menus.
 3. The ring preview.
 4. The **Item**, **Menu** and **Library** tabs.
-5. The **Library** button in the rail.
-6. The profile button.
-7. The **Simple** / **Full** switch.
-8. **Revert** and **Save**.
-9. **Status** and **Setup** in the rail.
+5. The ring preview on the **Look** screen.
+6. The **Library** button in the rail.
+7. The profile button.
+8. The **Simple** / **Full** switch.
+9. **Revert** and **Save**.
+10. **Status** and **Setup** in the rail.
 
 A stop whose part is not on screen, such as the profile button when it is hidden, is skipped and left out of the count.
 
-**Right** goes to the next stop, **Left** goes back and **Esc** ends the tour. **Tab** moves between the buttons on the card. While the tour is open you cannot click the rest of the window, and Studio's shortcuts (**Ctrl+S**, **Ctrl+Z**, **Alt+1** to **Alt+5**) do nothing until it ends.
+**Right** goes to the next stop, **Left** goes back and **Esc** ends the tour. **Tab** moves between the buttons on the card. While the tour is open you cannot click the rest of the window, and Studio's shortcuts (**Ctrl+S**, **Ctrl+Z**, **Alt+1** to **Alt+6**) do nothing until it ends.
 
 The tour changes no menu and no setting. When it ends, Studio goes back to the screen you started it from.
 
@@ -103,7 +106,7 @@ To take it later, press **Take the tour** in Setup step 5 (**What's where**) or 
 
 ## Keyboard shortcuts
 
-Alt+1 to Alt+5 open the screens (see the table at the top). **Ctrl+S** saves, **Ctrl+Z** undoes, **Ctrl+Y** (or Ctrl+Shift+Z) redoes. Undo and redo work wherever the focus is, even on a slider or a switch; inside a text box, Ctrl+Z undoes your typing there instead. Closing Studio with unsaved changes shows what would be lost, grouped by menu and setting, with **Save and close**, **Close without saving** and **Keep editing**; Escape keeps editing. The Undo and Redo buttons next to Revert do the same, and undoing puts the selection back on what you were editing. Each list (the menus, the items, the Library's folders and the Library's cards) is one stop for the Tab key. Inside it, **Up** and **Down** move through the rows, **Home** and **End** jump to the first and last, **Delete** removes the selected menu or item, **F2** renames a menu, **Alt+Up/Down** moves a menu or an item up or down the list, and **M** on an item moves it to another menu: a list of the other menus opens, and **Enter** on one moves the item there. The **Move to menu** button at the top of the **Item** tab does the same. In the Library, the cards are a grid: **Left**, **Right**, **Up** and **Down** move from card to card (the card you land on is selected), and **Home** and **End** jump to the first and last. **Enter** on a card adds it to the menu you are editing, **Space** selects it, **Ctrl+Space** adds it to or takes it out of the selection, and **Ctrl+D** stars it; the star and add buttons on a card are for the mouse. In the folders list, **Up** and **Down** move the focus, **Enter** or **Space** opens a folder, and **Right** and **Left** unfold and fold one that has sub-folders.
+Alt+1 to Alt+6 open the screens (see the table at the top). **Ctrl+S** saves, **Ctrl+Z** undoes, **Ctrl+Y** (or Ctrl+Shift+Z) redoes. Undo and redo work wherever the focus is, even on a slider or a switch; inside a text box, Ctrl+Z undoes your typing there instead. Closing Studio with unsaved changes shows what would be lost, grouped by menu and setting, with **Save and close**, **Close without saving** and **Keep editing**; Escape keeps editing. The Undo and Redo buttons next to Revert do the same, and undoing puts the selection back on what you were editing. Each list (the menus, the items, the Library's folders and the Library's cards) is one stop for the Tab key. Inside it, **Up** and **Down** move through the rows, **Home** and **End** jump to the first and last, **Delete** removes the selected menu or item, **F2** renames a menu, **Alt+Up/Down** moves a menu or an item up or down the list, and **M** on an item moves it to another menu: a list of the other menus opens, and **Enter** on one moves the item there. The **Move to menu** button at the top of the **Item** tab does the same. In the Library, the cards are a grid: **Left**, **Right**, **Up** and **Down** move from card to card (the card you land on is selected), and **Home** and **End** jump to the first and last. **Enter** on a card adds it to the menu you are editing, **Space** selects it, **Ctrl+Space** adds it to or takes it out of the selection, and **Ctrl+D** stars it; the star and add buttons on a card are for the mouse. In the folders list, **Up** and **Down** move the focus, **Enter** or **Space** opens a folder, and **Right** and **Left** unfold and fold one that has sub-folders.
 
 Opening the **problems** list with the keyboard puts the focus on its first entry; **Esc** closes it and gives the focus back to the pill. When a menu is deleted from the **Menu** tab, or its id is renamed there, the focus moves to the next menu in the list instead of being lost.
 
@@ -169,3 +172,29 @@ The right-hand side has three tabs:
 - **Library** is the [browser](browser.md) in a narrow form, to drag items into the ring or the list.
 
 Menu rows show the menu's title, id, hotkey (or a small submenu icon when it has none) and item count. When the window is narrow, hover a row for its full title and hotkey. A menu whose ring is full gets a note above its list: it says how many items fit at the current radius and how big the ring grows with the items the menu has.
+
+## The Look screen
+
+**Look** (Alt+2) is where the ring's looks are set. It edits one level, **Global**: what you set here is used by every menu. The bar at the top shows it.
+
+![The Look screen: the ring preview of the Brushes menu and a menu picker on the left, and the Slots, Hub and Labels groups on the right, each setting with a Default badge](images/studio-look.png)
+
+On the left is a preview of the real ring, drawn by the same code as the app, with the dead zone as a dashed circle. The **Preview menu** list picks which menu it shows. It only changes the preview, not the menu you are editing on the Menus screen. **Sample ring with tags** shows a ring of library brushes in your tag colours, for the tag settings.
+
+On the right are the settings, in groups. The buttons above them (**Slots**, **Hub**, **Labels**, **Colours**, **Tag colours**) jump to a group, and the one you are reading is highlighted.
+
+- **Slots:** **Ring radius**, **Slot size** and **Dead zone** (one **Ring size** slider in Simple mode), and **Slot shape**.
+- **Hub** (Full mode): the size of the centre dot.
+- **Labels:** **Icon and name** or **Icon only**.
+- **Colours** (Full mode): the five ring colours, each with a swatch and a hex value, and **Reset all colours**.
+- **Tag colours** (Full mode): the **Icon tint**, **Glow** and **Band** switches and their settings (see [Tag colours](appearance.md#tag-colours)). When the preview menu has no tagged brush, a note offers the sample ring.
+
+Each setting has a badge beside its name that says where its value comes from:
+
+- **Default** is the built-in value.
+- **Theme** is a colour that comes from the Light or Match ZBrush [theme](appearance.md#theme). You have not set it yourself.
+- **Global** is a value you set here. It is shown in the accent colour. A value you set that equals the default is not kept: the badge goes back to **Default** and the file says nothing about it.
+
+The reset button at the right of a setting (it appears once you have set it) is **Reset to default**. Clicking a badge moves the focus to its setting.
+
+The values are the same ones `radial.json` keeps under `"ring"` (see [Appearance and behaviour settings](appearance.md#appearance-and-behaviour-settings)), and Save, Revert and undo treat them like any other change. Settings that only Full shows keep their value in Simple mode. If one is not at its default, the top of the page names it and has a **Switch to Full mode** link.

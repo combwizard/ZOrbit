@@ -2,9 +2,9 @@
 
 ## Appearance and behaviour settings
 
-These are on the Settings screen in Studio, and under `"ring"` in `radial.json`. Studio shows live previews. The [theme](#theme) is on Settings too, but it is a Studio preference and not in `radial.json`.
+The look settings are on the Look screen in Studio, the rest on Settings, and all are under `"ring"` in `radial.json`. Studio shows live previews. The [theme](#theme) is on Settings, but it is a Studio preference and not in `radial.json`.
 
-![The Settings screen in Studio: a list of sections on the left, and Ring geometry with sliders for ring radius, slot size and dead zone beside a ring preview, above the Open animation choices](images/studio-settings.png)
+![The Look screen in Studio: a ring preview on the left, and Slots with sliders for ring radius, slot size and dead zone on the right, above Hub and Labels](images/studio-look.png)
 
 | Setting (`ring.`) and its label in Studio | Default | Range | Meaning |
 |---|---|---|---|
@@ -34,7 +34,7 @@ Studio's [Simple mode](studio.md#simple-and-full-mode) shows only some of these.
 
 ### Slot shapes
 
-**Slot shape** is a card below **Labels** on Settings, in Simple and Full mode. There are six shapes:
+**Slot shape** is under **Slots** on the Look screen, in Simple and Full mode. Studio offers **Circle** and **Rounded square** so far; the others are set as `slot_shape` in `radial.json`. There are six shapes:
 
 - **Circle** is the default.
 - **Rounded square** is a square with rounded corners, the same size as the circle. Its corner radius is `slot_corner`, 0 to 0.5 of the side, 0.28 by default.
@@ -114,7 +114,7 @@ If ZOrbit finds no stored scheme, it uses Dark and the card says so. See [Match 
 | `text` | `#f0f0f0` | `#1b1c20` | Labels |
 | `lines` | `#f86b33` | `#a8360f` | Spokes and guide circles |
 
-![Settings > Colours: swatches and hex values for Background, Accent, Highlight, Text and Lines, a Reset all colours button, and a preview of the Brushes ring](images/settings-colours.png)
+![Look > Colours: swatches and hex values for Background, Accent, Highlight, Text and Lines, each with a Default badge, and a Reset all colours button](images/look-colours.png)
 
 ```json
 "ring": {
@@ -128,7 +128,7 @@ Anything you leave out keeps the theme's default. Values outside the allowed ran
 
 ### Tag colours
 
-The colour of an item's first tag (see [Tags](tags.md)) can show on its slot in three ways: an icon tint, a glow and a band. In Studio they are the three groups of the **Tag colours** card on the Settings screen (Full mode), each with its own switch. Beside them is a preview. It shows the current menu if it has a tagged brush, and otherwise a sample ring of your brushes coloured with your tags, so every change is visible.
+The colour of an item's first tag (see [Tags](tags.md)) can show on its slot in three ways: an icon tint, a glow and a band. In Studio they are the three groups of **Tag colours** on the Look screen (Full mode), each with its own switch. The preview on that screen shows the menu you pick, and **Sample ring with tags** in its menu list shows a ring of your brushes coloured with your tags, so every change is visible.
 
 ![A ring of eight brushes with two tags: Blocking in lime green, Detailing in violet, and two untagged slots. Each slot has a coloured rim and tint, and the band behind them follows the tags](images/tag-colours.png)
 

@@ -76,7 +76,7 @@ A menu can open as a fan: hover its slot and its items spread out beyond it, wit
 3. **ZBrush 2026 and newer:** restart ZBrush once (it reads `ZBRUSH_PLUGIN_PATH` only when it starts). **ZBrush 2022 to 2025:** open **ZOrbit Studio**, go to **Setup**, press **Install** next to your ZBrush (approve the Windows prompt if it asks), then restart that ZBrush.
 4. Open a canvas, hover over it and press **Q**.
 
-The first time you open **ZOrbit Studio** it starts on its **Setup** screen. Setup walks through the rest: it finds your ZBrush, tells you whether to restart it, lists each ZBrush 2022 to 2025 with an **Install** button, and has you try the ring once. You can reopen it any time with Alt+5.
+The first time you open **ZOrbit Studio** it starts on its **Setup** screen. Setup walks through the rest: it finds your ZBrush, tells you whether to restart it, lists each ZBrush 2022 to 2025 with an **Install** button, and has you try the ring once. You can reopen it any time with Alt+6.
 
 The first run puts a starter set of menus in the **Default** profile, `%APPDATA%\ZOrbit\profiles\Default\radial.json`. They use only brushes that come with ZBrush.
 

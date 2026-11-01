@@ -1,6 +1,6 @@
 # Troubleshooting
 
-Entries are grouped by what you see. Studio's **Setup** screen (Alt+5) is the quickest first check: it looks at ZBrush, the plugin and the app, and says which step is missing. The log files named below are listed under [Logs](#logs).
+Entries are grouped by what you see. Studio's **Setup** screen (Alt+6) is the quickest first check: it looks at ZBrush, the plugin and the app, and says which step is missing. The log files named below are listed under [Logs](#logs).
 
 ## Installing
 
@@ -41,7 +41,7 @@ The palette was renamed, so a hotkey you bound by hand to the old **Apply** does
 
 ### Pressing the hotkey does nothing
 
-1. Open Studio's **Setup** screen (Alt+5). It checks ZBrush, the plugin and the app, and says which step is missing. An amber dot on its button in the rail means no ZBrush that Studio found has the plugin set up, or a running ZBrush does not. It does not appear when Studio finds no ZBrush at all. When step 2 says ZBrush has not loaded the plugin, close ZBrush completely and start it from the Start menu: a ZBrush started from a program that was already open before the plugin was registered does not know where the plugin is. If that does not help, read `bridge.log` (ZBrush 2026 and newer) or `zscript_launch.log` (ZBrush 2022 to 2025) in `%LOCALAPPDATA%\ZOrbit`; `bridge.log` does not exist if the plugin never ran.
+1. Open Studio's **Setup** screen (Alt+6). It checks ZBrush, the plugin and the app, and says which step is missing. An amber dot on its button in the rail means no ZBrush that Studio found has the plugin set up, or a running ZBrush does not. It does not appear when Studio finds no ZBrush at all. When step 2 says ZBrush has not loaded the plugin, close ZBrush completely and start it from the Start menu: a ZBrush started from a program that was already open before the plugin was registered does not know where the plugin is. If that does not help, read `bridge.log` (ZBrush 2026 and newer) or `zscript_launch.log` (ZBrush 2022 to 2025) in `%LOCALAPPDATA%\ZOrbit`; `bridge.log` does not exist if the plugin never ran.
 
     ![The Setup screen with ZBrush found ticked, and the Plugin loaded in ZBrush step waiting: ZBrush 2026 shows Restart ZBrush because it was started before the plugin was set up](images/setup-restart.png)
 
@@ -141,7 +141,7 @@ No installed item carries that tag, or the tag no longer exists (the problems pi
 
 ### My slots are not coloured by tag
 
-Check **Settings > Tag colours** (Full mode): the **Icon tint**, **Glow** and **Band** switches may all be off. Only an item's first tag colours its slot, and an item with no tag is not coloured. A change made by hand to `tags.json` shows within a moment.
+Check **Look > Tag colours** (Full mode): the **Icon tint**, **Glow** and **Band** switches may all be off. Only an item's first tag colours its slot, and an item with no tag is not coloured. A change made by hand to `tags.json` shows within a moment.
 
 ### A slot shows letters instead of a picture
 
@@ -161,7 +161,7 @@ The `usage.json` an older ZOrbit kept, which holds the brushes that fill the aut
 
 ### I cannot find a setting in Studio
 
-Studio may be in Simple mode, which hides some settings and item types. Press **Full** in the top bar. A hidden setting keeps its value, so nothing is lost by switching. If a Full-only setting is not at its default, the top of the Settings page names it and has a **Switch to Full mode** link. [Simple and Full mode](studio.md#simple-and-full-mode) lists what each mode shows.
+Studio may be in Simple mode, which hides some settings and item types. Press **Full** in the top bar. A hidden setting keeps its value, so nothing is lost by switching. If a Full-only setting is not at its default, the top of the Look or Settings page names it and has a **Switch to Full mode** link. [Simple and Full mode](studio.md#simple-and-full-mode) lists what each mode shows.
 
 ### Match ZBrush shows the Dark colours
 
@@ -179,7 +179,7 @@ Studio keeps the last version as `radial.json.bak`. If you edit the file by hand
 - **Start from defaults** replaces the file with the built-in menus, after a confirmation. The unreadable file is kept as `radial.json.broken`.
 - **Try again** reloads Studio, for when you have fixed the file by hand.
 
-The rail and the **Alt+1** to **Alt+5** keys do nothing, and the rail is dimmed, until the file loads. Nothing is changed or saved until you choose a button.
+The rail and the **Alt+1** to **Alt+6** keys do nothing, and the rail is dimmed, until the file loads. Nothing is changed or saved until you choose a button.
 
 A section of the wrong type, for example `"ring": "big"`, is reported with the section name, and the defaults are used for it. A brush, alpha, material or texture name may not contain `\ / :` or `..`, and an `icon` may not point at a network path; the problem names the item, and a bad name skips the item. A byte-order mark left by an editor is accepted. Deleting the profile's `radial.json` makes the app create a fresh one from the starter menus, in that profile's folder.
 

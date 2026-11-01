@@ -13,7 +13,7 @@
 3. **ZBrush 2026 and newer:** restart ZBrush once (it reads `ZBRUSH_PLUGIN_PATH` only when it starts). **ZBrush 2022 to 2025:** open **ZOrbit Studio**, go to **Setup**, press **Install** next to your ZBrush (approve the Windows prompt if it asks), then restart that ZBrush.
 4. Open a canvas, hover over it and press **Q**.
 
-The first time you open **ZOrbit Studio** it starts on its **Setup** screen. Setup walks through the rest: it finds your ZBrush, tells you whether to restart it, lists each ZBrush 2022 to 2025 it finds with an **Install** button (press it for each version you use), and has you try the ring once. You can reopen it any time with Alt+5.
+The first time you open **ZOrbit Studio** it starts on its **Setup** screen. Setup walks through the rest: it finds your ZBrush, tells you whether to restart it, lists each ZBrush 2022 to 2025 it finds with an **Install** button (press it for each version you use), and has you try the ring once. You can reopen it any time with Alt+6.
 
 ![The Setup screen with ZBrush found, Plugin loaded in ZBrush and Try the ring all ticked, and a row for each ZBrush version with its Install, Update or Remove button](images/setup.png)
 
@@ -44,7 +44,7 @@ In ZBrush 2026 the palette is now **Zplugin > ZOrbit**. If you bound F9 to the o
 
 These versions load plugins only from their own `ZStartup\ZPlugs64` folder, so Studio puts the plugin there:
 
-1. Open **ZOrbit Studio** and go to the **Setup** screen (Alt+5). Step 1 lists the 2022 to 2025 versions it found. If yours is missing, use **Add a ZBrush folder**. The same list, with the same **Install** button, is in **Settings > Older ZBrush** in [Full mode](studio.md#simple-and-full-mode).
+1. Open **ZOrbit Studio** and go to the **Setup** screen (Alt+6). Step 1 lists the 2022 to 2025 versions it found. If yours is missing, use **Add a ZBrush folder**. The same list, with the same **Install** button, is in **Settings > Older ZBrush** in [Full mode](studio.md#simple-and-full-mode).
 2. Click **Install**. A ZBrush under Program Files asks for administrator rights once (the prompt runs ZOrbit's own program as administrator).
 3. Restart that ZBrush.
 
@@ -58,7 +58,7 @@ The portable zip is for a PC where you do not want to run an installer. It holds
 
 1. Unzip it somewhere permanent, such as a folder under `Documents`. Keep `ZOrbit\` and `bridge\` together in the same parent folder.
 2. Run `ZOrbit\ZOrbit.exe`. It sits in the notification area.
-3. Left-click the tray icon to open Studio, and go to the **Setup** screen (Alt+5).
+3. Left-click the tray icon to open Studio, and go to the **Setup** screen (Alt+6).
 4. Press **Fix** next to your ZBrush. That adds the `bridge` folder to your `ZBRUSH_PLUGIN_PATH` user environment variable. The app also writes `%APPDATA%\ZOrbit\launch.json` each time it starts, so the plugin knows where to find it.
 5. Restart ZBrush. For ZBrush 2022 to 2025, press **Install** on **Setup** instead (see [ZBrush 2022 to 2025](#zbrush-2022-to-2025)).
 

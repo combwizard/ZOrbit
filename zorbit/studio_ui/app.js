@@ -53,6 +53,7 @@ function h(tag, attrs, ...kids) {
 const ICONS = {
   menus: '<circle cx="12" cy="12" r="2"/><circle cx="12" cy="4.6" r="1.9"/><circle cx="18.4" cy="8.3" r="1.9"/><circle cx="18.4" cy="15.7" r="1.9"/><circle cx="12" cy="19.4" r="1.9"/><circle cx="5.6" cy="15.7" r="1.9"/><circle cx="5.6" cy="8.3" r="1.9"/>',
   library: '<rect x="4" y="4" width="7" height="7" rx="1.6"/><rect x="13" y="4" width="7" height="7" rx="1.6"/><rect x="4" y="13" width="7" height="7" rx="1.6"/><rect x="13" y="13" width="7" height="7" rx="1.6"/>',
+  look: '<circle cx="12" cy="12" r="9"/><path d="M12 7.2l4.2 2.4v4.8L12 16.8l-4.2-2.4V9.6z"/>',
   settings: '<path d="M4 7h8M18 7h2M4 12h5M13 12h7M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="11" cy="12" r="2"/><circle cx="9" cy="17" r="2"/>',
   status: '<path d="M3 12h4l2.5-6 4 12 2.5-6H21"/>',
   setup: '<path d="M5 7l1.5 1.5L9 6M5 12l1.5 1.5L9 11M5 17l1.5 1.5L9 16"/><path d="M12 7h8M12 12h8M12 17h8"/>',
@@ -202,6 +203,10 @@ const S = {
   profile: '', active: '', profiles: [], profilesOn: false,   // the profile Studio edits, the one the app uses, every name, and whether profiles exist at all (not when a menus file is pinned)
 };
 const R = {};               // region renderers registered by the visible screen
+/* The screens in rail order: Alt+1 to Alt+6 follow it, and so do the rail titles (index.html carries the same words for the first paint). */
+const SCREEN_ORDER = ['menus', 'look', 'library', 'settings', 'status', 'setup'];
+const SCREEN_LABEL = { menus: 'Menus', look: 'Look', library: 'Library', settings: 'Settings', status: 'Status', setup: 'Setup' };
+const railTitle = name => SCREEN_LABEL[name] + ' (Alt+' + (SCREEN_ORDER.indexOf(name) + 1) + ')';
 
 /* Per-kind library state: S.libs[kind] (see emptyLib). lib(kind) never throws, ensureLib(kind) loads a kind the first time it is shown. */
 S.libs = Object.fromEntries(LIB_KINDS.map(k => [k, emptyLib()]));
@@ -231,12 +236,14 @@ const kindIsFull = k => !!(KIND[k] && KIND[k].full);
 /* Ring settings that only Full shows, with the names the "changed in Full mode" note uses. */
 const FULL_RING = { tag_colors: 'Tag colours', tag_band: 'Tag colours', tag_band_opacity: 'Tag colours', tag_glow_opacity: 'Tag colours', tag_tint_opacity: 'Tag colours',
   tag_tint_style: 'Tag colours', tag_tint_blend: 'Tag colours', colors: 'Colours', hover_submenus: 'Open submenus on hover', hub: 'Hub', tap_ms: 'Tap time', timeout_s: 'Auto-close' };
-const FULL_CARDS = new Set(['set-tag-colours', 'set-colours', 'set-zbrush-bridge', 'set-older-zbrush', 'set-tags']);
+const FULL_CARDS = new Set(['set-zbrush-bridge', 'set-older-zbrush', 'set-tags']);
+/* Of the names above, the ones that live on the Look screen; the rest are on Settings. */
+const LOOK_FULL_NAMES = new Set(['Tag colours', 'Colours', 'Hub']);
 /* A menu with an open animation, fan out or swallow turned off: the Menu tab shows those fields only in Full. */
 const menuFullSet = m => !!m && (!!m.animation || m.fan === true || m.swallow === false);
-/* Names (deduplicated, in settings order) of Full-only settings that differ from the defaults. */
-function fullOnlyChanges(cfg) {
-  const names = [], add = n => { if (!names.includes(n)) names.push(n); };
+/* Names (deduplicated, in settings order) of Full-only settings that differ from the defaults. where: 'look' or 'settings' keeps the ones that screen shows. */
+function fullOnlyChanges(cfg, where) {
+  const names = [], add = n => { if (!names.includes(n) && (!where || LOOK_FULL_NAMES.has(n) === (where === 'look'))) names.push(n); };
   const r = (cfg && cfg.ring && typeof cfg.ring === 'object') ? cfg.ring : {};
   for (const k of Object.keys(FULL_RING)) {
     if (k === 'colors' || !(k in r)) continue;
@@ -255,6 +262,7 @@ const needsFull = cfg => fullOnlyChanges(cfg).length > 0 || Object.values((cfg &
 function targetNeedsFull(t) {
   if (!t) return false;
   if (t.kind === 'settings') return FULL_CARDS.has(t.card) || !!(t.key && FULL_RING[t.key]);
+  if (t.kind === 'look') return !!(t.key && FULL_RING[t.key] && LOOK_FULL_NAMES.has(FULL_RING[t.key]));
   if (t.kind === 'menu') return t.field === 'id' || t.field === 'animation';
   if (t.kind === 'item') { const m = menuOf(t.menuId), it = m && m.items && m.items[t.index]; return !!it && kindIsFull(kindOf(it)); }
   return false;
@@ -1208,7 +1216,7 @@ function undoToast(msg, o = {}) {
 /* What the Settings screen draws from the config: when this is the same before and after an undo, Settings is left alone (and keeps focus). */
 const settingsSig = () => JSON.stringify([S.cfg.ring, S.cfg.bridge, S.cfg.browser, S.menuId, Object.entries(S.cfg.menus).map(([id, m]) => [id, m.title, m.animation])]);
 function applySnap(e) {
-  const sigBefore = R.settings ? settingsSig() : '';
+  const sigBefore = R.settings ? settingsSig() : '', lookBefore = R.look ? lookSig() : '';
   S.cfg = JSON.parse(e.cfg);
   const ids = Object.keys(S.cfg.menus);
   S.menuId = hasMenu(e.menuId) ? e.menuId : (hasMenu(S.menuId) ? S.menuId : (ids[0] || null));
@@ -1216,7 +1224,7 @@ function applySnap(e) {
   S.itemIdx = m && S.menuId === e.menuId && Number.isInteger(e.itemIdx) && e.itemIdx >= 0 && e.itemIdx < (m.items || []).length ? e.itemIdx : null;
   if (S.itemIdx === null && S.tab === 'item') S.tab = 'menu';           // no item to show; any other tab stays where it was
   S.version++; updateDirty(); validateSoon(); previewSoon(); updateHistButtons();
-  renderAllMenus(); if (R.settings && settingsSig() !== sigBefore) R.settings();
+  renderAllMenus(); if (R.settings && settingsSig() !== sigBefore) R.settings(); if (R.look && lookSig() !== lookBefore) R.look();
   const row = $('.irow.sel'); if (row) row.scrollIntoView({ block: 'nearest' });
 }
 function undo() { snapSoon.cancel(); pushSnap(); if (S.histI > 0) { S.histI--; applySnap(S.hist[S.histI]); toast('Undone', { ms: 1400 }); } }
@@ -1597,7 +1605,7 @@ function buildMenusScreen(root) {
       listEl._sig = null;                                       // the row holds the input: force a rebuild
       R.menuList();
     };
-    // Only Enter and Escape are ours; everything else (Ctrl+S, Alt+1..5) still reaches the window, after the new title is taken in
+    // Only Enter and Escape are ours; everything else (Ctrl+S, Alt+1..6) still reaches the window, after the new title is taken in
     inp.addEventListener('keydown', e => {
       if (e.key === 'Enter') { e.stopPropagation(); finish(true); }
       else if (e.key === 'Escape') { e.stopPropagation(); finish(false); }
@@ -3738,7 +3746,7 @@ function setZsBadge(n) {
   const rb = document.querySelector('.rail-btn[data-screen="settings"]');
   if (rb) {
     rb.classList.toggle('has-badge', n > 0);
-    rb.title = 'Settings (Alt+3)' + (n ? ' – ' + (n === 1 ? 'a ZBrush plugin needs' : n + ' ZBrush plugins need') + ' updating' + (isFull() ? '' : ' (Setup, step 1, or Full mode)') : '');
+    rb.title = railTitle('settings') + (n ? ' – ' + (n === 1 ? 'a ZBrush plugin needs' : n + ' ZBrush plugins need') + ' updating' + (isFull() ? '' : ' (Setup, step 1, or Full mode)') : '');
   }
   const tb = document.querySelector('.toc-item[data-card="set-older-zbrush"]');
   if (tb) { tb.classList.toggle('has-badge', n > 0); tb.title = n ? 'Update available' : ''; }
@@ -3858,7 +3866,6 @@ function buildSettingsScreen(root) {
   };
   R.gotoCard = id => {
     let it = tocItems.find(t => t.card.id === id);
-    if (!it && id === 'set-ring-geometry') it = tocItems.find(t => t.card.id === 'set-ring-size');     // Simple's one-slider card
     if (it) it.btn.click();
   };
   let tocRaf = 0;
@@ -3869,8 +3876,8 @@ function buildSettingsScreen(root) {
   const build = () => {
     const full = isFull();
     page.replaceChildren();
-    page.append(h('div', { class: 'page-head' }, h('h1', null, 'Settings', h('em', null, 'Appearance and behaviour')), h('p', null, 'How the ring looks, how it opens, and how the app talks to ZBrush. Changes show in the previews straight away and are saved with the Save button.')));
-    const hiddenSet = full ? [] : fullOnlyChanges(S.cfg);      // not a .card, so it is not in the contents list
+    page.append(h('div', { class: 'page-head' }, h('h1', null, 'Settings', h('em', null, 'Appearance and behaviour')), h('p', null, 'The theme, how the ring opens and behaves, and how the app talks to ZBrush. The ring\u2019s size, shape and colours are on the Look screen. Changes are saved with the Save button.')));
+    const hiddenSet = full ? [] : fullOnlyChanges(S.cfg, 'settings');      // not a .card, so it is not in the contents list
     if (hiddenSet.length) page.append(h('div', { class: 'mode-note', role: 'status' }, 'Changed in Full mode and not shown here: ' + hiddenSet.join(', ') + '. ', linkBtn('Switch to Full mode', () => setMode('full'))));
 
     /* --- theme: a Studio preference kept per PC, not part of S.cfg, so Save, Revert and undo never see it */
@@ -3896,39 +3903,15 @@ function buildSettingsScreen(root) {
         if (!ok) { if (R.settings) R.settings(); return; }             // the pick did not stick: draw the old one again
         syncTheme();
       }, 'four', 'Theme'),
-      h('div', { class: 'fhint', style: { marginTop: '8px' } }, 'Applies to Studio, the browser and the ring. A colour you set under Colours still wins. Themes are experimental: the colours will change as they are tuned.'), zbNote, themeNote);
+      h('div', { class: 'fhint', style: { marginTop: '8px' } }, 'Applies to Studio, the browser and the ring. A colour you set under Look > Colours still wins. Themes are experimental: the colours will change as they are tuned.'), zbNote, themeNote);
     // The badge goes after the title's text node: the contents list and the card's anchor (set-theme) are made from the text only.
     themeCard.querySelector('.card-title').firstChild.after(h('span', { class: 'tag amber', title: 'The colours will change as they are tuned. Say on GitHub what reads badly.' }, 'Experimental'));
     page.append(themeCard);
 
-    /* --- geometry with live preview */
-    const pimg = h('img', { class: 'ring-img', alt: 'Ring preview', draggable: false });
-    const dz = h('div', { class: 'dz-ring' });
-    const pwrap = h('div', { class: 'mini-wrap' }, pimg, dz);
-    const pbox = h('div', { class: 'mini-stage' }, h('div', { class: 'stage-rings', 'aria-hidden': 'true' }), pwrap, h('div', { class: 'mini-cap micro' }, 'Preview: ' + ((curMenu() && curMenu().title) || '')));
-    let msize = 447;
-    const paintDZ = () => { const k = (pwrap.clientWidth || 280) / msize, d = ringNum('dead_zone') * 2 * k; dz.style.width = dz.style.height = d + 'px'; };
-    const live = () => { paintDZ(); };
-    page.append(card(full ? 'Ring geometry' : 'Ring size', full ? 'Size and spacing of the ring' : 'How big the ring is', h('div', { class: 'split' },
-      h('div', { class: 'split-main' }, ...(full ? [
-        sliderRow({ label: 'Ring radius', hint: 'Distance from the centre to the slots', key: 'radius', unit: 'px', onLive: live }),
-        sliderRow({ label: 'Slot size', hint: 'Diameter of each icon disc', key: 'slot', unit: 'px', onLive: live }),
-        sliderRow({ label: 'Dead zone', hint: 'No slot is picked this close to the centre (dashed circle)', key: 'dead_zone', unit: 'px', onLive: live }),
-        sliderRow({ label: 'Hub', hint: 'Size of the accent dot in the centre, 0 for none', key: 'hub', unit: 'px', onLive: live })] : [sizeRow(live)])),
-      pbox)));
-    let cbox = null, cimg = null, paintTagPrev = null;         // the Colours and Tag colours cards, which only Full builds
-    R.preview = async () => {
-      const none = !curMenu() || !usableIdx(S.menuId).length;
-      pbox.classList.toggle('none', none); if (cbox) cbox.classList.toggle('none', none);
-      if (paintTagPrev) paintTagPrev();                                          // its own picture: the sample ring when this menu has no tagged brush
-      if (none) return;
-      const ver = S.version;
-      const res = await RingLoader.get(S.menuId, null);       // one request feeds the geometry, animation and colour previews
-      if (!res || ver !== S.version || !res.image) return;
-      if (cimg) cimg.src = res.image;
-      if (settingsPlayer.state === 'idle') { pimg.src = res.image; aimg.src = res.image; }
-      msize = res.size || msize; paintDZ();
-    };
+    /* --- ring look: the controls are on the Look screen; this card says what is changed there and opens it */
+    page.append(card('Ring look', 'Size, shape, labels and colours',
+      h('div', { class: 'field row' }, h('div', { class: 'grow' }, h('span', { class: 'flabel' }, 'Set on the Look screen'), h('div', { class: 'fhint' }, typeof window.lookSummary === 'function' ? window.lookSummary() : 'Set on the Look screen.')),
+        h('button', { class: 'btn small', type: 'button', onclick: () => showScreen('look') }, 'Open Look', icon('chevR', 12)))));
 
     /* --- animation */
     const aimg = h('img', { class: 'ring-img', alt: 'Animation preview', draggable: false });
@@ -3942,6 +3925,15 @@ function buildSettingsScreen(root) {
     settingsPlayer.stop(); abtn.replaceChildren(icon('play', 12), 'Replay');
     abtn.onclick = () => { if (usableIdx(S.menuId).length) settingsPlayer.play(S.menuId, true); else toast('The current menu has no usable items to animate.', { tone: 'warn' }); };
     restoreStatic();
+    R.preview = async () => {
+      const none = !curMenu() || !usableIdx(S.menuId).length;
+      astage.classList.toggle('none', none);
+      if (none) return;
+      const ver = S.version;
+      const res = await RingLoader.get(S.menuId, null);
+      if (!res || ver !== S.version || !res.image) return;
+      if (settingsPlayer.state === 'idle') aimg.src = res.image;
+    };
     const anims = (S.opts && S.opts.animations) || Object.keys(ANIM_INFO);
     const cur = ring().animation || S.defaults.animation;
     const ownAnim = Object.entries(S.cfg.menus).filter(([, m]) => m.animation).map(([id, m]) => m.title || id);
@@ -3950,102 +3942,6 @@ function buildSettingsScreen(root) {
       h('div', { class: 'fhint' }, ownAnim.length
         ? 'Used by every menu except ' + ownAnim.map(t => '\u201c' + t + '\u201d').join(', ') + ', which ' + (ownAnim.length === 1 ? 'has its own' : 'have their own') + (isFull() ? ' (set on the Menus screen).' : ' (set in Full mode, on the Menus screen).')
         : 'Used by every menu. A menu can have its own instead: pick it on the Menus screen' + (isFull() ? '.' : ' in Full mode.'))));
-
-    /* --- labels */
-    const labelOpts = (S.opts && S.opts.labels) || ['name', 'none'];
-    const LAB = { name: ['Icon and name', 'Each slot shows its label underneath.'], none: ['Icon only', 'A cleaner ring. Names appear only in this Studio.'] };
-    page.append(card('Labels', null, choiceCards(labelOpts.map(l => [l, (LAB[l] || [l, ''])[0], (LAB[l] || [l, ''])[1]]), ring().labels || S.defaults.labels, v => setRing('labels', v), 'two', 'Labels')));
-
-    /* --- slot shape */
-    const shapeOpts = (S.opts && S.opts.slot_shapes) || ['circle', 'rounded'];
-    const SHAPE = { circle: ['Circle', 'Round slots.'], rounded: ['Rounded square', 'Square slots with rounded corners, the same size.'] };
-    page.append(card('Slot shape', null, choiceCards(shapeOpts.map(v => [v, (SHAPE[v] || [v, ''])[0], (SHAPE[v] || [v, ''])[1]]), ring().slot_shape || S.defaults.slot_shape, v => setRing('slot_shape', v), 'two', 'Slot shape')));
-
-    if (full) {
-      /* --- tag colours: how a brush's first tag shows on its slot (tag slots always show their tag's colour).
-         Three effects, each a switch with its own controls; tint and glow together are the stored tag_colors. */
-      const tc = () => ring().tag_colors || S.defaults.tag_colors || 'tint';
-      const tintOn = () => tc() === 'tint' || tc() === 'both', glowOn = () => tc() === 'glow' || tc() === 'both';
-      const setTc = (tint, glow) => setRing('tag_colors', tint && glow ? 'both' : tint ? 'tint' : glow ? 'glow' : 'none');
-      const bandDef = S.defaults.tag_band && S.defaults.tag_band !== 'none' ? S.defaults.tag_band : 'medium';
-      let bandWas = ring().tag_band && ring().tag_band !== 'none' ? ring().tag_band : bandDef;     // the thickness to come back to
-      const bandOn = () => (ring().tag_band || S.defaults.tag_band) !== 'none';
-      const cap = t => t[0].toUpperCase() + t.slice(1);
-      const tcRows = [];                                    // [row, is its effect on]: rows of a switched-off effect are dimmed and disabled
-      const paintTc = () => {
-        for (const [row, on] of tcRows) {
-          const live = on();
-          row.classList.toggle('off', !live);
-          row.querySelectorAll('input, button').forEach(c => { c.disabled = !live; });
-        }
-      };
-      const segRow = ({ label, hint, key, opts, on, onPick }) => {
-        const row = h('div', { class: 'srow' }, h('div', { class: 'slabel' }, h('span', null, label), hint ? h('small', null, hint) : null),
-          choiceCards(opts, onPick ? bandWas : ring()[key] || S.defaults[key], onPick || (v => setRing(key, v)), 'seg', label));
-        tcRows.push([row, on]); return row;
-      };
-      const opacity = (key, on) => { const row = sliderRow({ label: 'Opacity', key, step: 5, scale: 100, unit: '%' }); tcRows.push([row, on]); return row; };
-      const group = ({ label, hint, on, set, rows }) => h('div', { class: 'tgroup' },
-        h('div', { class: 'tg-head' }, h('div', { class: 'slabel' }, h('span', null, label), h('small', null, hint)), toggleSwitch(on(), v => { set(v); paintTc(); }, label)),
-        h('div', { class: 'tg-body' }, ...rows));
-      const bandOpts = ((S.opts && S.opts.tag_bands) || ['none', 'hairline', 'narrow', 'medium', 'wide']).filter(v => v !== 'none').map(v => [v, cap(v), '']);
-      const BLEND = { multiply: 'Darken', overlay: 'Keep highlights' };
-      const timg = h('img', { class: 'ring-img pending', alt: 'Ring preview with the current tag colours', draggable: false, onload: () => timg.classList.remove('pending') });   // hidden until it has a picture
-      const tcap = h('div', { class: 'mini-cap micro' });
-      const tnote = h('div', { class: 'fhint' });
-      const tbox = h('div', { class: 'mini-stage' }, h('div', { class: 'stage-rings', 'aria-hidden': 'true' }), h('div', { class: 'mini-wrap' }, timg), tcap);
-      // The current menu when it has a tagged brush to show, else the backend's sample ring.
-      const hasTagged = m => !!m && (m.items || []).some(it => { const ik = kindOf(it); return isLib(ik) && firstTag(ik, it[ik]); });
-      let tTok = 0;
-      paintTagPrev = async () => {
-        const sample = !hasTagged(curMenu()), tok = ++tTok, ver = S.version;
-        tcap.textContent = sample ? 'Sample ring' : 'Preview: ' + (curMenu().title || S.menuId);
-        tnote.textContent = sample ? 'This menu has no tagged items yet, so the sample puts your tags on a few library brushes.' : '';
-        const res = await RingLoader.get(sample ? SAMPLE_MENU : S.menuId, null, null, 'tags');
-        if (tok !== tTok || !res || ver !== S.version) return;
-        if (res.image) timg.src = res.image;
-        else if (res.error || (res.problems || []).length) tnote.textContent = 'No preview: ' + (res.problems || [])[0];
-      };
-      page.append(card('Tag colours', "How a brush's tags show on its slots", h('div', { class: 'split tag-split' }, h('div', { class: 'split-main' },
-        group({ label: 'Icon tint', hint: 'A coloured rim, and the tag colour laid over the icon', on: tintOn, set: v => setTc(v, glowOn()), rows: [
-          opacity('tag_tint_opacity', tintOn),
-          segRow({ label: 'Style', hint: 'Gradient is stronger towards the rim', key: 'tag_tint_style', on: tintOn, opts: ((S.opts && S.opts.tint_styles) || ['flat', 'gradient']).map(v => [v, cap(v), '']) }),
-          segRow({ label: 'Blend', key: 'tag_tint_blend', on: tintOn, opts: ((S.opts && S.opts.tint_blends) || ['multiply', 'overlay']).map(v => [v, BLEND[v] || cap(v), '']) })] }),
-        group({ label: 'Glow', hint: 'A soft halo in the tag colour around the slot', on: glowOn, set: v => setTc(tintOn(), v), rows: [
-          opacity('tag_glow_opacity', glowOn)] }),
-        group({ label: 'Band', hint: 'A coloured strip through the slots, one stretch per slot', on: bandOn, set: v => setRing('tag_band', v ? bandWas : 'none'), rows: [
-          segRow({ label: 'Thickness', on: bandOn, opts: bandOpts, onPick: v => { bandWas = v; setRing('tag_band', v); } }),
-          opacity('tag_band_opacity', bandOn)] })),
-        h('div', { class: 'tag-prev' }, tbox, tnote))));
-      paintTc();
-
-      /* --- colours (the preview is the same picture as the geometry card's: one request per edit) */
-      const colorPaints = [];
-      const colorRows = Object.keys(COLOR_INFO).map(k => {
-        const sw = h('input', { type: 'color', class: 'swatch', value: colorVal(k), 'aria-label': COLOR_INFO[k][0] + ' colour' });
-        const hex = h('input', { class: 'inp mono hex', type: 'text', value: colorVal(k), maxlength: '7', spellcheck: 'false', 'aria-label': COLOR_INFO[k][0] + ' hex value' });
-        const hmsg = h('span', { class: 'hex-msg', role: 'status' });
-        const rs = iconBtn('undo', 'Reset to default (' + S.defaults.colors[k] + ')', () => { const c = ring().colors; if (c) { delete c[k]; if (!Object.keys(c).length) delete ring().colors; } tidyRing(); commit(); paint(); }, 'reset');
-        const showReset = v => { rs.style.visibility = v.toLowerCase() !== S.defaults.colors[k].toLowerCase() ? 'visible' : 'hidden'; };
-        const paint = () => { const v = colorVal(k); sw.value = v; hex.value = v; hex.classList.remove('bad'); hmsg.textContent = ''; showReset(v); };
-        sw.addEventListener('input', () => { setColor(k, sw.value); paint(); });
-        hex.addEventListener('input', () => {
-          const n = normHex(hex.value), bad = !n;
-          hex.classList.toggle('bad', bad); hmsg.textContent = bad ? 'Use #rrggbb' : '';
-          if (n && hex.value.trim().replace('#', '').length === 6) { setColor(k, n); sw.value = n; showReset(n); }   // short forms wait for Enter or blur
-        });
-        const apply = () => { const n = normHex(hex.value); if (n && n !== colorVal(k).toLowerCase()) setColor(k, n); paint(); };
-        hex.addEventListener('blur', apply);
-        hex.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); apply(); } });
-        colorPaints.push(paint);
-        paint();
-        return h('div', { class: 'crow' }, sw, h('div', { class: 'slabel' }, h('span', null, COLOR_INFO[k][0]), h('small', null, COLOR_INFO[k][1])), h('div', { class: 'hexwrap' }, hex, hmsg), rs);
-      });
-      cimg = h('img', { class: 'ring-img', alt: 'Ring preview with the current colours', draggable: false });
-      cbox = h('div', { class: 'mini-stage' }, h('div', { class: 'stage-rings', 'aria-hidden': 'true' }), h('div', { class: 'mini-wrap' }, cimg), h('div', { class: 'mini-cap micro' }, 'Preview: ' + ((curMenu() && curMenu().title) || '')));
-      page.append(card('Colours', 'Applied to the ring in the app', h('div', { class: 'split' }, h('div', { class: 'split-main' }, h('div', { class: 'colors' }, colorRows)), cbox),
-        h('div', { class: 'btn-row' }, h('button', { class: 'btn small', type: 'button', onclick: () => { delete ensureRing().colors; tidyRing(); commit(); colorPaints.forEach(f => f()); } }, icon('undo', 12), 'Reset all colours'))));
-    }
 
     /* --- behaviour */
     page.append(card('Behaviour', null,
@@ -4243,7 +4139,7 @@ function noteStatus(st) {
   const rb = document.querySelector('.rail-btn[data-screen="status"]');
   if (rb) {
     rb.classList.toggle('has-down', S.appDown === true);
-    rb.title = 'Status (Alt+4)' + (S.appDown === true ? ' \u2013 The app is not running' : '');
+    rb.title = railTitle('status') + (S.appDown === true ? ' \u2013 The app is not running' : '');
   }
 }
 /* One quiet look at the status for the rail dot, from outside the Status screen. */
@@ -4415,7 +4311,7 @@ function setSetupBadge(d) {
   if (!rb || (d && d.failed)) return;                       // a failed check says nothing about the installs: the dot stays as it was
   const bad = !!(d && d.hard_fail);
   rb.classList.toggle('has-badge', bad);
-  rb.title = 'Setup (Alt+5)' + (bad ? ' – Something needs attention' : '');
+  rb.title = railTitle('setup') + (bad ? ' – Something needs attention' : '');
 }
 /* One quiet look for the rail dot, from outside the Setup screen. */
 async function refreshSetupBadge() {
@@ -4566,7 +4462,8 @@ const USER_GUIDE_URL = 'https://zorbit.lol/docs/';
 const SETUP_WHERE = [
   ['Menus', 'Edit the rings and what each slot does', 'menus'],
   ['Library', 'Every brush ZBrush can load, with tags', 'library'],
-  ['Settings', 'Size, animation and labels. Full mode adds colours and the bridge', 'settings'],
+  ['Look', 'Ring size, slot shape, labels and colours', 'look'],
+  ['Settings', 'Theme, animation and behaviour. Full mode adds the bridge', 'settings'],
   ['Status', 'Is everything running, and the logs', 'status'],
   ['User guide', 'The whole manual, at zorbit.lol/docs', null]];
 
@@ -4777,9 +4674,11 @@ function updateDirty() {
 }
 /* Turns one message from the loader (config.py) into plain words plus where to go to fix it.
    Returns { text, raw, target }; target is null when the format is not recognised. */
-const RING_CARD = { radius: 'set-ring-geometry', slot: 'set-ring-geometry', dead_zone: 'set-ring-geometry', hub: 'set-ring-geometry', animation: 'set-open-animation',
-  labels: 'set-labels', slot_shape: 'set-slot-shape', tag_colors: 'set-tag-colours', tag_band: 'set-tag-colours', tag_band_opacity: 'set-tag-colours', tag_glow_opacity: 'set-tag-colours',
-  tag_tint_opacity: 'set-tag-colours', tag_tint_style: 'set-tag-colours', tag_tint_blend: 'set-tag-colours', colors: 'set-colours', tap_ms: 'set-behaviour', timeout_s: 'set-behaviour', flick: 'set-behaviour', hover_submenus: 'set-behaviour' };
+const RING_CARD = { animation: 'set-open-animation', tap_ms: 'set-behaviour', timeout_s: 'set-behaviour', flick: 'set-behaviour', hover_submenus: 'set-behaviour' };
+/* The ring keys the Look screen shows, with the group each one is in (look-screen.js has the same groups). */
+const RING_LOOK = { radius: 'slots', slot: 'slots', dead_zone: 'slots', slot_shape: 'slots', hub: 'hub', labels: 'labels', colors: 'colours',
+  tag_colors: 'tags', tag_band: 'tags', tag_band_opacity: 'tags', tag_glow_opacity: 'tags', tag_tint_opacity: 'tags', tag_tint_style: 'tags', tag_tint_blend: 'tags' };
+const lookTarget = key => ({ kind: 'look', key, group: RING_LOOK[key] });
 const RING_NAME = { radius: 'Ring radius', slot: 'Slot size', dead_zone: 'Dead zone', hub: 'Hub', tap_ms: 'Tap time', timeout_s: 'Auto-close', flick: 'Flick to pick',
   hover_submenus: 'Open submenus on hover', animation: 'Open animation', labels: 'Labels', slot_shape: 'Slot shape', tag_colors: 'Tag colours',
   tag_band: 'Band', tag_band_opacity: 'Band opacity', tag_glow_opacity: 'Glow opacity', tag_tint_opacity: 'Icon tint opacity', tag_tint_style: 'Icon tint style', tag_tint_blend: 'Icon tint blend' };
@@ -4849,14 +4748,14 @@ function describeProblem(raw) {
   }
   if ((m = /^ring\.colors\.(\w+): (.+) is not a #rrggbb colour$/s.exec(raw))) {
     const nm = COLOR_INFO[m[1]] ? COLOR_INFO[m[1]][0] : m[1];
-    return out(`${nm} colour ${unq(m[2])} is not a #rrggbb value`, { kind: 'settings', card: 'set-colours', key: 'colors' });
+    return out(`${nm} colour ${unq(m[2])} is not a #rrggbb value`, lookTarget('colors'));
   }
-  if ((m = /^ring\.colors\.(\w+): unknown colour(.*)$/s.exec(raw))) return out(`Ring colour “${m[1]}” is not one of the five colours.` + didYouMean(m[2]), { kind: 'settings', card: 'set-colours', key: 'colors' });
-  if (raw.startsWith('ring: must be an object')) return out('The ring section is not an object, so every ring setting uses its default', { kind: 'settings', card: 'set-ring-geometry', key: 'radius' });
+  if ((m = /^ring\.colors\.(\w+): unknown colour(.*)$/s.exec(raw))) return out(`Ring colour “${m[1]}” is not one of the five colours.` + didYouMean(m[2]), lookTarget('colors'));
+  if (raw.startsWith('ring: must be an object')) return out('The ring section is not an object, so every ring setting uses its default', lookTarget('radius'));
   if ((m = /^ring\.(\w+): unknown setting(.*)$/s.exec(raw))) return out(`The ring setting “${m[1]}” is not known.` + didYouMean(m[2]), null);
   if ((m = /^ring\.(\w+): (.*)$/s.exec(raw))) {
     const key = m[1], body = m[2], nm = RING_NAME[key] || key, card = RING_CARD[key];
-    const target = card ? { kind: 'settings', card, key } : null;
+    const target = own(RING_LOOK, key) ? lookTarget(key) : card ? { kind: 'settings', card, key } : null;
     let r;
     if ((r = /^(.+) must be a number from (\S+) to (\S+)$/s.exec(body))) return out(`${nm} ${unq(r[1])} is outside ${r[2]} to ${r[3]}`, target);
     if ((r = /^(.+) must be true or false$/s.exec(body))) return out(`${nm} must be on or off, not ${unq(r[1])}`, target);
@@ -4922,6 +4821,13 @@ function goToProblem(t) {
   S.problemsOpen = false; renderProblems();
   if (!t) return;
   if (!isFull() && targetNeedsFull(t)) { setMode('full'); toast('Switched to Full mode to show this.', { ms: 3500 }); }
+  if (t.kind === 'look') {
+    const same = S.screen === 'look';
+    showScreen('look', { fresh: true });
+    const go = () => { if (R.lookGoto) R.lookGoto(t.key, t.group); };
+    if (same) go(); else requestAnimationFrame(go);
+    return;
+  }
   if (t.kind === 'settings') {
     const same = S.screen === 'settings';
     showScreen('settings', { fresh: true });
@@ -5040,7 +4946,7 @@ function adoptAndRender(res) {
   if (S.itemIdx === null && S.tab === 'item') S.tab = 'menu';
   rememberSel();
   S.version++; updateDirty(); renderProblems(); previewSoon();
-  renderAllMenus(); if (R.settings) R.settings(); if (R.libTarget) R.libTarget();
+  renderAllMenus(); if (R.settings) R.settings(); if (R.look) R.look(); if (R.libTarget) R.libTarget();
   renderProfile();
   return '';
 }
@@ -5391,7 +5297,7 @@ async function importSettings() {
     if (!m || S.itemIdx === null || S.itemIdx >= (m.items || []).length) S.itemIdx = null;
     if (S.itemIdx === null && S.tab === 'item') S.tab = 'menu';
     commit({ inspector: true }); if (R.head) R.head();
-    renderProblems(); if (R.settings) R.settings(); if (R.libTarget) R.libTarget();
+    renderProblems(); if (R.settings) R.settings(); if (R.look) R.look(); if (R.libTarget) R.libTarget();
   }
   const bits = [];
   if (res.config) bits.push('Loaded the menus and settings into the editor. Save to keep them.');
@@ -5530,7 +5436,7 @@ async function revert() {
   S.cfg = JSON.parse(S.savedStr);
   if (!hasMenu(S.menuId)) S.menuId = Object.keys(S.cfg.menus)[0] || null;
   S.itemIdx = null; S.version++; updateDirty(); validateSoon(); previewSoon(); pushSnap();
-  renderAllMenus(); if (R.settings) R.settings(); if (R.libTarget) R.libTarget();
+  renderAllMenus(); if (R.settings) R.settings(); if (R.look) R.look(); if (R.libTarget) R.libTarget();
   toast('Reverted to the last saved version.', { ms: 2200 });
 }
 
@@ -5643,6 +5549,7 @@ function applyMode() {
     R.right();
     const nb = $('.tab-body'); if (nb) nb.scrollTop = top;
   } else if (S.screen === 'settings' && R.settings) R.settings();
+  else if (S.screen === 'look' && R.look) R.look();
   for (const b of browsers.values()) b.updateTags();
 }
 /* Switches the mode. The pref is set at once, so what the caller does next already sees it; a failed save puts the old mode back. */
@@ -5713,10 +5620,10 @@ function syncTheme(rebuild = true) {
   applyTheme(S.prefs.theme_effective, S.prefs.theme_base, S.prefs.theme_tokens);
   if (S.themeEff !== was || S.themeTokens !== wasTokens) call(POPOUT ? 'popout_theme_changed' : 'theme_changed', S.themeEff).catch(() => {});
   if (POPOUT) return;                                       // the browser holds no picture drawn from the theme
-  if (rebuild && S.screen === 'settings' && R.settings) {
+  if (rebuild && ((S.screen === 'settings' && R.settings) || (S.screen === 'look' && R.look))) {
     if (openPopover) openPopover();
     if (comboClose) comboClose();
-    R.settings();                                           // build() ends in R.preview()
+    (S.screen === 'look' ? R.look : R.settings)();          // build() ends in R.preview()
   } else if (R.preview) R.preview();
 }
 /* Follow Windows: the page's colour scheme moves with the Windows app mode, and the pages are told at once. Python reads the same
@@ -5735,7 +5642,7 @@ function watchSystemTheme() {
 }
 const typingInSettings = () => {
   const a = document.activeElement;
-  return !!(a && a.closest && a.closest('#screen-settings') && a.matches('input, textarea, select, [contenteditable], .hk-field'));
+  return !!(a && a.closest && a.closest('#screen-settings, #screen-look') && a.matches('input, textarea, select, [contenteditable], .hk-field'));
 };
 /* Match ZBrush: a Store Config in ZBrush changes the colours while the setting stays "zbrush", so the page asks again when its window
    gets the focus. Studio compares theme_sig; the browser has no signature in its state, so it compares the tokens. */
@@ -5766,11 +5673,18 @@ window.__popoutTheme = o => {
   return true;
 };
 
-/* Alt+1 to Alt+5: the screen's index, read from the physical digit key so it works on AZERTY (where the row types & and é unshifted), or null. */
-const screenKey = e => { const m = /^Digit([1-5])$/.exec(e.code || ''); return m ? +m[1] - 1 : null; };
-const SCREENS = { menus: buildMenusScreen, library: buildLibraryScreen, settings: buildSettingsScreen, status: buildStatusScreen, setup: buildSetupScreen };
+/* Alt+1 to Alt+6: the screen's index in SCREEN_ORDER, read from the physical digit key so it works on AZERTY (where the row types & and é unshifted), or null. */
+const screenKey = e => { const m = /^Digit([1-6])$/.exec(e.code || ''); return m ? +m[1] - 1 : null; };
+// look-screen.js builds the Look screen; it is looked up when the screen is shown, so a missing file only costs that screen
+const buildLookScreenLazy = root => { if (typeof window.buildLookScreen === 'function') window.buildLookScreen(root); else root.replaceChildren(h('div', { class: 'fhint warn', style: { padding: '24px' } }, 'The Look screen could not be loaded.')); };
+/* What look-screen.js needs from this closure: it is loaded after app.js and cannot see inside it. */
+window.ZStudio = { h, $, $$, S, R, icon, iconBtn, linkBtn, card, choiceCards, sliderRow, sizeRow, toggleSwitch, call, clamp, own, normHex,
+  commit, toast, ring, ringNum, ranges, ensureRing, tidyRing, usableIdx, menuOf, kindOf, isLib, firstTag, isFull, setMode, fullOnlyChanges,
+  RingLoader, SAMPLE_MENU, COLOR_INFO, FALLBACK_DEFAULTS, showScreen, railTitle };
+const SCREEN_BUILD = { menus: buildMenusScreen, look: buildLookScreenLazy, library: buildLibraryScreen, settings: buildSettingsScreen, status: buildStatusScreen, setup: buildSetupScreen };
+const SCREENS = Object.fromEntries(SCREEN_ORDER.map(k => [k, SCREEN_BUILD[k]]));
 // the element that scrolls on each screen (its position is remembered when you leave and put back when you return)
-const SCREEN_SCROLLER = { menus: '.ilist', library: '.b-scroll', settings: '.settings-scroll', status: '.settings-scroll', setup: '.settings-scroll' };
+const SCREEN_SCROLLER = { menus: '.ilist', look: '.look-scroll', library: '.b-scroll', settings: '.settings-scroll', status: '.settings-scroll', setup: '.settings-scroll' };
 const scrollerOf = name => { const root = $('#screen-' + name); return root ? $(SCREEN_SCROLLER[name] || '.settings-scroll', root) : null; };
 let lastScreenChain = Promise.resolve();   // writes run one after another, so two quick switches cannot land out of order
 const saveLastScreen = name => { lastScreenChain = lastScreenChain.then(() => call('set_pref', 'last_screen', name)).catch(() => {}); };
@@ -5852,7 +5766,7 @@ function recovery(res) {
   const tooNew = !isErr && !!(res && res.too_new);              // made by a newer ZOrbit: nothing here may touch the files, so only Open folder is offered
   const backup = !isErr && !tooNew && !!(res && res.backup_exists);
   const loading = $('#screens > .loading'); if (loading) loading.remove();
-  // The screens need the menus: the rail and Alt+1 to Alt+5 do nothing until the file is fixed, so the rail looks that way.
+  // The screens need the menus: the rail and Alt+1 to Alt+6 do nothing until the file is fixed, so the rail looks that way.
   $$('.rail-btn').forEach(b => { b.classList.remove('on'); b.setAttribute('aria-current', 'false'); b.setAttribute('aria-disabled', 'true'); b.title = 'Fix or reset the menus file first'; });
   $('#saveBtn').disabled = true; $('#revertBtn').disabled = true;
   modeBtns().forEach(b => { b.disabled = true; });
@@ -6078,10 +5992,11 @@ async function afterBoot() {
 /* The guided tour (#41). A stop names the screen it needs and the element to light up. A stop whose element is missing,
    hidden or squeezed to nothing (profiles off, a narrow window) is skipped. */
 const TOUR_STOPS = [
-  { screen: null, target: () => $('.rail'), title: 'Screens', text: 'Studio has five screens. Click one here, or press Alt+1 to Alt+5.' },
+  { screen: null, target: () => $('.rail'), title: 'Screens', text: 'Studio has six screens. Click one here, or press Alt+1 to Alt+6.' },
   { screen: 'menus', target: () => $('#screen-menus .menus-col'), title: 'Menus', text: 'Each menu is a ring. A menu with a hotkey opens over ZBrush; one without is a submenu.' },
   { screen: 'menus', target: () => $('#screen-menus .stage'), title: 'The ring', text: 'How the ring will look. Drag brushes onto it, drag slots to reorder them, and click one to edit it.' },
   { screen: 'menus', target: () => $('#screen-menus .right-col .tabs'), title: 'Item, Menu, Library', text: 'Item edits the slot you clicked, Menu edits the whole ring, and Library lists brushes to drag in.' },
+  { screen: 'look', target: () => $('#screen-look .look-left .mini-stage'), title: 'Look', text: 'How the ring looks: its size, the shape of the slots, labels and colours. It applies to every menu, and the preview here shows any menu you pick.' },
   { screen: null, target: () => $('.rail-btn[data-screen="library"]'), title: 'Library', text: 'Every brush, alpha, material and texture ZBrush can load, with tags and favourites.' },
   { screen: null, target: () => $('#profileBtn'), title: 'Profiles', text: 'A whole set of menus and settings for each kind of work.' },
   { screen: null, target: () => $('#modeSeg'), title: 'Simple and Full', text: 'Simple shows the everyday controls. Full shows every control. The ring is the same in both.' },
@@ -6156,7 +6071,7 @@ function startTour() {
   const back = () => { if (cur < 0) return; const i = find(-1); if (i >= 0) show(i, true); };
   const onResize = () => { if (cur >= 0 && !place()) next(); };
   const onKey = e => {
-    if ((e.ctrlKey || e.altKey || e.metaKey) && e.key !== 'F4') { e.preventDefault(); e.stopPropagation(); return; }   // Ctrl+S, Ctrl+Z and Alt+1 to Alt+5 wait until the tour is over; Alt+F4 still closes the window
+    if ((e.ctrlKey || e.altKey || e.metaKey) && e.key !== 'F4') { e.preventDefault(); e.stopPropagation(); return; }   // Ctrl+S, Ctrl+Z and Alt+1 to Alt+6 wait until the tour is over; Alt+F4 still closes the window
     const stop = () => { e.preventDefault(); e.stopPropagation(); };
     if (e.key === 'Escape') { stop(); end(); }
     else if (e.key === 'ArrowRight') { stop(); next(); }
@@ -6348,7 +6263,7 @@ function init() {
       const b = card && Array.from(browsers.values()).find(x => x.el.contains(card));
       if (b) { e.preventDefault(); b.toggleFav(card.dataset.name); }
     }
-    else if (e.altKey && !e.ctrlKey && !e.shiftKey && screenKey(e) !== null) { e.preventDefault(); showScreen(['menus', 'library', 'settings', 'status', 'setup'][screenKey(e)]); }
+    else if (e.altKey && !e.ctrlKey && !e.shiftKey && screenKey(e) !== null) { e.preventDefault(); showScreen(SCREEN_ORDER[screenKey(e)]); }
   });
   window.addEventListener('focus', debounce(() => { if (S.ready && !S.fatal) { loadTags(); reloadUsage(); } }, 300));      // tags.json may have changed (the popout, a hand edit), and picks add to Recent
   window.addEventListener('focus', debounce(checkProfile, 300));                                                                   // the app's profile may have changed (the tray), or this one may be gone

@@ -41,7 +41,8 @@ EDGE = [
 ]
 
 # Steps can use these: click(text) clicks the innermost visible element whose text starts with it (the click bubbles
-# to whatever handles it), card(name) is a Settings card by its title, alone at the top of the screen.
+# to whatever handles it), card(name) is a Settings card by its title, alone at the top of the screen, and
+# lookGroup(name) is the same for a group on the Look screen (Slots, Hub, Labels, Colours, Tag colours).
 HELPERS = """
 window.click = t => new Promise((ok, fail) => { const t0 = Date.now(); (function poll() {
   const hits = [...document.querySelectorAll('body *')].filter(e => e.offsetParent && e.textContent.trim().startsWith(t));
@@ -54,6 +55,9 @@ window.card = n => { const c = document.getElementById('set-' + n.toLowerCase().
   // with the wrong colours.
   for (const o of c.parentElement.children) if (o !== c) o.hidden = true;
   c.closest('.settings-scroll').scrollTop = 0; return c; };
+window.lookGroup = n => { const c = document.getElementById('look-g-' + ({'Tag colours': 'tags'}[n] || n.toLowerCase())); if (!c) throw new Error('no Look group ' + n);
+  for (const o of c.parentElement.children) if (o !== c) o.hidden = true;
+  c.closest('.look-scroll').scrollTop = 0; return c; };
 """
 
 # name -> page (default index.html), URL switches (see dev/mock.js; Studio itself reads screen, menu, item, tab,
@@ -66,11 +70,12 @@ SHOTS = {
     # Whole windows
     "studio": dict(q="screen=menus"),
     "studio-item": dict(q="screen=menus&menu=tools&item=8"),
+    "studio-look": dict(q="screen=look"),
     "studio-library": dict(q="screen=library"),
     "studio-settings": dict(q="screen=settings"),
     "studio-settings-simple": dict(q="screen=settings&mode=simple"),
     "studio-light": dict(q="screen=settings&theme=light"),
-    # studio-tour opens the guided tour, waits for its card and clicks Next twice: stop 3 of 9, The ring, lit.
+    # studio-tour opens the guided tour, waits for its card and clicks Next twice: stop 3 of 10, The ring, lit.
     "studio-tour": dict(q="screen=menus", steps=[
         "startTour()",
         "new Promise(r => { const t0 = Date.now(); (function w() {"
@@ -85,7 +90,7 @@ SHOTS = {
     "library-tag": dict(q="screen=library", steps=["click('Blocking')"]),
     # Details
     "settings-theme": dict(q="screen=settings&theme=zbrush", clip="card('Theme')"),
-    "settings-colours": dict(q="screen=settings", clip="card('Colours')"),
+    "look-colours": dict(q="screen=look", clip="lookGroup('Colours')"),
     "settings-behaviour": dict(q="screen=settings", clip="card('Behaviour')"),
     "settings-bridge": dict(q="screen=settings", clip="card('ZBrush bridge')"),
     "settings-older-zbrush": dict(q="screen=settings&zb=both", clip="card('Older ZBrush')"),

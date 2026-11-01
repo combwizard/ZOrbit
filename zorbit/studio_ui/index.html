@@ -66,14 +66,16 @@
   <div class="body">
     <nav class="rail" aria-label="Screens">
       <button class="rail-btn" type="button" data-screen="menus" title="Menus (Alt+1)"><span class="ri" data-i="menus"></span><span>Menus</span></button>
-      <button class="rail-btn" type="button" data-screen="library" title="Library (Alt+2)"><span class="ri" data-i="library"></span><span>Library</span></button>
-      <button class="rail-btn" type="button" data-screen="settings" title="Settings (Alt+3)"><span class="ri" data-i="settings"></span><span>Settings</span></button>
-      <button class="rail-btn" type="button" data-screen="status" title="Status (Alt+4)"><span class="ri" data-i="status"></span><span>Status</span></button>
-      <button class="rail-btn" type="button" data-screen="setup" title="Setup (Alt+5)"><span class="ri" data-i="setup"></span><span>Setup</span></button>
+      <button class="rail-btn" type="button" data-screen="look" title="Look (Alt+2)"><span class="ri" data-i="look"></span><span>Look</span></button>
+      <button class="rail-btn" type="button" data-screen="library" title="Library (Alt+3)"><span class="ri" data-i="library"></span><span>Library</span></button>
+      <button class="rail-btn" type="button" data-screen="settings" title="Settings (Alt+4)"><span class="ri" data-i="settings"></span><span>Settings</span></button>
+      <button class="rail-btn" type="button" data-screen="status" title="Status (Alt+5)"><span class="ri" data-i="status"></span><span>Status</span></button>
+      <button class="rail-btn" type="button" data-screen="setup" title="Setup (Alt+6)"><span class="ri" data-i="setup"></span><span>Setup</span></button>
     </nav>
     <main class="screens" id="screens" tabindex="-1">
       <div class="loading" role="status">Loading...</div>
       <section class="screen menus-screen" id="screen-menus" hidden></section>
+      <section class="screen look-screen" id="screen-look" hidden></section>
       <section class="screen library-screen" id="screen-library" hidden></section>
       <section class="screen settings-screen" id="screen-settings" hidden></section>
       <section class="screen status-screen" id="screen-status" hidden></section>
@@ -90,7 +92,9 @@
   // Inside pywebview there is no ?mock, so dev/ is never touched.
   var mock = /[?&]mock(=|&|$)/.test(location.search);
   if (mock) document.write('<script src="dev/mock_data.js"><\/script><script src="dev/mock.js"><\/script>');
+  document.write('<script src="look.js"><\/script>');
   document.write('<script src="app.js"><\/script>');
+  document.write('<script src="look-screen.js"><\/script>');
   document.write('<script src="window.js"><\/script>');
 })();
 </script>
@@ -100,6 +104,7 @@
 (function () {
   var P = {
     menus: '<circle cx="12" cy="12" r="2"/><circle cx="12" cy="4.6" r="1.9"/><circle cx="18.4" cy="8.3" r="1.9"/><circle cx="18.4" cy="15.7" r="1.9"/><circle cx="12" cy="19.4" r="1.9"/><circle cx="5.6" cy="15.7" r="1.9"/><circle cx="5.6" cy="8.3" r="1.9"/>',
+    look: '<circle cx="12" cy="12" r="9"/><path d="M12 7.2l4.2 2.4v4.8L12 16.8l-4.2-2.4V9.6z"/>',
     library: '<rect x="4" y="4" width="7" height="7" rx="1.6"/><rect x="13" y="4" width="7" height="7" rx="1.6"/><rect x="4" y="13" width="7" height="7" rx="1.6"/><rect x="13" y="13" width="7" height="7" rx="1.6"/>',
     settings: '<path d="M4 7h8M18 7h2M4 12h5M13 12h7M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="11" cy="12" r="2"/><circle cx="9" cy="17" r="2"/>',
     status: '<path d="M3 12h4l2.5-6 4 12 2.5-6H21"/>',
