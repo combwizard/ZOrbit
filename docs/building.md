@@ -39,6 +39,17 @@ GitHub Actions runs the tests on every push and pull request. A build only start
 
 To run straight from a checkout while you work on the code, use `tools\dev-install.ps1`. It registers the checkout's `bridge` folder in `ZBRUSH_PLUGIN_PATH` and adds the Start menu shortcut, and `-Uninstall` takes both away again. Add `-WhatIf` to see what it would do first.
 
+## Reading ZBrush's colour schemes
+
+`tools\icolors_probe.py` finds out where a ZBrush colour scheme (**Preferences > Icolors**) keeps each colour. Close ZBrush first, then run:
+
+```powershell
+python tools\icolors_probe.py auto               # ZBrush 2026
+python tools\icolors_probe.py auto --year=2022   # another installed version
+```
+
+It starts ZBrush twice with a script and closes it after each, with no clicks. The first run lists the Icolors items. The second sets each colour patch to a marker colour in turn, saves the scheme with **Save Ui Colors** after each, and loads the original back. Nothing is stored, so your colours are as before afterwards. Then it compares the files and prints where each patch sits and how a colour is packed. Everything goes to `%LOCALAPPDATA%\ZOrbit\icolors`, with the map in `icolors_map.json`. The script's header lists the steps it runs and the ZBrush quirks it works around. Run it again when a new ZBrush version comes out, to check the layout has not changed.
+
 ## Test the plugin install under Program Files
 
 ZBrush 2022 to 2025 load plugins only from their own `ZStartup\ZPlugs64` folder, which is usually under Program Files. There Studio's **Install**, **Update** and **Remove** cannot copy the files as you, so ZOrbit runs a helper as administrator instead. `tools\test_uac_install.py` tests that path without a real ZBrush:
