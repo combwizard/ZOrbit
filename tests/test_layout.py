@@ -78,8 +78,83 @@ def test_plan_keeps_a_big_enough_radius_and_a_single_slot():
     assert one.rings[0].radius == 145 and [s.angle for s in one.seats] == [0.0] and not one.grown
 
 
-def test_plan_takes_when_full_and_treats_every_mode_as_grow_for_now():
+def test_plan_treats_more_as_grow_and_an_empty_menu_as_nothing():
     base = layout.plan([72.0] * 12, 145, "grow")
-    for mode in layout.WHEN_FULL:
-        assert layout.plan([72.0] * 12, 145, mode) == base
-    assert layout.plan([], 145).seats == []
+    assert layout.plan([72.0] * 12, 145, "more") == base
+    assert layout.plan([72.0] * 12, 145, "rings") != base
+    assert layout.plan([], 145).seats == [] and layout.plan([], 145, "rings").rings == []
+
+
+# --- when_full "rings" ---------------------------------------------------------------------------
+@pytest.mark.parametrize("n", [1, 2, 8, 9])
+def test_rings_is_a_single_ring_while_everything_fits(n):
+    p = layout.plan([72.0] * n, 145, "rings")
+    assert p == layout.plan([72.0] * n, 145, "grow") and len(p.rings) == 1 and p.mode == "grow"
+
+
+def test_rings_splits_a_full_menu_into_an_inner_and_an_outer_ring():
+    p = layout.plan([72.0] * 14, 145, "rings")
+    assert p.mode == "rings" and p.capacity == 9 and not p.grown and p.more_slot is None
+    inner, outer = p.rings
+    assert (inner.first, inner.n, inner.radius, inner.offset, inner.rmin) == (0, 9, 145, 0.0, 0.0)
+    assert inner.step == 40.0
+    assert (outer.first, outer.n, outer.step, outer.offset) == (9, 5, 72.0, 36.0)
+    assert outer.radius >= inner.radius + layout.SLOT_GAP * 72 - 1e-9
+    assert outer.rmin == (inner.radius + outer.radius) / 2
+    assert p.needed == layout.needed_radius([72.0] * 14)
+    assert [s.ring for s in p.seats] == [0] * 9 + [1] * 5                  # menu order, inner then outer
+    assert [s.angle for s in p.seats[:9]] == [40.0 * i for i in range(9)]
+    assert [s.angle for s in p.seats[9:]] == [36.0 + 72.0 * j for j in range(5)]
+    assert [(s.ring, s.k) for s in p.seats[8:11]] == [(0, 8), (1, 0), (1, 1)]
+
+
+def test_the_outer_ring_keeps_its_neighbours_apart_and_grows_for_many_slots():
+    sizes = [72.0] * 30
+    p = layout.plan(sizes, 145, "rings")
+    assert [r.n for r in p.rings] == [9, 21]
+    for rp in p.rings:
+        sep = 2 * rp.radius * math.sin(math.pi / rp.n)
+        assert sep >= layout.SLOT_GAP * 72 - 1e-6
+    assert p.rings[1].radius == layout.needed_radius(sizes[9:]) > p.rings[0].radius + layout.SLOT_GAP * 72
+    assert len(layout.plan([72.0] * 80, 145, "rings").rings) == 2               # never a third ring
+
+
+def test_rings_uses_the_sizes_of_each_ring():
+    sizes = [72.0] * 9 + [100.0] * 4
+    p = layout.plan(sizes, 145, "rings")
+    inner, outer = p.rings
+    assert inner.n == 9 and outer.n == 4
+    assert outer.radius >= inner.radius + layout.SLOT_GAP * (72 + 100) / 2 - 1e-9
+    big = layout.plan([100.0] * 14, 145, "rings")                              # fewer fit, a bigger gap between rings
+    assert big.rings[0].n == layout.fit_count([100.0] * 14, 145) < 9
+
+
+def test_rings_grows_when_fewer_than_three_slots_would_fit():
+    sizes = [72.0] * 6
+    assert layout.fit_count(sizes, 50) < layout.MIN_INNER
+    p = layout.plan(sizes, 50, "rings")
+    assert p == layout.plan(sizes, 50, "grow") and p.mode == "grow" and len(p.rings) == 1
+    three = layout.plan(sizes, 60, "rings")                                     # exactly three fit: it splits 3 + 3
+    assert layout.fit_count(sizes, 60) == 3 and three.mode == "rings" and [r.n for r in three.rings] == [3, 3]
+
+
+def test_rings_boundary_is_where_the_next_slot_no_longer_fits():
+    sizes = [72.0] * 20
+    need10 = layout.needed_radius(sizes[:10])
+    assert [r.n for r in layout.plan(sizes, need10, "rings").rings][0] == 10
+    assert [r.n for r in layout.plan(sizes, need10 * (1 - 1e-3), "rings").rings][0] == 9
+
+
+def test_names_add_room_between_the_rings_and_no_names_keeps_the_tight_gap():
+    sizes = [72.0] * 14
+    named, bare = layout.plan(sizes, 145, "rings"), layout.plan(sizes, 145, "rings", labels=False)
+    assert layout.plan(sizes, 145, "rings", True) == named
+    tight = 145 + layout.SLOT_GAP * 72
+    assert bare.rings[1].radius == pytest.approx(tight)
+    assert named.rings[1].radius == pytest.approx(tight + layout.LABEL_ROOM * 72)
+    assert [r.n for r in named.rings] == [r.n for r in bare.rings] == [9, 5]
+    assert named.rings[1].rmin == pytest.approx((145 + named.rings[1].radius) / 2)
+    one = layout.plan([72.0] * 5, 145, "rings", labels=False)                 # labels only matter with two rings
+    assert one == layout.plan([72.0] * 5, 145, "rings", labels=True)
+    many = layout.plan([72.0] * 30, 145, "rings")                              # a crowded outer ring is set by its own need
+    assert many.rings[1].radius == layout.needed_radius([72.0] * 21)

@@ -618,11 +618,17 @@ class Ring:
                           "ang": r2(seat.angle), "half": r2(min(pl.rings[seat.ring].step, MAX_SECTOR) / 2),
                           "more": _is_more(it)})
         gaps = []
-        for rp in pl.rings:
-            for j in range(1, rp.n + 1):
+        for ring_k, rp in enumerate(pl.rings):
+            # k is the item index a dropped item would take. A single ring has k = 1 to n (n: the wrap, after the
+            # last). With two rings the inner one has 1 to its n - 1 (its wrap is the boundary) and the outer one
+            # k = first (before its first slot, half a step back) to the end.
+            lo = 0 if ring_k > 0 else 1
+            hi = rp.n - 1 if ring_k == 0 and len(pl.rings) > 1 else rp.n
+            for j in range(lo, hi + 1):
                 a = rp.offset + rp.step * (j - 0.5)
                 gaps.append({"k": rp.first + j, "x": r2(math.sin(math.radians(a)) * rp.radius),
                              "y": r2(-math.cos(math.radians(a)) * rp.radius), "ang": r2(a % 360)})
+        more_slot = next((i for i, it in enumerate(self.items) if _is_more(it)), None)
         fans = []
         for fan in self._open_fans():
             fans.append({"path": list(fan.path), "anchor": [r2(fan.anchor[0]), r2(fan.anchor[1])],
@@ -634,7 +640,7 @@ class Ring:
                 "rings": rings, "slots": slots, "gaps": gaps,
                 "full": {"mode": pl.mode, "when_full": look.when_full, "n": self.n, "capacity": pl.capacity,
                          "needed": r2(pl.needed), "radius": r2(pl.radius), "grown": pl.grown,
-                         "rings": len(pl.rings), "more_slot": pl.more_slot},
+                         "rings": len(pl.rings), "more_slot": more_slot},
                 "fans": fans}
 
     def show(self, x: int, y: int) -> None:
@@ -708,19 +714,22 @@ class Ring:
         c = self.look
         self.scale = scale
         self.n = len(self.items)
-        self.step = 360.0 / self.n
         self.slot = c.slot * scale
         # a slot's own size is a share (0.75 to 1.25) of the ring's slot size, from its style
         self.sizes = [self.slot * _num(_style(it).get("size"), 1.0, 0.75, 1.25) for it in self.items]
         # the radius is a minimum: layout grows it until neighbours have room
-        self.plan = layout.plan(self.sizes, c.radius * scale, c.when_full)
-        self.R = self.plan.rings[0].radius
+        self.plan = layout.plan(self.sizes, c.radius * scale, c.when_full, c.labels != "none")
+        self.R = self.plan.rings[0].radius                       # the first (inner) ring's radius
+        self.step = self.plan.rings[0].step
         self.rad = [seat.radius for seat in self.plan.seats]     # each slot's distance from the centre
         self.dead = c.dead_zone * scale
         if self.nested:                            # entered on the parent's slot disc: no instant pick there
             self.dead = max(self.dead, max(self.sizes) / 2 + 4 * scale)
-        self.flick_at = [self.rad[i] + self.sizes[i] * 0.56 for i in range(self.n)]   # just past the hovered (1.12x) disc
-        self.flick_r = max(self.flick_at)
+        past = [self.rad[i] + self.sizes[i] * 0.56 for i in range(self.n)]   # just past the hovered (1.12x) disc
+        self.flick_r = max(past)                   # the cursor is "inside" the ring while it is closer than this
+        # with a second ring only its slots flick: going out from an inner slot just meets the outer ring
+        self.flick_at = past if len(self.plan.rings) < 2 else [
+            math.inf if self.plan.seats[i].ring == 0 else past[i] for i in range(self.n)]
         grow = 1.0 + max(0.0, -self.anim.get("travel", 0.0))
         self.pad = max(self.sizes) * 0.62 + 34 * scale    # half the widest slot at 1.12x + glow + label
         # the ring's own square; the window adds open fans
@@ -771,9 +780,13 @@ class Ring:
         if math.hypot(dx, dy) < self.dead:
             return None
         ang = math.degrees(math.atan2(dx, -dy)) % 360          # 0 at top, clockwise
-        i = int(round(ang / self.step)) % self.n
-        off = abs((ang - i * self.step + 180) % 360 - 180)      # degrees from that slot's direction
-        return i if off <= MAX_SECTOR / 2 else None
+        rp = self.plan.rings[0]
+        for later in self.plan.rings[1:]:                       # the ring whose band the cursor is in
+            if math.hypot(dx, dy) >= later.rmin:
+                rp = later
+        j = int(round((ang - rp.offset) / rp.step)) % rp.n
+        off = abs((ang - rp.offset - j * rp.step + 180) % 360 - 180)   # degrees from that slot's direction
+        return rp.first + j if off <= MAX_SECTOR / 2 else None
 
     @staticmethod
     def _shape_of(it, look):
@@ -1414,11 +1427,18 @@ class Ring:
             d.ellipse((cx - r, cy - r, cx + r, cy + r), outline=_rgba(self.c_lines, a), width=lw)
         # spokes start at the hub's edge; under a solid dot they were always hidden, so a dot keeps today's 8 px
         r0 = (8 if self.look.hub_style == "dot" else max(8, self._hub() / 2 + 3)) * self.scale * s
-        for (ux, uy), it, rad, size in zip(self.seats, self.items, self.rad, self.sizes):
+        rings = self.plan.rings
+        for i, ((ux, uy), it, rad, size) in enumerate(zip(self.seats, self.items, self.rad, self.sizes)):
             r1 = (rad - size / 2 - 6 * self.scale) * s
+            start = r0
+            if self.plan.seats[i].ring > 0:         # an outer slot's spoke starts just outside the ring before it
+                inner = rings[self.plan.seats[i].ring - 1]
+                start = (inner.radius + max(self.sizes[inner.first:inner.first + inner.n]) / 2 + 6 * self.scale) * s
+                if r1 - start < 4 * self.scale * s:
+                    continue
             colr = _rgba(_chrome(it, self.look), 0.35) if _chrome(it, self.look) else (
                 _rgba(self.c_hi, 0.35) if it.kind == "menu" else _rgba(self.c_lines, 0.30))
-            d.line((cx + ux * r0, cy + uy * r0, cx + ux * r1, cy + uy * r1), fill=colr, width=lw)
+            d.line((cx + ux * start, cy + uy * start, cx + ux * r1, cy + uy * r1), fill=colr, width=lw)
         for text, font, dy, colr in self._caption(d):
             l, t, r_, b = d.textbbox((0, 0), text, font=font)
             d.text((cx - (r_ - l) / 2 - l, cy + dy * self.scale * s - (b - t) / 2 - t), text, font=font, fill=colr)
@@ -1484,17 +1504,19 @@ class Ring:
         a = self.look.tag_band_opacity
         s = SS
         w = max(2 * self.scale, self.slot * width) * s
-        ro, ri = self.R * s + w / 2, self.R * s - w / 2
-        band = Image.new("RGBA", im.size, (0, 0, 0, 0))
-        d = ImageDraw.Draw(band)                   # fills replace, so each stretch overwrites the faint base
-        d.ellipse((cx - ro, cy - ro, cx + ro, cy + ro), fill=_rgba(self.c_text, a * 0.2))
-        half = min(self.step, MAX_SECTOR) / 2
-        for i, col in enumerate(cols):
-            if col:
-                mid = self.step * i - 90           # Pillow's 0 is 3 o'clock, ours 12
-                d.pieslice((cx - ro, cy - ro, cx + ro, cy + ro), mid - half, mid + half, fill=_rgba(col, a))
-        d.ellipse((cx - ri, cy - ri, cx + ri, cy + ri), fill=(0, 0, 0, 0))
-        im.alpha_composite(band)
+        for rp in self.plan.rings:                 # one band per ring, through its slot centres
+            band = Image.new("RGBA", im.size, (0, 0, 0, 0))
+            d = ImageDraw.Draw(band)               # fills replace, so each stretch overwrites the faint base
+            ro, ri = rp.radius * s + w / 2, rp.radius * s - w / 2
+            d.ellipse((cx - ro, cy - ro, cx + ro, cy + ro), fill=_rgba(self.c_text, a * 0.2))
+            half = min(rp.step, MAX_SECTOR) / 2
+            for j in range(rp.n):
+                col = cols[rp.first + j]
+                if col:
+                    mid = rp.offset + rp.step * j - 90      # Pillow's 0 is 3 o'clock, ours 12
+                    d.pieslice((cx - ro, cy - ro, cx + ro, cy + ro), mid - half, mid + half, fill=_rgba(col, a))
+            d.ellipse((cx - ri, cy - ri, cx + ri, cy + ri), fill=(0, 0, 0, 0))
+            im.alpha_composite(band)
 
     def _base(self, el):
         """A fresh canvas holding the invisible hit surface of the open fans and the ring's static layer

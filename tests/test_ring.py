@@ -1263,3 +1263,228 @@ def test_the_hub_disc_is_a_disc_and_the_ring_is_hollow():
     assert disc[:3] != dot[:3]
     placeholder = theme.preset("dark")["ring"]["placeholder"]
     assert max(abs(a - b) for a, b in zip(disc[:3], placeholder[1])) <= 12            # the slot surface, its middle
+
+
+# --- when_full "rings": a second ring ------------------------------------------------------------
+def rings_ring(n=14, **over):
+    """A geometry-ready ring of n items with when_full "rings"."""
+    r = make_ring(make_menu(n), when_full="rings", **over)
+    r._geometry(1.0)
+    r._relayout()
+    return r
+
+
+def at(r, i, extra=(0.0, 0.0)):
+    """Window point of slot i's centre, moved by extra."""
+    return (r.centre[0] + r.seats[i][0] * r.rad[i] + extra[0], r.centre[1] + r.seats[i][1] * r.rad[i] + extra[1])
+
+
+def polar(r, rad, ang):
+    """Window point rad pixels from the ring centre at ang degrees clockwise from 12 o'clock."""
+    a = math.radians(ang)
+    return r.centre[0] + math.sin(a) * rad, r.centre[1] - math.cos(a) * rad
+
+
+def test_fourteen_items_make_nine_inner_and_five_outer_slots():
+    r = rings_ring(14)
+    assert [rp.n for rp in r.plan.rings] == [9, 5] and r.R == 145
+    assert r.rad[:9] == [145] * 9 and len(set(r.rad[9:])) == 1
+    assert r.rad[9] >= r.R + 1.25 * r.slot - 1e-9
+    assert r.rad[9] == pytest.approx(r.R + 1.25 * r.slot + 0.35 * r.slot)      # names shown: room for the inner labels
+    bare = rings_ring(14, labels="none")
+    assert bare.rad[9] == pytest.approx(bare.R + 1.25 * bare.slot) and bare.rsize < r.rsize
+    for rp in r.plan.rings:                          # neighbours on each ring are a gap apart
+        pts = [(r.seats[i][0] * r.rad[i], r.seats[i][1] * r.rad[i]) for i in range(rp.first, rp.first + rp.n)]
+        for a, b in zip(pts, pts[1:] + pts[:1]):
+            assert math.dist(a, b) >= ring.SLOT_GAP * r.slot - 1e-6
+    grow = make_ring(make_menu(14), when_full="grow")
+    grow._geometry(1.0)
+    assert r.rsize > grow.rsize
+
+
+def test_a_menu_that_fits_stays_one_ring_even_in_rings_mode():
+    r = rings_ring(9)
+    assert len(r.plan.rings) == 1 and r.plan.mode == "grow"
+    same = make_ring(make_menu(9))
+    same._geometry(1.0)
+    assert (r.rad, r.rsize, r.flick_at) == (same.rad, same.rsize, same.flick_at)
+
+
+def test_a_ring_with_fewer_than_three_slots_fitting_grows_instead():
+    r = rings_ring(8, radius=50)
+    assert len(r.plan.rings) == 1 and r.R > 50 and r.plan.mode == "grow"
+
+
+def test_picking_goes_by_radius_band_then_by_angle():
+    r = rings_ring(14)
+    band = r.plan.rings[1].rmin
+    assert r.plan.rings[0].radius < band < r.plan.rings[1].radius
+    # inner slots are 40 degrees apart: 0 at 0, 1 at 40
+    assert r._index_at(*polar(r, band - 5, 19)) == 0 and r._index_at(*polar(r, band - 5, 21)) == 1
+    # outer slots (9 to 13) sit at 36 + 72 j: in the same direction, past the band, an outer slot answers
+    assert r._index_at(*polar(r, band + 5, 20)) == 9
+    assert r._index_at(*polar(r, band + 5, 36 + 72 - 1)) == 10
+    assert r._index_at(*polar(r, band + 5, 359)) == 13
+    for ang in range(0, 360, 7):                     # an outer slot is never answered from inside the band, nor an inner one outside it
+        assert r._index_at(*polar(r, band - 1, ang)) < 9
+        assert r._index_at(*polar(r, band + 1, ang)) >= 9
+    assert r._index_at(*polar(r, 10, 20)) is None    # the dead zone
+
+
+def test_discs_are_hit_before_the_band_decides():
+    r = rings_ring(14)
+    for i in (0, 4, 8, 9, 13):
+        assert r._hit(*at(r, i)) == ((i,), "disc")
+    inwards = (-r.seats[9][0] * (r.sizes[9] / 2 - 2), -r.seats[9][1] * (r.sizes[9] / 2 - 2))
+    assert r._hit(*at(r, 9, inwards)) == ((9,), "disc")        # an outer disc reaches in past the band
+
+
+def test_only_the_outer_ring_flicks():
+    r = rings_ring(14)
+    assert r.flick_at[:9] == [math.inf] * 9
+    assert r.flick_at[9:] == pytest.approx([r.rad[i] + r.sizes[i] * 0.56 for i in range(9, 14)])
+    assert r.flick_r == max(r.rad[i] + r.sizes[i] * 0.56 for i in range(14))
+    done = []
+    r._finish = lambda item, why, at_=None: done.append((item, why))
+    for i, expect in ((0, False), (13, True)):
+        done.clear()
+        push = r.sizes[i] * 0.7 + 10                     # past the slot's flick distance, in its direction
+        x, y = at(r, i, (r.seats[i][0] * push, r.seats[i][1] * push))
+        assert r._flick_or_hand_off(x, y, (i,), "sector") is expect
+        assert [why for _, why in done] == (["flick"] if expect else [])
+
+
+def test_a_preview_of_two_rings_renders_and_reports_both():
+    menu = make_menu(14)
+    cfg = make_cfg(when_full="rings")
+    im = ring.Ring.preview(menu, cfg, lambda it: None)
+    grown = ring.Ring.preview(menu, make_cfg(), lambda it: None)
+    assert im.size[0] > grown.size[0] > ring.Ring.preview(make_menu(9), cfg, lambda it: None).size[0]
+    lay = im.info["layout"]
+    assert [r["n"] for r in lay["rings"]] == [9, 5] and [r["first"] for r in lay["rings"]] == [0, 9]
+    assert lay["rings"][0]["rmin"] == 38.0 and lay["rings"][1]["rmin"] == pytest.approx(
+        (lay["rings"][0]["r"] + lay["rings"][1]["r"]) / 2, abs=0.01)
+    assert [s["ring"] for s in lay["slots"]] == [0] * 9 + [1] * 5
+    assert lay["slots"][0]["half"] == 20.0 and lay["slots"][9]["half"] == 36.0 and lay["slots"][9]["ang"] == 36.0
+    json.dumps(lay)
+
+
+def test_the_layout_map_gaps_of_two_rings():
+    lay = ring.Ring.preview(make_menu(14), make_cfg(when_full="rings"), lambda it: None).info["layout"]
+    gaps = {g["k"]: g for g in lay["gaps"]}
+    assert sorted(g["k"] for g in lay["gaps"]) == list(range(1, 15))           # one gap per k from 1 to n
+    r_in, r_out = lay["rings"][0]["r"], lay["rings"][1]["r"]
+    assert gaps[1]["ang"] == 20.0 and gaps[8]["ang"] == 300.0
+    assert math.hypot(gaps[8]["x"], gaps[8]["y"]) == pytest.approx(r_in, abs=0.02)
+    assert gaps[9]["ang"] == 0.0                                               # before the first outer slot: 36 - 36
+    assert math.hypot(gaps[9]["x"], gaps[9]["y"]) == pytest.approx(r_out, abs=0.02)
+    assert gaps[10]["ang"] == 72.0
+    assert gaps[14]["ang"] == 0.0                                              # after the last: the same spot as k = 9
+    assert math.hypot(gaps[14]["x"], gaps[14]["y"]) == pytest.approx(r_out, abs=0.02)
+
+
+def test_the_layout_map_full_for_rings_and_grow():
+    full = ring.Ring.preview(make_menu(14), make_cfg(when_full="rings"), lambda it: None).info["layout"]["full"]
+    assert full["mode"] == "rings" and full["rings"] == 2 and full["when_full"] == "rings"
+    assert full["capacity"] == 9 and full["n"] == 14 and full["grown"] is False and full["radius"] == 145.0
+    assert full["needed"] == pytest.approx(1.25 * 72 / (2 * math.sin(math.pi / 14)), abs=0.01)
+    assert full["more_slot"] is None
+    few = ring.Ring.preview(make_menu(6), make_cfg(when_full="rings"), lambda it: None).info["layout"]["full"]
+    assert few["mode"] == "grow" and few["rings"] == 1 and few["when_full"] == "rings"
+    tiny = ring.Ring.preview(make_menu(8), make_cfg(when_full="rings", radius=50), lambda it: None).info["layout"]["full"]
+    assert tiny["mode"] == "grow" and tiny["rings"] == 1 and tiny["grown"] is True
+
+
+def test_the_layout_map_names_a_more_slot():
+    menu = make_menu(5)
+    menu.items[4] = config.Item("More", "menu", {"menu": "more:m"})
+    lay = ring.Ring.preview(menu, make_cfg(), lambda it: None).info["layout"]
+    assert lay["full"]["more_slot"] == 4 and [s["more"] for s in lay["slots"]] == [False] * 4 + [True]
+    assert ring.Ring.preview(make_menu(5), make_cfg(), lambda it: None).info["layout"]["full"]["more_slot"] is None
+    cut = ring.Ring.preview(menu, make_cfg(when_full="more"), lambda it: None).info["layout"]["full"]
+    assert cut["mode"] == "grow" and cut["when_full"] == "more"
+
+
+def static_alpha(r, ang, lo, hi):
+    """Highest alpha of the static layer along the direction ang (degrees from 12, clockwise) between radii lo and hi."""
+    st = r._static()
+    c = r.rsize // 2
+    a = math.radians(ang)
+    return max(st.getpixel((round(c + math.sin(a) * d), round(c - math.cos(a) * d)))[3] for d in range(int(lo), int(hi)))
+
+
+def test_outer_spokes_start_outside_the_inner_ring_and_inner_spokes_at_the_hub():
+    r = make_ring(make_menu(14), when_full="rings")
+    r._geometry(1.0)
+    r._prepare()
+    inner_edge = r.R + r.sizes[0] / 2
+    angle = r.plan.seats[9].angle                                                 # 36 degrees: between inner spokes
+    assert static_alpha(r, angle, 30, inner_edge) < 20                            # no spoke out to the inner ring's edge
+    assert static_alpha(r, angle, inner_edge + 8, r.rad[9] - r.sizes[9] / 2 - 8) > 40
+    assert static_alpha(r, r.plan.seats[0].angle, 12, r.R - r.sizes[0] / 2 - 8) > 40     # inner: from the hub
+
+
+def test_a_spoke_shorter_than_four_pixels_is_dropped():
+    r = make_ring(make_menu(14), when_full="rings")
+    r._geometry(1.0)
+    r._prepare()
+    start = r.R + r.sizes[0] / 2 + 6                         # where an outer spoke starts
+    reach = r.rad[9] - r.sizes[9] / 2 - 6                    # where it ends
+    assert reach - start >= 4                                # the default layout has a spoke ...
+    assert static_alpha(r, 36, start + 2, reach - 2) > 40
+    r.rad[9:] = [start + r.sizes[9] / 2 + 6 + 3] * 5         # ... squeeze it to 3 px: gone, and nothing breaks
+    r._static_cache = None
+    assert static_alpha(r, 36, start - 4, start + 12) < 20
+
+
+def test_the_tag_band_is_drawn_on_each_ring_and_not_between_them():
+    menu = make_menu(14)
+    menu.items = [dataclasses.replace(it, color="#ff0000") for it in menu.items]
+    r = make_ring(menu, when_full="rings", tag_colors="all", tag_band="wide")
+    r._geometry(1.0)
+    r._prepare()
+    st = r._static()
+    c = r.rsize // 2
+
+    def alpha(rad, ang):
+        a = math.radians(ang)
+        return st.getpixel((round(c + math.sin(a) * rad), round(c - math.cos(a) * rad)))[3]
+    r_out = r.rad[9]
+    assert alpha(r.R, 0) > 40 and alpha(r_out, 36) > 40
+    assert alpha((r.R + r_out) / 2, 72) <= 1                                          # only the invisible click disc
+
+
+def test_animation_travels_along_each_slots_own_radius_and_staggers_by_index():
+    r = rings_ring(14)
+    r._prepare()
+    r.t0 = 1000.0
+    r.anim = dict(r.anim, travel=0.5, dur=100, fade=100, stagger=10, scale=1.0, drift=0, rot=0, blur=0)
+    r.curve = lambda p: p
+    inner, outer = r._slot_state(0, 1000.0), r._slot_state(9, 1000.0 + 0.09)         # slot 9 has waited 90 ms
+    assert math.hypot(*r._slot_state(0, 1000.0)[2:4]) == pytest.approx(r.rad[0] * 0.5)
+    assert math.hypot(*outer[2:4]) == pytest.approx(r.rad[9] * 0.5)                  # not at the end: it starts at 0
+    assert r._slot_state(9, 1000.0)[1] == 0.0 and outer[1] == pytest.approx(0.0)
+    assert r._open_ms() == 10 * 13 + 100 + 40
+
+
+def test_a_fan_from_an_inner_slot_does_not_crash():
+    sub = SimpleNamespace(id="s", title="Sub", animation="", fan=True,
+                          items=[config.Item(f"S{i}", "brush", {"brush": f"S{i}"}) for i in range(4)])
+    menu = make_menu(14)
+    menu.items[2] = config.Item("Sub", "menu", {"menu": "s"})
+    menu.items[11] = config.Item("Sub", "menu", {"menu": "s"})
+    for path in ((2,), (11,)):
+        im = ring.Ring.preview(menu, make_cfg(when_full="rings"), lambda it: None, submenus=lambda mid: sub,
+                               open_path=path)
+        assert im.size[0] > 0 and im.info["layout"]["full"]["mode"] == "rings"
+    r = ring.Ring(menu, make_cfg(when_full="rings"), lambda it: None, lambda *a: None, lambda m: None, held=False,
+                  submenus=lambda mid: sub)
+    r._geometry(1.0)
+    r._relayout()
+    r._prepare()
+    for path in ((2,), (11,)):
+        if r._fannable(path):                         # when it does fan out, no fan slot sits on a ring slot
+            fan = r._fan(path)
+            for px, py in fan.pos:
+                for i in range(14):
+                    assert math.hypot(px - r.seats[i][0] * r.rad[i], py - r.seats[i][1] * r.rad[i]) > r.sizes[i] / 2

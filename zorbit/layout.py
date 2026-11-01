@@ -11,6 +11,8 @@ from typing import NamedTuple
 SLOT_GAP = 1.25             # neighbouring slot centres are at least this many slot widths apart (app.js copies it)
 MAX_SECTOR = 90.0           # widest angle (degrees) a single slot answers to (app.js copies it)
 WHEN_FULL = ("grow", "rings", "more")
+LABEL_ROOM = 0.35           # with names shown, the outer ring sits this many (outer) slot widths further out, for the inner labels
+MIN_INNER = 3               # "rings" needs at least this many slots to fit on the first ring, else the ring grows
 _EPS = 1e-6                 # fit_count leaves this much room for rounding (a ring that needs 145.0000001 fits 145)
 
 
@@ -38,9 +40,9 @@ class RingPlan(NamedTuple):
 class Plan(NamedTuple):
     """The layout of a menu's slots. seats has one Seat per slot in menu order; rings lists the rings (one, today);
     radius is the ring radius asked for; needed the radius the slots need; capacity how many slots fit at the radius
-    asked for; grown whether the ring had to grow past it; mode what was done about a full ring (always "grow"
-    for now: "rings" and "more" are planned the same way until they are built); more_slot the index of a More slot
-    or None."""
+    asked for; grown whether the ring had to grow past it; mode what was done about a full ring ("grow", or "rings"
+    when a second ring was added; "more" is planned as "grow" here, the expander pages the menu before it gets
+    here); more_slot the index of a More slot or None (the renderer fills it in)."""
     seats: list
     rings: list
     radius: float
@@ -73,14 +75,34 @@ def fit_count(sizes, radius):
     return 0
 
 
-def plan(sizes, radius, when_full="grow"):
+def plan(sizes, radius, when_full="grow", labels=True):
     """The Plan for slots of these widths on a ring of at least this radius. when_full: "grow", "rings" or "more".
-    Only "grow" is built: the ring grows to hold every slot. The others are accepted and planned as "grow" until the
-    rings phase turns them on (a plan then has more than one entry in rings, and each Seat names its ring)."""
+
+    "grow": one ring, grown until every slot has room. "rings": when the slots do not fit at the radius, the first K
+    (fit_count, at least MIN_INNER) stay on the inner ring at that radius and the rest go on a second ring outside it,
+    at least SLOT_GAP slot widths further out (plus LABEL_ROOM of a slot when labels is True, room for the names under
+    the inner slots), offset by half its own step so its slots sit between the inner ones. The
+    outer ring grows if it needs to; there are never more than two rings. Slots stay in menu order: the inner ring
+    clockwise from 12 o'clock, then the outer ring. When fewer than MIN_INNER fit, or everything fits, "rings" is "grow".
+    "more" is planned as "grow": the expander has already cut the menu down to what fits."""
     n = len(sizes)
     needed = needed_radius(sizes)
+    capacity = fit_count(sizes, radius)
+    if when_full == "rings" and n > capacity >= MIN_INNER:
+        k = capacity
+        inner, outer = sizes[:k], sizes[k:]
+        r_in = max(radius, needed_radius(inner))
+        gap = SLOT_GAP * (max(inner) + max(outer)) / 2 + (LABEL_ROOM * max(outer) if labels else 0.0)
+        r_out = max(r_in + gap, needed_radius(outer))
+        m = n - k
+        step_in, step_out = 360.0 / k, 360.0 / m
+        off_out = step_out / 2
+        seats = [Seat(0, i, r_in, step_in * i) for i in range(k)]
+        seats += [Seat(1, j, r_out, off_out + step_out * j) for j in range(m)]
+        rings = [RingPlan(r_in, 0, k, 0.0, step_in, 0.0), RingPlan(r_out, k, m, off_out, step_out, (r_in + r_out) / 2)]
+        return Plan(seats, rings, radius, needed, capacity, r_in > radius, "rings", None)
     r = max(radius, needed) if n >= 2 else radius
     step = 360.0 / n if n else 0.0
     seats = [Seat(0, i, r, step * i) for i in range(n)]
     rings = [RingPlan(r, 0, n, 0.0, step, 0.0)] if n else []
-    return Plan(seats, rings, radius, needed, fit_count(sizes, radius), needed > radius, "grow", None)
+    return Plan(seats, rings, radius, needed, capacity, needed > radius, "grow", None)
