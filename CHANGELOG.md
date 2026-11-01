@@ -8,34 +8,24 @@ All notable changes to this project are listed here. The format follows
 
 ### Added
 
-- **Hub** (Full mode) sets the size of the hub in the middle of the ring, from 0 to 64 px. It stays 10 unless you
-  change it, and 0 hides it. The dead zone does not change with it. `hub_style` draws it as a dot (as before), a
-  disc, a ring or the menu's icon (#33).
-- **Slot shape** (Simple and Full mode) switches every slot between **Circle**, the default, and **Rounded square**.
-  `radial.json` also takes `squircle`, `hexagon`, `octagon` and `diamond`. The icon, glow and submenu badge follow
-  the shape (#33).
-- **This slot**, the third level on the Look screen (Full mode), styles one slot on its own: its shape, corners, rim,
-  icon size, size, fill and rim colours, label colour and glow colour. Click a slot in the preview, use the arrow keys
-  or pick it from the list. It is saved as `style` on the item, and whatever you leave alone follows the menu's look.
-  A glow colour wins over the slot's tag colour for the hover glow, the hover rim and the idle halo only (#33).
-- The item inspector has a **Style** field in place of **Glow**. It lists what the slot sets for itself and has **Edit
-  in Look** and **Reset style**. Simple mode shows it, read-only, when an item has a style (#33).
-- `radial.json` can hold named looks under `looks`, a menu can have its own `look` (a look's name, its own settings, or
-  both), and an item can have a `style`. Studio edits the first two, on the Look screen (#33).
-- The **Look** screen has a gallery of looks: seven built in (**Classic**, **Soft**, **Tiles**, **Crystal**,
-  **Circuit**, **Diamonds** and **Minimal**) and your own. **New from current** saves what you see as a look,
-  **Edit**, **Duplicate**, **Rename** and **Delete** manage them, and menus that use a look follow it when you change
-  it. **Use for all menus** sets a look for every menu and removes your own settings that would hide it, with **Undo**
-  (#33).
-- **This menu** on the Look screen gives one menu its own look, saved as `look` in the menu. In Full mode the **Menu**
-  tab has a **Look** section with the same choice, **Edit in Look** and **Clear own settings** (#33).
-- The Look screen has controls for the rest of the look settings: six slot shapes, **Corner roundness**, **Rim width**,
-  **Icon size**, **Hub style**, **Hub colour**, **Hub glow**, **Glow colour**, **Glow strength**, **Label colour** and
-  **When full** (**Grow**, **Second ring** or **More slot**). A colour is a theme colour or any `#rrggbb` (#33).
-- `when_full: "more"` in the ring settings or a menu's look keeps a full ring at its radius and ends it with a
-  **More** slot, which opens a ring with the rest of the menu. Fans and tag fans are never paged (#33).
-- `when_full: "rings"` keeps a full ring at its radius and puts the items that do not fit on a second ring outside
-  it. Only the outer ring picks on a flick. A slot's `style.size` (0.75 to 1.25) makes one slot bigger or smaller (#33).
+- A **Look** screen (**Alt+2**) for how the ring looks, at three levels: **Global** for every menu, **This menu** for
+  one menu, and **This slot** (Full mode) for one slot. A badge on each setting says where its value comes from
+  (default, theme, a look, Global, the menu or the slot), and clicking it goes there (#33).
+- Looks: a look is a named set of look settings. Seven are built in (**Classic**, **Soft**, **Tiles**, **Crystal**,
+  **Circuit**, **Diamonds** and **Minimal**), and **New from current** saves your own. Use one for all menus or for one
+  menu; menus that use a look follow it when you edit it. They are saved under `looks` in `radial.json` (#33).
+- Six slot shapes (circle, rounded square, squircle, hexagon, octagon and diamond), with **Corner roundness**, **Rim
+  width** and **Icon size** (#33).
+- The hub in the middle of the ring has a size from 0 to 64 px and a style: a dot (as before), a disc, a ring or the
+  menu's icon, with its own colour and glow (#33).
+- **Glow colour**, **Glow strength** and **Label colour**. A colour is a theme colour (bg, accent, highlight, text,
+  lines), which follows the theme, or any `#rrggbb` (#33).
+- One slot can have its own shape, size (75% to 125%), fill and rim colours, icon size, label colour and glow colour,
+  saved as `style` on the item. The item panel's **Style** field lists them and has **Edit in Look** (#33).
+- **When full** chooses what a menu does when its items do not fit at **Ring radius**: **Grow** (as before), **Second
+  ring** (the rest go on a ring outside it; only the outer ring picks on a flick) or **More slot** (the last slot opens
+  a ring with the rest). Fans are never paged (#33).
+- In Full mode the **Menu** tab has a **Look** section to choose the menu's look, with **Edit in Look** (#33).
 - **Export menu...** puts the looks of your own that the menu uses into the file. **Import menu...** joins a look that
   is the same as one you have, and renames one that differs, such as `Bold 2` (#33).
 - Studio can install an update itself. Click the new version at the top, or **Install update** in **Settings > Studio**,
@@ -46,14 +36,12 @@ All notable changes to this project are listed here. The format follows
 
 ### Changed
 
-- Studio has a **Look** screen (**Alt+2**) for how the ring looks: size, slot shape, hub, labels, colours and tag
-  colours moved there from **Settings**. A badge on each setting says whether it is the default, comes from the
-  theme, or is your own. **Library**, **Settings**, **Status** and **Setup** move to **Alt+3** to **Alt+6** (#33).
+- Ring size, labels, colours and tag colours moved from **Settings** to the **Look** screen. **Library**, **Settings**,
+  **Status** and **Setup** move to **Alt+3** to **Alt+6** (#33).
 - **What's new** shows a link in the release notes as its text, not as `[text](address)`.
-- Studio's note above the item list no longer waits for 12 items. It shows when the ring is full at the current radius,
-  says how many items fit and how big the ring grows, and warns when it is too big for the screen (#33).
-- The note above the item list follows the menu's own look and its **When full** choice, and has a **Change in Look**
-  link. It says what the ring does: it grows to a radius, a second ring holds the rest, or a More slot does (#33).
+- The note above the item list shows when a ring is full at its radius, not after 12 items. It says how many items fit
+  and what the ring does then (grows to a radius, a second ring, or a More slot), warns when it is too big for the
+  screen, and has a **Change in Look** link (#33).
 - The outline and the bar in the ring preview on Menus follow the shape of each slot, and the bar works across both
   rings and beside a **More** slot. The preview on Look lights a slot when you hover it and shows its hover glow (#33).
 - **Unsaved changes** lists looks under **Looks** and ring look settings under **Look**, not **Settings** (#33).
