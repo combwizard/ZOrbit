@@ -144,16 +144,11 @@
   const Thumbs = { cache: new Map(), shown: new Map(), theme: '', timer: 0, busy: false, again: false };
   const themeNow = () => S.themeEff || 'dark';
   const tagSig = () => (S.tags || []).map(t => t.key + t.color).join(',');
-  /* Everything a picture of a look depends on besides the look: the base it is drawn over, the theme and the tag colours. */
-  function baseSig() {
-    const t = target(), c = lookCtx(), p = Z.prep(c);
-    const keep = o => { const r = {}; if (isObj(o)) for (const k of Object.keys(o)) if (p.lookSet.has(k) || k === 'look') r[k] = o[k]; return r; };
-    const m = t.level === 'menu' ? menuOf(t.menu) : null;
-    const ml = m && isObj(m.look) ? m.look : {};
-    const mk = {}; for (const k of Object.keys(ml)) if (k !== 'preset') mk[k] = ml[k];
-    return JSON.stringify([themeNow(), keep(S.cfg.ring), t.level === 'menu' ? [t.menu, mk] : null, tagSig()]);
-  }
-  const thumbBase = () => (target().level === 'menu' ? target().menu : 'global');
+  /* A card shows the look itself: drawn over the defaults and the theme (preview_looks base "default"), never over the
+     user's own ring settings or menu, so the only things besides the look that change it are the theme and the tags
+     (the sample ring carries their colours). Editing a setting therefore never redraws the gallery. */
+  const baseSig = () => JSON.stringify([themeNow(), tagSig()]);
+  const thumbBase = () => 'default';
   function fetchThumbs() {
     Thumbs.timer = 0;
     if (Thumbs.busy) { Thumbs.again = true; return; }

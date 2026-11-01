@@ -33,7 +33,7 @@ def main():
         "preview_ring_hover0": a.preview_ring(cfg["config"], first, hover=0),
         "preview_tags": a.preview_tags(cfg["config"]),
         "preview_animation": a.preview_animation(cfg["config"], first),
-        "preview_looks": a.preview_looks(cfg["config"])["looks"],       # the gallery's picture of each built-in look
+        "preview_looks": a.preview_looks(cfg["config"], base="default")["looks"],       # the gallery's picture of each built-in look
         **kinds,
     }
     # The same pictures in the Light theme (dev/mock.js answers with these when the theme is light).
@@ -44,7 +44,7 @@ def main():
         mock["preview_ring_hover0_light"] = a.preview_ring(cfg["config"], first, hover=0)
         mock["preview_tags_light"] = a.preview_tags(cfg["config"])
         mock["preview_animation_light"] = a.preview_animation(cfg["config"], first)
-        mock["preview_looks_light"] = a.preview_looks(cfg["config"])["looks"]
+        mock["preview_looks_light"] = a.preview_looks(cfg["config"], base="default")["looks"]
     finally:
         studio._theme_now = real_theme_now
     out = sys.argv[1] if len(sys.argv) > 1 else os.path.join(ROOT, "zorbit", "studio_ui", "dev", "mock_data.js")

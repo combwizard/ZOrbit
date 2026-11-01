@@ -143,7 +143,7 @@ How saving works:
   it or reload from disk. Reloading throws away your unsaved changes, and the dialog says so. **Cancel** is the
   button that has focus.
 - A config that no ring can open from (no menus, or no menu with a hotkey) is not saved until you confirm.
-- **Revert** goes back to what is saved on disk.
+- **Revert** goes back to what is saved on disk. It asks first and lists the changes it would discard, the same list as **Unsaved changes** when you close the window.
 - When the window is too narrow for everything in the top bar, the **Ctrl+S** hint on **Save** goes first, then the word Studio, then **Revert** and **Save** show only their icons (a clock with an arrow, and a disk), and last **Unsaved changes** shows only its dot. Hover any of them for its name. If that is still not enough, the profile name is shortened.
 - The app re-reads the file as soon as it changes, so saved changes apply immediately, new hotkeys included. You do not need to restart ZBrush or the app.
 - If something in the file is wrong, a **problems** pill appears at the top. Click it for the list: each entry says what is wrong in plain words and jumps to the menu, item or setting to fix, and the menu and item rows concerned carry an amber marker. Studio saves anyway, and the app skips the bad items and logs what it skipped. The list opens by itself after a save or an import only when there is a problem that was not there before; the toast and the pill give the count either way.
@@ -223,7 +223,7 @@ A look is a named group of look settings. Seven are built in: **Classic** (the l
 
 ![The gallery of looks on the Look screen: cards for Classic, Soft, Tiles and Crystal, each with the sample ring in that look and a Use for all menus button](images/look-presets.png)
 
-Each card in the gallery shows the sample ring in that look. Marks on a card say how it is used: **Global** (the look for all menus), **This menu**, **2 menus** (how many other menus use it) and **Editing**.
+Each card in the gallery shows the sample ring in that look, at the default sizes and in your theme, so changing your own settings does not redraw the cards; the preview above shows the look with your settings. Marks on a card say how it is used: **Global** (the look for all menus), **This menu**, **2 menus** (how many other menus use it) and **Editing**.
 
 - **Use for all menus** (or **Use for** and the menu's title, at the menu level) uses the look. It also removes the settings of your own at that level that would hide the look, such as your own slot shape, hub or glow, and anything the look sets itself. The ring size (**Ring radius**, **Slot size** and **Dead zone**), your colours and your tag colours stay unless the look sets them. A toast says how many settings it removed ("Cleared 3 of your own settings") and has **Undo**.
 - The arrow beside it (Full mode) opens a list. **Use, keep my changes** uses the look without removing anything. **Edit** changes a look (**View** for a built-in one, which cannot be changed). **Duplicate** makes a copy called, for example, "Soft copy". **Rename...** and **Delete...** are for your own looks.

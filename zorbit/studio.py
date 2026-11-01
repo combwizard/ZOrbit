@@ -794,7 +794,7 @@ class Api(webapi.LibraryApi, webapi.TagApi):
         """The look_spec ({"preset": name or "", **keys}) that preview_look draws: the preset and the raw look keys
         over the base ("global", or the id of a menu whose own look keys stay)."""
         spec = {}
-        if isinstance(base, str) and base != "global":
+        if isinstance(base, str) and base not in ("global", "default"):
             if base in loaded.menus:
                 spec = dict(loaded.menus[base].look_spec)
             else:
@@ -811,12 +811,22 @@ class Api(webapi.LibraryApi, webapi.TagApi):
         spec.setdefault("preset", "")
         return spec
 
-    def _render_look(self, loaded, app, sample, spec, mid, hover, scale):
+    @staticmethod
+    def _resolver(loaded, base):
+        """The LookSet a look picture is resolved with. base "default": the defaults and the theme only, so the
+        picture shows the look itself and does not change with the user's own ring settings; otherwise the loaded
+        config's (the ring's look and settings under it)."""
+        if base == "default":
+            return L.LookSet(user=loaded.looks.user, ring={}, theme=loaded.looks.theme)
+        return loaded.looks
+
+    def _render_look(self, loaded, app, sample, spec, mid, hover, scale, looks=None):
         """One look picture: {"image", "size", "width", "height", "centre"} of the sample ring drawn with the
-        look the spec resolves to. Pictures are kept for the next call with the same look, theme and size."""
+        look the spec resolves to (with looks, a LookSet, else the loaded config's). Pictures are kept for the
+        next call with the same look, theme and size."""
         from ring import Ring
         import dataclasses
-        resolved = loaded.looks.menu_look(spec)
+        resolved = (looks or loaded.looks).menu_look(spec)
         sig = tuple((it.label, it.kind, it.color) for it in sample.items)
         hover = tuple(hover) if isinstance(hover, (list, tuple)) else hover
         key = (json.dumps(resolved, sort_keys=True), resolved.get("theme", "dark"), round(float(scale), 3), hover, sig)
@@ -832,7 +842,8 @@ class Api(webapi.LibraryApi, webapi.TagApi):
 
     def preview_look(self, cfg, preset=None, look=None, base="global", hover=None, scale=0.5):
         """The sample ring drawn with a look: preset (a built-in or user look name) and/or look (a raw dict of look
-        keys) laid over base ("global": the ring's look, or a menu id: that menu's own look keys stay). Returns
+        keys) laid over base ("global": the ring's look; "default": the defaults and the theme only; or a menu id:
+        that menu's own look keys stay). Returns
         {"image", "size", "width", "height", "centre", "problems"}."""
         loaded, problems = self._load_dict(cfg)
         if loaded is None:
@@ -845,14 +856,17 @@ class Api(webapi.LibraryApi, webapi.TagApi):
         mid = "preset:" + (spec["preset"] or "~live") + ("~live" if live and spec["preset"] else "")
         if isinstance(base, str) and base in loaded.menus:
             mid += "@" + base
-        out = self._render_look(loaded, app, sample, spec, mid, hover, scale)
+        if base == "default":
+            mid += "~default"
+        out = self._render_look(loaded, app, sample, spec, mid, hover, scale, self._resolver(loaded, base))
         out["problems"] = problems
         return out
 
     def preview_looks(self, cfg, names=None, base="global", scale=0.5):
         """preview_look for several looks at once, for the gallery: {"looks": {name: {"image", "size", "width",
         "height", "centre"}}, "problems"}. names: the looks to draw (the built-in ones and the user's when not
-        given); a name that is no look is left out and reported."""
+        given); a name that is no look is left out and reported. base as for preview_look; the gallery uses
+        "default", so a card shows the look itself and only changes with the theme, the tags or that look."""
         loaded, problems = self._load_dict(cfg)
         if loaded is None:
             return {"looks": {}, "problems": problems}
@@ -860,11 +874,13 @@ class Api(webapi.LibraryApi, webapi.TagApi):
         app.cfg = loaded
         sample = self._sample_menu(loaded, app)
         out, notes = {}, []
+        looks = self._resolver(loaded, base)
         for name in (loaded.looks.names() if names is None else names):
             spec = self._look_spec(loaded, name, None, base, notes)
             if not spec["preset"]:
                 continue
-            out[name] = self._render_look(loaded, app, sample, spec, "preset:" + name, None, scale)
+            mid = "preset:" + name + ("~default" if base == "default" else "")
+            out[name] = self._render_look(loaded, app, sample, spec, mid, None, scale, looks)
         return {"looks": out, "problems": problems + list(dict.fromkeys(notes))}
 
     def resolve_look(self, cfg, menu_id=None, slot=None):

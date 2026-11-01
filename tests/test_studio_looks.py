@@ -354,3 +354,24 @@ def test_the_look_options_fixture_is_what_the_generator_writes():
         on_disk = json.load(f)
     fresh = json.loads(json.dumps(_generator().build_options(), sort_keys=True))
     assert on_disk == fresh, "run: python tools/make_look_cases.py"
+
+
+def test_a_gallery_picture_on_the_default_base_ignores_the_users_own_settings(api):
+    # base "default": the look over the defaults and the theme, so moving Hub size (or picking a global look) does not
+    # redraw a card; the global base still follows them (Classic sets no hub of its own)
+    a, b = cfg_of(), cfg_of()
+    b["ring"] = {"look": "tiles", "hub": 40, "slot_shape": "diamond"}
+    for name in ("classic", "soft", "Mine"):
+        da = api.preview_looks(a, names=[name], base="default")["looks"][name]["image"]
+        db = api.preview_looks(b, names=[name], base="default")["looks"][name]["image"]
+        assert da == db
+    ga = api.preview_looks(a, names=["classic"], base="global")["looks"]["classic"]["image"]
+    gb = api.preview_looks(b, names=["classic"], base="global")["looks"]["classic"]["image"]
+    assert ga != gb
+
+
+def test_the_default_base_draws_the_look_as_it_is(api):
+    plain = api.preview_look(cfg_of(), preset="classic", base="default")
+    assert plain["problems"] == [] and plain["image"]
+    assert api.preview_look({"menus": cfg_of()["menus"]}, preset="classic", base="default")["image"] == plain["image"]
+    assert api.preview_look(cfg_of(), preset="crystal", base="default")["image"] != plain["image"]
