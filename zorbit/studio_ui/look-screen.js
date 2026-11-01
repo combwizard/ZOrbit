@@ -734,7 +734,7 @@
               else if (e.key === ' ' ) { e.preventDefault(); }
               else if (e.key === 'ArrowRight' || e.key === 'ArrowLeft' || e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Home' || e.key === 'End') {
                 e.preventDefault();
-                const per = 2, to = e.key === 'Home' ? 0 : e.key === 'End' ? opts.length - 1 : e.key === 'ArrowRight' ? at + 1 : e.key === 'ArrowLeft' ? at - 1 : e.key === 'ArrowDown' ? at + per : at - per;
+                const per = Math.max(1, getComputedStyle(list).gridTemplateColumns.split(' ').filter(Boolean).length), to = e.key === 'Home' ? 0 : e.key === 'End' ? opts.length - 1 : e.key === 'ArrowRight' ? at + 1 : e.key === 'ArrowLeft' ? at - 1 : e.key === 'ArrowDown' ? at + per : at - per;
                 move(opts, at, to);
               }
             },

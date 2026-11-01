@@ -1026,7 +1026,8 @@ body.dragging .irow:hover { background: transparent; }
 .look-chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .look-chip.on { color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); }
 .look-levelnote { color: var(--sub); font-size: 12px; min-width: 0; }
-.look-body { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(280px, 400px) minmax(0, 1fr); }
+/* The preview and the gallery take the spare width; the controls stop at a readable width. */
+.look-body { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(300px, 1fr) minmax(480px, 780px); }
 .look-left { display: flex; flex-direction: column; gap: 10px; padding: 18px 8px 18px 20px; overflow: auto; align-content: start; }
 .look-pick { display: flex; flex-direction: column; gap: 6px; }
 .look-stage { cursor: default; }
@@ -1036,14 +1037,14 @@ body.dragging .irow:hover { background: transparent; }
 .look-glowsw { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 0 4px; font-size: 13px; }
 .look-chip[aria-disabled="true"] { opacity: .45; cursor: default; }
 .look-slotsel { max-width: 240px; }
-.look-left .mini-stage { max-width: 330px; align-self: center; flex: none; }
+.look-left .mini-stage { width: 100%; max-width: min(560px, 55vh); align-self: center; flex: none; }   /* leaves room for the gallery below */
 .look-scroll { height: 100%; overflow: auto; position: relative; }
 .look-nav { position: sticky; top: 0; z-index: 2; display: flex; flex-wrap: wrap; gap: 6px; padding: 12px 24px 10px; background: var(--bg2); border-bottom: 1px solid var(--line); }
 .look-navbtn { height: 26px; padding: 0 12px; border-radius: 99px; border: 1px solid var(--line); background: none; color: var(--sub); font: 600 12px/24px var(--font); cursor: pointer; }
 .look-navbtn:hover { color: var(--text); background: color-mix(in srgb, var(--ink) 3%, transparent); }
 .look-navbtn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .look-navbtn.on { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, transparent); background: color-mix(in srgb, var(--accent) 8%, transparent); }
-.look-groups { max-width: 780px; padding: 16px 24px 64px; }
+.look-groups { padding: 16px 24px 64px; }
 .look-modenote { margin: 0 0 14px; border: 1px solid color-mix(in srgb, var(--amber) 20%, transparent); border-radius: 8px; }
 .lk-line { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; }
 .lk-badge { flex: none; height: 18px; padding: 0 8px; border-radius: 99px; border: 1px solid var(--line2); background: none; color: var(--sub); font: 600 11px/16px var(--font); cursor: pointer; }
@@ -1080,7 +1081,7 @@ body.dragging .irow:hover { background: transparent; }
 .lk-fit { margin-top: 8px; }
 .lk-gallery { display: flex; flex-direction: column; gap: 8px; }
 .lk-ghead { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.lk-cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.lk-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(165px, 1fr)); gap: 8px; }
 .lk-card { display: flex; flex-direction: column; gap: 6px; padding: 6px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg3); }
 .lk-card.cur { border-color: color-mix(in srgb, var(--accent) 60%, transparent); box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 25%, transparent); }
 .lk-opt { display: flex; flex-direction: column; gap: 4px; padding: 2px; border-radius: 8px; cursor: default; }
