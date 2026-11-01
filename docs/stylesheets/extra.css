@@ -255,6 +255,48 @@ body::before {
   box-shadow: 0 12px 40px rgba(0, 0, 0, .35);
 }
 
+/* A picture that would show bigger can be clicked (docs/javascripts/lightbox.js). */
+.md-typeset img.zo-zoomable { cursor: zoom-in; transition: border-color .15s var(--zo-ease), box-shadow .15s var(--zo-ease); }
+.md-typeset img.zo-zoomable:hover { border-color: var(--zo-line2); box-shadow: 0 14px 44px rgba(0, 0, 0, .45); }
+.md-typeset img.zo-zoomable:focus-visible { outline: 2px solid var(--zo-accent); outline-offset: 3px; }
+
+html.zo-lightbox-open { overflow: hidden; }
+.zo-lightbox {
+  position: fixed; inset: 0; z-index: 1000;
+  display: grid; place-items: center; padding: 24px 20px;
+  background: rgba(10, 10, 12, .9); backdrop-filter: blur(6px);
+  opacity: 0; transition: opacity .18s var(--zo-ease);
+  cursor: zoom-out;
+}
+.zo-lightbox.on { opacity: 1; }
+.zo-lightbox figure { margin: 0; display: grid; gap: 12px; justify-items: center; max-width: 100%; max-height: 100%; }
+.zo-lightbox img {
+  display: block; max-width: calc(100vw - 40px); max-height: calc(100vh - 150px); width: auto; height: auto;
+  border-radius: 8px; border: 1px solid var(--zo-line2); box-shadow: 0 24px 80px rgba(0, 0, 0, .6);
+}
+.zo-lightbox figcaption {
+  width: 0; min-width: min(100%, 720px); text-align: center;      /* no wider than the picture, at most 720px */
+  color: var(--zo-sub); font-size: 13.5px; line-height: 1.5;
+}
+.zo-lightbox-x {
+  position: fixed; top: 16px; right: 16px; width: 40px; height: 40px;
+  display: grid; place-items: center; padding: 0; cursor: pointer;
+  color: var(--zo-text); background: var(--zo-bg2); border: 1px solid var(--zo-line2); border-radius: 50%;
+  transition: border-color .15s var(--zo-ease), color .15s var(--zo-ease);
+}
+.zo-lightbox-x:hover { color: var(--zo-accent); border-color: var(--zo-accent); }
+.zo-lightbox-x:focus-visible { outline: 2px solid var(--zo-accent); outline-offset: 3px; }
+/* On a phone the picture is already as wide as the screen: show it at its own size and let it be panned. */
+@media (max-width: 700px) {
+  .zo-lightbox { overflow: auto; place-items: start; padding: 64px 20px 24px; }
+  .zo-lightbox figure { max-width: none; max-height: none; justify-items: start; }
+  .zo-lightbox img { max-width: none; max-height: none; }
+  .zo-lightbox figcaption { position: sticky; left: 20px; width: calc(100vw - 40px); min-width: 0; text-align: left; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .zo-lightbox, .md-typeset img.zo-zoomable, .zo-lightbox-x { transition: none; }
+}
+
 .md-typeset .admonition, .md-typeset details {
   background: var(--zo-bg1); border-radius: 8px;
   border-color: var(--zo-accent); box-shadow: none; font-size: 14.5px;

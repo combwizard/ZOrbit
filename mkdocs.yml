@@ -66,6 +66,10 @@ plugins:
 extra_css:
   - stylesheets/extra.css
 
+# Click a picture to see it larger (docs and blog).
+extra_javascript:
+  - javascripts/lightbox.js
+
 extra:
   homepage: https://zorbit.lol/
   generator: false
