@@ -64,6 +64,8 @@ import os
 import re
 from dataclasses import dataclass, field
 
+import theme as T
+
 ACTION_KEYS = ("brush", "alpha", "material", "texture", "press", "set", "toggle", "steps", "menu", "auto", "tag",
                "browser")
 ASSET_KINDS = ("brush", "alpha", "material", "texture")     # the kinds of the browser and of tags
@@ -84,8 +86,7 @@ DEFAULT_RING = {"radius": 145, "slot": 72, "dead_zone": 38, "tap_ms": 250, "time
                 "animation": "smooth", "labels": "name", "tag_colors": "tint", "flick": True, "hover_submenus": True,
                 "tag_band": "medium", "tag_band_opacity": 0.45, "tag_glow_opacity": 0.4, "tag_tint_opacity": 0.3,
                 "tag_tint_style": "gradient", "tag_tint_blend": "multiply",
-                "colors": {"bg": "#222327", "accent": "#f86b33", "highlight": "#4dc8e9", "text": "#f0f0f0",
-                           "lines": "#f86b33"}}
+                "colors": T.ring_colors("dark")}        # the Dark theme's; default_ring() gives another theme's
 _RING_SWITCHES = ("flick", "hover_submenus")
 _RING_CHOICES = {"tag_colors": TAG_COLOR_MODES, "tag_band": TAG_BANDS, "tag_tint_style": TINT_STYLES,
                  "tag_tint_blend": TINT_BLENDS}
@@ -297,14 +298,28 @@ def _default_label(a: dict, menus_raw: dict, tags=None) -> str:
     return "?"
 
 
-def load(path: str, tags=None) -> Config:
-    """tags: a tags.TagStore (anything with has(key) and label(key)); None skips the checks on tag names."""
+def default_ring(theme: str = "dark") -> dict:
+    """DEFAULT_RING with the colours a theme gives by default (no "theme" key)."""
+    out = json.loads(json.dumps(DEFAULT_RING))
+    out["colors"] = T.ring_colors(theme)
+    return out
+
+
+def load(path: str, tags=None, theme: str = "dark") -> Config:
+    """tags: a tags.TagStore (anything with has(key) and label(key)); None skips the checks on tag names.
+    theme: the preset in force (theme.current()): its colours are the defaults the file's ring.colors fill in,
+    and cfg.ring carries it as "theme" when it is not dark, for the ring's neutrals (pill, hint, badge). It is
+    per PC, so a "theme" key in the file itself is an unknown setting."""
     st = os.stat(path)
     with open(path, encoding="utf-8-sig") as f:         # -sig: an editor's byte-order mark is accepted
         raw = json.load(f)
     if not isinstance(raw, dict):
         raise ValueError("radial.json must be a JSON object")
     cfg = Config(path=path, mtime=st.st_mtime)
+    theme = T.effective(theme)
+    if theme != "dark":
+        cfg.ring["colors"].update(T.ring_colors(theme))
+        cfg.ring["theme"] = theme
     errors = cfg.errors
     bridge = raw.get("bridge")
     if bridge is None:
