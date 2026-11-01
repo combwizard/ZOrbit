@@ -69,7 +69,7 @@
   var straysFound = q.has('strays'), appRestarted = false;
   var libSeq = {}, ticks = 0, thumbCalls = 0, alreadyDone = false, appStarted = false, setupCalls = 0, modernAdded = false, keptDone = false;
   var saved = clone(M.get_config.config);
-  var TAG_DEFAULTS = { tag_colors: 'tint', tag_band: 'medium', tag_band_opacity: 0.45, tag_glow_opacity: 0.4, tag_tint_opacity: 0.3, tag_tint_style: 'gradient', tag_tint_blend: 'multiply' };
+  var TAG_DEFAULTS = { hub: 10, tag_colors: 'tint', tag_band: 'medium', tag_band_opacity: 0.45, tag_glow_opacity: 0.4, tag_tint_opacity: 0.3, tag_tint_style: 'gradient', tag_tint_blend: 'multiply' };
   var KINDS = ['brush', 'alpha', 'material', 'texture', 'press', 'set', 'toggle', 'steps', 'menu', 'auto', 'tag', 'browser'];
   if (q.has('kinds') && saved.menus && saved.menus.tools) saved.menus.tools.items.push({ tag: 'blocking' }, { browser: '' });
   var mtime = 1700000000000000000, conflictDone = false;
@@ -788,7 +788,7 @@
         o.tag_bands = ['none', 'hairline', 'narrow', 'medium', 'wide']; o.tint_styles = ['flat', 'gradient']; o.tint_blends = ['multiply', 'overlay'];
         o.theme_ring_colors = themeRing(); o.themes = o.themes || THEMES.slice();
         o.ring_defaults = Object.assign({}, o.ring_defaults, TAG_DEFAULTS, { colors: clone(o.theme_ring_colors[themeEff()]) });
-        o.ring_ranges = Object.assign({}, o.ring_ranges, { tag_band_opacity: [0, 1], tag_glow_opacity: [0, 1], tag_tint_opacity: [0, 1] });
+        o.ring_ranges = Object.assign({}, o.ring_ranges, { hub: [0, 40], tag_band_opacity: [0, 1], tag_glow_opacity: [0, 1], tag_tint_opacity: [0, 1] });
         return o;
       });
     },

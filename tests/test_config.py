@@ -261,7 +261,8 @@ def test_ring_defaults_when_missing(load_menus):
 
 
 @pytest.mark.parametrize("key, value", [
-    ("radius", 5), ("radius", 5000), ("slot", 10), ("dead_zone", 500), ("tap_ms", -1), ("timeout_s", 1),
+    ("radius", 5), ("radius", 5000), ("slot", 10), ("dead_zone", 500), ("hub", 99), ("hub", -1),
+    ("tap_ms", -1), ("timeout_s", 1),
     ("tag_band_opacity", 1.5), ("tag_glow_opacity", -0.1), ("tag_tint_opacity", 2)])
 def test_out_of_range_ring_values_fall_back_to_the_default(load_menus, key, value):
     cfg = load_menus(GOOD_MENUS, ring={key: value})

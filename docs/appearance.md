@@ -11,6 +11,7 @@ These are on the Settings screen in Studio, and under `"ring"` in `radial.json`.
 | `radius` (**Ring radius**; **Ring size** in Simple mode) | 145 | 60 to 400 | Distance from the centre to the slots, in pixels. This is the smallest the ring gets: a menu with many items spreads wider. |
 | `slot` (**Slot size**) | 72 | 32 to 160 | Diameter of each icon disc. |
 | `dead_zone` (**Dead zone**) | 38 | 10 to 120 | Radius around the centre where no slot is picked. |
+| `hub` (**Hub**) | 10 | 0 to 40 | Diameter of the accent dot in the middle of the ring, in pixels. 0 draws no dot. A larger dot moves the menu title and hint down to keep clear of it. It does not change the dead zone. |
 | `tap_ms` (**Tap time**) | 250 | 0 to 1000 | A hotkey press shorter than this is a tap. |
 | `timeout_s` (**Auto-close**) | 20 | 2 to 120 | An open ring closes itself after this many seconds. |
 | `animation` (**Open animation**) | `smooth` | see [Open animations](#open-animations) | The open animation. |
@@ -28,7 +29,7 @@ These are on the Settings screen in Studio, and under `"ring"` in `radial.json`.
 Sizes are scaled for high-DPI screens automatically.
 
 The radius is a minimum. When a menu has so many items that neighbouring slots would sit closer than 1.25 slot widths apart, the ring grows until they do not. With the default slot size that starts at 10 items: 12 items make a ring about 174 pixels in radius, 24 items about 345. The Studio preview grows the same way, so lowering **Ring radius** changes nothing once a menu is past that point. Raise **Slot size** or cut the number of items to keep the ring smaller. Names in Chinese, Japanese or Korean are drawn with Microsoft YaHei, Yu Gothic or Malgun Gothic, whichever Windows has; other names use Segoe UI.
-Studio's [Simple mode](studio.md#simple-and-full-mode) shows only some of these. Its **Ring size** slider moves `radius`, `slot` and `dead_zone` together and keeps their proportions. Full mode has the three separate sliders, and is the only mode that shows `hover_submenus`, `tap_ms`, `timeout_s`, the `tag_` settings and `colors`. The animation, `labels`, `flick` and the theme are in both. What Simple hides keeps its value.
+Studio's [Simple mode](studio.md#simple-and-full-mode) shows only some of these. Its **Ring size** slider moves `radius`, `slot` and `dead_zone` together and keeps their proportions. Full mode has the three separate sliders, and is the only mode that shows `hub`, `hover_submenus`, `tap_ms`, `timeout_s`, the `tag_` settings and `colors`. The animation, `labels`, `flick` and the theme are in both. What Simple hides keeps its value.
 
 ### Theme
 

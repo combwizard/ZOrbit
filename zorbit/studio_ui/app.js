@@ -172,10 +172,10 @@ const BRIDGE_INFO = {
   message: ['Message', 'Posts a message to a small window the plugin keeps inside ZBrush (its listener). No keystroke is sent, so nothing can collide with your own shortcuts. Needs the ZOrbit plugin loaded in ZBrush. If the plugin is not listening, the pick is dropped and logged.'],
   key: ['Key', 'Presses the bridge key. Bind that key in ZBrush to Zplugin > ZOrbit > Apply (Ctrl+Alt+click the button, press the key, then Preferences > Hotkeys > Store).'],
 };
-const FALLBACK_DEFAULTS = { radius: 145, slot: 72, dead_zone: 38, tap_ms: 250, timeout_s: 20, animation: 'smooth', labels: 'name', tag_colors: 'tint', flick: true, hover_submenus: true,
+const FALLBACK_DEFAULTS = { radius: 145, slot: 72, dead_zone: 38, hub: 10, tap_ms: 250, timeout_s: 20, animation: 'smooth', labels: 'name', tag_colors: 'tint', flick: true, hover_submenus: true,
   tag_band: 'medium', tag_band_opacity: 0.45, tag_glow_opacity: 0.4, tag_tint_opacity: 0.3, tag_tint_style: 'gradient', tag_tint_blend: 'multiply',
   colors: { bg: '#222327', accent: '#f86b33', highlight: '#4dc8e9', text: '#f0f0f0', lines: '#f86b33' } };
-const FALLBACK_RANGES = { radius: [60, 400], slot: [32, 160], dead_zone: [10, 120], tap_ms: [0, 1000], timeout_s: [2, 120],
+const FALLBACK_RANGES = { radius: [60, 400], slot: [32, 160], dead_zone: [10, 120], hub: [0, 40], tap_ms: [0, 1000], timeout_s: [2, 120],
   tag_band_opacity: [0, 1], tag_glow_opacity: [0, 1], tag_tint_opacity: [0, 1] };
 
 const params = new URLSearchParams(location.search);
@@ -228,7 +228,7 @@ const isFull = () => S.prefs.mode !== 'simple';
 const kindIsFull = k => !!(KIND[k] && KIND[k].full);
 /* Ring settings that only Full shows, with the names the "changed in Full mode" note uses. */
 const FULL_RING = { tag_colors: 'Tag colours', tag_band: 'Tag colours', tag_band_opacity: 'Tag colours', tag_glow_opacity: 'Tag colours', tag_tint_opacity: 'Tag colours',
-  tag_tint_style: 'Tag colours', tag_tint_blend: 'Tag colours', colors: 'Colours', hover_submenus: 'Open submenus on hover', tap_ms: 'Tap time', timeout_s: 'Auto-close' };
+  tag_tint_style: 'Tag colours', tag_tint_blend: 'Tag colours', colors: 'Colours', hover_submenus: 'Open submenus on hover', hub: 'Hub', tap_ms: 'Tap time', timeout_s: 'Auto-close' };
 const FULL_CARDS = new Set(['set-tag-colours', 'set-colours', 'set-zbrush-bridge', 'set-older-zbrush', 'set-tags']);
 /* A menu with an open animation, fan out or swallow turned off: the Menu tab shows those fields only in Full. */
 const menuFullSet = m => !!m && (!!m.animation || m.fan === true || m.swallow === false);
@@ -3856,7 +3856,8 @@ function buildSettingsScreen(root) {
       h('div', { class: 'split-main' }, ...(full ? [
         sliderRow({ label: 'Ring radius', hint: 'Distance from the centre to the slots', key: 'radius', unit: 'px', onLive: live }),
         sliderRow({ label: 'Slot size', hint: 'Diameter of each icon disc', key: 'slot', unit: 'px', onLive: live }),
-        sliderRow({ label: 'Dead zone', hint: 'No slot is picked this close to the centre (dashed circle)', key: 'dead_zone', unit: 'px', onLive: live })] : [sizeRow(live)])),
+        sliderRow({ label: 'Dead zone', hint: 'No slot is picked this close to the centre (dashed circle)', key: 'dead_zone', unit: 'px', onLive: live }),
+        sliderRow({ label: 'Hub', hint: 'Size of the accent dot in the centre, 0 for none', key: 'hub', unit: 'px', onLive: live })] : [sizeRow(live)])),
       pbox)));
     let cbox = null, cimg = null, paintTagPrev = null;         // the Colours and Tag colours cards, which only Full builds
     R.preview = async () => {
@@ -4706,10 +4707,10 @@ function updateDirty() {
 }
 /* Turns one message from the loader (config.py) into plain words plus where to go to fix it.
    Returns { text, raw, target }; target is null when the format is not recognised. */
-const RING_CARD = { radius: 'set-ring-geometry', slot: 'set-ring-geometry', dead_zone: 'set-ring-geometry', animation: 'set-open-animation',
+const RING_CARD = { radius: 'set-ring-geometry', slot: 'set-ring-geometry', dead_zone: 'set-ring-geometry', hub: 'set-ring-geometry', animation: 'set-open-animation',
   labels: 'set-labels', tag_colors: 'set-tag-colours', tag_band: 'set-tag-colours', tag_band_opacity: 'set-tag-colours', tag_glow_opacity: 'set-tag-colours',
   tag_tint_opacity: 'set-tag-colours', tag_tint_style: 'set-tag-colours', tag_tint_blend: 'set-tag-colours', colors: 'set-colours', tap_ms: 'set-behaviour', timeout_s: 'set-behaviour', flick: 'set-behaviour', hover_submenus: 'set-behaviour' };
-const RING_NAME = { radius: 'Ring radius', slot: 'Slot size', dead_zone: 'Dead zone', tap_ms: 'Tap time', timeout_s: 'Auto-close', flick: 'Flick to pick',
+const RING_NAME = { radius: 'Ring radius', slot: 'Slot size', dead_zone: 'Dead zone', hub: 'Hub', tap_ms: 'Tap time', timeout_s: 'Auto-close', flick: 'Flick to pick',
   hover_submenus: 'Open submenus on hover', animation: 'Open animation', labels: 'Labels', tag_colors: 'Tag colours',
   tag_band: 'Band', tag_band_opacity: 'Band opacity', tag_glow_opacity: 'Glow opacity', tag_tint_opacity: 'Icon tint opacity', tag_tint_style: 'Icon tint style', tag_tint_blend: 'Icon tint blend' };
 const unq = s => String(s).replace(/^(['"])(.*)\1$/, '$2');
@@ -5506,7 +5507,7 @@ function describeChanges() {
   for (const id of Object.keys(bm)) if (!am[id]) groups.push({ area: 'Menu ' + q(bm[id].title || id), lines: ['Deleted'] });
   const ringLines = [];
   const br = before.ring || {}, ar = after.ring || {};
-  const NAMES = { radius: 'Ring radius', slot: 'Slot size', dead_zone: 'Dead zone', tap_ms: 'Tap time', timeout_s: 'Auto-close', animation: 'Open animation', labels: 'Labels', tag_colors: 'Tag colours',
+  const NAMES = { radius: 'Ring radius', slot: 'Slot size', dead_zone: 'Dead zone', hub: 'Hub', tap_ms: 'Tap time', timeout_s: 'Auto-close', animation: 'Open animation', labels: 'Labels', tag_colors: 'Tag colours',
     tag_band: 'Tag band', tag_band_opacity: 'Tag band opacity', tag_glow_opacity: 'Tag glow opacity', tag_tint_opacity: 'Tag tint opacity', tag_tint_style: 'Tag tint style', tag_tint_blend: 'Tag tint blend',
     flick: 'Flick to pick', hover_submenus: 'Open submenus on hover' };
   for (const k of new Set([...Object.keys(br), ...Object.keys(ar)])) {

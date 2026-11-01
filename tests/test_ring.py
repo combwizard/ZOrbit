@@ -369,6 +369,33 @@ def test_preview_says_where_the_hovered_slot_is_and_can_draw_the_hold_hint():
     assert held.size == hot.size and held.tobytes() != hot.tobytes()   # the hint under the title differs
 
 
+def test_the_dot_grows_with_the_hub_setting_and_is_part_of_the_sprite_key():
+    small, big = prepared(make_menu(4), hub=10), prepared(make_menu(4), hub=30)
+    assert big._dot.size[0] > small._dot.size[0]
+    assert small._dot.size[0] == int((10 + 2 * 14) * ring.SS) // ring.SS   # the default look is unchanged
+    assert big._dot is not small._dot                                       # not served from the hub 10 entry
+
+
+def test_no_hub_means_no_dot_and_the_ring_still_renders():
+    menu = make_menu(6, title="Tools")
+    r = prepared(menu, hub=0)
+    assert r._dot is None
+    assert ring.Ring.preview_frames(menu, make_cfg(hub=0, animation="pop"), lambda it: None, fps=20)
+    flat = ring.Ring.preview(menu, make_cfg(hub=0), lambda it: None)
+    dotted = ring.Ring.preview(menu, make_cfg(), lambda it: None)
+    cx, cy = flat.info["centre"]
+    assert flat.getpixel((cx, cy))[3] < dotted.getpixel((cx, cy))[3]     # nothing drawn where the dot sits
+
+
+def test_a_big_dot_pushes_the_title_down_to_keep_its_gap():
+    draw = ring.ImageDraw.Draw(Image.new("RGBA", (1, 1)))
+    dys = []
+    for hub in (10, 40):
+        r = prepared(make_menu(4, title="Tools"), hub=hub)
+        dys.append(r._caption(draw)[0][2])
+    assert dys == [18, 18 + 15]
+
+
 def test_preview_window_grows_with_the_item_count():
     cfg = make_cfg()
     small = ring.Ring.preview(make_menu(6), cfg, lambda it: None)

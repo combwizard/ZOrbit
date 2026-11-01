@@ -911,7 +911,7 @@ class Ring:
         look = (c["slot"], col["bg"], col["accent"], col["highlight"], col["text"],
                 c.get("tag_colors", "tint"), c.get("tag_glow_opacity", 0.4), c.get("tag_tint_opacity", 0.3),
                 c.get("tag_tint_style", "gradient"), c.get("tag_tint_blend", "multiply"),
-                c.get("theme", "dark"))
+                c.get("theme", "dark"), self._hub())
         return self.menu.id, items, look, self.scale, c.get("labels", "name")
 
     def _slot_sprites(self, it, slot=None):
@@ -1039,18 +1039,25 @@ class Ring:
             out.append(im.resize((max(1, int(Wd / s)), max(1, int(Hd / s))), Image.LANCZOS))
         return out
 
+    def _hub(self):
+        """The centre dot's diameter in unscaled px (0 = none)."""
+        return max(0, self.cfg.get("hub", 10))
+
     def _dot_sprite(self):
+        if self._hub() <= 0:
+            return None
         s = SS
-        d = 10 * self.scale * s
-        m = 14 * self.scale * s
+        k = self._hub() / 10                       # margin and blur follow the size; 10 px is the original look
+        d = 10 * self.scale * s * k
+        m = 14 * self.scale * s * k
         C = int(d + 2 * m)
         c = C / 2
         im = Image.new("RGBA", (C, C), (0, 0, 0, 0))
         g = Image.new("RGBA", (C, C), (0, 0, 0, 0))
         ImageDraw.Draw(g).ellipse((c - d / 2, c - d / 2, c + d / 2, c + d / 2), fill=_rgba(self.c_accent, 0.9))
-        im.alpha_composite(g.filter(ImageFilter.GaussianBlur(5 * self.scale * s)))
+        im.alpha_composite(g.filter(ImageFilter.GaussianBlur(5 * self.scale * s * k)))
         ImageDraw.Draw(im).ellipse((c - d / 2, c - d / 2, c + d / 2, c + d / 2), fill=_rgba(self.c_accent, 1.0))
-        return im.resize((int(C / s), int(C / s)), Image.LANCZOS)
+        return im.resize((max(1, int(C / s)),) * 2, Image.LANCZOS)
 
     def _fan_lines(self, anchor, anchor_r, pos, cs, color=""):
         """Dashed lines from a fan's slot out to each of its slots, in color if it has one: (image, top-left
@@ -1133,21 +1140,24 @@ class Ring:
             box = d.textbbox((0, 0), text, font=font)
             return box[2] - box[0]
         out = []
+        push = max(0.0, self._hub() / 2 - 5)                       # a dot bigger than the default 5 px radius
+        ty = 18 + push                                             # pushes the text down to keep its gap
         title = self.menu.title.upper()
         for px in (9, 8, 7):
             font = _font_for(title, int(px * self.scale * s))
             text = " ".join(title)                                 # letter-spaced caps
-            if width(text, font) <= room(18):
+            if width(text, font) <= room(ty):
                 break
         else:
-            while len(title) > 1 and width(" ".join(title + "…"), font) > room(18):
+            while len(title) > 1 and width(" ".join(title + "…"), font) > room(ty):
                 title = title[:-1]
             text = " ".join(title + "…")
-        out.append((text, font, 18, _rgba(self.c_accent, 0.85)))
+        if width(text, font) <= room(ty):                          # a huge dot in a small ring leaves no room
+            out.append((text, font, ty, _rgba(self.c_accent, 0.85)))
         for lines in self._hint_lines():
             for px in (10, 9, 8, 7):
                 fonts = [_font_for(t, int(px * self.scale * s)) for t in lines]
-                dys = [30 + 11 * k for k in range(len(lines))]
+                dys = [30 + push + 11 * k for k in range(len(lines))]
                 if all(width(t, f) <= room(dy) for t, f, dy in zip(lines, fonts, dys)):
                     return out + [(t, f, dy, self.pre["hint"]) for t, f, dy in zip(lines, fonts, dys)]
         return out
@@ -1288,7 +1298,7 @@ class Ring:
         if a.get("dot_pop"):                       # 0 -> 1.35 -> 1 over 420 ms
             p = min(1.0, el / 420)
             ds = 1.35 * EASE_OUT(p / 0.6) if p < 0.6 else 1.35 - 0.35 * EASE((p - 0.6) / 0.4)
-        if ds > 0.02:
+        if ds > 0.02 and self._dot is not None:    # None: hub 0, no dot
             dot = self._dot
             k = max(1, int(dot.size[0] * ds))
             dd = dot if k == dot.size[0] else dot.resize((k, k), Image.BILINEAR)

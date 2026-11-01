@@ -10,7 +10,8 @@ Schema (all keys optional except menus):
       #                 Hotkeys > Store)
       # mode "auto":    message if the listener is alive, else key; and key as a fallback if a message
       #                 was not picked up within 0.5 s
-  "ring": {"radius": 145, "slot": 72, "dead_zone": 38, "tap_ms": 250, "timeout_s": 20,
+  "ring": {"radius": 145, "slot": 72, "dead_zone": 38, "hub": 10, "tap_ms": 250, "timeout_s": 20,
+           # hub: diameter in px of the accent dot in the middle, 0 to 40 (0 = no dot); dead_zone is separate
            "animation": "smooth",            # smooth bounce pop zoom fade drift fancy spiral ripple breath
                                              # mist snappy
            "labels": "name",                 # name | none
@@ -82,7 +83,7 @@ RESERVED_MENU_IDS = frozenset({"__proto__", "constructor", "hasOwnProperty", "is
                                "toLocaleString", "toString", "valueOf", "__defineGetter__", "__defineSetter__",
                                "__lookupGetter__", "__lookupSetter__"})
 
-DEFAULT_RING = {"radius": 145, "slot": 72, "dead_zone": 38, "tap_ms": 250, "timeout_s": 20,
+DEFAULT_RING = {"radius": 145, "slot": 72, "dead_zone": 38, "hub": 10, "tap_ms": 250, "timeout_s": 20,
                 "animation": "smooth", "labels": "name", "tag_colors": "tint", "flick": True, "hover_submenus": True,
                 "tag_band": "medium", "tag_band_opacity": 0.45, "tag_glow_opacity": 0.4, "tag_tint_opacity": 0.3,
                 "tag_tint_style": "gradient", "tag_tint_blend": "multiply",
@@ -90,7 +91,7 @@ DEFAULT_RING = {"radius": 145, "slot": 72, "dead_zone": 38, "tap_ms": 250, "time
 _RING_SWITCHES = ("flick", "hover_submenus")
 _RING_CHOICES = {"tag_colors": TAG_COLOR_MODES, "tag_band": TAG_BANDS, "tag_tint_style": TINT_STYLES,
                  "tag_tint_blend": TINT_BLENDS}
-_RING_RANGES = {"radius": (60, 400), "slot": (32, 160), "dead_zone": (10, 120), "tap_ms": (0, 1000),
+_RING_RANGES = {"radius": (60, 400), "slot": (32, 160), "dead_zone": (10, 120), "hub": (0, 40), "tap_ms": (0, 1000),
                 "timeout_s": (2, 120), "tag_band_opacity": (0, 1), "tag_glow_opacity": (0, 1),
                 "tag_tint_opacity": (0, 1)}
 

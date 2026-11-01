@@ -4,6 +4,13 @@ All notable changes to this project are listed here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- **Hub** (Full mode) sets the size of the accent dot in the middle of the ring, from 0 to 40 px. It stays 10 unless you
+  change it, and 0 hides the dot. The dead zone does not change with it (#33).
+
 ## [0.14.0] - 2026-11-01
 
 ZOrbit now has an experimental **Theme** setting for the ring, the browser and Studio: Dark, Light, Follow Windows, and
