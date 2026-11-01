@@ -5579,7 +5579,7 @@ const scrollerOf = name => { const root = $('#screen-' + name); return root ? $(
 let lastScreenChain = Promise.resolve();   // writes run one after another, so two quick switches cannot land out of order
 const saveLastScreen = name => { lastScreenChain = lastScreenChain.then(() => call('set_pref', 'last_screen', name)).catch(() => {}); };
 function showScreen(name, { fresh = false } = {}) {
-  if (!own(SCREENS, name)) name = 'menus';
+  name = Object.keys(SCREENS).find(k => k === name) || 'menus';     // the name from the list, never the one passed in (a link or studio.json)
   if (openPopover) openPopover();
   if (comboClose) comboClose();
   if (S.shown && name === S.screen) return;
@@ -5803,13 +5803,14 @@ async function boot() {
     call('set_pref', 'mode', S.prefs.mode).catch(() => {});
   }
   const ids = Object.keys(S.cfg.menus);
-  S.menuId = hasMenu(params.get('menu')) ? params.get('menu') : (ids.find(id => S.cfg.menus[id].hotkey) || ids[0] || null);
+  const wantMenu = params.get('menu');                                  // the ids are taken from the config, never from the URL
+  S.menuId = ids.find(id => id === wantMenu) || ids.find(id => S.cfg.menus[id].hotkey) || ids[0] || null;
   const m0 = curMenu();
   if (params.has('item') && m0 && m0.items[+params.get('item')]) { S.itemIdx = +params.get('item'); S.tab = 'item'; }
   else S.tab = params.get('tab') || 'menu';
   if (params.get('q')) S.lib.q = params.get('q');
   if (params.get('cat')) S.lib.cat = params.get('cat');
-  if (isLib(params.get('kind'))) S.lib.kind = params.get('kind');
+  S.lib.kind = LIB_KINDS.find(k => k === params.get('kind')) || S.lib.kind;
   if (params.get('dock')) S.dock.cat = params.get('dock');
   setPathHint(S.path); renderProfile();
   updateDirty(); renderProblems();
