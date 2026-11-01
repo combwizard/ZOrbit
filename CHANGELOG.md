@@ -4,13 +4,18 @@ All notable changes to this project are listed here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.14.0] - 2026-11-01
+
+ZOrbit now has an experimental **Theme** setting for the ring, the browser and Studio: Dark, Light, Follow Windows, and
+Match ZBrush, which takes the interface colours you stored in ZBrush. Expect the light colours and the matching to
+change a good deal as more people try them. If something is hard to read with your setup, say so on
+[#32](https://github.com/combwizard/zorbit/issues/32) or in a new issue. Studio also has a short tour of its window.
 
 ### Added
 
-- A **Theme** setting on Settings: **Dark** (the default), **Light** and **Follow Windows**, for Studio, the browser and the ring.
-  The ring's colour defaults follow it; a colour set under **Colours** still wins.
-- **Match ZBrush**, a fourth **Theme** choice that colours the ring, the browser and Studio with the interface colours
+- A **Theme** setting on Settings, marked experimental: **Dark** (the default), **Light** and **Follow Windows**, for
+  Studio, the browser and the ring. The ring's colour defaults follow it; a colour set under **Colours** still wins.
+- **Match ZBrush** (experimental), a fourth **Theme** choice that colours the ring, the browser and Studio with the interface colours
   you last stored in ZBrush (**Preferences > Config > Store Config**). It reads ZBrush's own file and never changes it.
   Without a stored scheme it uses Dark (#32).
 - Studio: a short guided tour of the window. It is offered once after Setup, and you can take it again from Setup step 5 or **Settings > Studio** (#41).
@@ -790,6 +795,7 @@ First public release.
   only brushes included with ZBrush.
 - Documentation: README, user guide, third-party notices and contributing guide.
 
+[0.14.0]: https://github.com/combwizard/zorbit/releases/tag/v0.14.0
 [0.13.0]: https://github.com/combwizard/zorbit/releases/tag/v0.13.0
 [0.12.0]: https://github.com/combwizard/zorbit/releases/tag/v0.12.0
 [0.11.0]: https://github.com/combwizard/zorbit/releases/tag/v0.11.0

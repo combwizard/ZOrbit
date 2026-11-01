@@ -32,6 +32,8 @@ Studio's [Simple mode](studio.md#simple-and-full-mode) shows only some of these.
 
 ### Theme
 
+Themes are experimental, and the card says so. The colours, those of **Light** and **Match ZBrush** most of all, will change as they are tuned. If something is hard to read with your setup, say so on [issue #32](https://github.com/combwizard/zorbit/issues/32) or in a new issue.
+
 The **Theme** card is at the top of **Settings**, in Simple and Full mode. It has four choices:
 
 - **Dark** is the default.

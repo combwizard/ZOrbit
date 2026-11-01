@@ -3830,7 +3830,7 @@ function buildSettingsScreen(root) {
           sw.length ? h('span', { class: 'zb-sws', role: 'img', 'aria-label': 'Main, Palette, Button, Text and Switch colours' }, sw) : null);
       } else zbNote = h('div', { class: 'fhint zb-src', role: 'status' }, 'No stored ZBrush colours found, so Dark is used. In ZBrush: Preferences > Config > Store Config.');
     }
-    page.append(card('Theme', 'How Studio, the browser and the ring look',
+    const themeCard = card('Theme', 'How Studio, the browser and the ring look',
       choiceCards([['dark', 'Dark', 'The default look.'], ['light', 'Light', 'For ZBrush and Windows set to a light theme.'],
         ['system', 'Follow Windows', 'Uses the Windows app colour mode and changes with it.'],
         ['zbrush', 'Match ZBrush', 'Uses the colours you last stored in ZBrush.']], THEMES.includes(S.prefs.theme) ? S.prefs.theme : 'dark', async v => {
@@ -3839,7 +3839,10 @@ function buildSettingsScreen(root) {
         if (!ok) { if (R.settings) R.settings(); return; }             // the pick did not stick: draw the old one again
         syncTheme();
       }, 'four', 'Theme'),
-      h('div', { class: 'fhint', style: { marginTop: '8px' } }, 'Applies to Studio, the browser and the ring. A colour you set under Colours still wins.'), zbNote, themeNote));
+      h('div', { class: 'fhint', style: { marginTop: '8px' } }, 'Applies to Studio, the browser and the ring. A colour you set under Colours still wins. Themes are experimental: the colours will change as they are tuned.'), zbNote, themeNote);
+    // The badge goes after the title's text node: the contents list and the card's anchor (set-theme) are made from the text only.
+    themeCard.querySelector('.card-title').firstChild.after(h('span', { class: 'tag amber', title: 'The colours will change as they are tuned. Say on GitHub what reads badly.' }, 'Experimental'));
+    page.append(themeCard);
 
     /* --- geometry with live preview */
     const pimg = h('img', { class: 'ring-img', alt: 'Ring preview', draggable: false });
