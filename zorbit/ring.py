@@ -8,6 +8,9 @@ tinted (ring.tag_tint_*), a soft halo (ring.tag_glow_opacity), or both, as ring.
 border, spoke and label take the colour too. A band through the slot centres (ring.tag_band) shows each slot's
 colour, faint for one without; it is left out when no slot has a colour. A tag slot is a solid disc in the tag colour with a tag glyph whatever ring.tag_colors says; one with no
 brushes is a faint tag glyph and nothing else of it is coloured.
+Looks: what is drawn comes from a _Look (the ring's settings with the menu's look over them), what is picked and
+how the ring behaves from ring_cfg. A slot can take a shape (shapes.py), a style of its own (item.style) and a
+glow colour; a fan with a look of its own is drawn in it; the hub is a dot, disc, ring or the menu's icon.
 All of it is drawn into the sprites when they are built, so a frame costs the same as before.
 Every disc is drawn before any label, and a label sits on a soft pill in the theme's colour, so a neighbouring disc never hides a name. The radius is
 a minimum: a ring with many items grows until neighbouring slots are SLOT_GAP slot widths apart.
@@ -49,9 +52,11 @@ from collections import OrderedDict
 
 from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageFont
 
+import shapes
 import tags
 import theme
 import win32 as W
+from shapes import SLOT_CORNER   # noqa: F401  (a rounded slot's corner share; it lives in shapes now)
 
 SS = 3                      # supersampling for sprites (drawn large, reduced once)
 TIMER_TICK = 1
@@ -201,8 +206,11 @@ def _sprite_get(key):
 
 
 def _sprite_put(key, val):
-    """Keeps val for key; only the SPRITE_MENUS most recently used entries stay."""
+    """Keeps val for key; only the SPRITE_MENUS most recently used entries stay. An older entry of the same menu
+    at the same scale goes first (key[0] and key[3]), so dragging a slider does not push other menus out."""
     with _sprite_lock:
+        for old in [k for k in _sprite_cache if k != key and k[0] == key[0] and k[3] == key[3]]:
+            del _sprite_cache[old]
         _sprite_cache[key] = val
         _sprite_cache.move_to_end(key)
         while len(_sprite_cache) > SPRITE_MENUS:
@@ -249,22 +257,127 @@ def _fade(im, a: float):
     return out
 
 
-def _chrome(it):
+ROLES = ("bg", "accent", "highlight", "text", "lines")
+
+
+def _role(v, colors):
+    """A colour setting as #rrggbb: a theme role (bg, accent, highlight, text, lines) takes the colour the theme
+    gives it, a hex colour is passed on and "" stays "" (no colour of its own). Kept in one place so the looks
+    module can take it over."""
+    if not isinstance(v, str) or not v:
+        return ""
+    if v in ROLES:
+        return colors.get(v) or colors.get("accent", "")
+    return v
+
+
+def _chrome(it, look):
     """The colour an item's rim, spoke, hover and fan lines take: its tag colour, except for an empty tag slot,
-    which stays faint all over (its colour only tints the glyph)."""
-    return it.color if it.kind != "tag" else ""
+    which stays faint all over (its colour only tints the glyph). A slot carrying a tag keeps its colour even
+    when the look has tag colours off."""
+    return it.color if (it.tag or look.tags_on) and it.kind != "tag" else ""
 
 
-SLOT_CORNER = 0.28                              # a rounded slot's corner radius, as a share of its side
+def _num(v, default, lo, hi):
+    try:
+        v = float(v)
+    except (TypeError, ValueError):
+        return default
+    return min(hi, max(lo, v)) if v == v else default
 
 
-def _slot_shape(d, box, rounded, **kw):
-    """Draws a slot outline in box: an ellipse, or a rounded square whose corners scale with the box, so a glow
-    or halo drawn around a slot is the same shape grown."""
-    if rounded:
-        d.rounded_rectangle(box, radius=(box[2] - box[0]) * SLOT_CORNER, **kw)
-    else:
-        d.ellipse(box, **kw)
+# Look keys that reach the sprites (so are part of the cache key) and ring keys that do not. Every key of
+# config.DEFAULT_RING is in exactly one of them: a guard test checks it, so a new setting has to be classified.
+SPRITE_LOOK_KEYS = ("slot", "slot_shape", "slot_corner", "border_width", "icon_scale", "hub", "hub_style",
+                    "hub_color", "hub_glow", "glow_color", "glow_opacity", "labels", "label_color", "tag_colors",
+                    "tag_glow_opacity", "tag_tint_opacity", "tag_tint_style", "tag_tint_blend", "theme", "colors")
+NOT_IN_SPRITES = frozenset(("radius", "dead_zone", "tap_ms", "timeout_s", "animation", "flick", "hover_submenus",
+                            "tag_band", "tag_band_opacity", "look", "when_full"))
+HUB_STYLES = ("dot", "disc", "ring", "icon")
+
+
+class _Look:
+    """The look of one ring or fan, read once from a settings dict (the ring's, with a menu's look over it):
+    sizes, shapes, parsed colours and the settings the sprites are drawn from. Never changed after it is made."""
+
+    def __init__(self, d):
+        colors = dict(d["colors"])
+        colors.setdefault("lines", colors["accent"])
+        set_ = object.__setattr__
+        set_(self, "colors", colors)
+        set_(self, "bg", colors["bg"])
+        set_(self, "accent", colors["accent"])
+        set_(self, "hi", colors["highlight"])
+        set_(self, "text", colors["text"])
+        set_(self, "lines", colors["lines"])
+        set_(self, "theme", d.get("theme", "dark"))
+        set_(self, "pre", theme.preset(self.theme)["ring"])        # the theme's pill, hint, badge, placeholder
+        set_(self, "radius", d.get("radius", 145))
+        set_(self, "slot", d.get("slot", 72))
+        set_(self, "dead_zone", d.get("dead_zone", 38))
+        shape = d.get("slot_shape", "circle")
+        set_(self, "slot_shape", shape if shape in shapes.SHAPES else "circle")
+        set_(self, "slot_corner", _num(d.get("slot_corner"), SLOT_CORNER, 0.0, 0.5))
+        set_(self, "border_width", _num(d.get("border_width"), 2, 0, 6))
+        set_(self, "icon_scale", _num(d.get("icon_scale"), 1.0, 0.5, 1.0))
+        set_(self, "labels", d.get("labels", "name"))
+        set_(self, "label_color", _role(d.get("label_color", "text"), colors) or colors["text"])
+        set_(self, "glow_color", _role(d.get("glow_color", ""), colors))
+        set_(self, "glow_opacity", _num(d.get("glow_opacity"), 0.55, 0.0, 1.0))
+        set_(self, "hub", max(0, d.get("hub", 10)))
+        style = d.get("hub_style", "dot")
+        set_(self, "hub_style", style if style in HUB_STYLES else "dot")
+        set_(self, "hub_color", _role(d.get("hub_color", "accent"), colors) or colors["accent"])
+        set_(self, "hub_glow", _num(d.get("hub_glow"), 1.0, 0.0, 1.0))
+        set_(self, "tag_colors", d.get("tag_colors", "tint"))
+        set_(self, "tag_glow_opacity", d.get("tag_glow_opacity", 0.4))
+        set_(self, "tag_tint_opacity", d.get("tag_tint_opacity", 0.3))
+        set_(self, "tag_tint_style", d.get("tag_tint_style", "gradient"))
+        set_(self, "tag_tint_blend", d.get("tag_tint_blend", "multiply"))
+        set_(self, "tag_band", d.get("tag_band", "medium"))
+        set_(self, "tag_band_opacity", d.get("tag_band_opacity", 0.45))
+        set_(self, "tags_on", self.tag_colors != "none" or self.tag_band != "none")   # as the Expander gates them
+        set_(self, "sig", _look_sig(self))
+
+    def __setattr__(self, name, value):
+        raise AttributeError("a look is read-only")
+
+
+def _look_sig(look):
+    """What the sprites are drawn from, as a hashable tuple (a look's part of the sprite cache key)."""
+    return tuple((look.bg, look.accent, look.hi, look.text) if k == "colors" else getattr(look, k)
+                 for k in SPRITE_LOOK_KEYS)
+
+
+def _merged(ring_cfg, over):
+    """The ring's settings with a menu's look laid over them (its colours merge key by key)."""
+    out = {**ring_cfg, **over}
+    if isinstance(over.get("colors"), dict):
+        out["colors"] = {**ring_cfg["colors"], **over["colors"]}
+    return out
+
+
+def _item_sig(it):
+    """What an item's sprites are drawn from, apart from its icon."""
+    return (it.kind, it.label, it.color, it.tag, getattr(it, "glow", ""), tuple(sorted(_style(it).items())),
+            _is_more(it))
+
+
+def _style(it):
+    return getattr(it, "style", None) or {}
+
+
+def _glyph_more(draw, cx, cy, size, fill):
+    """Three dots in a row, size across: the glyph of a More slot."""
+    r = size * 0.075
+    for k in (-1, 0, 1):
+        x = cx + k * size * 0.24
+        draw.ellipse((x - r, cy - r, x + r, cy + r), fill=fill)
+
+
+def _is_more(it):
+    """A slot that opens a paged-out part of its menu: a submenu whose id starts with "more:"."""
+    return it.kind == "menu" and str(it.data.get("menu", "")).startswith("more:")
 
 
 def _tint_icon(icon, col, amount, style, blend):
@@ -376,6 +489,7 @@ class _Fan:
         self.step, self.half, self.reach = step, half, reach   # slot spacing, wedge half-angle and length
         self.hv = [[0.0, 0.0, 0.0] for _ in self.items]
         self.t_open = 0.0
+        self.look = None                           # its styling: its menu's own look, else the ring's
         self.sprites = self.labels = self.lines = None
         self.motion = (0, 0, 0, None)              # duration, fade, stagger (ms), curve
         self.total = 0
@@ -391,7 +505,10 @@ class Ring:
         submenu is handed back through on_done."""
         self.menu = menu
         self.items = menu.items
-        self.cfg = ring_cfg
+        self.cfg = ring_cfg                        # behaviour keys (tap, flick, animation ...) are read from here
+        self.look = _Look(_merged(ring_cfg, getattr(menu, "look", None) or {}))   # what is drawn: this menu's look
+        self._looks = {}                           # fan menu id -> its _Look
+        self._hub_img = None                       # (icon image or None,) of the hub icon, once asked
         self.icon_for = icon_for
         self.on_done = on_done
         self._log = log
@@ -537,15 +654,15 @@ class Ring:
 
     # --- geometry --------------------------------------------------------------------------------
     def _geometry(self, scale):
-        c = self.cfg
+        c = self.look
         self.scale = scale
         self.n = len(self.items)
         self.step = 360.0 / self.n
-        self.R = c["radius"] * scale
-        self.slot = c["slot"] * scale
+        self.R = c.radius * scale
+        self.slot = c.slot * scale
         if self.n >= 2:                            # the radius is a minimum: grow it until neighbours have room
             self.R = max(self.R, SLOT_GAP * self.slot / (2 * math.sin(math.pi / self.n)))
-        self.dead = c["dead_zone"] * scale
+        self.dead = c.dead_zone * scale
         if self.nested:                            # entered on the parent's slot disc: no instant pick there
             self.dead = max(self.dead, self.slot / 2 + 4 * scale)
         self.flick_r = self.R + self.slot * 0.56   # just past the hovered (1.12x) disc
@@ -601,12 +718,18 @@ class Ring:
         off = abs((ang - i * self.step + 180) % 360 - 180)      # degrees from that slot's direction
         return i if off <= MAX_SECTOR / 2 else None
 
-    def _rounded(self):
-        return self.cfg.get("slot_shape", "circle") == "rounded"
+    @staticmethod
+    def _shape_of(it, look):
+        """(shape, corner) of a slot: its own style over its ring's or fan's look."""
+        st = _style(it)
+        shape = st.get("slot_shape") or look.slot_shape
+        corner = st.get("slot_corner")
+        return (shape if shape in shapes.SHAPES else "circle"), (look.slot_corner if corner in (None, "") else corner)
 
-    def _within(self, dx, dy, half):
-        """Whether an offset from a slot's centre is on the slot: a box for rounded slots, a disc otherwise."""
-        return max(abs(dx), abs(dy)) <= half if self._rounded() else math.hypot(dx, dy) <= half
+    def _within(self, dx, dy, half, it, look):
+        """Whether an offset from a slot's centre is on the slot: its shape, a box for a rounded one."""
+        shape, corner = self._shape_of(it, look)
+        return shapes.inside(shape, dx, dy, half, corner)
 
     def _hit(self, x, y):
         """(path, how) under window point x, y. how: "disc" (on a slot), "wedge" (inside an open fan but on
@@ -616,10 +739,10 @@ class Ring:
         for fan in reversed(fans):                 # deepest first
             rr = fan.cslot / 2 * 1.12 + 4 * self.scale
             for k, (px, py) in enumerate(fan.pos):
-                if self._within(rx - px, ry - py, rr):
+                if self._within(rx - px, ry - py, rr, fan.items[k], fan.look):
                     return fan.path + (k,), "disc"
         for i, (ux, uy) in enumerate(self.seats):
-            if self._within(rx - ux * self.R, ry - uy * self.R, self.slot / 2):
+            if self._within(rx - ux * self.R, ry - uy * self.R, self.slot / 2, self.items[i], self.look):
                 return (i,), "disc"
         for fan in reversed(fans):
             if self._in_wedge(fan, rx, ry):
@@ -708,9 +831,11 @@ class Ring:
         anchor = self._node_pos(path)
         anchor_r = self.slot / 2 if len(path) == 1 else cs / 2
         fan = _Fan(path, menu, anchor, anchor_r, cs, *self._layout(path)[:-1])
+        fan.look = self._look_for(menu)
         art = self._fan_art(menu)
         fan.sprites, fan.labels = [a[0] for a in art], [a[1] for a in art]
-        fan.lines = self._fan_lines(anchor, anchor_r, fan.pos, cs, _chrome(self._item(path)))
+        fan.lines = self._fan_lines(anchor, anchor_r, fan.pos, cs, _chrome(self._item(path), self._look_at(path)),
+                                    fan.look)
         mode = MODES.get(menu.animation or self.cfg.get("animation", "smooth"), MODES["smooth"])
         dur = min(mode["dur"], FAN_MS)
         fade = max(1, min(mode["fade"], 150)) if dur else 0
@@ -719,6 +844,21 @@ class Ring:
         fan.total = stagger * max(0, len(fan.items) - 1) + max(dur, fade)
         self.fans[path] = fan
         return fan
+
+    def _look_for(self, menu):
+        """The look a fan menu is drawn in: its own look over the ring's settings, else the ring's look (tag and
+        More menus have none and inherit it). A fan takes styling only: its slot size stays a share of the ring's."""
+        own = getattr(menu, "look", None)
+        if not own:
+            return self.look
+        look = self._looks.get(menu.id)
+        if look is None:
+            look = self._looks[menu.id] = _Look(_merged(self.cfg, own))
+        return look
+
+    def _look_at(self, path):
+        """The look of the ring or fan that holds the slot at path."""
+        return self.look if len(path) == 1 else self.fans[path[:-1]].look
 
     def _layout(self, path):
         """_fan_layout for the slot at path, cached (its ancestors' fans must exist)."""
@@ -745,7 +885,7 @@ class Ring:
         slot set further out. The arc turns away from ring slots, outer fans and the screen edge when it has
         to. Returns (axis, offsets, distances, positions, step, wedge half-angle, wedge length, penalty)."""
         cs = self.slot * FAN_SLOT
-        g = cs * (1.3 if self.cfg.get("labels", "name") != "none" else 1.15)   # centre-to-centre gap
+        g = cs * (1.3 if self.look.labels != "none" else 1.15)   # centre-to-centre gap
         span = math.radians(FAN_SPAN[0] if depth == 1 else FAN_SPAN[1])
         r = self.slot * (1.5 if depth == 1 else 1.3)
         r2, step = r, 0.0
@@ -795,9 +935,10 @@ class Ring:
         """(sprites, labels) of a fan's slots, rendered once per menu (upto: stop after that many)."""
         art = self._art.setdefault(menu.id, [])
         cs = self.slot * FAN_SLOT
+        look = self._look_for(menu)
         while len(art) < len(menu.items) and (upto is None or len(art) < upto):
             it = menu.items[len(art)]
-            art.append((self._slot_sprites(it, cs), self._label_sprites(it, cs)))
+            art.append((self._slot_sprites(it, cs, look), self._label_sprites(it, cs, look)))
         return art
 
     def _warm_step(self):
@@ -891,10 +1032,10 @@ class Ring:
 
     # --- sprites ---------------------------------------------------------------------------------
     def _prepare(self):
-        col = self.cfg["colors"]
-        self.c_bg, self.c_accent, self.c_hi = col["bg"], col["accent"], col["highlight"]
-        self.c_text, self.c_lines = col["text"], col.get("lines", col["accent"])
-        self.pre = theme.preset(self.cfg.get("theme", "dark"))["ring"]     # the theme's pill, hint, badge, placeholder
+        lk = self.look
+        self.c_bg, self.c_accent, self.c_hi = lk.bg, lk.accent, lk.hi
+        self.c_text, self.c_lines, self.c_hub = lk.text, lk.lines, lk.hub_color
+        self.pre = lk.pre                                                  # the theme's pill, hint, badge, placeholder
         self.f_glyph = _font(int(15 * self.scale * SS))
         t0 = time.perf_counter()
         key = self._sprite_key()
@@ -924,165 +1065,235 @@ class Ring:
     def _sprite_key(self):
         """What the ring's sprites are drawn from: the menu, each item's look (its icon by content, since a
         thumbnail can turn up later), and every setting that reaches a sprite."""
-        c, col = self.cfg, self.cfg["colors"]
-        items = tuple((it.kind, it.label, _icon_sig(self._icon(it)), it.color, it.tag, it.glow,
+        items = tuple((_item_sig(it), _icon_sig(self._icon(it)),
                        self._fans_out(it) if it.kind == "menu" else False) for it in self.items)
-        look = (c["slot"], col["bg"], col["accent"], col["highlight"], col["text"],
-                c.get("tag_colors", "tint"), c.get("tag_glow_opacity", 0.4), c.get("tag_tint_opacity", 0.3),
-                c.get("tag_tint_style", "gradient"), c.get("tag_tint_blend", "multiply"),
-                c.get("theme", "dark"), self._hub(), c.get("slot_shape", "circle"))
-        return self.menu.id, items, look, self.scale, c.get("labels", "name")
+        hub = None
+        if self.look.hub > 0 and self.look.hub_style == "icon":
+            hub = (getattr(self.menu, "icon", "") or "", self.menu.title, _icon_sig(self._hub_icon()))   # the menu's icon
+        return self.menu.id, items, self.look.sig, self.scale, hub
 
-    def _slot_sprites(self, it, slot=None):
-        """(idle, hover) RGBA sprites, drawn at the 1.12x hover size so scaling always reduces."""
+    def _slot_sprites(self, it, size=None, look=None):
+        """(idle, hover) RGBA sprites, drawn at the 1.12x hover size so scaling always reduces. size: the slot's
+        width (a fan's is smaller than the ring's); look: the ring's or fan's look (None: this ring's)."""
+        L = look or self.look
+        st = _style(it)
         s = SS
-        D = (slot or self.slot) * 1.12 * s         # disc diameter at full hover size, supersampled
+        shape, corner = self._shape_of(it, L)
+        D = (size or self.slot) * 1.12 * s         # disc diameter at full hover size, supersampled
         m = 30 * self.scale * s                    # margin for ring + glow
-        C = int(D + 2 * m)
+        C = int(D + 2 * m + shapes.pad_extra(shape, D))
         c = C / 2
         sub = it.kind == "menu"
         fan = sub and self._fans_out(it)
-        rd = self._rounded()
-        col = _chrome(it)
-        hue = it.glow or col or (self.c_hi if sub else self.c_accent)    # a glow colour of its own wins for the glow
-        mode = self.cfg.get("tag_colors", "tint")
+        more = _is_more(it) and not getattr(it, "icon", "")
+        col = _chrome(it, L)
+        glow_own = _role(st.get("glow_color"), L.colors) or getattr(it, "glow", "")   # the slot's own glow colour
+        hue = glow_own or col or L.glow_color or (L.hi if sub else L.accent)   # a glow colour of its own wins
+        mode = L.tag_colors
         tint = bool(col) and (mode in ("tint", "both") or bool(it.tag))
-        glow_a = self.cfg.get("tag_glow_opacity", 0.4)
-        halo_col = it.glow or col
+        glow_a = L.tag_glow_opacity
+        halo_col = glow_own or col
         soft = bool(halo_col) and mode in ("glow", "both") and glow_a > 0
+        go = L.glow_opacity
+        base = _role(st.get("fill_color"), L.colors) or L.bg
+        rim = _role(st.get("border_color"), L.colors)
+        bw = _num(st.get("border_width"), L.border_width, 0, 6)
+        text = L.text
         icon = self._icon(it)
-        ins = int(D - 16 * 1.12 * self.scale * s)
+        ins = int((D - 16 * 1.12 * self.scale * s) * _num(st.get("icon_scale"), L.icon_scale, 0.5, 1.0))
         if icon is not None:
             icon = icon.convert("RGBA").resize((ins, ins), Image.LANCZOS)
-            mask = Image.new("L", (ins, ins), 0)
-            _slot_shape(ImageDraw.Draw(mask), (0, 0, ins - 1, ins - 1), rd, fill=255)
-            icon.putalpha(ImageChops.multiply(icon.getchannel("A"), mask))
-            amount = self.cfg.get("tag_tint_opacity", 0.3)
+            icon.putalpha(ImageChops.multiply(icon.getchannel("A"), shapes.icon_mask(shape, ins, corner)))
+            amount = L.tag_tint_opacity
             if col and mode in ("tint", "both") and amount > 0:
-                icon = _tint_icon(icon, col, amount, self.cfg.get("tag_tint_style", "gradient"),
-                                  self.cfg.get("tag_tint_blend", "multiply"))
+                icon = _tint_icon(icon, col, amount, L.tag_tint_style, L.tag_tint_blend)
         solid = bool(col) and bool(it.tag) and sub and icon is None   # a tag slot: solid disc in the tag colour
-        fill = _mix(self.c_bg, col, 0.6) + (255,) if solid else (
-            _mix(self.c_bg, col, 0.45) + (235,) if tint else _rgba(self.c_bg, 0.92))
+        fill = _mix(base, col, 0.6) + (255,) if solid else (
+            _mix(base, col, 0.45) + (235,) if tint else _rgba(base, 0.92))
 
         def disc(hover):
             im = Image.new("RGBA", (C, C), (0, 0, 0, 0))
             if hover:                              # glow + soft outer ring
                 glow = Image.new("RGBA", (C, C), (0, 0, 0, 0))
-                gr = D / 2 + 4 * self.scale * s
-                _slot_shape(ImageDraw.Draw(glow), (c - gr, c - gr, c + gr, c + gr), rd, fill=_rgba(hue, 0.55))
+                shapes.draw(ImageDraw.Draw(glow), shape, c, c, D / 2, corner, grow=4 * self.scale * s,
+                            fill=_rgba(hue, go))
                 glow = glow.filter(ImageFilter.GaussianBlur(12 * self.scale * s))
                 im.alpha_composite(glow)
-                rr = D / 2 + 3 * self.scale * s
-                _slot_shape(ImageDraw.Draw(im), (c - rr, c - rr, c + rr, c + rr), rd, fill=_rgba(hue, 0.20))
+                shapes.draw(ImageDraw.Draw(im), shape, c, c, D / 2, corner, grow=3 * self.scale * s,
+                            fill=_rgba(hue, 0.20 * go / 0.55))
             d = ImageDraw.Draw(im)
             r = D / 2
-            border = _rgba(hue, 1.0) if hover else (_rgba(col, 0.9) if tint else _rgba(self.c_text, 0.10))
-            _slot_shape(d, (c - r, c - r, c + r, c + r), rd, fill=fill, outline=border,
-                        width=max(1, int((3 if tint and not hover else 2) * self.scale * s)))
+            border = _rgba(hue, 1.0) if hover else (_rgba(rim, 0.9) if rim else (
+                _rgba(col, 0.9) if tint else _rgba(text, 0.10)))
+            wv = max(2, bw) if hover else (bw + 1 if tint and bw > 0 else bw)    # a tinted idle rim is a step wider
+            if wv > 0:
+                shapes.draw(d, shape, c, c, r, corner, fill=fill, outline=border,
+                            width=max(1, int(wv * self.scale * s)))
+            else:                                  # no rim
+                shapes.draw(d, shape, c, c, r, corner, fill=fill)
             if icon is not None:
                 im.alpha_composite(icon, (int(c - ins / 2), int(c - ins / 2)))
             elif it.kind == "auto":                # an auto slot nothing has filled yet: faint, no disc
                 gd = ImageDraw.Draw(im)
                 l, t_, r_, b_ = gd.textbbox((0, 0), "+", font=self.f_glyph)
                 gd.text((c - (r_ - l) / 2 - l, c - (b_ - t_) / 2 - t_), "+", font=self.f_glyph,
-                        fill=_rgba(self.c_text, 0.35))
+                        fill=_rgba(text, 0.35))
             elif it.kind == "tag":                 # a tag with no brushes (or no such tag): faint, no tint
                 glyph = _glyph_star if it.tag == tags.FAVOURITE else _glyph_tag
-                glyph(ImageDraw.Draw(im), c, c, ins * 0.42, _rgba(it.color or self.c_text, 0.35))
+                glyph(ImageDraw.Draw(im), c, c, ins * 0.42, _rgba(it.color or text, 0.35))
             elif solid:                            # tag slot: the disc is the tag colour
                 glyph = _glyph_star if it.tag == tags.FAVOURITE else _glyph_tag
-                glyph(ImageDraw.Draw(im), c, c, ins * 0.46, _rgba(self.c_text, 0.9))
+                glyph(ImageDraw.Draw(im), c, c, ins * 0.46, _rgba(text, 0.9))
             else:                                  # placeholder disc with a short glyph
-                pr = ins / 2
-                ph = Image.new("RGBA", (C, C), (0, 0, 0, 0))
-                pd = ImageDraw.Draw(ph)
-                for k in range(12, 0, -1):         # cheap radial gradient
-                    t = k / 12
-                    g = tuple(int(a + (b - a) * (1 - t)) for a, b in zip(*self.pre["placeholder"]))
-                    rr = pr * t
-                    _slot_shape(pd, (c - rr, c - rr, c + rr, c + rr), rd, fill=g + (255,))
-                im.alpha_composite(ph)
+                self._placeholder(im, shape, corner, c, ins / 2, L)
                 gd = ImageDraw.Draw(im)
                 if it.kind == "browser":           # the browser: a 2x2 grid
-                    _glyph_grid(gd, c, c, ins * 0.46, _rgba(it.color or self.c_text, 0.95))
+                    _glyph_grid(gd, c, c, ins * 0.46, _rgba(it.color or text, 0.95))
+                elif more:                         # a More slot: three dots
+                    _glyph_more(gd, c, c, ins * 0.5, _rgba(text, 0.9))
                 else:
-                    glyph = it.label if len(it.label) <= 4 else "".join(w[0] for w in it.label.split()[:2]).upper()
-                    gf = _font_for(glyph, int(15 * self.scale * SS))
-                    l, t_, r_, b_ = gd.textbbox((0, 0), glyph, font=gf)
-                    gd.text((c - (r_ - l) / 2 - l, c - (b_ - t_) / 2 - t_), glyph, font=gf,
-                            fill=_rgba(self.c_text, 0.9))
-            if sub:                                # submenu badge, bottom-right: a fan, or an arrow for a ring
+                    self._monogram(gd, it.label, c, text)
+            if sub and not more:                   # submenu badge, bottom-right: a fan, or an arrow for a ring
                 u = self.scale * s
-                bw = 14 * u
-                bx = by = c + r * (0.66 if rd else 0.62)   # a square's corner is further out than a circle's edge
-                d.rounded_rectangle((bx - bw / 2, by - bw / 2, bx + bw / 2, by + bw / 2), radius=4 * u,
-                                    fill=self.pre["badge"], outline=_rgba(self.c_hi, 1.0), width=max(1, int(u)))
+                bw_ = 14 * u
+                bx = by = c + r * shapes.badge(shape)   # a square's corner is further out than a circle's edge
+                d.rounded_rectangle((bx - bw_ / 2, by - bw_ / 2, bx + bw_ / 2, by + bw_ / 2), radius=4 * u,
+                                    fill=L.pre["badge"], outline=_rgba(L.hi, 1.0), width=max(1, int(u)))
                 if fan:
-                    _glyph_fan(d, bx - 4 * u, by + 4 * u, 8 * u, _rgba(self.c_hi, 1.0))
+                    _glyph_fan(d, bx - 4 * u, by + 4 * u, 8 * u, _rgba(L.hi, 1.0))
                 else:
                     tri = 3.5 * u
                     d.polygon([(bx - tri * 0.7, by - tri), (bx - tri * 0.7, by + tri), (bx + tri, by)],
-                              fill=_rgba(self.c_hi, 1.0))
+                              fill=_rgba(L.hi, 1.0))
             out = im.resize((int(C / s), int(C / s)), Image.LANCZOS)
             if soft and not hover:                 # soft halo in the glow or tag colour, blurred at 1x
                 n = out.size[0]
-                gr = D / 2 / s + 2 * self.scale
                 halo = Image.new("RGBA", (n, n), (0, 0, 0, 0))
-                _slot_shape(ImageDraw.Draw(halo), (n / 2 - gr, n / 2 - gr, n / 2 + gr, n / 2 + gr), rd, fill=_rgba(halo_col, glow_a))
+                shapes.draw(ImageDraw.Draw(halo), shape, n / 2, n / 2, D / 2 / s, corner, grow=2 * self.scale,
+                            fill=_rgba(halo_col, glow_a))
                 halo = halo.filter(ImageFilter.GaussianBlur(8 * self.scale))
                 halo.alpha_composite(out)
                 out = halo
             return out
         return disc(False), disc(True)
 
-    def _label_sprites(self, it, slot=None):
+    def _placeholder(self, im, shape, corner, c, pr, L):
+        """A placeholder disc (a cheap radial gradient in the theme's colours) of half width pr, into im."""
+        ph = Image.new("RGBA", im.size, (0, 0, 0, 0))
+        pd = ImageDraw.Draw(ph)
+        for k in range(12, 0, -1):
+            t = k / 12
+            g = tuple(int(a + (b - a) * (1 - t)) for a, b in zip(*L.pre["placeholder"]))
+            shapes.draw(pd, shape, c, c, pr * t, corner, fill=g + (255,))
+        im.alpha_composite(ph)
+
+    def _monogram(self, gd, label, c, text):
+        """A short glyph for a slot with no picture: the label when it is short, else its first two initials."""
+        glyph = label if len(label) <= 4 else "".join(w[0] for w in label.split()[:2]).upper()
+        gf = _font_for(glyph, int(15 * self.scale * SS))
+        l, t_, r_, b_ = gd.textbbox((0, 0), glyph, font=gf)
+        gd.text((c - (r_ - l) / 2 - l, c - (b_ - t_) / 2 - t_), glyph, font=gf, fill=_rgba(text, 0.9))
+
+    def _label_sprites(self, it, size=None, look=None):
         """(idle, hover) label sprites: the name on a soft pill in the theme's colour, so it reads over a neighbouring disc."""
-        if self.cfg.get("labels", "name") == "none":
+        L = look or self.look
+        if L.labels == "none":
             return None
         s = SS
         font = _font_for(it.label, int(11 * self.scale * s))
         tmp = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
-        text = _shorten(tmp, it.label, font, (slot or self.slot) * 1.9 * s)
+        text = _shorten(tmp, it.label, font, (size or self.slot) * 1.9 * s)
         l, _, r, _ = tmp.textbbox((0, 0), text, font=font, anchor="ls")          # anchor: left of the baseline
         top, bottom = tmp.textbbox((0, 0), "Åg", font=font, anchor="ls")[1::2]   # one line height for every label
         pad = int(6 * self.scale * s)
         Wd, Hd = r - l + 2 * pad, bottom - top + 2 * pad
         hx, vy = 5 * self.scale * s, 2 * self.scale * s                          # how far the pill reaches past the text
         pill = (pad - hx, pad - vy, Wd - pad + hx, Hd - pad + vy)
+        idle = _role(_style(it).get("label_color"), L.colors) or L.label_color   # a slot's own name colour wins
         out = []
         for hover in (False, True):
-            hue = (_chrome(it) or (self.c_hi if it.kind == "menu" else self.c_accent)) if hover else self.c_text
+            hue = (_chrome(it, L) or (L.hi if it.kind == "menu" else L.accent)) if hover else idle
             im = Image.new("RGBA", (Wd, Hd), (0, 0, 0, 0))
             d = ImageDraw.Draw(im)
-            d.rounded_rectangle(pill, radius=(pill[3] - pill[1]) / 2, fill=self.pre["pill"])
+            d.rounded_rectangle(pill, radius=(pill[3] - pill[1]) / 2, fill=L.pre["pill"])
             d.text((pad - l, pad - top), text, font=font, fill=_rgba(hue, 1.0), anchor="ls")
             out.append(im.resize((max(1, int(Wd / s)), max(1, int(Hd / s))), Image.LANCZOS))
         return out
 
     def _hub(self):
         """The centre dot's diameter in unscaled px (0 = none)."""
-        return max(0, self.cfg.get("hub", 10))
+        return self.look.hub
 
-    def _dot_sprite(self):
-        if self._hub() <= 0:
+    def _hub_icon(self):
+        """The menu's icon image for a hub of style "icon" (None: no icon, or none found), asked of icon_for once."""
+        if self._hub_img is None:
+            img = None
+            icon = getattr(self.menu, "icon", "") or ""
+            if icon:
+                import config as C
+                try:
+                    img = self.icon_for(C.Item(label=self.menu.title, kind="menu", data={"menu": self.menu.id},
+                                               icon=icon))
+                except Exception:
+                    img = None
+            self._hub_img = (img,)
+        return self._hub_img[0]
+
+    def _dot_sprite(self, look=None):
+        """The centre hub: a dot, a disc, a ring or the menu's icon, in the hub colour with a soft glow (None: no hub)."""
+        L = look or self.look
+        if L.hub <= 0:
             return None
         s = SS
-        k = self._hub() / 10                       # margin and blur follow the size; 10 px is the original look
+        k = L.hub / 10                             # margin and blur follow the size; 10 px is the original look
         d = 10 * self.scale * s * k
         m = 14 * self.scale * s * k
         C = int(d + 2 * m)
         c = C / 2
+        hc, style = L.hub_color, L.hub_style
+        rim = max(1, int(round(max(1.0, 0.12 * L.hub) * self.scale * s)))
+        box = (c - d / 2, c - d / 2, c + d / 2, c + d / 2)
         im = Image.new("RGBA", (C, C), (0, 0, 0, 0))
-        g = Image.new("RGBA", (C, C), (0, 0, 0, 0))
-        ImageDraw.Draw(g).ellipse((c - d / 2, c - d / 2, c + d / 2, c + d / 2), fill=_rgba(self.c_accent, 0.9))
-        im.alpha_composite(g.filter(ImageFilter.GaussianBlur(5 * self.scale * s * k)))
-        ImageDraw.Draw(im).ellipse((c - d / 2, c - d / 2, c + d / 2, c + d / 2), fill=_rgba(self.c_accent, 1.0))
+        if L.hub_glow > 0:
+            g = Image.new("RGBA", (C, C), (0, 0, 0, 0))
+            gd = ImageDraw.Draw(g)
+            if style == "ring":
+                gd.ellipse(box, outline=_rgba(hc, 0.9 * L.hub_glow), width=rim)
+            else:
+                gd.ellipse(box, fill=_rgba(hc, 0.9 * L.hub_glow))
+            im.alpha_composite(g.filter(ImageFilter.GaussianBlur(5 * self.scale * s * k * L.hub_glow)))
+        draw = ImageDraw.Draw(im)
+        if style == "dot":
+            draw.ellipse(box, fill=_rgba(hc, 1.0))
+        elif style == "ring":
+            draw.ellipse(box, outline=_rgba(hc, 1.0), width=rim)
+        else:                                      # disc, or the menu's icon on a disc
+            draw.ellipse(box, fill=_rgba(L.bg, 0.92), outline=_rgba(hc, 1.0), width=rim)
+            if style == "icon":
+                self._hub_face(im, L, c, int(d) - 2 * rim)
         return im.resize((max(1, int(C / s)),) * 2, Image.LANCZOS)
 
-    def _fan_lines(self, anchor, anchor_r, pos, cs, color=""):
-        """Dashed lines from a fan's slot out to each of its slots, in color if it has one: (image, top-left
-        relative to the ring centre)."""
+    def _hub_face(self, im, L, c, ins):
+        """The hub icon style's face, into im: the menu's icon in a circle, or a monogram of its title."""
+        if ins < 2:
+            return
+        img = self._hub_icon()
+        if img is not None:
+            face = img.convert("RGBA").resize((ins, ins), Image.LANCZOS)
+            face.putalpha(ImageChops.multiply(face.getchannel("A"), shapes.icon_mask("circle", ins)))
+            im.alpha_composite(face, (int(c - ins / 2), int(c - ins / 2)))
+            return
+        self._placeholder(im, "circle", SLOT_CORNER, c, ins / 2, L)
+        title = self.menu.title
+        glyph = title if len(title) <= 4 else "".join(w[0] for w in title.split()[:2]).upper()
+        f = _font_for(glyph, max(6, int(ins * 0.42)))
+        gd = ImageDraw.Draw(im)
+        l, t_, r_, b_ = gd.textbbox((0, 0), glyph, font=f)
+        gd.text((c - (r_ - l) / 2 - l, c - (b_ - t_) / 2 - t_), glyph, font=f, fill=_rgba(L.text, 0.9))
+
+    def _fan_lines(self, anchor, anchor_r, pos, cs, color="", look=None):
+        """Dashed lines from a fan's slot out to each of its slots, in color if it has one, else the lines colour
+        of the fan's look: (image, top-left relative to the ring centre)."""
         s = SS
         m = 4 * self.scale
         xs, ys = [anchor[0]] + [p[0] for p in pos], [anchor[1]] + [p[1] for p in pos]
@@ -1090,7 +1301,7 @@ class Ring:
         w, h = math.ceil(max(xs) + m) - x0, math.ceil(max(ys) + m) - y0
         im = Image.new("RGBA", (w * s, h * s), (0, 0, 0, 0))
         d = ImageDraw.Draw(im)
-        col = _rgba(color or self.c_lines, 0.75)
+        col = _rgba(color or (look or self.look).lines, 0.75)
         lw = max(1, int(1.3 * self.scale * s))
         dash, gap = 5 * self.scale, 4 * self.scale
         ax, ay = anchor
@@ -1124,9 +1335,11 @@ class Ring:
         for frac, a in ((0.28, 0.05), (0.52, 0.03), (0.76, 0.02)):
             r = self.R * frac * s
             d.ellipse((cx - r, cy - r, cx + r, cy + r), outline=_rgba(self.c_lines, a), width=lw)
-        r0, r1 = 8 * self.scale * s, (self.R - self.slot / 2 - 6 * self.scale) * s
+        # spokes start at the hub's edge; under a solid dot they were always hidden, so a dot keeps today's 8 px
+        r0 = (8 if self.look.hub_style == "dot" else max(8, self._hub() / 2 + 3)) * self.scale * s
+        r1 = (self.R - self.slot / 2 - 6 * self.scale) * s
         for (ux, uy), it in zip(self.seats, self.items):
-            colr = _rgba(_chrome(it), 0.35) if _chrome(it) else (
+            colr = _rgba(_chrome(it, self.look), 0.35) if _chrome(it, self.look) else (
                 _rgba(self.c_hi, 0.35) if it.kind == "menu" else _rgba(self.c_lines, 0.30))
             d.line((cx + ux * r0, cy + uy * r0, cx + ux * r1, cy + uy * r1), fill=colr, width=lw)
         for text, font, dy, colr in self._caption(d):
@@ -1186,11 +1399,11 @@ class Ring:
     def _band(self, im, cx, cy):
         """The tag band (supersampled, into im): a ring through the slot centres, each slot's stretch of it in
         its colour and the rest faint."""
-        width = TAG_BANDS.get(self.cfg.get("tag_band", "medium"))
-        cols = [_chrome(it) for it in self.items]
+        width = TAG_BANDS.get(self.look.tag_band)
+        cols = [_chrome(it, self.look) for it in self.items]
         if width is None or not any(cols):
             return
-        a = self.cfg.get("tag_band_opacity", 0.45)
+        a = self.look.tag_band_opacity
         s = SS
         w = max(2 * self.scale, self.slot * width) * s
         ro, ri = self.R * s + w / 2, self.R * s - w / 2
@@ -1305,15 +1518,15 @@ class Ring:
             if p > 0.01:
                 rad = 120 * self.scale * p
                 halo = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
-                ImageDraw.Draw(halo).ellipse((cx - rad, cy - rad, cx + rad, cy + rad), fill=_rgba(self.c_accent, 0.12))
+                ImageDraw.Draw(halo).ellipse((cx - rad, cy - rad, cx + rad, cy + rad), fill=_rgba(self.c_hub, 0.12))
                 canvas.alpha_composite(halo.filter(ImageFilter.GaussianBlur(rad * 0.35 + 1)))
         if a.get("ripples"):                       # two accent rings expanding from the dot
             d = ImageDraw.Draw(canvas)
             for delay in (0, 140):
                 p = (el - delay) / 1000
                 if 0 < p < 1:
-                    rr = 5 * self.scale * (0.1 + 23.9 * EASE_OUT(p))
-                    d.ellipse((cx - rr, cy - rr, cx + rr, cy + rr), outline=_rgba(self.c_accent, 0.9 * (1 - p)),
+                    rr = max(5, self._hub() / 2) * self.scale * (0.1 + 23.9 * EASE_OUT(p))
+                    d.ellipse((cx - rr, cy - rr, cx + rr, cy + rr), outline=_rgba(self.c_hub, 0.9 * (1 - p)),
                               width=max(1, int(1.5 * self.scale)))
         ds = 1.0
         if a.get("dot_pop"):                       # 0 -> 1.35 -> 1 over 420 ms

@@ -10,10 +10,11 @@ import shutil
 from types import SimpleNamespace
 
 import pytest
-from PIL import Image, ImageFont
+from PIL import Image, ImageDraw, ImageFont
 
 import config
 import ring
+import shapes
 import theme
 
 SEGOE = os.path.join(os.environ.get("WINDIR", r"C:\Windows"), "Fonts", "segoeuib.ttf")
@@ -477,3 +478,604 @@ def test_default_font_is_a_fallback_not_a_crash(tmp_path, monkeypatch):
     im = ring.Ring.preview(make_menu(5, labels=["中文", "a", "b", "c", "d"]), make_cfg(), lambda it: None)
     assert im.getchannel("A").getbbox() is not None
     assert isinstance(ring._font(12), (ImageFont.FreeTypeFont, ImageFont.ImageFont))
+
+
+# --- shapes ------------------------------------------------------------------------------------
+ALL_SHAPES = ("circle", "rounded", "squircle", "hexagon", "octagon", "diamond")
+
+
+def styled(item, **extra):
+    """A copy of a config.Item with extra attributes (style, glow ...): the ring only reads attributes, so this works
+    whatever fields config.Item has."""
+    ns = SimpleNamespace(**{f.name: getattr(item, f.name) for f in dataclasses.fields(item)})
+    for k, v in extra.items():
+        setattr(ns, k, v)
+    return ns
+
+
+def menu_with(n=3, **extra):
+    """A menu whose first slot has the extra attributes."""
+    m = make_menu(n)
+    m.items[0] = styled(m.items[0], **extra)
+    return m
+
+
+def test_shapes_lists_the_six_and_ring_still_exports_the_corner():
+    assert shapes.SHAPES == ALL_SHAPES
+    assert ring.SLOT_CORNER == shapes.SLOT_CORNER == 0.28
+
+
+def test_inside_circle_and_rounded_match_the_old_hit_tests():
+    r = 36
+    assert shapes.inside("circle", 25, 25, r) and not shapes.inside("circle", 26, 26, r)       # hypot <= r
+    assert shapes.inside("rounded", 36, 36, r) and not shapes.inside("rounded", 36.5, 0, r)    # the whole box
+
+
+def test_inside_squircle_is_between_a_circle_and_a_box():
+    r = 36
+    assert shapes.inside("squircle", 35, 0, r) and not shapes.inside("squircle", 37, 0, r)
+    assert shapes.inside("squircle", 30, 30, r) and not shapes.inside("squircle", 31, 31, r)   # 0.84 r on the diagonal
+
+
+def test_inside_hexagon_is_pointy_top_and_rejects_the_box_corner():
+    r = 36
+    assert shapes.inside("hexagon", 0, 35, r) and not shapes.inside("hexagon", 0, 37, r)       # points up and down
+    assert shapes.inside("hexagon", 31, 0, r) and not shapes.inside("hexagon", 32, 0, r)       # flat sides at 0.866 r
+    assert shapes.inside("hexagon", 31, 17, r) and not shapes.inside("hexagon", 31, 19, r)     # the slanted edge
+    assert not shapes.inside("hexagon", 28, 28, r)                                             # a box corner
+
+
+def test_inside_octagon_is_flat_top_with_cut_corners():
+    r = 36
+    assert shapes.inside("octagon", 36, 10, r) and not shapes.inside("octagon", 37, 0, r)
+    assert shapes.inside("octagon", 25, 25, r) and not shapes.inside("octagon", 26, 26, r)     # corner cut at 1.414 r
+
+
+def test_inside_diamond_reaches_past_r_on_the_axes_only():
+    r = 36
+    assert shapes.inside("diamond", 41, 0, r) and not shapes.inside("diamond", 42, 0, r)
+    assert shapes.inside("diamond", 20, 20, r) and not shapes.inside("diamond", 21, 21, r)
+    assert not shapes.inside("diamond", 36, 36, r)
+
+
+def test_an_unknown_shape_is_a_circle():
+    assert shapes.inside("blob", 25, 25, 36) and not shapes.inside("blob", 26, 26, 36)
+
+
+def test_circle_and_rounded_draw_with_the_pillow_calls_the_ring_always_made():
+    for shape in ("circle", "rounded"):
+        a, b = Image.new("RGBA", (200, 200)), Image.new("RGBA", (200, 200))
+        shapes.draw(ImageDraw.Draw(a), shape, 100.0, 100.0, 60.0, 0.28, grow=7.5, fill=(10, 20, 30, 200),
+                    outline=(200, 100, 50, 255), width=5)
+        box = (100.0 - 67.5, 100.0 - 67.5, 100.0 + 67.5, 100.0 + 67.5)
+        d = ImageDraw.Draw(b)
+        if shape == "circle":
+            d.ellipse(box, fill=(10, 20, 30, 200), outline=(200, 100, 50, 255), width=5)
+        else:
+            d.rounded_rectangle(box, radius=(box[2] - box[0]) * 0.28, fill=(10, 20, 30, 200),
+                                outline=(200, 100, 50, 255), width=5)
+        assert a.tobytes() == b.tobytes()
+
+
+def test_the_icon_mask_of_a_circle_and_a_rounded_square_is_what_the_ring_always_used():
+    for shape in ("circle", "rounded"):
+        want = Image.new("L", (80, 80), 0)
+        d = ImageDraw.Draw(want)
+        if shape == "circle":
+            d.ellipse((0, 0, 79, 79), fill=255)
+        else:
+            d.rounded_rectangle((0, 0, 79, 79), radius=79 * 0.28, fill=255)
+        assert shapes.icon_mask(shape, 80).tobytes() == want.tobytes()
+
+
+@pytest.mark.parametrize("shape", ALL_SHAPES)
+def test_every_shape_draws_a_rim_around_a_fill_and_masks_an_icon(shape):
+    im = Image.new("RGBA", (200, 200))
+    shapes.draw(ImageDraw.Draw(im), shape, 100, 100, 60, 0.28, fill=(0, 0, 255, 255), outline=(255, 0, 0, 255),
+                width=6)
+    assert im.getpixel((100, 100)) == (0, 0, 255, 255) and im.getpixel((2, 2)) == (0, 0, 0, 0)
+    assert any(im.getpixel((x, 100)) == (255, 0, 0, 255) for x in range(100, 180))      # a rim between fill and edge
+    mask = shapes.icon_mask(shape, 80)
+    assert mask.size == (80, 80) and mask.getpixel((40, 40)) == 255 and mask.getbbox() is not None
+    assert shapes.inside(shape, 0, 0, 1) and shapes.pad_extra(shape, 200) >= 0 and 0.4 < shapes.badge(shape) < 0.8
+
+
+def test_the_rim_is_even_on_a_polygon_and_zero_width_means_no_rim():
+    im = Image.new("RGBA", (200, 200))
+    shapes.draw(ImageDraw.Draw(im), "hexagon", 100, 100, 60, fill=(0, 0, 255, 255), outline=(255, 0, 0, 255), width=8)
+    top = [y for y in range(0, 100) if im.getpixel((100, y)) == (255, 0, 0, 255)]
+    side = [x for x in range(100, 200) if im.getpixel((x, 100)) == (255, 0, 0, 255)]
+    assert 6 <= len(top) <= 10 and 6 <= len(side) <= 10
+    flat = Image.new("RGBA", (200, 200))
+    shapes.draw(ImageDraw.Draw(flat), "hexagon", 100, 100, 60, fill=(0, 0, 255, 255), outline=(255, 0, 0, 255),
+                width=0)
+    assert (255, 0, 0, 255) not in {flat.getpixel((100, y)) for y in range(200)}
+    assert flat.getpixel((100, 100)) == (0, 0, 255, 255)
+
+
+def test_a_grown_polygon_is_bigger_by_the_same_distance_on_each_edge():
+    plain, grown = Image.new("RGBA", (300, 300)), Image.new("RGBA", (300, 300))
+    for im, g in ((plain, 0), (grown, 12)):
+        shapes.draw(ImageDraw.Draw(im), "octagon", 150, 150, 60, grow=g, fill=(255, 255, 255, 255))
+    pb, gb = plain.getchannel("A").getbbox(), grown.getchannel("A").getbbox()
+    assert abs((gb[3] - gb[1]) - (pb[3] - pb[1]) - 24) <= 2 and abs((gb[2] - gb[0]) - (pb[2] - pb[0]) - 24) <= 2
+
+
+def test_only_a_diamond_needs_extra_canvas():
+    assert [shapes.pad_extra(s, 240) for s in ALL_SHAPES] == [0.0, 0.0, 0.0, 0.0, 0.0, pytest.approx(18.0)]
+
+
+def test_every_shape_renders_a_distinct_sprite_and_a_whole_ring():
+    menu = make_menu(5)
+    seen = {}
+    for shape in ALL_SHAPES:
+        r = prepared(menu, slot_shape=shape)
+        idle, hover = r.sprites[0]
+        assert idle.getchannel("A").getbbox() is not None and hover.getchannel("A").getbbox() is not None
+        seen[shape] = idle.tobytes()
+        assert ring.Ring.preview(menu, make_cfg(slot_shape=shape), lambda it: None, hover=1).size[0] > 0
+    assert len(set(seen.values())) == 6
+
+
+def test_a_diamond_sprite_has_room_for_its_tips_and_the_others_keep_the_circle_size():
+    sizes = {shape: prepared(make_menu(4), slot_shape=shape).sprites[0][0].size[0] for shape in ALL_SHAPES}
+    assert len({sizes[s] for s in ALL_SHAPES if s != "diamond"}) == 1 and sizes["diamond"] > sizes["circle"]
+
+
+@pytest.mark.parametrize("shape,hit", [("circle", True), ("rounded", True), ("squircle", True), ("hexagon", False),
+                                       ("octagon", True), ("diamond", False)])
+def test_a_slot_is_hit_where_its_shape_is(shape, hit):
+    r = prepared(make_menu(4), slot_shape=shape)
+    r.centre = (0, 0)
+    cx, cy = r.seats[1][0] * r.R, r.seats[1][1] * r.R
+    assert r._hit(cx, cy) == ((1,), "disc")
+    off = r.slot * 0.35                                       # on the box's diagonal, out towards its corner
+    assert (r._hit(cx + off, cy + off)[1] == "disc") == hit
+
+
+def test_a_slot_with_its_own_shape_is_hit_in_that_shape():
+    menu = menu_with(4, style={"slot_shape": "diamond"})
+    r = prepared(menu)
+    r.centre = (0, 0)
+    ux, uy = r.seats[0]
+    top = (ux * r.R, uy * r.R)
+    assert r._hit(top[0] + r.slot * 0.55, top[1])[1] == "disc"      # a diamond's tip reaches past a circle's edge
+    assert r._hit(top[0] + r.slot * 0.4, top[1] + r.slot * 0.4)[1] != "disc"
+
+
+# --- per-slot style ----------------------------------------------------------------------------
+def slot_px(r, i=0, hover=False, dx=0, dy=0):
+    sprite = r.sprites[i][1 if hover else 0]
+    n = sprite.size[0]
+    return sprite.getpixel((n // 2 + dx, n // 2 + dy))
+
+
+def _rgb_of(hexcol):
+    return tuple(int(hexcol.lstrip("#")[i:i + 2], 16) for i in (0, 2, 4))
+
+
+def test_a_slot_style_leaves_its_neighbours_byte_equal():
+    base = prepared(make_menu(4))
+    st = prepared(menu_with(4, style={"slot_shape": "hexagon", "fill_color": "#ff0000", "border_color": "#00ff00",
+                                      "border_width": 5, "icon_scale": 0.6, "label_color": "#0000ff",
+                                      "glow_color": "#ffff00"}))
+    assert st.sprites[0][0].tobytes() != base.sprites[0][0].tobytes()
+    assert st.sprites[0][1].tobytes() != base.sprites[0][1].tobytes()
+    for i in (1, 2, 3):
+        assert st.sprites[i][0].tobytes() == base.sprites[i][0].tobytes()
+        assert st.sprites[i][1].tobytes() == base.sprites[i][1].tobytes()
+        assert st.labels[i][0].tobytes() == base.labels[i][0].tobytes()
+
+
+def test_a_slot_style_is_part_of_the_sprite_key():
+    a, b = prepared(make_menu(3)), prepared(menu_with(3, style={"border_width": 4}))
+    assert a._sprite_key() != b._sprite_key()
+    c = prepared(menu_with(3, style={"border_width": 5}))
+    assert b._sprite_key() != c._sprite_key()
+    same = prepared(menu_with(3, style={"border_width": 5}))
+    assert same._sprite_key() == c._sprite_key()
+
+
+def test_a_slot_fill_colour_replaces_the_theme_background():
+    base, red = prepared(make_menu(3)), prepared(menu_with(3, style={"fill_color": "#ff0000"}))
+    r, g, b, a = slot_px(red, 0, dx=33)            # inside the disc, outside the placeholder gradient
+    br, bg, bb, ba = slot_px(base, 0, dx=33)
+    assert r > br + 30 and a > 0
+
+
+def test_a_slot_fill_colour_can_name_a_theme_role():
+    by_role = prepared(menu_with(3, style={"fill_color": "accent"}))
+    by_hex = prepared(menu_with(3, style={"fill_color": config.DEFAULT_RING["colors"]["accent"]}))
+    assert by_role.sprites[0][0].tobytes() == by_hex.sprites[0][0].tobytes()
+
+
+def test_a_slot_border_colour_and_width_set_the_idle_rim():
+    r = prepared(menu_with(3, style={"border_color": "#00ff00", "border_width": 6}))
+    n = r.sprites[0][0].size[0]
+    px = r.sprites[0][0].getpixel((n // 2 + int(r.slot * 1.12 / 2) - 3, n // 2))      # the middle of the 6 px rim
+    assert px[1] > 150 and px[0] < 100 and px[3] > 200
+
+
+def test_border_width_zero_draws_no_rim_and_the_hover_keeps_one():
+    plain, flat = prepared(make_menu(3)), prepared(menu_with(3, style={"border_width": 0}))
+    assert flat.sprites[0][0].tobytes() != plain.sprites[0][0].tobytes()
+    assert flat.sprites[0][1].tobytes() == plain.sprites[0][1].tobytes()       # the hover rim is at least 2 px
+
+
+def test_the_global_border_width_changes_the_rim_and_2_is_todays():
+    thin, thick = prepared(make_menu(3), border_width=1), prepared(make_menu(3), border_width=6)
+    assert thin.sprites[0][0].tobytes() != thick.sprites[0][0].tobytes()
+    assert prepared(make_menu(3), border_width=2).sprites[0][0].tobytes() == prepared(make_menu(3)).sprites[0][0].tobytes()
+
+
+def test_a_tinted_idle_rim_is_a_step_wider_than_the_base_rim():
+    def tagged(**over):
+        m = make_menu(3)
+        m.items[0] = dataclasses.replace(m.items[0], color="#ff0000", tag="t")
+        return prepared(m, **over)
+    assert tagged(border_width=3).sprites[0][0].tobytes() != tagged().sprites[0][0].tobytes()
+    assert tagged(border_width=0).sprites[0][0].tobytes() != tagged().sprites[0][0].tobytes()   # 0: no rim, tinted or not
+
+
+def test_icon_scale_shrinks_the_icon_inside_its_slot():
+    def icon(it):
+        return Image.new("RGBA", (64, 64), (255, 255, 255, 255)) if it.label == "Item 0" else None
+    full, half = prepared(make_menu(3), icon), prepared(menu_with(3, style={"icon_scale": 0.5}), icon)
+    near = int(full.slot * 0.4)
+    assert min(slot_px(full, 0, dx=near)[:3]) > 250      # the full icon reaches 0.4 slot widths out
+    assert min(slot_px(half, 0, dx=near)[:3]) < 250
+    assert min(slot_px(half, 0)[:3]) > 250
+    assert prepared(make_menu(3), icon, icon_scale=0.5).sprites[0][0].tobytes() == half.sprites[0][0].tobytes()
+
+
+def _pixels(im):
+    raw = im.tobytes()
+    return zip(raw[0::4], raw[1::4], raw[2::4], raw[3::4])
+
+
+def _ink(sprite):
+    """Mean colour of a label's solid pixels (the text; the pill is see-through)."""
+    px = [p for p in _pixels(sprite) if p[3] >= 200]
+    return tuple(sum(p[k] for p in px) / len(px) for k in range(3)) if px else None
+
+
+def test_a_slot_label_colour_wins_over_the_look_over_the_theme_text():
+    text = _rgb_of(config.DEFAULT_RING["colors"]["text"])
+    a = prepared(make_menu(3))
+    b = prepared(make_menu(3), label_color="#ff0000")
+    c = prepared(menu_with(3, style={"label_color": "#00ff00"}), label_color="#ff0000")
+    assert max(abs(x - y) for x, y in zip(_ink(a.labels[0][0]), text)) < 40
+    ar, ag, ab = _ink(b.labels[0][0])
+    assert ar > 200 and ag < 60 and ab < 60
+    cr, cg, cb = _ink(c.labels[0][0])
+    assert cg > 200 and cr < 60 and cb < 60
+    assert c.labels[1][0].tobytes() == b.labels[1][0].tobytes()            # the other slots follow the look
+    assert a.labels[0][1].tobytes() == c.labels[0][1].tobytes()            # the hover name keeps its accent
+
+
+def test_a_look_label_colour_can_be_a_theme_role():
+    a = prepared(make_menu(2), label_color="accent")
+    r, g, b = _ink(a.labels[0][0])
+    assert r > 200 and b < 120
+
+
+def test_a_slot_glow_colour_colours_the_hover_glow_and_beats_the_legacy_glow():
+    both = prepared(menu_with(3, glow="#0000ff", style={"glow_color": "#00ff00"}))
+    gr, gg, gb, ga = _hover_edge(both)
+    assert gg > gr and gg > gb and ga > 0                      # green: the style wins over the old glow field
+    legacy = prepared(menu_with(3, glow="#0000ff"))
+    lr, lg, lb, la = _hover_edge(legacy)
+    assert lb > lr and lb > lg                                  # blue: the old glow field still works
+    role = prepared(menu_with(3, style={"glow_color": "highlight"}))
+    assert _hover_edge(role)[:3] != _hover_edge(prepared(make_menu(3)))[:3]
+
+
+def test_a_style_glow_colour_shows_the_idle_halo_and_a_look_glow_colour_alone_does_not():
+    plain = prepared(make_menu(3), tag_colors="glow")
+    styled_ = prepared(menu_with(3, style={"glow_color": "#0000ff"}), tag_colors="glow")
+    assert styled_.sprites[0][0].tobytes() != plain.sprites[0][0].tobytes()
+    blue = prepared(make_menu(3), tag_colors="glow", glow_color="#0000ff")
+    r, g, b, a = _hover_edge(blue)
+    assert b > r and a > 0                                             # the hover glow takes the look's colour
+    assert blue.sprites[0][0].tobytes() == plain.sprites[0][0].tobytes()      # but no halo from it alone
+
+
+def test_the_glow_opacity_scales_the_hover_glow():
+    low, mid, high = (prepared(make_menu(3), glow_opacity=v) for v in (0.2, 0.55, 1.0))
+    assert _hover_edge(low)[3] < _hover_edge(mid)[3] < _hover_edge(high)[3]
+    assert mid.sprites[0][1].tobytes() == prepared(make_menu(3)).sprites[0][1].tobytes()   # 0.55 is today's look
+    assert prepared(make_menu(3), glow_opacity=0.0).sprites[0][1].tobytes() != mid.sprites[0][1].tobytes()
+
+
+def test_a_tag_slot_takes_the_base_fill_of_its_style():
+    plain = menu_with(3, color="#ff0000", tag="t")
+    white = menu_with(3, color="#ff0000", tag="t", style={"fill_color": "#ffffff"})
+    assert prepared(white).sprites[0][0].tobytes() != prepared(plain).sprites[0][0].tobytes()
+
+
+# --- a menu's own look -------------------------------------------------------------------------
+def test_a_menu_look_overrides_colours_and_geometry_but_not_behaviour():
+    menu = make_menu(4)
+    menu.look = {"radius": 200, "slot": 60, "hub": 20, "colors": {"accent": "#00ff00"}, "flick": False, "tap_ms": 1}
+    r = prepared(menu)
+    assert r.R == 200 and r.slot == 60 and r.look.hub == 20 and r.look.accent == "#00ff00"
+    assert r.cfg["flick"] is True and r.cfg["tap_ms"] == 250 and r.cfg["radius"] == 145     # behaviour stays global
+    assert r.look.bg == config.DEFAULT_RING["colors"]["bg"]                                    # colours merge per key
+
+
+def test_a_menu_look_changes_the_sprites_and_a_plain_menu_is_unchanged():
+    a = prepared(make_menu(4))
+    menu = make_menu(4)
+    menu.look = {"slot_shape": "hexagon"}
+    b = prepared(menu)
+    assert a.sprites[0][0].tobytes() != b.sprites[0][0].tobytes() and a._sprite_key() != b._sprite_key()
+    assert prepared(make_menu(4)).sprites[0][0].tobytes() == a.sprites[0][0].tobytes()
+
+
+def test_no_look_and_an_empty_look_are_the_same_ring():
+    menu = make_menu(4)
+    menu.look = {}
+    assert prepared(menu).sprites[0][0].tobytes() == prepared(make_menu(4)).sprites[0][0].tobytes()
+    menu.look = None
+    assert prepared(menu).look.slot_shape == "circle"
+
+
+def test_a_look_is_read_only_and_ignores_nonsense():
+    r = prepared(make_menu(2), slot_shape="blob", hub_style="swirl", border_width="wide", icon_scale=7)
+    assert r.look.slot_shape == "circle" and r.look.hub_style == "dot"
+    assert r.look.border_width == 2 and r.look.icon_scale == 1.0
+    with pytest.raises(AttributeError):
+        r.look.slot = 5
+
+
+def test_roles_resolve_against_the_theme_and_hex_passes_through():
+    col = {"bg": "#111111", "accent": "#222222", "highlight": "#333333", "text": "#444444", "lines": "#555555"}
+    assert [ring._role(v, col) for v in ("bg", "accent", "highlight", "text", "lines")] == [
+        "#111111", "#222222", "#333333", "#444444", "#555555"]
+    assert ring._role("#abcdef", col) == "#abcdef" and ring._role("", col) == "" and ring._role(None, col) == ""
+    assert ring._role("lines", {"accent": "#222222"}) == "#222222"      # lines falls back to the accent
+
+
+def test_a_look_names_its_colour_roles_for_the_hub_and_the_labels():
+    r = prepared(make_menu(2), hub_color="highlight", label_color="accent", glow_color="highlight")
+    col = r.cfg["colors"]
+    assert (r.look.hub_color, r.look.label_color, r.look.glow_color) == (col["highlight"], col["accent"],
+                                                                         col["highlight"])
+    plain = prepared(make_menu(2))
+    assert plain.look.hub_color == col["accent"] and plain.look.glow_color == "" and plain.look.label_color == col["text"]
+
+
+# --- fans with a look of their own -------------------------------------------------------------
+def fan_ring(fan_look=None, ring_look=None):
+    sub = SimpleNamespace(id="s", title="Sub", animation="", fan=True,
+                          items=[config.Item(f"S{i}", "brush", {"brush": f"S{i}"}) for i in range(3)])
+    if fan_look is not None:
+        sub.look = fan_look
+    menu = make_menu(4)
+    menu.items[1] = config.Item("Sub", "menu", {"menu": "s"})
+    if ring_look is not None:
+        menu.look = ring_look
+    r = ring.Ring(menu, make_cfg(), lambda it: None, lambda *a: None, lambda m: None, held=False,
+                  submenus=lambda mid: sub if mid == "s" else None)
+    r._geometry(1.0)
+    r._relayout()
+    r._prepare()
+    return r, r._fan((1,))
+
+
+def test_a_fan_without_a_look_takes_the_rings():
+    r, fan = fan_ring()
+    assert fan.look is r.look
+    r2, fan2 = fan_ring(ring_look={"slot_shape": "diamond"})
+    assert fan2.look is r2.look and fan2.look.slot_shape == "diamond"
+
+
+def test_a_fan_with_its_own_look_is_drawn_in_it_and_the_ring_is_not():
+    r, plain = fan_ring()
+    r2, fan = fan_ring(fan_look={"slot_shape": "hexagon", "colors": {"accent": "#00ff00"}})
+    assert fan.look is not r2.look and fan.look.slot_shape == "hexagon" and r2.look.slot_shape == "circle"
+    assert fan.look.accent == "#00ff00" and fan.look.bg == r2.look.bg
+    assert fan.sprites[0][0].tobytes() != plain.sprites[0][0].tobytes()
+    assert r2.sprites[0][0].tobytes() == r.sprites[0][0].tobytes()            # the ring's own slots are untouched
+    assert r2.cfg == r.cfg                                                    # and the settings were never swapped
+
+
+def test_a_fan_slot_keeps_its_size_whatever_its_look_says():
+    r, fan = fan_ring(fan_look={"slot": 150, "radius": 400})
+    assert fan.cslot == pytest.approx(r.slot * ring.FAN_SLOT)
+    assert fan.sprites[0][0].size[0] == fan_ring()[1].sprites[0][0].size[0]
+
+
+def test_fan_lines_use_the_fans_lines_colour():
+    r, plain = fan_ring()
+    r2, own = fan_ring(fan_look={"colors": {"lines": "#00ff00"}})
+    assert own.lines[0].tobytes() != plain.lines[0].tobytes()
+
+
+def test_a_fan_is_hit_in_its_own_shape():
+    r, fan = fan_ring(fan_look={"slot_shape": "diamond"})
+    plain_ring, plain = fan_ring()
+    rr = fan.cslot / 2 * 1.12 + 4
+    for ring_, f in ((r, fan), (plain_ring, plain)):
+        ring_.open = [1]
+        ring_.centre = (0, 0)
+    px, py = fan.pos[0]
+    assert r._hit(px + rr * 1.1, py)[0] == (1, 0)            # past a circle's edge, in the tip
+    assert plain_ring._hit(plain.pos[0][0] + rr * 1.1, plain.pos[0][1])[0] != (1, 0)
+
+
+# --- hub styles --------------------------------------------------------------------------------
+def test_each_hub_style_draws_a_different_hub():
+    menu = make_menu(4, title="Tools")
+    dots = {st: prepared(menu, hub=30, hub_style=st)._dot.tobytes() for st in ring.HUB_STYLES}
+    assert len(set(dots.values())) == 4
+    for st in ring.HUB_STYLES:
+        assert prepared(menu, hub=30, hub_style=st)._dot.getchannel("A").getbbox() is not None
+
+
+def test_a_ring_hub_is_hollow_and_a_dot_is_not():
+    menu = make_menu(4)
+    hollow = prepared(menu, hub=40, hub_style="ring", hub_glow=0.0)._dot
+    solid = prepared(menu, hub=40, hub_style="dot")._dot
+    c = hollow.size[0] // 2
+    assert hollow.getpixel((c, c))[3] == 0 and solid.getpixel((c, c))[3] == 255
+    assert hollow.getpixel((c + 18, c))[3] > 200                                     # the rim, 20 px out
+
+
+def test_the_hub_takes_its_colour_role_and_glow():
+    plain = prepared(make_menu(4), hub=30)
+    hi = prepared(make_menu(4), hub=30, hub_color="highlight")
+    c = plain._dot.size[0] // 2
+    assert plain._dot.getpixel((c, c))[:3] == _rgb_of(config.DEFAULT_RING["colors"]["accent"])
+    assert hi._dot.getpixel((c, c))[:3] == _rgb_of(config.DEFAULT_RING["colors"]["highlight"])
+    none = prepared(make_menu(4), hub=30, hub_glow=0.0)._dot
+    edge = (c + 18, c)
+    assert none.getpixel(edge)[3] == 0 and plain._dot.getpixel(edge)[3] > 0          # no glow outside the dot
+
+
+def test_the_default_hub_is_the_dot_it_always_was():
+    assert prepared(make_menu(4))._dot.tobytes() == prepared(make_menu(4), hub_style="dot", hub_color="accent",
+                                                              hub_glow=1.0)._dot.tobytes()
+
+
+def test_no_hub_is_no_dot_for_every_style():
+    for st in ring.HUB_STYLES:
+        assert prepared(make_menu(4), hub=0, hub_style=st)._dot is None
+
+
+def test_the_icon_hub_shows_the_menus_icon_or_a_monogram_of_its_title():
+    menu = make_menu(4, title="Brush Tools")
+    menu.icon = "tools.png"
+    seen = []
+
+    def icon_for(it):
+        seen.append((it.kind, it.icon, it.label))
+        return Image.new("RGBA", (64, 64), (0, 255, 0, 255)) if it.kind == "menu" else None
+    withicon = prepared(menu, icon_for, hub=40, hub_style="icon")
+    assert ("menu", "tools.png", "Brush Tools") in seen
+    c = withicon._dot.size[0] // 2
+    assert withicon._dot.getpixel((c, c))[:3] == (0, 255, 0)
+    asked = []
+    mono = prepared(make_menu(4, title="Brush Tools"), lambda it: asked.append(it.kind), hub=40, hub_style="icon")
+    assert "menu" not in asked                                                 # no icon set: icon_for is not asked
+    other = prepared(make_menu(4, title="Zed"), hub=40, hub_style="icon")
+    assert mono._dot.tobytes() != withicon._dot.tobytes() and mono._dot.tobytes() != other._dot.tobytes()
+    gone = make_menu(4, title="Brush Tools")
+    gone.icon = "gone.png"                                                     # an icon that is not found: monogram
+    assert prepared(gone, lambda it: None, hub=40, hub_style="icon")._dot.tobytes() == mono._dot.tobytes()
+
+
+def test_the_hub_icon_is_part_of_the_sprite_key():
+    menu = make_menu(4)
+    menu.icon = "a.png"
+    red = prepared(menu, lambda it: Image.new("RGBA", (8, 8), (255, 0, 0, 255)) if it.kind == "menu" else None,
+                   hub=30, hub_style="icon")
+    blue = prepared(menu, lambda it: Image.new("RGBA", (8, 8), (0, 0, 255, 255)) if it.kind == "menu" else None,
+                    hub=30, hub_style="icon")
+    assert red._sprite_key() != blue._sprite_key() and red._dot is not blue._dot
+    assert prepared(make_menu(4), hub=30, hub_style="dot")._sprite_key()[4] is None
+
+
+def test_the_hub_sets_the_title_push_and_where_the_spokes_start():
+    draw = ring.ImageDraw.Draw(Image.new("RGBA", (1, 1)))
+    for hub, dy in ((10, 18), (40, 33)):                                       # pinned: hub 10 and 40
+        assert prepared(make_menu(4, title="Tools"), hub=hub)._caption(draw)[0][2] == dy
+    # a hollow hub shows what is inside it, so spokes start at its edge; under a solid dot they stay as they were
+    hollow = prepared(make_menu(4), hub=40, hub_style="ring")
+    solid = prepared(make_menu(4), hub=40)
+    assert hollow._static().tobytes() != solid._static().tobytes()
+    assert solid._static().tobytes() == prepared(make_menu(4), hub=40, hub_color="text")._static().tobytes()
+
+
+def test_the_ripples_and_dot_take_the_hub_colour():
+    r = prepared(make_menu(4), hub_color="#00ff00", hub=30, animation="ripple")
+    r._relayout()
+    r.t0 = 0.0
+    frame = r._compose(0.2)
+    assert any(p[1] > 200 and p[0] < 60 and p[3] > 100 for p in _pixels(frame))     # the hub and its ripple are green
+
+
+# --- the More slot -----------------------------------------------------------------------------
+def test_a_more_slot_is_three_dots_with_no_submenu_badge():
+    more, plain_sub = config.Item("More", "menu", {"menu": "more:m"}), config.Item("More", "menu", {"menu": "tools"})
+    a, b = make_menu(3), make_menu(3)
+    a.items.append(more)
+    b.items.append(plain_sub)
+    ra, rb = prepared(a), prepared(b)
+    assert ra.sprites[3][0].tobytes() != rb.sprites[3][0].tobytes()
+    n = ra.sprites[3][0].size[0]
+    bx = n // 2 + int(ra.slot * 1.12 / 2 * 0.62)
+    assert ra.sprites[3][0].getpixel((bx, bx)) != rb.sprites[3][0].getpixel((bx, bx))   # the badge is on the other only
+    assert ring._is_more(more) and not ring._is_more(plain_sub)
+    assert ring.Ring.preview(a, make_cfg(), lambda it: None).getchannel("A").getbbox() is not None
+
+
+def test_the_more_glyph_draws_three_separate_dots():
+    im = Image.new("RGBA", (60, 20))
+    ring._glyph_more(ImageDraw.Draw(im), 30, 10, 40, (255, 255, 255, 255))
+    row = [im.getpixel((x, 10))[3] > 0 for x in range(60)]
+    assert sum(1 for i in range(1, 60) if row[i] and not row[i - 1]) == 3
+
+
+# --- the sprite key ----------------------------------------------------------------------------
+NEW_LOOK_KEYS = ("slot_shape", "slot_corner", "border_width", "icon_scale", "hub", "hub_style", "hub_color", "hub_glow",
+                 "glow_color", "glow_opacity", "label_color", "labels")
+
+
+def test_every_ring_setting_is_classified_as_in_the_sprites_or_not_exactly_once():
+    keys = set(config.DEFAULT_RING) | set(NEW_LOOK_KEYS)
+    in_key, out = set(ring.SPRITE_LOOK_KEYS), set(ring.NOT_IN_SPRITES)
+    assert len(ring.SPRITE_LOOK_KEYS) == len(in_key) and not in_key & out, in_key & out
+    assert keys <= in_key | out, sorted(keys - in_key - out)
+
+
+def test_each_sprite_setting_changes_the_key_and_each_other_one_does_not():
+    base = prepared(make_menu(3))._sprite_key()
+    changes = {"slot": 60, "slot_shape": "squircle", "slot_corner": 0.4, "border_width": 4, "icon_scale": 0.7,
+               "hub": 22, "hub_style": "ring", "hub_color": "text", "hub_glow": 0.5, "glow_color": "#123456",
+               "glow_opacity": 0.2, "labels": "none", "label_color": "accent", "tag_colors": "glow",
+               "tag_glow_opacity": 0.1, "tag_tint_opacity": 0.9, "tag_tint_style": "flat", "tag_tint_blend": "overlay",
+               "theme": "light"}
+    for k, v in changes.items():
+        assert prepared(make_menu(3), **{k: v})._sprite_key() != base, k
+    same = {"radius": 200, "dead_zone": 60, "tap_ms": 5, "timeout_s": 3, "animation": "pop", "flick": False,
+            "hover_submenus": False, "tag_band": "wide", "tag_band_opacity": 0.1}
+    for k, v in same.items():
+        assert prepared(make_menu(3), **{k: v})._sprite_key() == base, k
+    col = dict(config.DEFAULT_RING["colors"])
+    for role in ("bg", "accent", "highlight", "text"):
+        assert prepared(make_menu(3), colors=dict(col, **{role: "#010203"}))._sprite_key() != base, role
+
+
+def test_the_key_starts_with_the_menu_id_and_has_the_scale_fourth():
+    key = prepared(make_menu(2, mid="abc"))._sprite_key()
+    assert key[0] == "abc" and key[3] == 1.0
+
+
+# --- the cache keeps one entry per menu and scale ----------------------------------------------
+def test_a_changed_setting_replaces_the_menus_entry_instead_of_adding_one():
+    menu = make_menu(3, mid="slider")
+    for slot in (40, 50, 60, 70, 80):
+        prepared(menu, slot=slot)
+    assert [k[0] for k in ring._sprite_cache] == ["slider"]
+
+
+def test_another_scale_of_the_same_menu_lives_next_to_it():
+    menu = make_menu(3, mid="two")
+    for scale in (1.0, 1.5):
+        r = make_ring(menu)
+        r._geometry(scale)
+        r._prepare()
+    assert sorted(k[3] for k in ring._sprite_cache) == [1.0, 1.5]
+    r = make_ring(menu, slot=50)
+    r._geometry(1.5)
+    r._prepare()
+    assert sorted(k[3] for k in ring._sprite_cache) == [1.0, 1.5]
+
+
+def test_replacing_does_not_push_other_menus_out_of_the_cache():
+    for i in range(7):
+        prepared(make_menu(2, mid=f"keep{i}"))
+    for slot in range(40, 60, 4):
+        prepared(make_menu(2, mid="dragged"), slot=slot)
+    assert {k[0] for k in ring._sprite_cache} == {f"keep{i}" for i in range(7)} | {"dragged"}

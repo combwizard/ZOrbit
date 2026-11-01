@@ -11,12 +11,12 @@ These are on the Settings screen in Studio, and under `"ring"` in `radial.json`.
 | `radius` (**Ring radius**; **Ring size** in Simple mode) | 145 | 60 to 400 | Distance from the centre to the slots, in pixels. This is the smallest the ring gets: a menu with many items spreads wider. |
 | `slot` (**Slot size**) | 72 | 32 to 160 | Diameter of each icon disc, or the side of a rounded square. |
 | `dead_zone` (**Dead zone**) | 38 | 10 to 120 | Radius around the centre where no slot is picked. |
-| `hub` (**Hub**) | 10 | 0 to 40 | Diameter of the accent dot in the middle of the ring, in pixels. 0 draws no dot. A larger dot moves the menu title and hint down to keep clear of it. It does not change the dead zone. |
+| `hub` (**Hub**) | 10 | 0 to 40 | Diameter of the hub in the middle of the ring, in pixels. 0 draws no hub. A larger hub moves the menu title and hint down to keep clear of it. It does not change the dead zone. See [Hub styles](#hub-styles). |
 | `tap_ms` (**Tap time**) | 250 | 0 to 1000 | A hotkey press shorter than this is a tap. |
 | `timeout_s` (**Auto-close**) | 20 | 2 to 120 | An open ring closes itself after this many seconds. |
 | `animation` (**Open animation**) | `smooth` | see [Open animations](#open-animations) | The open animation. |
 | `labels` (**Labels**: **Icon and name**, **Icon only**) | `name` | `name`, `none` | Show names under the slots, or icons only. A name sits on a soft pill (dark in the Dark theme, light in the Light theme), so it stays readable when a neighbouring slot is close. |
-| `slot_shape` (**Slot shape**: **Circle**, **Rounded square**) | `circle` | `circle`, `rounded` | The shape of every slot. See [Slot shape](#slot-shape). |
+| `slot_shape` (**Slot shape**) | `circle` | `circle`, `rounded`, `squircle`, `hexagon`, `octagon`, `diamond` | The shape of every slot. See [Slot shapes](#slot-shapes). |
 | `flick` (**Flick to pick**) | `true` | `true`, `false` | Moving out past a slot picks it without releasing or clicking. |
 | `hover_submenus` (**Open submenus on hover**) | `true` | `true`, `false` | Reaching a submenu slot opens the submenu, centred on that slot. |
 | `tag_colors` (**Tag colours**: the **Icon tint** and **Glow** switches) | `tint` | `none`, `tint`, `glow`, `both` | Whether an item's first tag tints its icon, glows, or both. See [Tag colours](#tag-colours). |
@@ -32,11 +32,31 @@ Sizes are scaled for high-DPI screens automatically.
 The radius is a minimum. When a menu has so many items that neighbouring slots would sit closer than 1.25 slot widths apart, the ring grows until they do not. With the default slot size that starts at 10 items: 12 items make a ring about 174 pixels in radius, 24 items about 345. The Studio preview grows the same way, so lowering **Ring radius** changes nothing once a menu is past that point. Studio shows a note above the item list when that happens, and says so if the grown ring is too big for your screen. Lower **Slot size** or cut the number of items to keep the ring smaller. Names in Chinese, Japanese or Korean are drawn with Microsoft YaHei, Yu Gothic or Malgun Gothic, whichever Windows has; other names use Segoe UI.
 Studio's [Simple mode](studio.md#simple-and-full-mode) shows only some of these. Its **Ring size** slider moves `radius`, `slot` and `dead_zone` together and keeps their proportions. Full mode has the three separate sliders, and is the only mode that shows `hub`, `hover_submenus`, `tap_ms`, `timeout_s`, the `tag_` settings and `colors`. The animation, `labels`, `slot_shape`, `flick` and the theme are in both. What Simple hides keeps its value.
 
-### Slot shape
+### Slot shapes
 
-**Slot shape** is a card below **Labels** on Settings, in Simple and Full mode. **Circle** is the default. **Rounded square** draws each slot as a square with rounded corners, the same size as the circle. The icon, the hover glow, the tag colours and the submenu badge follow the shape, and a slot is picked anywhere inside its square. The names, the lines and the spacing of the ring do not change. The setting is for every menu, and for fans as well as rings.
+**Slot shape** is a card below **Labels** on Settings, in Simple and Full mode. There are six shapes:
+
+- **Circle** is the default.
+- **Rounded square** is a square with rounded corners, the same size as the circle. Its corner radius is `slot_corner`, 0 to 0.5 of the side, 0.28 by default.
+- **Squircle** is a square with soft corners, rounder than the rounded square and squarer than the circle.
+- **Hexagon** has a point at the top and bottom and flat sides left and right.
+- **Octagon** is a square with its corners cut off, flat at the top.
+- **Diamond** is a square turned on its corner. Its tips reach a little past where a circle's edge would be, so a diamond looks larger than the other shapes at the same slot size.
+
+The icon, the hover glow, the tag colours and the submenu badge follow the shape, and a slot is picked where the shape is (a rounded square answers anywhere in its box). The names, the lines and the spacing of the ring do not change. The setting is for every menu, and for fans as well as rings.
 
 ![The Brushes ring with Rounded square slots, ClayBuildup hovered](images/slot-shapes.png)
+
+### Hub styles
+
+The hub is drawn in one of four styles, all the same size (`hub`) and all with a soft glow in the hub colour:
+
+- `dot` is a filled dot in the accent colour. It is the default.
+- `disc` is a disc in the theme's background colour with a rim in the hub colour.
+- `ring` is the rim alone, so the middle of the ring shows through it. The spokes start at its edge.
+- `icon` is a round disc showing the menu's icon. A menu with no icon, or an icon that cannot be found, shows the first letters of its title instead.
+
+`hub_color` sets the colour of the dot, the rim and the glow. It takes a theme colour (`accent`, `highlight`, `text`, `lines`, `bg`) or a `#rrggbb` colour, and `accent` is the default. `hub_glow` is how strong the glow is, 0 to 1 (1 by default; 0 turns it off). The open animations that start from the middle (**Ripple** and **Breath**) start from the hub's edge and use its colour.
 
 ### Theme
 
