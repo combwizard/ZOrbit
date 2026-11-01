@@ -51,6 +51,11 @@ All notable changes to this project are listed here. The format follows
 - When an update is available, the version chip stacks your version above the new one, with the arrow beside them, so
   it takes half the width.
 
+### Fixed
+
+- Studio no longer opens as an empty dark window when it was closed maximised. The page now draws in a window that
+  opens maximised.
+
 ### Removed
 
 - The path to `radial.json` and its copy button are gone from Studio's top bar. With **Unsaved changes** showing, they

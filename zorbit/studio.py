@@ -2219,7 +2219,13 @@ def _frame_and_show(window, placement, api=None):
                                  theme=theme.preset(_theme_now())["window"])
     window.events.loaded.wait(3)
     if hwnd:
-        winframe.show_placed(hwnd, bool(placement and placement[4]))
+        maxed = bool(placement and placement[4])
+        winframe.show_placed(hwnd, maxed)
+        if maxed:
+            # Shown maximised with plain Win32, WinForms never marks the form visible, so WebView2 keeps its page
+            # hidden and draws nothing (a dark, empty window). pywebview's show() on the already maximised window
+            # only fixes that state; it does not move or resize it.
+            window.show()
     else:
         window.show()
     _startup("window shown")
