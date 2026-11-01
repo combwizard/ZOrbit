@@ -5,6 +5,8 @@ import json
 import pytest
 
 import config
+import expand
+import looks
 import paths
 import tags
 import theme
@@ -26,6 +28,11 @@ def load_menus(load):
     def run(menus, tag_store=None, **top):
         return load({"menus": menus, **top}, tag_store)
     return run
+
+
+def default_look(theme_name="dark"):
+    """What the ring draws with no settings: every key at its default, the colour roles resolved."""
+    return looks.LookSet(theme=theme_name).global_look()
 
 
 def problems(cfg, text):
@@ -257,13 +264,15 @@ def test_ring_values_are_read(load_menus):
 
 
 def test_ring_defaults_when_missing(load_menus):
-    assert load_menus(GOOD_MENUS).ring == config.DEFAULT_RING
+    assert load_menus(GOOD_MENUS).ring == default_look()
 
 
 @pytest.mark.parametrize("key, value", [
     ("radius", 5), ("radius", 5000), ("slot", 10), ("dead_zone", 500), ("hub", 99), ("hub", -1),
     ("tap_ms", -1), ("timeout_s", 1),
-    ("tag_band_opacity", 1.5), ("tag_glow_opacity", -0.1), ("tag_tint_opacity", 2)])
+    ("tag_band_opacity", 1.5), ("tag_glow_opacity", -0.1), ("tag_tint_opacity", 2),
+    ("hub", 65), ("slot_corner", 0.6), ("border_width", 7), ("icon_scale", 0.4), ("hub_glow", 2),
+    ("glow_opacity", -1)])
 def test_out_of_range_ring_values_fall_back_to_the_default(load_menus, key, value):
     cfg = load_menus(GOOD_MENUS, ring={key: value})
     assert cfg.ring[key] == config.DEFAULT_RING[key]
@@ -279,7 +288,8 @@ def test_non_numeric_ring_values_fall_back_to_the_default(load_menus, key, value
 
 @pytest.mark.parametrize("key, value", [
     ("animation", "wobble"), ("labels", "icons"), ("tag_colors", "neon"), ("tag_band", "huge"),
-    ("tag_tint_style", "dotted"), ("tag_tint_blend", "screen"), ("slot_shape", "hexagon")])
+    ("tag_tint_style", "dotted"), ("tag_tint_blend", "screen"), ("slot_shape", "blob"), ("hub_style", "star"),
+    ("when_full", "never")])
 def test_unknown_ring_choices_fall_back_to_the_default(load_menus, key, value):
     cfg = load_menus(GOOD_MENUS, ring={key: value})
     assert cfg.ring[key] == config.DEFAULT_RING[key]
@@ -288,7 +298,26 @@ def test_unknown_ring_choices_fall_back_to_the_default(load_menus, key, value):
 
 def test_the_slot_shape_is_read_and_defaults_to_a_circle(load_menus):
     assert load_menus(GOOD_MENUS, ring={"slot_shape": "rounded"}).ring["slot_shape"] == "rounded"
+    assert load_menus(GOOD_MENUS, ring={"slot_shape": "hexagon"}).ring["slot_shape"] == "hexagon"
     assert load_menus(GOOD_MENUS).ring["slot_shape"] == "circle"
+
+
+def test_the_new_look_keys_are_read_from_the_ring(load_menus):
+    ring = {"slot_corner": 0.4, "border_width": 4, "icon_scale": 0.8, "hub": 64, "hub_style": "ring",
+            "hub_color": "highlight", "hub_glow": 0.5, "glow_color": "#102030", "glow_opacity": 0.2,
+            "label_color": "lines", "when_full": "more"}
+    cfg = load_menus(GOOD_MENUS, ring=ring)
+    assert not cfg.errors
+    assert cfg.ring["hub_style"] == "ring" and cfg.ring["when_full"] == "more" and cfg.ring["hub"] == 64
+    assert cfg.ring["hub_color"] == cfg.ring["colors"]["highlight"]         # roles come out as #rrggbb
+    assert cfg.ring["label_color"] == cfg.ring["colors"]["lines"]
+    assert cfg.ring["glow_color"] == "#102030"
+
+
+def test_the_default_ring_holds_roles_and_the_loaded_ring_holds_colours():
+    assert config.DEFAULT_RING["hub_color"] == "accent" and config.DEFAULT_RING["label_color"] == "text"
+    assert config.default_ring("light")["colors"] == theme.ring_colors("light")
+    assert default_look()["hub_color"] == config.DEFAULT_RING["colors"]["accent"]
 
 
 @pytest.mark.parametrize("key", ["flick", "hover_submenus"])
@@ -333,7 +362,7 @@ def test_a_colour_set_in_the_file_wins_over_the_light_default(radial_file):
 
 def test_the_dark_theme_changes_nothing(radial_file):
     cfg = config.load(radial_file({"menus": GOOD_MENUS}), theme="dark")
-    assert cfg.ring == config.DEFAULT_RING
+    assert cfg.ring == default_look()
     assert "theme" not in cfg.ring
 
 
@@ -345,7 +374,7 @@ def test_a_theme_key_in_the_file_is_an_unknown_setting(load_menus):
 
 def test_an_unknown_theme_name_loads_as_dark(radial_file):
     cfg = config.load(radial_file({"menus": GOOD_MENUS}), theme="blue")
-    assert cfg.ring == config.DEFAULT_RING
+    assert cfg.ring == default_look()
 
 
 def test_default_ring_has_the_colours_of_the_theme_and_no_theme_key():
@@ -676,20 +705,213 @@ def test_item_label_and_icon_are_kept_and_not_part_of_the_action_data(load_menus
     assert (it.label, it.icon, it.data) == ("Inflate", "Standard", {"brush": "Inflat"})
 
 
-def test_a_glow_colour_is_read_onto_the_item_and_is_not_part_of_the_action_data(load_menus):
-    cfg = load_menus({"main": one_item_menu({"brush": "Inflat", "glow": "#ff8800"}, {"brush": "Standard"})})
+def test_a_style_glow_colour_is_read_onto_the_item_and_is_not_part_of_the_action_data(load_menus):
+    cfg = load_menus({"main": one_item_menu({"brush": "Inflat", "style": {"glow_color": "#ff8800", "size": 1.1}},
+                                            {"brush": "Standard"})})
     it = cfg.menus["main"].items[0]
-    assert (it.glow, it.data) == ("#ff8800", {"brush": "Inflat"})
-    assert cfg.menus["main"].items[1].glow == ""
-    assert not problems(cfg, "unknown setting")
+    assert (it.glow, it.data) == ("#ff8800", {"brush": "Inflat"})                 # glow: the shim for the renderer
+    assert it.style == {"glow_color": "#ff8800", "size": 1.1}
+    assert cfg.menus["main"].items[1].glow == "" and cfg.menus["main"].items[1].style == {}
+    assert not cfg.errors
+
+
+def test_a_style_glow_role_is_resolved_by_the_menus_colours(load_menus):
+    cfg = load_menus({"main": one_item_menu({"brush": "Inflat", "style": {"glow_color": "highlight"}},
+                                            look={"colors": {"highlight": "#010203"}})})
+    it = cfg.menus["main"].items[0]
+    assert it.style["glow_color"] == "highlight" and it.glow == "#010203"
 
 
 @pytest.mark.parametrize("glow", ["orange", "#ff88", "ff8800", 5])
-def test_a_glow_that_is_not_rrggbb_is_reported_and_dropped_but_the_item_stays(load_menus, glow):
-    cfg = load_menus({"main": one_item_menu({"brush": "Inflat", "glow": glow}, {"brush": "Standard"})})
-    assert problems(cfg, "menu main item 1: glow")
-    assert problems(cfg, "is not a #rrggbb colour")
+def test_a_style_glow_that_is_not_a_colour_is_reported_and_dropped_but_the_item_stays(load_menus, glow):
+    cfg = load_menus({"main": one_item_menu({"brush": "Inflat", "style": {"glow_color": glow}}, {"brush": "Standard"})})
+    assert problems(cfg, "menu main item 1: style.glow_color: ")
+    assert problems(cfg, "is not a #rrggbb colour or a theme colour (bg, accent, highlight, text, lines)")
     assert [(it.data["brush"], it.glow) for it in cfg.menus["main"].items] == [("Inflat", ""), ("Standard", "")]
+
+
+def test_the_old_item_glow_is_an_unknown_setting_that_says_where_it_went(load_menus):
+    cfg = load_menus({"main": one_item_menu({"brush": "Inflat", "glow": "#ff8800"}, {"brush": "Standard"})})
+    assert cfg.errors == ["menu main item 1: unknown setting 'glow' (glow is now style.glow_color)"]
+    it = cfg.menus["main"].items[0]
+    assert it.glow == "" and it.data == {"brush": "Inflat"}
+
+
+def test_a_style_that_is_not_an_object_is_reported_and_ignored(load_menus):
+    cfg = load_menus({"main": one_item_menu({"brush": "Inflat", "style": "big"})})
+    assert problems(cfg, "menu main item 1: style must be an object")
+    assert cfg.menus["main"].items[0].style == {}
+
+
+def test_item_style_messages(load_menus):
+    cfg = load_menus({"main": one_item_menu({"brush": "Inflat", "style": {
+        "size": 3, "slot_shape": "blob", "hub": 4, "tap_ms": 100, "fill_color": "nope", "border_color": "",
+        "slot_corner": "x", "slotshape": "circle"}})})
+    assert cfg.errors == [
+        "menu main item 1: style.size: 3 must be a number from 0.75 to 1.25",
+        "menu main item 1: style.slot_shape: 'blob' unknown; one of circle, rounded, squircle, hexagon, octagon, "
+        "diamond",
+        "menu main item 1: style.hub: unknown setting" + looks.did_you_mean("hub", looks.STYLE_KEYS),
+        "menu main item 1: style.tap_ms: is a ring setting, not part of a look; ignored",
+        "menu main item 1: style.fill_color: 'nope' is not a #rrggbb colour or a theme colour "
+        "(bg, accent, highlight, text, lines)",
+        "menu main item 1: style.slot_corner: 'x' must be a number from 0 to 0.5",
+        "menu main item 1: style.slotshape: unknown setting (did you mean slot_shape?)"]
+    assert cfg.menus["main"].items[0].style == {"border_color": ""}
+
+
+# --- a menu's look and icon ---------------------------------------------------------------------
+def test_a_menu_without_a_look_is_drawn_with_the_global_look(load_menus):
+    cfg = load_menus(GOOD_MENUS, ring={"hub": 20})
+    m = cfg.menus["main"]
+    assert m.look == cfg.ring and m.look["hub"] == 20
+    assert m.look_spec == {"preset": ""} and m.icon == ""
+
+
+def test_a_menu_look_can_be_a_built_in_name(load_menus):
+    cfg = load_menus({"main": one_item_menu({"brush": "A"}, look="soft")})
+    m = cfg.menus["main"]
+    assert not cfg.errors
+    assert m.look_spec == {"preset": "soft"} and m.look["slot_shape"] == "squircle"
+    assert cfg.ring["slot_shape"] == "circle"               # the ring itself is untouched
+
+
+def test_a_menu_look_object_has_a_preset_and_overrides(load_menus):
+    menu = one_item_menu({"brush": "A"}, look={"preset": "My look", "hub": 30, "colors": {"accent": "#112233"}})
+    cfg = load_menus({"main": menu}, looks={"My look": {"slot_shape": "hexagon", "hub": 12, "hub_color": "accent"}})
+    m = cfg.menus["main"]
+    assert not cfg.errors
+    assert m.look_spec == {"preset": "My look", "hub": 30, "colors": {"accent": "#112233"}}
+    assert (m.look["slot_shape"], m.look["hub"]) == ("hexagon", 30)
+    assert m.look["hub_color"] == "#112233"                 # the role follows the menu's accent
+    assert cfg.ring["hub_color"] == cfg.ring["colors"]["accent"] != "#112233"
+
+
+def test_a_menu_look_that_names_nothing_is_reported_and_follows_the_ring(load_menus):
+    cfg = load_menus({"main": one_item_menu({"brush": "A"}, look="nope")}, ring={"hub": 20})
+    assert cfg.errors == ["menu main: look 'nope' unknown; using the ring's look"]
+    assert cfg.menus["main"].look == cfg.ring and cfg.menus["main"].look_spec == {"preset": ""}
+    cfg = load_menus({"main": one_item_menu({"brush": "A"}, look={"preset": "nope", "hub": 3})})
+    assert problems(cfg, "menu main: look 'nope' unknown; using the ring's look")
+    assert cfg.menus["main"].look["hub"] == 3 and cfg.menus["main"].look_spec == {"preset": "", "hub": 3}
+
+
+@pytest.mark.parametrize("bad", [5, ["soft"], True])
+def test_a_menu_look_of_the_wrong_type_is_ignored(load_menus, bad):
+    cfg = load_menus({"main": one_item_menu({"brush": "A"}, look=bad)})
+    assert cfg.errors == ['menu main: look must be a look name or an object like {"preset": "soft", "hub": 14}; '
+                          'ignored']
+    assert cfg.menus["main"].look == cfg.ring
+
+
+def test_menu_look_messages(load_menus):
+    cfg = load_menus({"main": one_item_menu({"brush": "A"}, look={
+        "hub": 99, "tap_ms": 5, "slot_shape": "blob", "hub_color": "pink", "wen_full": "grow"})})
+    assert cfg.errors == [
+        "menu main: look.hub: 99 must be a number from 0 to 64",
+        "menu main: look.tap_ms: is a ring setting, not part of a look; ignored",
+        "menu main: look.slot_shape: 'blob' unknown; one of circle, rounded, squircle, hexagon, octagon, diamond",
+        "menu main: look.hub_color: 'pink' is not a #rrggbb colour or a theme colour (bg, accent, highlight, text, "
+        "lines)",
+        "menu main: look.wen_full: unknown setting (did you mean when_full?)"]
+    assert cfg.menus["main"].look["hub"] == cfg.ring["hub"]
+
+
+def test_a_menu_icon_is_kept_and_checked_like_an_item_icon(load_menus):
+    cfg = load_menus({"main": one_item_menu({"brush": "A"}, icon="ClayBuildup")})
+    assert cfg.menus["main"].icon == "ClayBuildup" and not cfg.errors
+    cfg = load_menus({"main": one_item_menu({"brush": "A"}, icon="\\\\pc\\share\\a.png")})
+    assert problems(cfg, "menu main: icon '") and cfg.menus["main"].icon == ""
+    cfg = load_menus({"main": one_item_menu({"brush": "A"}, icon="art/clay.png")})
+    assert problems(cfg, "menu main: icon 'art/clay.png' must be a full path")
+
+
+# --- the ring's look and the user looks ----------------------------------------------------------
+def test_the_ring_look_is_a_preset_under_the_rings_own_keys(load_menus):
+    cfg = load_menus(GOOD_MENUS, ring={"look": "tiles", "hub": 30})
+    assert not cfg.errors
+    assert cfg.ring["slot_shape"] == "rounded" and cfg.ring["hub"] == 30 and cfg.ring["hub_style"] == "ring"
+
+
+def test_a_ring_look_that_names_nothing_is_reported_and_falls_back(load_menus):
+    cfg = load_menus(GOOD_MENUS, ring={"look": "nope"}, looks={"Mine": {}})
+    assert cfg.errors == ["ring.look: 'nope' unknown; one of classic, soft, tiles, crystal, circuit, diamonds, "
+                          "minimal, Mine"]
+    assert cfg.ring == default_look()
+
+
+def test_a_user_look_comes_before_the_ring_and_the_menus(load_menus):
+    cfg = load_menus(GOOD_MENUS, ring={"look": "Mine"}, looks={"Mine": {"hub": 33, "slot_shape": "diamond"}})
+    assert not cfg.errors
+    assert (cfg.ring["hub"], cfg.ring["slot_shape"]) == (33, "diamond")
+    assert cfg.looks.preset("Mine") == {"hub": 33, "slot_shape": "diamond"}
+
+
+def test_user_look_problems_are_reported_in_the_looks_table(load_menus):
+    cfg = load_menus(GOOD_MENUS, looks={"Ok": {"hub": 99, "animation": "fade"}, "soft": {}, "Ok2": 5})
+    assert cfg.errors == [
+        "looks.Ok.hub: 99 must be a number from 0 to 64",
+        "looks.Ok.animation: is a ring setting, not part of a look; ignored",
+        "looks.soft: that name is a built-in look or is reserved, give it another; ignored",
+        "looks.Ok2: not an object; ignored"]
+
+
+# --- the reserved more: prefix --------------------------------------------------------------------
+def test_menu_ids_starting_with_more_are_reserved(load_menus):
+    cfg = load_menus({"main": one_item_menu({"brush": "A"}), "more:x": {"items": [{"brush": "Standard"}]}})
+    assert "more:x" not in cfg.menus
+    assert cfg.errors == ["menu more:x: ids starting with 'more:' are reserved for the More submenu"]
+
+
+# --- relook ---------------------------------------------------------------------------------------
+def test_relook_repoints_string_and_object_looks():
+    menus = {"a": {"look": "Old"}, "b": {"look": {"preset": "Old", "hub": 3}}, "c": {"look": "Other"}, "d": {},
+             "e": "junk"}
+    assert config.relook(menus, {"Old": "New"}) == 2
+    assert menus["a"]["look"] == "New" and menus["b"]["look"] == {"preset": "New", "hub": 3}
+    assert menus["c"]["look"] == "Other"
+    assert config.relook(menus, {}) == 0
+
+
+# --- the expander keeps style, glow and icon --------------------------------------------------------
+class _Usage:
+    version = 1
+
+    def load(self):
+        return self
+
+    def slots(self, menu):
+        return ["Inflat"]
+
+
+class _Tags:
+    mtime = 0
+
+    def color(self, key):
+        return "#ff0000"
+
+    def color_of_item(self, key):
+        return ""
+
+
+def test_an_auto_slot_keeps_its_style_icon_and_glow_when_filled(load_menus):
+    cfg = load_menus({"main": one_item_menu({"auto": "brush", "icon": "Standard",
+                                             "style": {"glow_color": "#ff8800", "slot_shape": "hexagon"}})})
+    it = expand.Expander(cfg, _Usage(), _Tags()).menu(cfg.menus["main"]).items[0]
+    assert (it.kind, it.label, it.auto, it.data) == ("brush", "Inflat", True, {"brush": "Inflat"})
+    assert it.style == {"glow_color": "#ff8800", "slot_shape": "hexagon"} and it.glow == "#ff8800"
+    assert it.icon == "Standard"
+
+
+def test_a_tag_slot_keeps_its_style_icon_and_glow_when_it_opens_a_fan(load_menus, monkeypatch):
+    cfg = load_menus({"main": one_item_menu({"tag": "blocking", "label": "Blocks", "icon": "Standard",
+                                             "style": {"glow_color": "#ff8800", "size": 1.2}})})
+    ex = expand.Expander(cfg, _Usage(), _Tags())
+    monkeypatch.setattr(ex, "tag_menu", lambda key: object())
+    it = ex.menu(cfg.menus["main"]).items[0]
+    assert (it.kind, it.data, it.tag, it.label, it.color) == ("menu", {"menu": "tag:blocking"}, "blocking", "Blocks",
+                                                              "#ff0000")
+    assert it.style == {"glow_color": "#ff8800", "size": 1.2} and it.glow == "#ff8800" and it.icon == "Standard"
 
 
 @pytest.mark.parametrize("item, label", [
@@ -784,7 +1006,7 @@ def test_bridge_section_that_is_not_an_object_is_reported_and_defaults_are_used(
 def test_ring_section_that_is_not_an_object_is_reported_and_defaults_are_used(load):
     cfg = load({"ring": "big", "menus": GOOD_MENUS})
     assert problems(cfg, "ring:")
-    assert cfg.ring == config.DEFAULT_RING
+    assert cfg.ring == default_look()
     assert "main" in cfg.menus
 
 

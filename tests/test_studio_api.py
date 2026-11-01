@@ -469,11 +469,11 @@ def test_previews_and_validation_use_the_theme(api, monkeypatch):
 def test_an_item_with_its_own_glow_colour_previews_and_validates(api):
     cfg = _default()
     mid = next(iter(cfg["menus"]))
-    cfg["menus"][mid]["items"][0]["glow"] = "#ff8800"
+    cfg["menus"][mid]["items"][0]["style"] = {"glow_color": "#ff8800"}
     res = api.preview_ring(cfg, mid)
     assert res["image"].startswith("data:image/png") and not res.get("problems")
-    cfg["menus"][mid]["items"][1]["glow"] = "orange"
-    assert any("glow 'orange'" in p for p in api.preview_ring(cfg, mid).get("problems", []))
+    cfg["menus"][mid]["items"][1]["style"] = {"glow_color": "orange"}
+    assert any("style.glow_color: 'orange'" in p for p in api.preview_ring(cfg, mid).get("problems", []))
 
 
 def test_setting_the_theme_without_a_window_does_not_fail(api):

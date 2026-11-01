@@ -15,12 +15,14 @@ A menu has these fields, and no others (a name ZOrbit does not know is reported 
 
 | Field | What it is |
 |---|---|
-| id | The menu's key in the `menus` object. Any text works in the file except one that starts with `tag:`, which is kept for the fans that tag slots open. The names a JavaScript object already has (`__proto__`, `constructor`, `toString` and the like) are reserved too, because Studio keeps the menus in such an object. Studio takes letters, digits, `-` and `_`, not only digits, and each id once. |
+| id | The menu's key in the `menus` object. Any text works in the file except one that starts with `tag:`, which is kept for the fans that tag slots open, or `more:`, which is kept for the More submenu of a full ring. The names a JavaScript object already has (`__proto__`, `constructor`, `toString` and the like) are reserved too, because Studio keeps the menus in such an object. Studio takes letters, digits, `-` and `_`, not only digits, and each id once. |
 | `title` | The name in the middle of the ring and in Studio's lists. Without one, the id is shown. |
 | `hotkey` | Optional. See [Hotkeys](hotkeys.md#hotkeys). |
 | `swallow` | `true` (the default) or `false`: whether the hotkey is hidden from ZBrush. |
 | `animation` | Optional. This menu's open animation. |
 | `fan` | `true` or `false` (the default): whether the menu fans out as a submenu. |
+| `look` | Optional. How this menu looks, instead of the ring's look. Either the name of a look (`"soft"`), or an object with a `preset` and any look keys that change on top of it (`{"preset": "soft", "hub": 14}`). A name that is no look is listed as a problem and the menu follows the ring. |
+| `icon` | Optional. The picture in the middle of the ring when the hub style is `icon`: a brush name or a full path, as for an item's `icon`. |
 | `items` | The slots, clockwise from the top. |
 
 A new menu's id comes from its title in Studio. **Sculpting** becomes `sculpting`, or `sculpting_2` if that is taken. Accents are dropped (`Détails` becomes `details`), any other run of characters becomes `_`, and a title of digits only gets `m_` in front. Until you save the menu, renaming it changes the id too; after the first save, or once you type an id yourself, the id stays. Auto slots learn under the id, so changing it resets them.
@@ -44,7 +46,7 @@ The hotkey, the ring settings and the bridge and browser settings stay behind, a
 
 ## Item types
 
-Every item does exactly one thing. Besides the action, an item can have a `label` (the text under the slot; if you leave it out, one is made from the action), an `icon` and a `glow` colour.
+Every item does exactly one thing. Besides the action, an item can have a `label` (the text under the slot; if you leave it out, one is made from the action), an `icon` and a `style`.
 
 | Type | What it does |
 |---|---|
@@ -231,4 +233,4 @@ Opens the [browser window](browser.md). `kind` chooses the tab it opens on: `bru
 
 - `label`: text shown under the slot. Long labels are shortened with an ellipsis.
 - `icon`: a brush name, the path to a `.zbp`, or the path to a `.png` file (an alpha image or a `.zmt` also works, and shows its thumbnail). Give the full path, such as `C:\Art\clay.png`. A text with a `\` or `/` in it, or one that ends in an image extension, counts as a path. A relative path (`icons\clay.png`) is listed as a problem, because it is looked up from the app's working directory, not from `radial.json`, so it is usually not found and the slot shows a letter tile. A full path to a file that does not exist is listed as a problem too ("icon file not found"); the item still works and picks up the file if it appears. Any other text is taken as a brush name. A network path (`\\server\share\...`) is refused and listed as a problem. Without one, brush, alpha, material and texture items use the item's own thumbnail, and a `steps` item uses the thumbnail of its first asset step. Other items show a round placeholder with a short text.
-- `glow`: a colour such as `"#4dc8e9"` for this slot's glow: the soft light around it and its rim when the pointer is on it, and the halo when **Glow** is on under [Tag colours](appearance.md#tag-colours). It wins over the slot's tag colour for the glow only; the tint and the band keep the tag colour. Set it with **Glow** in the item panel in Studio, or clear it there to go back to the tag colour or the accent. A value that is not `#rrggbb` is listed as a problem and left out.
+- `style`: an object that changes how this one slot looks, over the menu's look. It takes `slot_shape`, `slot_corner`, `border_width`, `icon_scale`, `label_color` and `glow_color` (they mean the same as the ring settings of those names), and three that exist only on a slot: `size` (0.75 to 1.25, default 1), `fill_color` and `border_color`. A colour is a theme colour (`bg`, `accent`, `highlight`, `text` or `lines`) or `"#rrggbb"`; `glow_color`, `fill_color` and `border_color` can also be `""` for none. `glow_color` is the colour of the slot's glow: the soft light around it and its rim when the pointer is on it, and the halo when **Glow** is on under [Tag colours](appearance.md#tag-colours). It wins over the slot's tag colour for the glow only; the tint and the band keep the tag colour. A value that is not valid is listed as a problem and left out. `glow` on its own is no longer a setting; it is `style.glow_color` now.

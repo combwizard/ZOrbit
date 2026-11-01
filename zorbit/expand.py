@@ -48,7 +48,7 @@ class Expander:
             if it.kind == "auto":
                 name = next(filled)
                 if name:
-                    it = C.Item(label=name, kind="brush", data={"brush": name}, auto=True)
+                    it = dataclasses.replace(it, label=name, kind="brush", data={"brush": name}, auto=True)
             items.append(self._stamp(it))
         return dataclasses.replace(menu, items=items)
 
@@ -133,8 +133,7 @@ class Expander:
             key = it.data["tag"]
             color = self.tags.color(key)
             if self.tag_menu(key) is not None:
-                return C.Item(label=it.label, kind="menu", data={"menu": "tag:" + key}, icon=it.icon, tag=key,
-                              color=color, glow=it.glow)
+                return dataclasses.replace(it, kind="menu", data={"menu": "tag:" + key}, tag=key, color=color)
             return dataclasses.replace(it, color=color)       # missing or empty: stays, drawn faint
         first = it.data["steps"][0] if it.kind == "steps" else it.data
         got = C.asset_of(first) if it.kind in C.ASSET_KINDS or it.kind == "steps" else None

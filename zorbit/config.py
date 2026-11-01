@@ -11,11 +11,14 @@ Schema (all keys optional except menus):
       # mode "auto":    message if the listener is alive, else key; and key as a fallback if a message
       #                 was not picked up within 0.5 s
   "ring": {"radius": 145, "slot": 72, "dead_zone": 38, "hub": 10, "tap_ms": 250, "timeout_s": 20,
-           # hub: diameter in px of the accent dot in the middle, 0 to 40 (0 = no dot); dead_zone is separate
+           # hub: diameter in px of the hub in the middle, 0 to 64 (0 = no hub); dead_zone is separate
+           # hub_style (dot disc ring icon), hub_color, hub_glow, slot_corner, border_width, icon_scale,
+           # glow_color, glow_opacity, label_color, when_full (grow rings more): see looks.py
+           "look": "soft",                   # a built-in look or one of "looks" below; the keys here win over it
            "animation": "smooth",            # smooth bounce pop zoom fade drift fancy spiral ripple breath
                                              # mist snappy
            "labels": "name",                 # name | none
-           "slot_shape": "circle",           # circle | rounded (a rounded square): the shape of every slot
+           "slot_shape": "circle",           # circle rounded squircle hexagon octagon diamond
            "tag_colors": "tint",             # none | tint | glow | both: how a brush's first tag shows on its slot
            "tag_band": "medium",             # none | hairline | narrow | medium | wide: a band through the slots,
                                              # coloured per slot by its tag
@@ -28,6 +31,7 @@ Schema (all keys optional except menus):
            "hover_submenus": true,           # reaching a submenu slot opens that submenu, centred on it
            "colors": {"bg": "#222327", "accent": "#f86b33", "highlight": "#4dc8e9", "text": "#f0f0f0",
                       "lines": "#f86b33"}},
+  "looks": {"My look": {"slot_shape": "hexagon", "hub": 14}},    # named looks: any of the look keys of "ring"
   "browser": {"hotkey": "Alt+B"},         # opens the browser popout (tabs per kind, tags, search, folders)
   "menus": {
     "<id>": {
@@ -37,13 +41,15 @@ Schema (all keys optional except menus):
       "animation": "spiral",           # optional; this menu's open animation instead of ring.animation
       "fan": true,                     # optional; opened as a submenu, its items fan out from that slot
                                        # and the ring stays (default false: a new ring centred on the slot)
+      "look": "soft",                  # optional; a look name, or {"preset": "soft", "hub": 14, ...} (look keys)
+      "icon": "ClayBuildup",           # optional; the icon of a hub_style "icon" hub (a brush name or a full path)
       "items": [ <item>, ... ]         # drawn clockwise from the top
     }
   }
 }
 
-<item> is one action plus an optional "label", "icon" (full path to a .png/.zbp, or a brush name) and "glow"
-(#rrggbb: the colour of the slot's hover glow, which wins over its tag colour):
+<item> is one action plus an optional "label", "icon" (full path to a .png/.zbp, or a brush name) and "style"
+(an object of the style keys in looks.py, such as {"glow_color": "#ff8800", "slot_shape": "hexagon"}):
   {"brush": "ClayBuildup"}                       select a brush (loaded from its .zbp if needed)
   {"alpha": "Alpha 58"}                          select an alpha (imported from its file if needed)
   {"material": "SkinShade4"}                     select a material (Material:Load replaces the selected slot)
@@ -58,45 +64,39 @@ Schema (all keys optional except menus):
   {"browser": "", "kind": "alpha"}               open the browser (tabs: brush alpha material texture) on that
                                                  tab (default brush); a tag key filters it ("" = everything)
 
-Menu ids starting with "tag:" are reserved for the submenus a tag slot opens. Ids that are names a JavaScript
-object already has (__proto__, constructor, toString and the like) are reserved too.
+Menu ids starting with "tag:" are reserved for the submenus a tag slot opens, and ids starting with "more:" for the
+More submenu of a full ring. Ids that are names a JavaScript object already has (__proto__, constructor, toString and the like) are reserved too.
 """
-import difflib
 import json
 import os
 import re
 from dataclasses import dataclass, field
 
+import looks as L
 import theme as T
 
 ACTION_KEYS = ("brush", "alpha", "material", "texture", "press", "set", "toggle", "steps", "menu", "auto", "tag",
                "browser")
 ASSET_KINDS = ("brush", "alpha", "material", "texture")     # the kinds of the browser and of tags
 AUTO_KINDS = ("brush",)
-ANIMATIONS = ("smooth", "bounce", "pop", "zoom", "fade", "drift", "fancy", "spiral", "ripple", "breath", "mist",
-              "snappy")
-LABEL_MODES = ("name", "none")
-TAG_COLOR_MODES = ("none", "tint", "glow", "both")
-TAG_BANDS = ("none", "hairline", "narrow", "medium", "wide")
-TINT_STYLES = ("flat", "gradient")
-TINT_BLENDS = ("multiply", "overlay")
-SLOT_SHAPES = ("circle", "rounded")
-# the names a JavaScript object already has; Studio holds menus in one, so a menu with such an id would break it
-RESERVED_MENU_IDS = frozenset({"__proto__", "constructor", "hasOwnProperty", "isPrototypeOf", "propertyIsEnumerable",
-                               "toLocaleString", "toString", "valueOf", "__defineGetter__", "__defineSetter__",
-                               "__lookupGetter__", "__lookupSetter__"})
+ANIMATIONS = L.ANIMATIONS
+LABEL_MODES = L.LABEL_MODES
+TAG_COLOR_MODES = L.TAG_COLOR_MODES
+TAG_BANDS = L.TAG_BANDS
+TINT_STYLES = L.TINT_STYLES
+TINT_BLENDS = L.TINT_BLENDS
+SLOT_SHAPES = L.SLOT_SHAPES
+HUB_STYLES = L.HUB_STYLES
+WHEN_FULL = L.WHEN_FULL
+RESERVED_MENU_IDS = L.RESERVED_MENU_IDS         # the names a JavaScript object already has (see looks.py)
 
-DEFAULT_RING = {"radius": 145, "slot": 72, "dead_zone": 38, "hub": 10, "tap_ms": 250, "timeout_s": 20,
-                "animation": "smooth", "labels": "name", "slot_shape": "circle", "tag_colors": "tint", "flick": True,
-                "hover_submenus": True, "tag_band": "medium", "tag_band_opacity": 0.45, "tag_glow_opacity": 0.4, "tag_tint_opacity": 0.3,
-                "tag_tint_style": "gradient", "tag_tint_blend": "multiply",
-                "colors": T.ring_colors("dark")}        # the Dark theme's; default_ring() gives another theme's
-_RING_SWITCHES = ("flick", "hover_submenus")
-_RING_CHOICES = {"tag_colors": TAG_COLOR_MODES, "tag_band": TAG_BANDS, "tag_tint_style": TINT_STYLES,
-                 "tag_tint_blend": TINT_BLENDS, "slot_shape": SLOT_SHAPES}
-_RING_RANGES = {"radius": (60, 400), "slot": (32, 160), "dead_zone": (10, 120), "hub": (0, 40), "tap_ms": (0, 1000),
-                "timeout_s": (2, 120), "tag_band_opacity": (0, 1), "tag_glow_opacity": (0, 1),
-                "tag_tint_opacity": (0, 1)}
+# every ring key at its default; the colours are the Dark theme's and the colour keys hold roles (see looks.py).
+# default_ring() gives another theme's colours. What the ring draws is Config.ring, with the roles resolved.
+DEFAULT_RING = {**L.BEHAVIOUR_DEFAULTS, **L.LOOK_DEFAULTS, "colors": T.ring_colors("dark")}
+_RING_SWITCHES = L.SWITCHES
+_RING_CHOICES = L.CHOICES
+_RING_RANGES = L.RANGES
+_did_you_mean = L.did_you_mean
 
 _NAMED_VK = {
     "space": 0x20, "tab": 0x09, "enter": 0x0D, "backspace": 0x08, "insert": 0x2D, "delete": 0x2E,
@@ -104,10 +104,10 @@ _NAMED_VK = {
     "`": 0xC0, "~": 0xC0, "-": 0xBD, "=": 0xBB, "[": 0xDB, "]": 0xDD, "\\": 0xDC, ";": 0xBA,
     "'": 0xDE, ",": 0xBC, ".": 0xBE, "/": 0xBF,
 }
-MENU_KEYS = ("title", "hotkey", "swallow", "animation", "fan", "items")
+MENU_KEYS = ("title", "hotkey", "swallow", "animation", "fan", "look", "icon", "items")
 BRIDGE_KEYS = ("mode", "key")
 BROWSER_KEYS = ("hotkey",)
-ITEM_KEYS = ACTION_KEYS + ("label", "icon", "glow", "value", "kind")
+ITEM_KEYS = ACTION_KEYS + ("label", "icon", "style", "value", "kind")
 DEFAULT_BRIDGE_KEY = "F9"          # used when radial.json has no usable bridge.key
 VK_F10 = 0x79                       # Windows' menu-bar key: never usable as the bridge key
 _MODS = {"ctrl": "ctrl", "control": "ctrl", "alt": "alt", "shift": "shift"}
@@ -131,7 +131,8 @@ class Item:
     auto: bool = False        # put into an auto slot by the app (from usage.json), not by the user
     tag: str = ""             # tag key of a tag item (and of the submenu it opens)
     color: str = ""           # #rrggbb from the item's tag, stamped by expand.py, never by the loader
-    glow: str = ""            # #rrggbb the user chose for this slot's glow; wins over color for the glow only
+    glow: str = ""            # #rrggbb of style.glow_color, resolved by load(): kept until the ring reads style
+    style: dict = field(default_factory=dict)   # the valid keys of the item's "style", roles still roles
 
 
 @dataclass
@@ -143,6 +144,9 @@ class Menu:
     swallow: bool = True
     animation: str = ""       # one of ANIMATIONS, or "" for ring.animation
     fan: bool = False         # opened as a submenu: fan out in place instead of a new ring
+    look: dict | None = None  # the complete look this menu is drawn with (roles resolved); None: use Config.ring
+    look_spec: dict = field(default_factory=dict)   # {"preset": name or "", **the menu's own look keys}
+    icon: str = ""            # the icon of a hub_style "icon" hub
 
 
 @dataclass
@@ -152,7 +156,8 @@ class Config:
     bridge_mode: str = "auto"
     bridge_key: Hotkey | None = field(default_factory=lambda: parse_hotkey(DEFAULT_BRIDGE_KEY))
     browser_key: Hotkey | None = None
-    ring: dict = field(default_factory=lambda: json.loads(json.dumps(DEFAULT_RING)))
+    ring: dict = field(default_factory=lambda: L.LookSet().global_look())    # the resolved global look
+    looks: L.LookSet = field(default_factory=L.LookSet)
     menus: dict = field(default_factory=dict)
     errors: list = field(default_factory=list)
 
@@ -205,14 +210,62 @@ def retag(cfg: dict, renamed: dict) -> int:
     return n
 
 
-def _did_you_mean(key, known) -> str:
-    near = difflib.get_close_matches(str(key), list(known), n=1)
-    return f" (did you mean {near[0]}?)" if near else ""
+def relook(menus: dict, renamed: dict) -> int:
+    """Points the "look" of every menu in a raw menus dict (a name, or the "preset" of an object) at the name
+    renamed gives ({old name: new name}). Changes menus in place and returns how many menus changed."""
+    n = 0
+    for m in (menus or {}).values() if renamed else ():
+        if not isinstance(m, dict):
+            continue
+        v = m.get("look")
+        if isinstance(v, str) and v in renamed:
+            m["look"] = renamed[v]
+            n += 1
+        elif isinstance(v, dict) and isinstance(v.get("preset"), str) and v["preset"] in renamed:
+            v["preset"] = renamed[v["preset"]]
+            n += 1
+    return n
 
 
 def _bad_asset_name(name) -> bool:
     """A brush, alpha, material or texture name is a plain name, never a path (it is looked up by file name)."""
     return isinstance(name, str) and (any(c in name for c in "\\/:") or ".." in name)
+
+
+def _check_icon(icon, where, errors) -> str:
+    """The icon value of an item or a menu; a problem with it is reported under where."""
+    icon = str(icon or "")
+    if _network_path(icon):
+        errors.append(f"{where}: icon '{icon}' must be a plain file path on this PC, not a network path")
+        return ""
+    if icon:
+        icon_problem = _icon_problem(icon)
+        if icon_problem:
+            errors.append(f"{where}: {icon_problem}")      # the item and its icon value stay: only a warning
+    return icon
+
+
+def _check_menu_look(raw, mid, looks, errors) -> dict:
+    """A menu's "look" (a name, or an object with a "preset" and look keys) as {"preset": name or "", **valid
+    keys}. A name that is no look is reported and the menu follows the ring's look."""
+    spec = {"preset": ""}
+    if raw is None:
+        return spec
+    if isinstance(raw, str):
+        raw = {"preset": raw}
+    elif not isinstance(raw, dict):
+        errors.append(f'menu {mid}: look must be a look name or an object like {{"preset": "soft", "hub": 14}}; '
+                      f'ignored')
+        return spec
+    name = raw.get("preset") or ""
+    if name:
+        if isinstance(name, str) and looks.preset(name) is not None:
+            spec["preset"] = name
+        else:
+            errors.append(f"menu {mid}: look {name!r} unknown; using the ring's look")
+    spec.update(L.check_look({k: v for k, v in raw.items() if k != "preset"}, errors, f"menu {mid}: look.",
+                             L.LOOK_KEYS))
+    return spec
 
 
 def _network_path(path) -> bool:
@@ -322,9 +375,6 @@ def load(path: str, tags=None, theme: str = "dark") -> Config:
         raise ValueError("radial.json must be a JSON object")
     cfg = Config(path=path, mtime=st.st_mtime)
     theme = T.effective(theme)
-    if theme != "dark":
-        cfg.ring["colors"].update(T.ring_colors(theme))
-        cfg.ring["theme"] = theme
     errors = cfg.errors
     bridge = raw.get("bridge")
     if bridge is None:
@@ -359,44 +409,16 @@ def load(path: str, tags=None, theme: str = "dark") -> Config:
     elif not isinstance(ring, dict):
         errors.append('ring: must be an object like {"radius": 145, "animation": "smooth"}')
         ring = {}
-    for k, v in ring.items():
-        if k == "colors" and isinstance(v, dict):
-            for ck, cv in v.items():
-                if ck in DEFAULT_RING["colors"]:
-                    if isinstance(cv, str) and re.fullmatch(r"#[0-9a-fA-F]{6}", cv):
-                        cfg.ring["colors"][ck] = cv
-                    else:
-                        errors.append(f"ring.colors.{ck}: {cv!r} is not a #rrggbb colour")
-                else:
-                    errors.append(f"ring.colors.{ck}: unknown colour" + _did_you_mean(ck, DEFAULT_RING["colors"]))
-        elif k in _RING_RANGES:
-            lo, hi = _RING_RANGES[k]
-            if not isinstance(v, bool) and isinstance(v, (int, float)) and lo <= v <= hi:
-                cfg.ring[k] = v
-            else:
-                errors.append(f"ring.{k}: {v!r} must be a number from {lo} to {hi}")
-        elif k in _RING_SWITCHES:
-            if isinstance(v, bool):
-                cfg.ring[k] = v
-            else:
-                errors.append(f"ring.{k}: {v!r} must be true or false")
-        elif k == "animation":
-            if v in ANIMATIONS:
-                cfg.ring[k] = v
-            else:
-                errors.append(f"ring.animation: {v!r} unknown; one of {', '.join(ANIMATIONS)}")
-        elif k == "labels":
-            if v in LABEL_MODES:
-                cfg.ring[k] = v
-            else:
-                errors.append(f"ring.labels: {v!r} unknown; one of {', '.join(LABEL_MODES)}")
-        elif k in _RING_CHOICES:
-            if v in _RING_CHOICES[k]:
-                cfg.ring[k] = v
-            else:
-                errors.append(f"ring.{k}: {v!r} unknown; one of {', '.join(_RING_CHOICES[k])}")
+    presets = L.check_presets(raw.get("looks"), errors)     # first: the ring and the menus name them
+    ring_vals = L.check_look(ring, errors, "ring.", L.RING_KEYS)
+    if ring.get("look"):
+        if isinstance(ring["look"], str) and (ring["look"] in presets or ring["look"] in L.BUILTIN):
+            ring_vals["look"] = ring["look"]
         else:
-            errors.append(f"ring.{k}: unknown setting" + _did_you_mean(k, DEFAULT_RING))
+            names = list(L.BUILTIN) + list(presets)
+            errors.append(f"ring.look: {ring['look']!r} unknown; one of {', '.join(names)}")
+    cfg.looks = L.LookSet(presets, ring_vals, theme)
+    cfg.ring = cfg.looks.global_look()
     menus_raw = raw.get("menus") or {}
     if not isinstance(menus_raw, dict) or not menus_raw:
         errors.append("menus: must be a non-empty object of id -> menu")
@@ -410,6 +432,9 @@ def load(path: str, tags=None, theme: str = "dark") -> Config:
             continue
         if mid.startswith("tag:"):
             errors.append(f"menu {mid}: ids starting with 'tag:' are reserved for tag submenus")
+            continue
+        if mid.startswith("more:"):
+            errors.append(f"menu {mid}: ids starting with 'more:' are reserved for the More submenu")
             continue
         if mid in RESERVED_MENU_IDS:
             errors.append(f"menu {mid}: that id is reserved, give the menu another")
@@ -427,7 +452,9 @@ def load(path: str, tags=None, theme: str = "dark") -> Config:
                 errors.append(f"{where}: submenu {it['menu']!r} does not exist")
                 continue
             for k in it:
-                if k not in ITEM_KEYS:
+                if k == "glow":
+                    errors.append(f"{where}: unknown setting 'glow' (glow is now style.glow_color)")
+                elif k not in ITEM_KEYS:
                     errors.append(f"{where}: unknown setting {k!r}" + _did_you_mean(k, ITEM_KEYS))
             if tags is not None and kind == "tag" and not tags.has(it["tag"]):
                 if tag_error:
@@ -440,21 +467,11 @@ def load(path: str, tags=None, theme: str = "dark") -> Config:
             elif tags is not None and kind == "browser" and it["browser"] and not tags.has(it["browser"]):
                 if not tag_error:
                     errors.append(f"{where}: tag {it['browser']!r} does not exist; the browser opens unfiltered")
-            icon = str(it.get("icon") or "")
-            if _network_path(icon):
-                errors.append(f"{where}: icon '{icon}' must be a plain file path on this PC, not a network path")
-                icon = ""
-            elif icon:
-                icon_problem = _icon_problem(icon)
-                if icon_problem:
-                    errors.append(f"{where}: {icon_problem}")      # the item and its icon value stay: only a warning
-            glow = it.get("glow") or ""
-            if glow and not (isinstance(glow, str) and re.fullmatch(r"#[0-9a-fA-F]{6}", glow)):
-                errors.append(f"{where}: glow {glow!r} is not a #rrggbb colour")
-                glow = ""
+            icon = _check_icon(it.get("icon"), where, errors)
+            style = L.check_style(it["style"], errors, where) if "style" in it else {}
             items.append((i + 1, Item(label=str(it.get("label") or _default_label(it, menus_raw, tags)), kind=kind,
-                                      data={k: v for k, v in it.items() if k not in ("label", "icon", "glow")},
-                                      icon=icon, tag=it["tag"] if kind == "tag" else "", glow=glow)))
+                                      data={k: v for k, v in it.items() if k not in ("label", "icon", "style", "glow")},
+                                      icon=icon, tag=it["tag"] if kind == "tag" else "", style=style)))
         if not items:
             errors.append(f"menu {mid}: no usable items")
             continue
@@ -501,8 +518,14 @@ def load(path: str, tags=None, theme: str = "dark") -> Config:
         if not isinstance(fan, bool):
             errors.append(f"menu {mid}: fan {fan!r} must be true or false; using false")
             fan = False
-        cfg.menus[mid] = Menu(id=mid, title=str(m.get("title") or mid), items=[it for _, it in items], hotkey=hk,
-                              swallow=swallow, animation=anim, fan=fan)
+        spec = _check_menu_look(m.get("look"), mid, cfg.looks, errors)
+        look = cfg.looks.menu_look(spec)
+        built_items = [it for _, it in items]
+        for it in built_items:          # the shim: the renderer reads the glow colour here until it reads style
+            it.glow = L.colour(it.style.get("glow_color", ""), look["colors"])
+        cfg.menus[mid] = Menu(id=mid, title=str(m.get("title") or mid), items=built_items, hotkey=hk,
+                              swallow=swallow, animation=anim, fan=fan, look=look, look_spec=spec,
+                              icon=_check_icon(m.get("icon"), f"menu {mid}", errors))
     browser = raw.get("browser")
     if browser is None:
         browser = {}
