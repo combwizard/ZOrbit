@@ -6,7 +6,7 @@ Studio is where you edit everything. Open it from the Start menu (**ZOrbit Studi
 | Screen | Shortcut | What it does |
 |---|---|---|
 | Menus | Alt+1 | Create and edit menus and their items, with a live ring preview. |
-| Look | Alt+2 | How the ring looks for every menu: its size, slot shape, hub, labels, colours and tag colours, with a live preview of any menu you pick. See [The Look screen](#the-look-screen). |
+| Look | Alt+2 | How the ring looks, for every menu or for one: its size, slot shape, hub, glow, labels, colours and tag colours, a gallery of looks to use, and a live preview. See [The Look screen](#the-look-screen). |
 | Library | Alt+3 | Browse the brushes, alphas, materials and textures ZBrush can load, on four tabs, with search, folders and thumbnails. Click an item and press **Add to <menu>**, or drag it onto a menu, the ring or the item list. **Rescan** picks up items saved since Studio opened. Tag items and filter by tag (see [Tags](tags.md)). Star favourites; Recent lists what you have picked in ZBrush (see [Favourites and Recent](browser.md#favourites-and-recent)). |
 | Settings | Alt+4 | The theme, a **Ring look** card with a button that opens Look, the open animation, flick, the browser hotkey, Studio's own preferences, and Import and export (see [Import and export](files.md#import-and-export)). [Full mode](#simple-and-full-mode) adds hover submenus, tap time, auto-close, tags, the bridge and Older ZBrush. |
 | Status | Alt+5 | Four cards: **ZBrush** (running or not), **ZOrbit app** (running or not, with **Start app** when ZBrush is running, or amber with **Restart app** when the app running is older than Studio: see [Older versions](profiles.md#older-versions)), **Bridge listener** (the small window the plugin keeps inside ZBrush: **Connected**, **Found, unverified**, **Stale** or **Not found**; **ZBrush closed** in grey when ZBrush is not running, since there is nothing to listen in; and **Not needed (key bridge)** when the bridge mode is `key` or only a ZBrush 2022 to 2025 is installed) and **Last pick** (the most recent item sent to ZBrush). Below them the last 40 lines of the app log, with **Copy log**, **Open logs folder** and **Open menus folder** (the folder of the profile you are editing, which holds its `radial.json`). The screen refreshes every 3 seconds. A dot on this button in the rail means the app is not running while ZBrush is. |
@@ -25,9 +25,9 @@ The mode only changes what Studio shows. The ring, the app, `radial.json`, Save,
 | Screen | Simple shows | Full adds |
 |---|---|---|
 | Menus, **Add item** | Brush, Alpha, Material, Texture and Submenu. | Press, Set, Toggle, Steps, Auto, Tag and Browser. |
-| Menus, **Menu** tab | Title, Hotkey, **Duplicate** and **Delete**. | Id, **Swallow hotkey**, **Used by**, **Open animation** and **Fan out when opened from another menu**. |
+| Menus, **Menu** tab | Title, Hotkey, **Duplicate** and **Delete**. | Id, **Swallow hotkey**, **Used by**, **Look**, **Open animation** and **Fan out when opened from another menu**. |
 | Library and the dock | Everything, with starring, tag chips and the right-click tag picker. | **Manage tags...**. |
-| Look | **Ring size**, **Slot shape** and **Labels**. | **Ring radius**, **Slot size** and **Dead zone** in place of **Ring size**, **Hub**, **Colours** and **Tag colours**. |
+| Look | **Applies to** (all menus or one), **Ring size**, **Slot shape**, **Labels** and **When full**, and the gallery with **Use for ...** and **New from current**. | **Ring radius**, **Slot size** and **Dead zone** in place of **Ring size**, **Corner roundness**, **Rim width**, **Icon size**, **Hub**, **Glow**, **Label colour**, **Colours** and **Tag colours**, and **Edit**, **Duplicate**, **Rename** and **Delete** on a look. |
 | Settings | **Theme**, **Ring look**, **Open animation**, **Behaviour** with **Flick to pick**, **Browser**, **Studio** and **Import and export**. | **Open submenus on hover**, **Tap time**, **Auto-close**, **ZBrush bridge**, **Older ZBrush** and **Tags**. |
 | Status and Setup | The same. | The same. |
 
@@ -37,7 +37,7 @@ In Simple, the **Ring size** slider on **Look** moves **Ring radius**, **Slot si
 
 An item of a type Simple does not offer still appears in the list and on the ring. The starter **Tools** and **SubDivide** menus are full of them. Select one and the inspector shows its type and what it does on one line, with an **Edit in Full mode** link. You can still change its **Label** and **Icon**, except on an Auto slot. You can move, duplicate and delete it as usual.
 
-A menu with an open animation, **Fan out when opened from another menu** or **Swallow hotkey** switched off says so on its **Menu** tab, with a **Switch to Full mode** link. When a setting that only Full shows is not at its default, the top of the Look or Settings page says so: "Changed in Full mode and not shown here: Colours." It has a **Switch to Full mode** link too.
+A menu with an open animation, **Fan out when opened from another menu**, **Swallow hotkey** switched off or a look of its own says so on its **Menu** tab, with a **Switch to Full mode** link. When a setting that only Full shows is not at its default, the top of the Look or Settings page says so: "Changed in Full mode and not shown here: Colours." It has a **Switch to Full mode** link too.
 
 Studio switches to Full by itself when you ask for something Simple hides. Clicking a problem in the **problems** list that points at a hidden setting or item switches first and shows "Switched to Full mode to show this." Setup step 3's **Open Settings** button does the same.
 
@@ -168,33 +168,91 @@ On the Menus screen you can:
 The right-hand side has three tabs:
 
 - **Item** edits the selected item: its type, target, label and icon.
-- **Menu** edits the selected menu: its title, hotkey, **Duplicate** and **Delete** and, in Full mode, its id, **Swallow hotkey** switch (greyed out until the menu has a hotkey, and showing on unless you switched it off), open animation and **Fan out when opened from another menu**. A new menu takes its id from its title: a menu you call **Sculpting** gets the id `sculpting`, or `sculpting_2` if that is taken. Until you save, renaming it changes the id too. After the first save, or once you type an id yourself, the id stays as it is. Changing the **Id** updates every item that opens the menu. If the menu has auto slots, they forget what they learned, because they are kept under the id. **Used by** lists the items in other menus that open this one; click one to go to it.
+- **Menu** edits the selected menu: its title, hotkey, **Duplicate** and **Delete** and, in Full mode, its id, **Swallow hotkey** switch (greyed out until the menu has a hotkey, and showing on unless you switched it off), its [look](#the-look-section-of-the-menu-tab), open animation and **Fan out when opened from another menu**. A new menu takes its id from its title: a menu you call **Sculpting** gets the id `sculpting`, or `sculpting_2` if that is taken. Until you save, renaming it changes the id too. After the first save, or once you type an id yourself, the id stays as it is. Changing the **Id** updates every item that opens the menu. If the menu has auto slots, they forget what they learned, because they are kept under the id. **Used by** lists the items in other menus that open this one; click one to go to it.
 - **Library** is the [browser](browser.md) in a narrow form, to drag items into the ring or the list.
 
-Menu rows show the menu's title, id, hotkey (or a small submenu icon when it has none) and item count. When the window is narrow, hover a row for its full title and hotkey. A menu whose ring is full gets a note above its list: it says how many items fit at the current radius and how big the ring grows with the items the menu has.
+Menu rows show the menu's title, id, hotkey (or a small submenu icon when it has none) and item count. When the window is narrow, hover a row for its full title and hotkey. A menu whose ring is full gets a note above its list. It says how many items fit at the menu's radius and what the menu's **When full** setting does about it: the ring grows (and by how much), the rest go in a second ring, or a **More** slot opens them. A **Change in Look** link opens the **When full** group for that menu.
+
+### The Look section of the Menu tab
+
+In Full mode the **Menu** tab has a **Look** section for the selected menu. The list in it chooses the menu's look:
+
+- **Same as all menus (Global: ...)** follows the look chosen for all menus. The text in brackets says which one that is.
+- **Built-in** and **Yours** list the looks you can use. Picking one uses it for this menu only.
+- A menu that has settings of its own shows them as one line you cannot pick, such as **Custom (2 changes)** or **Soft + 2 changes**.
+
+Using a look here works like **Use for ...** on the Look screen: it removes the menu's own settings that would hide the look, and the toast says how many ("Cleared 3 of your own settings") with **Undo**. **Edit in Look** opens the Look screen at that menu. **Clear own settings** removes the settings the menu has of its own and keeps the look it uses.
+
+The animation list stays below it: a menu's open animation is not part of a look.
 
 ## The Look screen
 
-**Look** (Alt+2) is where the ring's looks are set. It edits one level, **Global**: what you set here is used by every menu. The bar at the top shows it.
+**Look** (Alt+2) is where the ring's looks are set. You can set them for every menu or for one menu, and you can save a group of settings as a named **look** to use again. The bar at the top shows what you are editing.
 
 ![The Look screen: the ring preview of the Brushes menu and a menu picker on the left, and the Slots, Hub and Labels groups on the right, each setting with a Default badge](images/studio-look.png)
 
-On the left is a preview of the real ring, drawn by the same code as the app, with the dead zone as a dashed circle. The **Preview menu** list picks which menu it shows. It only changes the preview, not the menu you are editing on the Menus screen. **Sample ring with tags** shows a ring of library brushes in your tag colours, for the tag settings.
+On the left is a preview of the real ring, drawn by the same code as the app, with the dead zone as a dashed circle, and under it the [gallery of looks](#looks). The **Preview menu** list picks which menu the preview shows. It only changes the preview, not the menu you are editing on the Menus screen. **Sample ring with tags** shows a ring of library brushes in your tag colours, for the tag settings.
 
-On the right are the settings, in groups. The buttons above them (**Slots**, **Hub**, **Labels**, **Colours**, **Tag colours**) jump to a group, and the one you are reading is highlighted.
+### Levels
 
-- **Slots:** **Ring radius**, **Slot size** and **Dead zone** (one **Ring size** slider in Simple mode), and **Slot shape**.
-- **Hub** (Full mode): the size of the centre dot.
-- **Labels:** **Icon and name** or **Icon only**.
+The bar at the top says where what you set applies. In Simple mode it reads **Applies to**, with **All menus** and **Only** and a list of menus.
+
+- **Global** is the look every menu starts from. What you set here is used by every menu.
+- **This menu** is the look of one menu, picked in the list beside it. The whole screen then edits that menu and the preview shows it. A setting you leave alone follows Global.
+- **Look: Name** appears while you [edit a look](#editing-a-look).
+
+For a menu the layers are, from the bottom: the default, the colours of the [theme](appearance.md#theme), the look chosen for all menus, your own global settings, the look chosen for the menu and your own settings for the menu. A later layer wins over an earlier one.
+
+### Looks
+
+A look is a named group of look settings. Seven are built in: **Classic** (the look ZOrbit starts with), **Soft**, **Tiles**, **Crystal**, **Circuit**, **Diamonds** and **Minimal**. They change the shape, the hub, the glow and the labels, never the size of the ring, and they use theme colours only, so they follow the theme. You can make looks of your own.
+
+Each card in the gallery shows the sample ring in that look. Marks on a card say how it is used: **Global** (the look for all menus), **This menu**, **2 menus** (how many other menus use it) and **Editing**.
+
+- **Use for all menus** (or **Use for** and the menu's title, at the menu level) uses the look. It also removes the settings of your own at that level that would hide the look, such as your own slot shape, hub or glow, and anything the look sets itself. The ring size (**Ring radius**, **Slot size** and **Dead zone**), your colours and your tag colours stay unless the look sets them. A toast says how many settings it removed ("Cleared 3 of your own settings") and has **Undo**.
+- The arrow beside it (Full mode) opens a list. **Use, keep my changes** uses the look without removing anything. **Edit** changes a look (**View** for a built-in one, which cannot be changed). **Duplicate** makes a copy called, for example, "Soft copy". **Rename...** and **Delete...** are for your own looks.
+- **New from current** saves what the preview shows as a look of your own. The name is 1 to 32 letters, digits, spaces, `-` or `_`. It cannot be the name of a built-in look or another of your looks apart from capitals. **Include ring size** is off, so the look leaves out the radius, slot size and dead zone and fits any ring. **Also use it here** is on: the new look is used at once, for all menus or for the menu you are on, and the settings it now holds are removed from that level.
+- **Rename...** changes the name and every place that uses it.
+- **Delete...** removes a look. If menus use it, a dialog lists them. **Delete and keep their look** gives each of them the look's settings as its own. **Delete, they lose it** sends them back to the look above them, which is the one for all menus or Classic. A toast has **Undo** either way.
+
+In the gallery, Tab goes to the list, the arrow keys move between cards and Enter uses the look. A double click does too.
+
+A look is a live link. A menu that uses a look follows it when you edit the look, and so do all the menus when it is the look for all menus.
+
+### Editing a look
+
+**Edit** opens a look in the screen. The bar shows **Look: Name**, and a banner says "Editing look Name. 2 menus use it." with a **Done** button that returns to where you were. Every setting you change is saved in that look. The preview shows the menu you picked drawn with it. A built-in look is shown read-only, and its banner has **Duplicate to edit**.
+
+### Settings
+
+On the right are the settings, in groups. The buttons above them (**Slots**, **Hub**, **Glow**, **Labels**, **Colours**, **Tag colours**, **When full**) jump to a group, and the one you are reading is highlighted. Simple mode shows only some of them.
+
+- **Slots:** **Ring radius**, **Slot size** and **Dead zone** (one **Ring size** slider in Simple mode), **Slot shape** (**Circle**, **Rounded square**, **Squircle**, **Hexagon**, **Octagon** or **Diamond**), and in Full mode **Corner roundness** (it only changes a Rounded square), **Rim width** and **Icon size**.
+- **Hub** (Full mode): **Hub size** (0 to 64 px, 0 for none), **Hub style** (**Dot**, **Disc**, **Ring** or **Menu icon**), **Hub colour** and **Hub glow**.
+- **Glow** (Full mode): **Glow colour** and **Glow strength**.
+- **Labels:** **Icon and name** or **Icon only**, and in Full mode **Label colour**.
 - **Colours** (Full mode): the five ring colours, each with a swatch and a hex value, and **Reset all colours**.
 - **Tag colours** (Full mode): the **Icon tint**, **Glow** and **Band** switches and their settings (see [Tag colours](appearance.md#tag-colours)). When the preview menu has no tagged brush, a note offers the sample ring.
+- **When full:** what a ring does when a menu has more items than fit at its radius. **Grow** makes the ring bigger until every slot fits. **Second ring** puts the slots that do not fit in an outer ring. **More slot** ends the ring with a **More** slot that opens the rest as a submenu. A line under the cards says whether the menu in the preview is full.
+
+**Hub colour**, **Glow colour** and **Label colour** are a row of chips. **Background**, **Accent**, **Highlight**, **Text** and **Lines** are theme colours, each drawn in the colour it has at that level, so they follow the theme and any colours you set under **Colours**. **Custom** shows a swatch and a hex value for any `#rrggbb` colour. **Automatic**, for **Glow colour**, uses the slot's tag colour when it has one, and the accent or highlight when it has not.
+
+### Where a value comes from
 
 Each setting has a badge beside its name that says where its value comes from:
 
 - **Default** is the built-in value.
 - **Theme** is a colour that comes from the Light or Match ZBrush [theme](appearance.md#theme). You have not set it yourself.
-- **Global** is a value you set here. It is shown in the accent colour. A value you set that equals the default is not kept: the badge goes back to **Default** and the file says nothing about it.
+- **Look: Name** comes from a look, the one for all menus or the one for the menu.
+- **Global** is a value you set for all menus.
+- **This menu** is a value you set for the menu you are on.
 
-The reset button at the right of a setting (it appears once you have set it) is **Reset to default**. Clicking a badge moves the focus to its setting.
+Clicking a badge that shows a value from another level goes to that level (Global, or the look), with the setting selected. Clicking one at the level you are on moves the focus to its setting. A badge for a value from another level has a dashed outline.
 
-The values are the same ones `radial.json` keeps under `"ring"` (see [Appearance and behaviour settings](appearance.md#appearance-and-behaviour-settings)), and Save, Revert and undo treat them like any other change. Settings that only Full shows keep their value in Simple mode. If one is not at its default, the top of the page names it and has a **Switch to Full mode** link.
+The reset button at the right of a setting (it appears once you have set it) is **Reset to default** at the Global level and **Reset to inherited** on a menu.
+
+When you set a value, Studio writes it unless it is what the level would take from the default or the theme anyway. Setting the hub of a menu to 10, the default, when nothing above sets it, writes nothing. A value that equals what a look gives is written, so the menu stays as it is if the look changes later. Only the reset button removes it.
+
+### Saved in `radial.json`
+
+Your looks are saved under `"looks"` in `radial.json`. The look for all menus is `"look"` under `"ring"`, and the look of a menu is `"look"` in the menu: a look's name, or an object with the name as `"preset"` and the menu's own settings. The settings are the same ones `radial.json` keeps under `"ring"` (see [Appearance and behaviour settings](appearance.md#appearance-and-behaviour-settings)). Save, Revert and undo treat them like any other change, and **Unsaved changes** lists them under **Looks** and **Look**. Settings that only Full shows keep their value in Simple mode. If one is not at its default, the top of the page names it and has a **Switch to Full mode** link.

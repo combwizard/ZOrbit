@@ -1,0 +1,550 @@
+{
+ "animations": [
+  "smooth",
+  "bounce",
+  "pop",
+  "zoom",
+  "fade",
+  "drift",
+  "fancy",
+  "spiral",
+  "ripple",
+  "breath",
+  "mist",
+  "snappy"
+ ],
+ "looks": {
+  "builtin": [
+   {
+    "blurb": "Round slots with an accent dot: the look ZOrbit starts with.",
+    "id": "classic",
+    "label": "Classic",
+    "look": {}
+   },
+   {
+    "blurb": "Rounder, softer slots with a quiet disc in the middle.",
+    "id": "soft",
+    "label": "Soft",
+    "look": {
+     "border_width": 1,
+     "glow_opacity": 0.7,
+     "hub_glow": 0.6,
+     "hub_style": "disc",
+     "icon_scale": 0.92,
+     "slot_shape": "squircle"
+    }
+   },
+   {
+    "blurb": "Square tiles with rounded corners and a ring in the middle.",
+    "id": "tiles",
+    "label": "Tiles",
+    "look": {
+     "glow_opacity": 0.45,
+     "hub": 14,
+     "hub_style": "ring",
+     "icon_scale": 0.9,
+     "slot_corner": 0.22,
+     "slot_shape": "rounded"
+    }
+   },
+   {
+    "blurb": "Hexagons with a bright highlight glow.",
+    "id": "crystal",
+    "label": "Crystal",
+    "look": {
+     "glow_color": "highlight",
+     "glow_opacity": 0.8,
+     "hub": 16,
+     "hub_color": "highlight",
+     "hub_style": "ring",
+     "icon_scale": 0.85,
+     "slot_shape": "hexagon"
+    }
+   },
+   {
+    "blurb": "Thin-rimmed octagons in the line colour.",
+    "id": "circuit",
+    "label": "Circuit",
+    "look": {
+     "border_width": 1,
+     "glow_color": "lines",
+     "glow_opacity": 0.4,
+     "hub": 12,
+     "hub_color": "lines",
+     "hub_style": "ring",
+     "label_color": "highlight",
+     "slot_shape": "octagon"
+    }
+   },
+   {
+    "blurb": "Diamond slots with small icons.",
+    "id": "diamonds",
+    "label": "Diamonds",
+    "look": {
+     "border_width": 2,
+     "hub": 12,
+     "hub_style": "disc",
+     "icon_scale": 0.7,
+     "slot_shape": "diamond"
+    }
+   },
+   {
+    "blurb": "No rim, a faint glow and a tiny dot.",
+    "id": "minimal",
+    "label": "Minimal",
+    "look": {
+     "border_width": 0,
+     "glow_opacity": 0.3,
+     "hub": 6,
+     "hub_glow": 0
+    }
+   }
+  ],
+  "menu_prefixes": [
+   "tag:",
+   "more:"
+  ],
+  "name": {
+   "flags": "u",
+   "max": 32,
+   "pattern": "^[\\p{L}\\p{N}_](?:[\\p{L}\\p{N}_ -]{0,30}[\\p{L}\\p{N}_])?$"
+  },
+  "reserved": [
+   "__defineGetter__",
+   "__defineSetter__",
+   "__lookupGetter__",
+   "__lookupSetter__",
+   "__proto__",
+   "constructor",
+   "hasOwnProperty",
+   "isPrototypeOf",
+   "propertyIsEnumerable",
+   "toLocaleString",
+   "toString",
+   "valueOf"
+  ],
+  "roles": [
+   "bg",
+   "accent",
+   "highlight",
+   "text",
+   "lines"
+  ],
+  "schema": {
+   "border_color": {
+    "allow_empty": true,
+    "default": "",
+    "full": true,
+    "group": "Slots",
+    "kind": "colour",
+    "levels": [
+     "slot"
+    ]
+   },
+   "border_width": {
+    "default": 2,
+    "full": true,
+    "group": "Slots",
+    "kind": "range",
+    "levels": [
+     "global",
+     "menu",
+     "slot"
+    ],
+    "max": 6,
+    "min": 0
+   },
+   "colors": {
+    "choices": [
+     "bg",
+     "accent",
+     "highlight",
+     "text",
+     "lines"
+    ],
+    "default": {
+     "accent": "#f86b33",
+     "bg": "#222327",
+     "highlight": "#4dc8e9",
+     "lines": "#f86b33",
+     "text": "#f0f0f0"
+    },
+    "full": true,
+    "group": "Colours",
+    "kind": "colors",
+    "levels": [
+     "global",
+     "menu"
+    ]
+   },
+   "dead_zone": {
+    "default": 38,
+    "full": false,
+    "group": "Slots",
+    "kind": "range",
+    "levels": [
+     "global",
+     "menu"
+    ],
+    "max": 120,
+    "min": 10
+   },
+   "fill_color": {
+    "allow_empty": true,
+    "default": "",
+    "full": true,
+    "group": "Slots",
+    "kind": "colour",
+    "levels": [
+     "slot"
+    ]
+   },
+   "glow_color": {
+    "allow_empty": true,
+    "default": "",
+    "full": true,
+    "group": "Glow",
+    "kind": "colour",
+    "levels": [
+     "global",
+     "menu",
+     "slot"
+    ]
+   },
+   "glow_opacity": {
+    "default": 0.55,
+    "full": true,
+    "group": "Glow",
+    "kind": "range",
+    "levels": [
+     "global",
+     "menu"
+    ],
+    "max": 1,
+    "min": 0
+   },
+   "hub": {
+    "default": 10,
+    "full": true,
+    "group": "Hub",
+    "kind": "range",
+    "levels": [
+     "global",
+     "menu"
+    ],
+    "max": 64,
+    "min": 0
+   },
+   "hub_color": {
+    "allow_empty": false,
+    "default": "accent",
+    "full": true,
+    "group": "Hub",
+    "kind": "colour",
+    "levels": [
+     "global",
+     "menu"
+    ]
+   },
+   "hub_glow": {
+    "default": 1.0,
+    "full": true,
+    "group": "Hub",
+    "kind": "range",
+    "levels": [
+     "global",
+     "menu"
+    ],
+    "max": 1,
+    "min": 0
+   },
+   "hub_style": {
+    "choices": [
+     "dot",
+     "disc",
+     "ring",
+     "icon"
+    ],
+    "default": "dot",
+    "full": true,
+    "group": "Hub",
+    "kind": "choice",
+    "levels": [
+     "global",
+     "menu"
+    ]
+   },
+   "icon_scale": {
+    "default": 1.0,
+    "full": true,
+    "group": "Slots",
+    "kind": "range",
+    "levels": [
+     "global",
+     "menu",
+     "slot"
+    ],
+    "max": 1,
+    "min": 0.5
+   },
+   "label_color": {
+    "allow_empty": false,
+    "default": "text",
+    "full": true,
+    "group": "Labels",
+    "kind": "colour",
+    "levels": [
+     "global",
+     "menu",
+     "slot"
+    ]
+   },
+   "labels": {
+    "choices": [
+     "name",
+     "none"
+    ],
+    "default": "name",
+    "full": false,
+    "group": "Labels",
+    "kind": "choice",
+    "levels": [
+     "global",
+     "menu"
+    ]
+   },
+   "radius": {
+    "default": 145,
+    "full": false,
+    "group": "Slots",
+    "kind": "range",
+    "levels": [
+     "global",
+     "menu"
+    ],
+    "max": 400,
+    "min": 60
+   },
+   "size": {
+    "default": 1.0,
+    "full": true,
+    "group": "Slots",
+    "kind": "range",
+    "levels": [
+     "slot"
+    ],
+    "max": 1.25,
+    "min": 0.75
+   },
+   "slot": {
+    "default": 72,
+    "full": false,
+    "group": "Slots",
+    "kind": "range",
+    "levels": [
+     "global",
+     "menu"
+    ],
+    "max": 160,
+    "min": 32
+   },
+   "slot_corner": {
+    "default": 0.28,
+    "full": true,
+    "group": "Slots",
+    "kind": "range",
+    "levels": [
+     "global",
+     "menu",
+     "slot"
+    ],
+    "max": 0.5,
+    "min": 0
+   },
+   "slot_shape": {
+    "choices": [
+     "circle",
+     "rounded",
+     "squircle",
+     "hexagon",
+     "octagon",
+     "diamond"
+    ],
+    "default": "circle",
+    "full": false,
+    "group": "Slots",
+    "kind": "choice",
+    "levels": [
+     "global",
+     "menu",
+     "slot"
+    ]
+   },
+   "tag_band": {
+    "choices": [
+     "none",
+     "hairline",
+     "narrow",
+     "medium",
+     "wide"
+    ],
+    "default": "medium",
+    "full": true,
+    "group": "Tag colours",
+    "kind": "choice",
+    "levels": [
+     "global",
+     "menu"
+    ]
+   },
+   "tag_band_opacity": {
+    "default": 0.45,
+    "full": true,
+    "group": "Tag colours",
+    "kind": "range",
+    "levels": [
+     "global",
+     "menu"
+    ],
+    "max": 1,
+    "min": 0
+   },
+   "tag_colors": {
+    "choices": [
+     "none",
+     "tint",
+     "glow",
+     "both"
+    ],
+    "default": "tint",
+    "full": true,
+    "group": "Tag colours",
+    "kind": "choice",
+    "levels": [
+     "global",
+     "menu"
+    ]
+   },
+   "tag_glow_opacity": {
+    "default": 0.4,
+    "full": true,
+    "group": "Tag colours",
+    "kind": "range",
+    "levels": [
+     "global",
+     "menu"
+    ],
+    "max": 1,
+    "min": 0
+   },
+   "tag_tint_blend": {
+    "choices": [
+     "multiply",
+     "overlay"
+    ],
+    "default": "multiply",
+    "full": true,
+    "group": "Tag colours",
+    "kind": "choice",
+    "levels": [
+     "global",
+     "menu"
+    ]
+   },
+   "tag_tint_opacity": {
+    "default": 0.3,
+    "full": true,
+    "group": "Tag colours",
+    "kind": "range",
+    "levels": [
+     "global",
+     "menu"
+    ],
+    "max": 1,
+    "min": 0
+   },
+   "tag_tint_style": {
+    "choices": [
+     "flat",
+     "gradient"
+    ],
+    "default": "gradient",
+    "full": true,
+    "group": "Tag colours",
+    "kind": "choice",
+    "levels": [
+     "global",
+     "menu"
+    ]
+   },
+   "when_full": {
+    "choices": [
+     "grow",
+     "rings",
+     "more"
+    ],
+    "default": "grow",
+    "full": false,
+    "group": "When full",
+    "kind": "choice",
+    "levels": [
+     "global",
+     "menu"
+    ]
+   }
+  }
+ },
+ "ring_defaults": {
+  "animation": "smooth",
+  "border_width": 2,
+  "colors": {
+   "accent": "#f86b33",
+   "bg": "#222327",
+   "highlight": "#4dc8e9",
+   "lines": "#f86b33",
+   "text": "#f0f0f0"
+  },
+  "dead_zone": 38,
+  "flick": true,
+  "glow_color": "",
+  "glow_opacity": 0.55,
+  "hover_submenus": true,
+  "hub": 10,
+  "hub_color": "accent",
+  "hub_glow": 1.0,
+  "hub_style": "dot",
+  "icon_scale": 1.0,
+  "label_color": "text",
+  "labels": "name",
+  "radius": 145,
+  "slot": 72,
+  "slot_corner": 0.28,
+  "slot_shape": "circle",
+  "tag_band": "medium",
+  "tag_band_opacity": 0.45,
+  "tag_colors": "tint",
+  "tag_glow_opacity": 0.4,
+  "tag_tint_blend": "multiply",
+  "tag_tint_opacity": 0.3,
+  "tag_tint_style": "gradient",
+  "tap_ms": 250,
+  "timeout_s": 20,
+  "when_full": "grow"
+ },
+ "theme_ring_colors": {
+  "dark": {
+   "accent": "#f86b33",
+   "bg": "#222327",
+   "highlight": "#4dc8e9",
+   "lines": "#f86b33",
+   "text": "#f0f0f0"
+  },
+  "light": {
+   "accent": "#a8360f",
+   "bg": "#f3f4f6",
+   "highlight": "#066785",
+   "lines": "#a8360f",
+   "text": "#1b1c20"
+  }
+ }
+}

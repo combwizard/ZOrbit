@@ -347,3 +347,10 @@ def test_the_look_cases_cover_every_level_and_origin():
     origins = {o["from"] for c in cases for o in c["expected"]["origins"].values()}
     assert origins == {"default", "theme", "global-preset", "global", "menu-preset", "menu", "slot"}
     assert any(c["expected"]["problems"] for c in cases)
+
+
+def test_the_look_options_fixture_is_what_the_generator_writes():
+    with open(os.path.join(ROOT, "tests", "fixtures", "look_options.json"), encoding="utf-8") as f:
+        on_disk = json.load(f)
+    fresh = json.loads(json.dumps(_generator().build_options(), sort_keys=True))
+    assert on_disk == fresh, "run: python tools/make_look_cases.py"

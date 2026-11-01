@@ -80,7 +80,9 @@
       'Settings now says a newer version is available when Studio opens straight on Settings.'] };
   var libSeq = {}, ticks = 0, thumbCalls = 0, alreadyDone = false, appStarted = false, setupCalls = 0, modernAdded = false, keptDone = false;
   var saved = clone(M.get_config.config);
-  var TAG_DEFAULTS = { hub: 10, slot_shape: 'circle', tag_colors: 'tint', tag_band: 'medium', tag_band_opacity: 0.45, tag_glow_opacity: 0.4, tag_tint_opacity: 0.3, tag_tint_style: 'gradient', tag_tint_blend: 'multiply' };
+  var TAG_DEFAULTS = { radius: 145, slot: 72, dead_zone: 38, labels: 'name', slot_corner: 0.28, border_width: 2, icon_scale: 1, hub_style: 'dot', hub_color: 'accent', hub_glow: 1,
+    glow_color: '', glow_opacity: 0.55, label_color: 'text', when_full: 'grow', look: undefined,
+    hub: 10, slot_shape: 'circle', tag_colors: 'tint', tag_band: 'medium', tag_band_opacity: 0.45, tag_glow_opacity: 0.4, tag_tint_opacity: 0.3, tag_tint_style: 'gradient', tag_tint_blend: 'multiply' };
   var KINDS = ['brush', 'alpha', 'material', 'texture', 'press', 'set', 'toggle', 'steps', 'menu', 'auto', 'tag', 'browser'];
   if (q.has('kinds') && saved.menus && saved.menus.tools) saved.menus.tools.items.push({ tag: 'blocking' }, { browser: '' });
   var mtime = 1700000000000000000, conflictDone = false;
@@ -148,6 +150,14 @@
     "menu brushes item 6: 'press' must be a non-empty string", "menu brushes item 6: brush name 'C:\\x\\Clay' must not contain \\ / : or ..", "menu brushes item 7: submenu 'nope' does not exist",
     "menu brushes item 7: unknown setting 'lable' (did you mean label?)", "menu brushes item 8: tag 'gone' does not exist; the slot stays empty", "menu brushes item 8: tag 'gone' does not exist; the browser opens unfiltered",
     "menu brushes item 9: icon '\\\\pc\\share\\a.png' must be a plain file path on this PC, not a network path", "menu brushes item 9: style.glow_color: 'orange' is not a #rrggbb colour or a theme colour (bg, accent, highlight, text, lines)", "menu brushes item 9: submenu 'tools' has no usable items",
+    'looks: must be an object like {"My look": {"slot_shape": "hexagon"}}; ignored', 'looks.Mine: not an object; ignored',
+    'looks.My look!: name must be 1 to 32 letters, digits, spaces, - or _; ignored', 'looks.soft: that name is a built-in look or is reserved, give it another; ignored',
+    "looks.mine: same name as 'Mine' apart from capitals; ignored", 'looks.Mine.preset: a look cannot be based on another look; ignored',
+    'looks.Mine.hub: 99 must be a number from 0 to 64', "looks.Mine.slot_shape: 'star' unknown; one of circle, rounded, squircle, hexagon, octagon, diamond",
+    "looks.Mine.hub_color: 'red' is not a #rrggbb colour or a theme colour (bg, accent, highlight, text, lines)", "looks.Mine.colors.bg: 'red' is not a #rrggbb colour",
+    'looks.Mine.tap_ms: is a ring setting, not part of a look; ignored', "ring.look: 'Gone' unknown; one of classic, soft, tiles, crystal, circuit, diamonds, minimal",
+    "menu brushes: look 'Nope' unknown; using the ring's look", 'menu brushes: look must be a look name or an object like {"preset": "soft", "hub": 14}; ignored',
+    'menu brushes: look.hub: 99 must be a number from 0 to 64', 'menu brushes: look.tap_ms: is a ring setting, not part of a look; ignored',
     'menu tools: no usable items', "menu tools: hotkey 'Q' already used by menu brushes", "menu tools: hotkey 'Ctrl+Q+Q' not understood", "menu tools: animation 'spin' unknown; using ring.animation",
     "menu tools: swallow 'no' must be true or false; using true", "menu tools: fan 'yes' must be true or false; using false",
     'browser: must be an object like {"hotkey": "Alt+B"}', 'browser.hotkye: unknown setting (did you mean hotkey?)', "browser.hotkey 'Alt+B+B' not understood", "browser.hotkey 'Q' already used by menu brushes",
@@ -175,8 +185,7 @@
     var menus = (cfg && cfg.menus) || {};
     var ids = Object.keys(menus);
     var seen = {}, st = tagState();
-    var ringc = (cfg && cfg.ring) || {};
-    if (ringc.tag_colors !== undefined && ['none', 'tint', 'glow', 'both'].indexOf(ringc.tag_colors) < 0) out.push('ring.tag_colors: ' + pyr(ringc.tag_colors) + ' unknown; one of none, tint, glow, both');
+    if (window.ZLook) out.push.apply(out, window.ZLook.problems(cfg, mockCtx()));        // looks, ring.look, menu looks and every look value, from look.js
     if (!ids.length) out.push('menus: must be a non-empty object of id -> menu');
     ids.forEach(function (id) {
       var m = menus[id], good = 0;
@@ -225,6 +234,74 @@
     if (q.has('problems')) out.push('menu brushes item 3: sample problem for the problems panel (?problems)', 'bridge.key must not use Ctrl or Shift (ZBrush reads them as mask/smooth); use a bare F-key',
       'ring.radius: 500 must be a number from 60 to 400', "menu tools: hotkey 'Q' already used by menu brushes");
     return out;
+  }
+
+  // ---- looks (zorbit/looks.py, studio.py _look_options): the get_options structure built from a short table
+  var SHAPES = ['circle', 'rounded', 'squircle', 'hexagon', 'octagon', 'diamond'], HUBS = ['dot', 'disc', 'ring', 'icon'], WHEN_FULL = ['grow', 'rings', 'more'];
+  var ROLES = ['bg', 'accent', 'highlight', 'text', 'lines'];
+  var BUILTIN = [
+    ['classic', 'Classic', 'Round slots with an accent dot: the look ZOrbit starts with.', {}],
+    ['soft', 'Soft', 'Rounder, softer slots with a quiet disc in the middle.', { slot_shape: 'squircle', border_width: 1, icon_scale: 0.92, glow_opacity: 0.7, hub_style: 'disc', hub_glow: 0.6 }],
+    ['tiles', 'Tiles', 'Square tiles with rounded corners and a ring in the middle.', { slot_shape: 'rounded', slot_corner: 0.22, icon_scale: 0.9, glow_opacity: 0.45, hub_style: 'ring', hub: 14 }],
+    ['crystal', 'Crystal', 'Hexagons with a bright highlight glow.', { slot_shape: 'hexagon', icon_scale: 0.85, glow_opacity: 0.8, glow_color: 'highlight', hub_style: 'ring', hub: 16, hub_color: 'highlight' }],
+    ['circuit', 'Circuit', 'Thin-rimmed octagons in the line colour.', { slot_shape: 'octagon', border_width: 1, label_color: 'highlight', glow_color: 'lines', glow_opacity: 0.4, hub_style: 'ring', hub: 12, hub_color: 'lines' }],
+    ['diamonds', 'Diamonds', 'Diamond slots with small icons.', { slot_shape: 'diamond', icon_scale: 0.7, border_width: 2, hub_style: 'disc', hub: 12 }],
+    ['minimal', 'Minimal', 'No rim, a faint glow and a tiny dot.', { border_width: 0, glow_opacity: 0.3, hub: 6, hub_glow: 0 }]];
+  function mockLooks() {
+    var G = ['global', 'menu'], GS = ['global', 'menu', 'slot'], SL = ['slot'], R = function (a, b) { return { min: a, max: b }; }, C = function (list) { return { choices: list }; };
+    var TABLE = [   // key, group, kind, default, shown in Simple, extras, levels
+      ['radius', 'Slots', 'range', 145, 1, R(60, 400), G], ['slot', 'Slots', 'range', 72, 1, R(32, 160), G], ['dead_zone', 'Slots', 'range', 38, 1, R(10, 120), G],
+      ['slot_shape', 'Slots', 'choice', 'circle', 1, C(SHAPES), GS], ['slot_corner', 'Slots', 'range', 0.28, 0, R(0, 0.5), GS], ['border_width', 'Slots', 'range', 2, 0, R(0, 6), GS],
+      ['icon_scale', 'Slots', 'range', 1, 0, R(0.5, 1), GS], ['size', 'Slots', 'range', 1, 0, R(0.75, 1.25), SL], ['fill_color', 'Slots', 'colour', '', 0, { allow_empty: true }, SL],
+      ['border_color', 'Slots', 'colour', '', 0, { allow_empty: true }, SL],
+      ['hub', 'Hub', 'range', 10, 0, R(0, 64), G], ['hub_style', 'Hub', 'choice', 'dot', 0, C(HUBS), G], ['hub_color', 'Hub', 'colour', 'accent', 0, { allow_empty: false }, G],
+      ['hub_glow', 'Hub', 'range', 1, 0, R(0, 1), G], ['glow_color', 'Glow', 'colour', '', 0, { allow_empty: true }, GS], ['glow_opacity', 'Glow', 'range', 0.55, 0, R(0, 1), G],
+      ['labels', 'Labels', 'choice', 'name', 1, C(['name', 'none']), G], ['label_color', 'Labels', 'colour', 'text', 0, { allow_empty: false }, GS],
+      ['colors', 'Colours', 'colors', null, 0, C(ROLES), G],
+      ['tag_colors', 'Tag colours', 'choice', 'tint', 0, C(['none', 'tint', 'glow', 'both']), G], ['tag_band', 'Tag colours', 'choice', 'medium', 0, C(['none', 'hairline', 'narrow', 'medium', 'wide']), G],
+      ['tag_band_opacity', 'Tag colours', 'range', 0.45, 0, R(0, 1), G], ['tag_glow_opacity', 'Tag colours', 'range', 0.4, 0, R(0, 1), G], ['tag_tint_opacity', 'Tag colours', 'range', 0.3, 0, R(0, 1), G],
+      ['tag_tint_style', 'Tag colours', 'choice', 'gradient', 0, C(['flat', 'gradient']), G], ['tag_tint_blend', 'Tag colours', 'choice', 'multiply', 0, C(['multiply', 'overlay']), G],
+      ['when_full', 'When full', 'choice', 'grow', 1, C(WHEN_FULL), G]];
+    var schema = {};
+    TABLE.forEach(function (r) {
+      var e = Object.assign({ group: r[1], kind: r[2], default: r[3], full: !r[4] }, r[5]);
+      e.levels = r[6];
+      schema[r[0]] = e;
+    });
+    return { schema: schema, roles: ROLES.slice(),
+      builtin: BUILTIN.map(function (b) { return { id: b[0], label: b[1], blurb: b[2], look: clone(b[3]) }; }),
+      reserved: ['__defineGetter__', '__defineSetter__', '__lookupGetter__', '__lookupSetter__', '__proto__', 'constructor', 'hasOwnProperty', 'isPrototypeOf', 'propertyIsEnumerable', 'toLocaleString', 'toString', 'valueOf'],
+      menu_prefixes: ['tag:', 'more:'], name: { max: 32, pattern: '^[\\p{L}\\p{N}_](?:[\\p{L}\\p{N}_ -]{0,30}[\\p{L}\\p{N}_])?$', flags: 'u' } };
+  }
+  function mockOptions() {
+    var o = clone(M.get_options);
+    o.favourite_tag = FAV;
+    o.actions = KINDS.slice(); o.asset_kinds = ['brush', 'alpha', 'material', 'texture']; o.tag_colors = ['none', 'tint', 'glow', 'both'];
+    o.tag_bands = ['none', 'hairline', 'narrow', 'medium', 'wide']; o.tint_styles = ['flat', 'gradient']; o.slot_shapes = SHAPES.slice(); o.tint_blends = ['multiply', 'overlay'];
+    o.hub_styles = HUBS.slice(); o.when_full = WHEN_FULL.slice();
+    o.theme_ring_colors = themeRing(); o.themes = o.themes || THEMES.slice();
+    o.ring_defaults = Object.assign({}, o.ring_defaults, TAG_DEFAULTS, { colors: clone(o.theme_ring_colors[themeEff()]) });
+    delete o.ring_defaults.look;
+    o.ring_ranges = Object.assign({}, o.ring_ranges, { hub: [0, 64], tag_band_opacity: [0, 1], tag_glow_opacity: [0, 1], tag_tint_opacity: [0, 1] });
+    o.looks = q.has('nolooks') ? undefined : (o.looks && o.looks.schema ? o.looks : mockLooks());       // ?nolooks: an older backend without looks
+    if (!o.looks) { delete o.looks; delete o.hub_styles; delete o.when_full; o.slot_shapes = ['circle', 'rounded']; o.ring_ranges.hub = [0, 40]; }
+    return o;
+  }
+  // What look.js takes as context
+  function mockCtx() { var o = mockOptions(); return { looks: o.looks, defaults: o.ring_defaults, colors: o.theme_ring_colors, animations: o.animations, theme: themeEff() }; }
+  function lookPic(name) {
+    var rec = (lightPics() && M.preview_looks_light) || M.preview_looks, hit = rec && rec[name];
+    var res = clone(hit || (lightPics() && M.preview_tags_light) || M.preview_tags || M.preview_ring[Object.keys(M.preview_ring)[0]]);
+    res.width = res.height = res.size; res.centre = [res.size / 2, res.size / 2];
+    return res;
+  }
+  // studio._fit: how many items the menu's ring holds at its radius (SLOT_GAP is 1.25 slot widths), for the ring-full note
+  function mockFit(cfg, menuId) {
+    var m = cfg && cfg.menus && cfg.menus[menuId];
+    if (!m || m.fan === true || !window.ZLook) return null;
+    var v = window.ZLook.explain(cfg, { level: 'menu', menu: menuId }, mockCtx()).values, n = usable(m).length, x = 1.25 * v.slot / (2 * v.radius);
+    var cap = x < 1 ? Math.max(1, Math.floor(Math.PI / Math.asin(x) + 1e-6)) : 1;
+    return { items: n, capacity: cap, needed_radius: n < 2 ? 0 : 1.25 * v.slot / (2 * Math.sin(Math.PI / n)), full: n > cap, when_full: v.when_full || 'grow' };
   }
 
   // 'YYYY-MM-DD HH:MM:SS.mmm' in local time, like the app's log
@@ -763,6 +840,7 @@
         var pics = (lightPics() && M.preview_ring_light) || M.preview_ring, hov0 = (lightPics() && M.preview_ring_hover0_light) || M.preview_ring_hover0;
         var res = clone((hover === 0 && menuId === 'brushes' && hov0) || pics[menuId] || pics.brushes || M.preview_ring[menuId] || M.preview_ring.brushes);
         res.width = res.height = res.size; res.centre = [res.size / 2, res.size / 2];
+        res.fit = mockFit(cfg, menuId);
         var it = openPath && openPath.length ? usable(m)[openPath[0]] : null, sub = it && it.menu ? cfg.menus[it.menu] : null;
         if (it && it.tag) {                                          // a tag slot with brushes is a fan of them, like the expander makes
           var tn = (tagSnapshot().tags.filter(function (t) { return t.key === it.tag; })[0] || {}).count || 0;
@@ -794,16 +872,24 @@
     preview_animation: function (cfg, menuId) {
       return sleep(350 + lag).then(function () { return (lightPics() && M.preview_animation_light) || M.preview_animation; });
     },
-    get_options: function () {
-      return sleep(10).then(function () {
-        var o = clone(M.get_options);
-        o.favourite_tag = FAV;
-        o.actions = KINDS.slice(); o.asset_kinds = ['brush', 'alpha', 'material', 'texture']; o.tag_colors = ['none', 'tint', 'glow', 'both'];
-        o.tag_bands = ['none', 'hairline', 'narrow', 'medium', 'wide']; o.tint_styles = ['flat', 'gradient']; o.slot_shapes = ['circle', 'rounded']; o.tint_blends = ['multiply', 'overlay'];
-        o.theme_ring_colors = themeRing(); o.themes = o.themes || THEMES.slice();
-        o.ring_defaults = Object.assign({}, o.ring_defaults, TAG_DEFAULTS, { colors: clone(o.theme_ring_colors[themeEff()]) });
-        o.ring_ranges = Object.assign({}, o.ring_ranges, { hub: [0, 40], tag_band_opacity: [0, 1], tag_glow_opacity: [0, 1], tag_tint_opacity: [0, 1] });
-        return o;
+    get_options: function () { return sleep(10).then(mockOptions); },
+    // The look previews: the recorded pictures of each built-in look when there are some, else the plain ring picture (a user look has no picture of its own here).
+    preview_look: function (cfg, preset) {
+      return sleep(60 + lag).then(function () { var out = lookPic(preset); out.problems = []; return out; });
+    },
+    preview_looks: function (cfg, names) {
+      return sleep(120 + lag).then(function () {
+        var ctx = mockCtx(), known = ctx.looks.builtin.map(function (b) { return b.id; }).concat(Object.keys((cfg && cfg.looks) || {})), out = {};
+        (names || known).forEach(function (n) { if (known.indexOf(n) >= 0) out[n] = lookPic(n); });
+        return { looks: out, problems: [] };
+      });
+    },
+    resolve_look: function (cfg, menuId, slot) {
+      return sleep(30).then(function () {
+        var ctx = mockCtx(), Z = window.ZLook, t = menuId ? (slot === null || slot === undefined ? { level: 'menu', menu: menuId } : { level: 'menu', menu: menuId, slot: slot }) : { level: 'global' };
+        var ex = Z.explain(cfg, t, ctx), name = slot === null || slot === undefined ? Z.presetOf(cfg, t) : '';
+        return { values: ex.values, origins: ex.origins, preset: name ? { name: name, builtin: ctx.looks.builtin.some(function (b) { return b.id === name; }) } : null,
+          fit: menuId ? mockFit(cfg, menuId) : null, problems: Z.problems(cfg, ctx) };
       });
     },
     get_library: function (refresh, kind, since) {

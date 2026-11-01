@@ -17,7 +17,17 @@ All notable changes to this project are listed here. The format follows
 - **Glow** in the item inspector gives one slot its own glow colour, saved as `style.glow_color` in `radial.json`. It
   wins over the slot's tag colour for the hover glow, the hover rim and the idle halo only (#33).
 - `radial.json` can hold named looks under `looks`, a menu can have its own `look` (a look's name, its own settings, or
-  both), and an item can have a `style`. Studio does not edit these yet (#33).
+  both), and an item can have a `style`. Studio edits the first two, on the Look screen (#33).
+- The **Look** screen has a gallery of looks: seven built in (**Classic**, **Soft**, **Tiles**, **Crystal**,
+  **Circuit**, **Diamonds** and **Minimal**) and your own. **New from current** saves what you see as a look,
+  **Edit**, **Duplicate**, **Rename** and **Delete** manage them, and menus that use a look follow it when you change
+  it. **Use for all menus** sets a look for every menu and removes your own settings that would hide it, with **Undo**
+  (#33).
+- **This menu** on the Look screen gives one menu its own look, saved as `look` in the menu. In Full mode the **Menu**
+  tab has a **Look** section with the same choice, **Edit in Look** and **Clear own settings** (#33).
+- The Look screen has controls for the rest of the look settings: six slot shapes, **Corner roundness**, **Rim width**,
+  **Icon size**, **Hub style**, **Hub colour**, **Hub glow**, **Glow colour**, **Glow strength**, **Label colour** and
+  **When full** (**Grow**, **Second ring** or **More slot**). A colour is a theme colour or any `#rrggbb` (#33).
 - `when_full: "more"` in the ring settings or a menu's look keeps a full ring at its radius and ends it with a
   **More** slot, which opens a ring with the rest of the menu. Fans and tag fans are never paged (#33).
 - `when_full: "rings"` keeps a full ring at its radius and puts the items that do not fit on a second ring outside
@@ -38,6 +48,9 @@ All notable changes to this project are listed here. The format follows
 - **What's new** shows a link in the release notes as its text, not as `[text](address)`.
 - Studio's note above the item list no longer waits for 12 items. It shows when the ring is full at the current radius,
   says how many items fit and how big the ring grows, and warns when it is too big for the screen (#33).
+- The note above the item list follows the menu's own look and its **When full** choice, and has a **Change in Look**
+  link (#33).
+- **Unsaved changes** lists looks under **Looks** and ring look settings under **Look**, not **Settings** (#33).
 - Studio's top bar gives way only when it has no room left, not whenever the window is narrower than 1100 px. First
   the **Ctrl+S** hint on **Save** goes, then the word Studio, then **Revert** and **Save** turn into icons, and last
   **Unsaved changes** keeps only its dot. After that the profile name is shortened.

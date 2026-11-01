@@ -225,6 +225,10 @@ const isPath = s => /[\\/]/.test(s) || /\.(png|zbp|zmt|psd|jpg|jpeg|bmp|tif|tiff
 const ring = () => S.cfg.ring || {};
 const ringNum = k => { const v = ring()[k]; return typeof v === 'number' ? v : S.defaults[k]; };
 const ranges = () => (S.opts && S.opts.ring_ranges) || FALLBACK_RANGES;
+/* What look.js needs to resolve a look (see its header): the schema of get_options, the ring defaults, the theme colours, the theme in force. */
+/* The toast text for settings that using a look removed. */
+const clearedText = n => (n === 1 ? 'Cleared your own setting' : 'Cleared ' + n + ' of your own settings');
+const lookCtx = () => ({ looks: S.opts && S.opts.looks, defaults: S.defaults, colors: S.opts && S.opts.theme_ring_colors, animations: S.opts && S.opts.animations, theme: S.themeEff || 'dark' });
 const menus = () => S.cfg.menus;
 const curMenu = () => menuOf(S.menuId);
 const curItem = () => { const m = curMenu(); return m && S.itemIdx !== null ? m.items[S.itemIdx] : undefined; };
@@ -235,12 +239,13 @@ const isFull = () => S.prefs.mode !== 'simple';
 const kindIsFull = k => !!(KIND[k] && KIND[k].full);
 /* Ring settings that only Full shows, with the names the "changed in Full mode" note uses. */
 const FULL_RING = { tag_colors: 'Tag colours', tag_band: 'Tag colours', tag_band_opacity: 'Tag colours', tag_glow_opacity: 'Tag colours', tag_tint_opacity: 'Tag colours',
-  tag_tint_style: 'Tag colours', tag_tint_blend: 'Tag colours', colors: 'Colours', hover_submenus: 'Open submenus on hover', hub: 'Hub', tap_ms: 'Tap time', timeout_s: 'Auto-close' };
+  tag_tint_style: 'Tag colours', tag_tint_blend: 'Tag colours', colors: 'Colours', hover_submenus: 'Open submenus on hover', hub: 'Hub', hub_style: 'Hub', hub_color: 'Hub', hub_glow: 'Hub',
+  glow_color: 'Glow', glow_opacity: 'Glow', label_color: 'Label colour', slot_corner: 'Slot detail', border_width: 'Slot detail', icon_scale: 'Slot detail', tap_ms: 'Tap time', timeout_s: 'Auto-close' };
 const FULL_CARDS = new Set(['set-zbrush-bridge', 'set-older-zbrush', 'set-tags']);
 /* Of the names above, the ones that live on the Look screen; the rest are on Settings. */
-const LOOK_FULL_NAMES = new Set(['Tag colours', 'Colours', 'Hub']);
+const LOOK_FULL_NAMES = new Set(['Tag colours', 'Colours', 'Hub', 'Glow', 'Label colour', 'Slot detail']);
 /* A menu with an open animation, fan out or swallow turned off: the Menu tab shows those fields only in Full. */
-const menuFullSet = m => !!m && (!!m.animation || m.fan === true || m.swallow === false);
+const menuFullSet = m => !!m && (!!m.animation || m.fan === true || m.swallow === false || !!m.look);
 /* Names (deduplicated, in settings order) of Full-only settings that differ from the defaults. where: 'look' or 'settings' keeps the ones that screen shows. */
 function fullOnlyChanges(cfg, where) {
   const names = [], add = n => { if (!names.includes(n) && (!where || LOOK_FULL_NAMES.has(n) === (where === 'look'))) names.push(n); };
@@ -738,19 +743,21 @@ function itemThumb(it, size = 30) {
 const SAMPLE_MENU = 'sample:tags';             // not a menu: the backend's sample ring of library brushes in the user's tag colours
 const RingLoader = {
   cache: new Map(), ver: -1, gen: 0, queue: {}, cur: null, busy: false,   // gen: bumped by tag edits, which S.version does not see; queue: lane -> waiting request
-  key: (m, hv, path) => m + '|' + (hv === null || hv === undefined ? 'n' : hv) + '|' + (path && path.length ? path.join('.') : ''),
+  key: (m, hv, path, variant) => m + '|' + (hv === null || hv === undefined ? 'n' : hv) + '|' + (path && path.length ? path.join('.') : '') + (variant ? '|v:' + variant.key : ''),
   sync() { if (this.ver !== S.version) { this.cache.clear(); this.ver = S.version; } },
-  peek(menuId, hover, path) { this.sync(); return this.cache.get(this.key(menuId, hover, path)) || null; },
-  get(menuId, hover, path, lane = 'main') {      // path: item indices of the fan submenus to show open (null: none)
+  peek(menuId, hover, path, variant) { this.sync(); return this.cache.get(this.key(menuId, hover, path, variant)) || null; },
+  /* path: item indices of the fan submenus to show open (null: none). variant: { key, cfg() } draws from a config of its own (a copy with
+     another look on one menu) instead of S.cfg; key tells its pictures apart, and the menu it changes is the one to preview. */
+  get(menuId, hover, path, lane = 'main', variant = null) {
     this.sync();
-    const k = this.key(menuId, hover, path), c = this.cache.get(k);
+    const k = this.key(menuId, hover, path, variant), c = this.cache.get(k);
     if (c) return Promise.resolve(c);
     return new Promise(res => {
       // the same picture asked for twice (several previews on one screen) shares one backend call
       const same = [this.cur, ...Object.values(this.queue)].find(q => q && q.k === k && q.ver === S.version && q.gen === this.gen);
       if (same) { same.waiters.push(res); return; }
       if (this.queue[lane]) this.settle(this.queue[lane], null);   // latest request wins within a lane; other lanes keep theirs
-      this.queue[lane] = { menuId, hover: hover === undefined ? null : hover, path: path && path.length ? path : null, k, ver: S.version, gen: this.gen, res, waiters: [] };
+      this.queue[lane] = { menuId, hover: hover === undefined ? null : hover, path: path && path.length ? path : null, variant, k, ver: S.version, gen: this.gen, res, waiters: [] };
       this.pump();
     });
   },
@@ -762,7 +769,8 @@ const RingLoader = {
     const q = this.queue[lane]; delete this.queue[lane]; this.cur = q;
     let out;
     try {
-      out = q.menuId === SAMPLE_MENU ? await call('preview_tags', S.cfg, q.hover, 1.0) : await call('preview_ring', S.cfg, q.menuId, q.hover, 1.0, q.path);
+      const cfg = q.variant ? q.variant.cfg() : S.cfg;
+      out = q.menuId === SAMPLE_MENU ? await call('preview_tags', cfg, q.hover, 1.0, q.variant ? q.variant.menu : null) : await call('preview_ring', cfg, q.menuId, q.hover, 1.0, q.path);
       if (out && out.image && q.ver === this.ver && q.gen === this.gen) {
         this.cache.set(q.k, out);
         if (this.cache.size > 60) this.cache.delete(this.cache.keys().next().value);
@@ -1623,11 +1631,15 @@ function buildMenusScreen(root) {
     if (!back && S.cameFrom) S.cameFrom = null;
     itemsHead.replaceChildren(...[back ? h('button', { class: 'chip back', type: 'button', title: 'Back to ' + (back.title || S.cameFrom.menuId), onclick: goBack }, icon('chevL', 12), h('span', { class: 'back-txt' }, 'Back to ' + (back.title || S.cameFrom.menuId))) : null,
       h('span', { class: 'micro' }, 'Items'), h('span', { class: 'count' }, m ? String(m.items.length) : '0'), h('span', { class: 'spacer' }), m ? addBtn : null].filter(Boolean));
-    const full = ringFull(m ? m.items.length : 0);
+    R.itemNote();
+    renderItemList(itemsEl, S.menuId, false);
+  };
+  R.itemNote = () => {
+    const full = S.menuId ? ringNote(S.menuId) : null;
     itemsNote.hidden = !full;
     itemsNote.classList.toggle('warn', !!full && full.tooBig);
-    if (full) itemsNote.replaceChildren(icon('alert', 13), full.text);
-    renderItemList(itemsEl, S.menuId, false);
+    if (full) itemsNote.replaceChildren(icon('alert', 13), full.text, ...(full.link && S.opts && S.opts.looks ? [' ', linkBtn('Change in Look', () => goToProblem({ kind: 'look', level: 'menu', menuId: S.menuId, key: 'when_full', group: 'when_full' }))] : []));
+    else itemsNote.replaceChildren();
   };
 
   /* --- right column */
@@ -1779,6 +1791,25 @@ function ringFull(n) {
     + (isFull() ? 'Raise ' + label + ', lower Slot size or move some items into a submenu.' : 'Raise ' + label + ' or move some items into a submenu.');
   return { text, tooBig };
 }
+/* The note above the item list when a menu has more items than its ring holds at its radius. The preview says how many the menu's own
+   look holds (fit, which follows the menu's look and its When full choice); until it arrives, or from an older backend, the ring's
+   look is used and the ring is assumed to grow. Returns null when the items fit, else { text, tooBig, link }. */
+function ringNote(menuId) {
+  const m = menuOf(menuId), n = m && Array.isArray(m.items) ? m.items.length : 0;
+  const res = RingLoader.peek(menuId, null, null);
+  if (!res || !res.image || !('fit' in res)) { const f = ringFull(n); return f ? Object.assign({ link: false }, f) : null; }
+  const fit = res.fit;
+  if (!fit || !fit.full) return null;
+  const v = ZLook.explain(S.cfg, { level: 'menu', menu: menuId }, lookCtx()).values;
+  const radius = Math.round(v.radius || ringNum('radius')), slot = v.slot || ringNum('slot'), k = fit.capacity, mode = fit.when_full || 'grow';
+  const holds = 'At a radius of ' + radius + ' px this ring holds ' + k + (k === 1 ? ' item' : ' items') + '. ';
+  if (mode === 'rings') return { text: holds + 'With ' + n + ' the other ' + (n - k) + ' go in a second ring.', tooBig: false, link: true };
+  if (mode === 'more') return { text: holds + 'With ' + n + ' it shows ' + Math.max(1, k - 1) + ' and a More slot opens the rest.', tooBig: false, link: true };
+  const need = Math.round(fit.needed_radius), label = isFull() ? 'Ring radius' : 'Ring size';
+  const tooBig = 2 * (fit.needed_radius + slot * 0.62 + 34) > Math.min(screen.availWidth || Infinity, screen.availHeight || Infinity);
+  return { text: holds + 'With ' + n + ' it grows to ' + need + ' px. ' + (tooBig ? 'It is too big for this screen, so it is pushed against the edges. ' : '')
+    + (isFull() ? 'Raise ' + label + ', lower Slot size or move some items into a submenu.' : 'Raise ' + label + ' or move some items into a submenu.'), tooBig, link: true };
+}
 function buildStage() {
   const img = h('img', { class: 'ring-img pending', alt: 'Ring preview', draggable: false });     // hidden until the first image has decoded, so no broken-image icon
   const ov = h('div', { class: 'ring-ov' });
@@ -1911,7 +1942,7 @@ function buildStage() {
       el.classList.remove('err'); haveImage = true;
       const w = res.width || res.size, ht = res.height || res.size, cx = res.centre ? res.centre[0] : w / 2, cy = res.centre ? res.centre[1] : ht / 2;
       const fanned = !!path && (Math.abs(w - ht) > 1.5 || Math.abs(cx - w / 2) > 1.5 || Math.abs(cy - ht / 2) > 1.5);
-      if (!fanned) { if (res.size && res.size !== curSize) curSize = res.size; baseVer = S.version; }     // only the plain ring says how big the ring is
+      if (!fanned) { if (res.size && res.size !== curSize) curSize = res.size; baseVer = S.version; if (R.itemNote) R.itemNote(); }     // only the plain ring says how big the ring is, and how full it is
       setImg(res.image, fanned ? { w, h: ht, cx, cy } : null);
       layout();
     } else if (res) {
@@ -2287,6 +2318,39 @@ addEventListener('pointerdown', () => { pointerHeld = true; }, true);
 addEventListener('pointerup', () => { pointerHeld = false; }, true);
 addEventListener('pointercancel', () => { pointerHeld = false; }, true);
 
+/* The Look section of the Menu tab: which look the menu uses (the ring's, a built-in or one of yours), and a way into the Look screen.
+   A menu with settings of its own shows them as one read-only line, "Custom (2 changes)" or "Soft + 2 changes". */
+function buildMenuLook(id) {
+  const ctx = lookCtx(), T = { level: 'menu', menu: id }, m = menuOf(id);
+  const sum = ZLook.summary(S.cfg, T, ctx), glob = ZLook.summary(S.cfg, { level: 'global' }, ctx);
+  const mine = Object.keys(ZLook.userLooks(S.cfg)).filter(n => ZLook.nameProblem(n, ctx) === '');
+  const custom = sum.count > 0 || (!!sum.preset && !sum.known);
+  const current = custom ? '~custom' : sum.preset;
+  const sel = h('select', { class: 'inp sel', 'aria-label': 'Look for this menu', dataset: { fk: 'menu:look' }, onchange: () => {
+    const v = sel.value;
+    if (v === '~custom') return;
+    let n = 0;
+    if (v === '') { n = ZLook.ownCount(S.cfg, T, ctx); delete m.look; } else n = ZLook.usePreset(S.cfg, T, v, { keep: false }, ctx);
+    commit({ inspector: true });
+    const what = v === '' ? 'This menu follows the ring’s look' : ZLook.labelOf(v, ctx) + ' is the look of this menu';
+    undoToast(what + (n ? '. ' + clearedText(n) + '.' : '.'));
+  } },
+  custom ? h('option', { value: '~custom', selected: true, disabled: true }, sum.text) : null,
+  h('option', { value: '', selected: current === '' }, 'Same as all menus (Global: ' + glob.text + ')'),
+  h('optgroup', { label: 'Built-in' }, ((ctx.looks && ctx.looks.builtin) || []).map(b => h('option', { value: b.id, selected: current === b.id }, b.label))),
+  mine.length ? h('optgroup', { label: 'Yours' }, mine.map(n => h('option', { value: n, selected: current === n }, n))) : null);
+  const hint = h('div', { class: 'fhint' }, custom
+    ? 'This menu has settings of its own' + (sum.preset && sum.known ? ' on top of ' + ZLook.labelOf(sum.preset, ctx) : '') + '. Change them in Look, or clear them to pick a look here.'
+    : sum.preset ? 'Only this menu uses ' + sum.text + '. The other menus keep following the look for all menus.' : 'This menu follows the look chosen for all menus. Pick another to give this menu its own.');
+  const edit = h('button', { class: 'btn', type: 'button', onclick: () => goToProblem({ kind: 'look', level: 'menu', menuId: id, key: null, group: null }) }, icon('look', 13), 'Edit in Look');
+  const clearBtn = h('button', { class: 'btn', type: 'button', disabled: sum.count === 0, title: sum.count ? 'Remove the settings this menu has of its own' : 'This menu has no settings of its own', onclick: () => {
+    const n = ZLook.clearAll(S.cfg, T, ctx);
+    commit({ inspector: true });
+    undoToast(clearedText(n) + '.');
+  } }, icon('undo', 13), 'Clear own settings');
+  return h('div', { class: 'field' }, sel, hint, h('div', { class: 'btn-row' }, edit, clearBtn));
+}
+
 function buildMenuProps() {
   const m = curMenu(), id = S.menuId;
   const box = h('div', { class: 'insp' });
@@ -2364,12 +2428,17 @@ function buildMenuProps() {
     h('div', { class: 'fhint' }, 'Hides the key from ZBrush while the ring is in use, so it does not also trigger ZBrush\'s own shortcut for that key. Turn off if you want the key to keep working in ZBrush too.'), swallowNeed),
     swallowSw));
 
-  if (!full && menuFullSet(m)) box.append(h('div', { class: 'fhint' }, 'Open animation, Fan out or Swallow hotkey are set for this menu in Full mode. ', linkBtn('Switch to Full mode', () => setMode('full'))));
+  if (!full && menuFullSet(m)) {
+    const set = [m.animation ? 'Open animation' : '', m.fan === true ? 'Fan out' : '', m.swallow === false ? 'Swallow hotkey' : '', m.look ? 'A look' : ''].filter(Boolean);
+    box.append(h('div', { class: 'fhint' }, joinList(set) + (set.length === 1 ? ' is' : ' are') + ' set for this menu in Full mode. ', linkBtn('Switch to Full mode', () => setMode('full'))));
+  }
   const refs = referrers(id);
   if (full) box.append(sectionTitle('Used by'), refs.length
     ? h('div', { class: 'refs' }, refs.map(r => h('button', { class: 'chip cyan', type: 'button', title: 'Go to this item', onclick: () => { selectMenu(r.menuId); selectItem(r.index); } },
       icon('k_menu', 12), (menuOf(r.menuId).title || r.menuId) + ' / ' + (r.index + 1))))
     : h('div', { class: 'fhint' }, m.hotkey ? 'Opened from ZBrush by its hotkey.' : 'Nothing opens this menu yet. Add a Submenu item in another menu that points to it.'));
+
+  if (full && S.opts && S.opts.looks) box.append(sectionTitle('Look', 'Shapes, hub, glow and colours of this menu'), buildMenuLook(id));
 
   const anims = (S.opts && S.opts.animations) || Object.keys(ANIM_INFO);
   const animTitle = a => a[0].toUpperCase() + a.slice(1);
@@ -3661,9 +3730,9 @@ function putRing(k, v) {
   ringSet(k, v); tidyRing(); commit();
 }
 /* get/put/clear/isSet let a row drive more than its own key (see sizeRow); the defaults are the plain one-key behaviour. */
-function sliderRow({ label, hint, key, step = 1, unit = '', scale = 1, onLive, get = () => ringNum(key), put = v => putRing(key, v),
-  clear = () => { delete ensureRing()[key]; tidyRing(); commit(); }, isSet = () => key in ring() && ring()[key] !== S.defaults[key] }) {   // scale: shown = stored * scale (0-1 opacity as 0-100 %)
-  const [lo, hi] = ranges()[key] || [0, 100];
+function sliderRow({ label, hint, key, step = 1, unit = '', scale = 1, onLive, limits = null, get = () => ringNum(key), put = v => putRing(key, v),
+  clear = () => { delete ensureRing()[key]; tidyRing(); commit(); }, isSet = () => key in ring() && ring()[key] !== S.defaults[key] }) {   // scale: shown = stored * scale (0-1 opacity as 0-100 %); limits: [min, max] when ring_ranges has none for the key
+  const [lo, hi] = limits || ranges()[key] || [0, 100];
   const min = lo * scale, max = hi * scale;
   const disp = v => Number((v * scale).toFixed(6)), store = d => Number((d / scale).toFixed(6));
   const range = h('input', { type: 'range', min, max, step, value: disp(get()), 'aria-label': label, dataset: { fk: key + '/range' } });
@@ -4676,15 +4745,32 @@ function updateDirty() {
    Returns { text, raw, target }; target is null when the format is not recognised. */
 const RING_CARD = { animation: 'set-open-animation', tap_ms: 'set-behaviour', timeout_s: 'set-behaviour', flick: 'set-behaviour', hover_submenus: 'set-behaviour' };
 /* The ring keys the Look screen shows, with the group each one is in (look-screen.js has the same groups). */
-const RING_LOOK = { radius: 'slots', slot: 'slots', dead_zone: 'slots', slot_shape: 'slots', hub: 'hub', labels: 'labels', colors: 'colours',
-  tag_colors: 'tags', tag_band: 'tags', tag_band_opacity: 'tags', tag_glow_opacity: 'tags', tag_tint_opacity: 'tags', tag_tint_style: 'tags', tag_tint_blend: 'tags' };
-const lookTarget = key => ({ kind: 'look', key, group: RING_LOOK[key] });
+const RING_LOOK = { radius: 'slots', slot: 'slots', dead_zone: 'slots', slot_shape: 'slots', slot_corner: 'slots', border_width: 'slots', icon_scale: 'slots',
+  hub: 'hub', hub_style: 'hub', hub_color: 'hub', hub_glow: 'hub', glow_color: 'glow', glow_opacity: 'glow', labels: 'labels', label_color: 'labels', colors: 'colours',
+  tag_colors: 'tags', tag_band: 'tags', tag_band_opacity: 'tags', tag_glow_opacity: 'tags', tag_tint_opacity: 'tags', tag_tint_style: 'tags', tag_tint_blend: 'tags', when_full: 'when_full' };
+/* Where a problem with a look setting leads: the Look screen at a level ('global', 'menu' with menuId, 'preset' with name), at the group and control of key. */
+const lookTarget = (key, where = {}) => Object.assign({ kind: 'look', level: 'global', key, group: RING_LOOK[key] }, where);
 const RING_NAME = { radius: 'Ring radius', slot: 'Slot size', dead_zone: 'Dead zone', hub: 'Hub', tap_ms: 'Tap time', timeout_s: 'Auto-close', flick: 'Flick to pick',
   hover_submenus: 'Open submenus on hover', animation: 'Open animation', labels: 'Labels', slot_shape: 'Slot shape', tag_colors: 'Tag colours',
+  slot_corner: 'Corner roundness', border_width: 'Rim width', icon_scale: 'Icon size', hub_style: 'Hub style', hub_color: 'Hub colour', hub_glow: 'Hub glow',
+  glow_color: 'Glow colour', glow_opacity: 'Glow opacity', label_color: 'Label colour', when_full: 'When full',
   tag_band: 'Band', tag_band_opacity: 'Band opacity', tag_glow_opacity: 'Glow opacity', tag_tint_opacity: 'Icon tint opacity', tag_tint_style: 'Icon tint style', tag_tint_blend: 'Icon tint blend' };
+const isPlainObj = o => o !== null && typeof o === 'object' && !Array.isArray(o);
 const unq = s => String(s).replace(/^(['"])(.*)\1$/, '$2');
 /* "(did you mean mode?)" at the end of a loader message, as a sentence of its own ('' when there is none). */
 const didYouMean = s => { const d = /\(did you mean (.+)\?\)\s*$/.exec(String(s)); return d ? ' Did you mean ' + d[1] + '?' : ''; };
+/* What is wrong with one look setting, from the loader's text after "<key>: " (nm is the setting's name); null when it is not one it knows. */
+function lookValueReason(nm, body) {
+  let r;
+  if ((r = /^(.+) must be a number from (\S+) to (\S+)$/s.exec(body))) return `${nm} ${unq(r[1])} is outside ${r[2]} to ${r[3]}`;
+  if ((r = /^(.+) must be true or false$/s.exec(body))) return `${nm} must be on or off, not ${unq(r[1])}`;
+  if ((r = /^(.+) unknown; one of /s.exec(body))) return `${nm} ${unq(r[1])} is not one of the available choices`;
+  if ((r = /^(.+) is not a #rrggbb colour or a theme colour/s.exec(body))) return `${nm} ${unq(r[1])} is not a #rrggbb value or a theme colour`;
+  if (body.startsWith('is a ring setting, not part of a look')) return `${nm} is a ring setting, not part of a look, so it is ignored here`;
+  if (body.startsWith('unknown setting')) return `${nm} is not a known look setting`;
+  return null;
+}
+const lookLabel = key => RING_NAME[key] || key;
 function describeProblem(raw) {
   const out = (text, target) => ({ text, raw, target: target || null });
   const cfgMenus = (S.cfg && S.cfg.menus) || {};
@@ -4744,6 +4830,11 @@ function describeProblem(raw) {
     if ((m = /^: animation (.+) unknown; using ring\.animation$/s.exec(rest))) return out(`${titleOf(mid)} has an unknown animation (${unq(m[1])}); the one from Settings is used instead`, tgt('animation'));
     if ((m = /^: unknown setting (.+)$/s.exec(rest))) return out(`${titleOf(mid)} has an unknown setting ${m[1].replace(/\s*\(did you mean .*$/s, '')}.` + didYouMean(m[1]), tgt());
     if ((m = /^: (swallow|fan) (.+) must be true or false; using (true|false)$/s.exec(rest))) return out(`${titleOf(mid)}: ${m[1] === 'fan' ? 'Fan out' : 'Swallow hotkey'} must be on or off, not ${unq(m[2])}; it is ${m[3] === 'true' ? 'on' : 'off'} for now`, tgt());
+    const lookAt = key => (known(mid) ? lookTarget(key, { level: 'menu', menuId: mid }) : null);
+    if ((m = /^: look (.+) unknown; using the ring's look$/s.exec(rest))) return out(`${titleOf(mid)} uses the look ${unq(m[1])}, which does not exist; the ring's look is used instead`, lookAt('_look'));
+    if (rest.startsWith(': look must be a look name or an object')) return out(`The look of ${titleOf(mid)} must be a look name or an object of look settings, so it is ignored`, lookAt('_look'));
+    if ((m = /^: look\.(\w+): (.*)$/s.exec(rest))) { const why = lookValueReason(lookLabel(m[1]), m[2]); return out(`${titleOf(mid)}, look: ${why || lookLabel(m[1]) + ': ' + m[2]}`, lookAt(m[1])); }
+    if ((m = /^: look\.colors\.(\w+): (.*)$/s.exec(rest))) return out(`${titleOf(mid)}, look: ${COLOR_INFO[m[1]] ? COLOR_INFO[m[1]][0] : m[1]} colour ${m[2]}`, lookAt('colors'));
     return out(titleOf(mid) + rest, tgt());
   }
   if ((m = /^ring\.colors\.(\w+): (.+) is not a #rrggbb colour$/s.exec(raw))) {
@@ -4753,14 +4844,30 @@ function describeProblem(raw) {
   if ((m = /^ring\.colors\.(\w+): unknown colour(.*)$/s.exec(raw))) return out(`Ring colour “${m[1]}” is not one of the five colours.` + didYouMean(m[2]), lookTarget('colors'));
   if (raw.startsWith('ring: must be an object')) return out('The ring section is not an object, so every ring setting uses its default', lookTarget('radius'));
   if ((m = /^ring\.(\w+): unknown setting(.*)$/s.exec(raw))) return out(`The ring setting “${m[1]}” is not known.` + didYouMean(m[2]), null);
+  if ((m = /^ring\.look: (.+) unknown; one of /s.exec(raw))) return out(`The ring uses the look ${unq(m[1])}, which does not exist, so the default look is used`, lookTarget('_look'));
   if ((m = /^ring\.(\w+): (.*)$/s.exec(raw))) {
     const key = m[1], body = m[2], nm = RING_NAME[key] || key, card = RING_CARD[key];
     const target = own(RING_LOOK, key) ? lookTarget(key) : card ? { kind: 'settings', card, key } : null;
-    let r;
-    if ((r = /^(.+) must be a number from (\S+) to (\S+)$/s.exec(body))) return out(`${nm} ${unq(r[1])} is outside ${r[2]} to ${r[3]}`, target);
-    if ((r = /^(.+) must be true or false$/s.exec(body))) return out(`${nm} must be on or off, not ${unq(r[1])}`, target);
-    if ((r = /^(.+) unknown; one of /s.exec(body))) return out(`${nm} ${unq(r[1])} is not one of the available choices`, target);
-    return out(`${nm}: ${body}`, target);
+    const why = lookValueReason(nm, body);
+    return out(why || `${nm}: ${body}`, target);
+  }
+  if (raw.startsWith('looks: must be an object')) return out('The looks section is not an object, so every look in it is ignored', lookTarget('_look'));
+  if (raw.startsWith('looks.')) {
+    const names = Object.keys((S.cfg && S.cfg.looks) || {}).sort((x, y) => y.length - x.length);
+    const nm = names.find(n => raw.startsWith('looks.' + n + ': ') || raw.startsWith('looks.' + n + '.'));
+    const lname = nm !== undefined ? nm : ((m = /^looks\.([^:.]+)/.exec(raw)) ? m[1] : null);
+    if (lname !== null) {
+      const rest = raw.slice(('looks.' + lname).length), q = '“' + lname + '”';
+      const there = !!(S.cfg && S.cfg.looks && own(S.cfg.looks, lname) && ZLook.nameProblem(lname, lookCtx()) === '');
+      const gal = lookTarget('_look'), on = key => (there ? lookTarget(key, { level: 'preset', name: lname }) : gal);
+      if (rest.startsWith(': name must be')) return out(`The look ${q} has a name that is not allowed (1 to 32 letters, digits, spaces, - or _), so it is ignored. Rename it in the file`, gal);
+      if (rest.startsWith(': that name is a built-in look')) return out(`The look ${q} has the name of a built-in look, or a reserved name, so it is ignored. Rename it in the file`, gal);
+      if ((m = /^: same name as (.+) apart from capitals; ignored$/s.exec(rest))) return out(`The look ${q} has the same name as ${'“' + unq(m[1]) + '”'} apart from capitals, so it is ignored`, gal);
+      if (rest.startsWith(': not an object')) return out(`The look ${q} is not an object, so it is ignored`, gal);
+      if (rest.startsWith('.preset:')) return out(`The look ${q} names another look; a look cannot be based on another one, so that is ignored`, on('_look'));
+      if ((m = /^\.colors\.(\w+): (.*)$/s.exec(rest))) return out(`The look ${q}: ${COLOR_INFO[m[1]] ? COLOR_INFO[m[1]][0] : m[1]} colour ${m[2]}`, on('colors'));
+      if ((m = /^\.(\w+): (.*)$/s.exec(rest))) { const why = lookValueReason(lookLabel(m[1]), m[2]); return out(`The look ${q}: ${why || lookLabel(m[1]) + ': ' + m[2]}`, on(m[1])); }
+    }
   }
   const bridge = { kind: 'settings', card: 'set-zbrush-bridge' };
   if ((m = /^bridge\.mode (.+) unknown; using auto$/s.exec(raw))) return out(`Bridge mode ${unq(m[1])} is unknown; Auto is used instead`, bridge);
@@ -4823,6 +4930,7 @@ function goToProblem(t) {
   if (!isFull() && targetNeedsFull(t)) { setMode('full'); toast('Switched to Full mode to show this.', { ms: 3500 }); }
   if (t.kind === 'look') {
     const same = S.screen === 'look';
+    if (typeof window.lookOpenAt === 'function') window.lookOpenAt(t, same);     // the level, menu or look to show
     showScreen('look', { fresh: true });
     const go = () => { if (R.lookGoto) R.lookGoto(t.key, t.group); };
     if (same) go(); else requestAnimationFrame(go);
@@ -5460,6 +5568,10 @@ function describeChanges() {
     if ((a.animation || '') !== (b.animation || '')) lines.push('Open animation: ' + (b.animation || 'same as Settings') + ' \u2192 ' + (a.animation || 'same as Settings'));
     if ((a.fan === true) !== (b.fan === true)) lines.push('Fan out as a submenu: ' + (b.fan === true ? 'on' : 'off') + ' \u2192 ' + (a.fan === true ? 'on' : 'off'));
     if ((a.swallow !== false) !== (b.swallow !== false)) lines.push('Swallow hotkey: ' + (b.swallow !== false ? 'on' : 'off') + ' \u2192 ' + (a.swallow !== false ? 'on' : 'off'));
+    if (JSON.stringify(a.look) !== JSON.stringify(b.look)) {
+      const tb = ZLook.summary(before, { level: 'menu', menu: id }, lookCtx()).text, ta = ZLook.summary(after, { level: 'menu', menu: id }, lookCtx()).text;
+      lines.push(tb === ta ? 'Look settings changed (' + ta + ')' : 'Look: ' + tb + ' \u2192 ' + ta);
+    }
     const bi = b.items || [], ai = a.items || [];
     const key = it => JSON.stringify(it);
     const pool = new Map();                       // multiset of unchanged items
@@ -5483,19 +5595,30 @@ function describeChanges() {
     if (lines.length) groups.push({ area: 'Menu ' + q(title), lines });
   }
   for (const id of Object.keys(bm)) if (!am[id]) groups.push({ area: 'Menu ' + q(bm[id].title || id), lines: ['Deleted'] });
-  const ringLines = [];
+  const ringLines = [], lookLines = [];
   const br = before.ring || {}, ar = after.ring || {};
+  const bl = isPlainObj(before.looks) ? before.looks : {}, al = isPlainObj(after.looks) ? after.looks : {};
+  const lookNames = [];
+  for (const name of Object.keys(al)) {
+    if (!own(bl, name)) lookNames.push('Added look ' + q(name));
+    else if (JSON.stringify(al[name]) !== JSON.stringify(bl[name])) lookNames.push('Changed look ' + q(name));
+  }
+  for (const name of Object.keys(bl)) if (!own(al, name)) lookNames.push('Deleted look ' + q(name));
+  const gname = v => (v ? ZLook.labelOf(v, lookCtx()) : 'none');
+  if ((br.look || '') !== (ar.look || '')) lookNames.push('Global look: ' + gname(br.look) + ' \u2192 ' + gname(ar.look));
+  if (lookNames.length) groups.push({ area: 'Looks', lines: lookNames });
   const NAMES = { radius: 'Ring radius', slot: 'Slot size', dead_zone: 'Dead zone', hub: 'Hub', tap_ms: 'Tap time', timeout_s: 'Auto-close', animation: 'Open animation', labels: 'Labels', slot_shape: 'Slot shape', tag_colors: 'Tag colours',
     tag_band: 'Tag band', tag_band_opacity: 'Tag band opacity', tag_glow_opacity: 'Tag glow opacity', tag_tint_opacity: 'Tag tint opacity', tag_tint_style: 'Tag tint style', tag_tint_blend: 'Tag tint blend',
     flick: 'Flick to pick', hover_submenus: 'Open submenus on hover' };
   for (const k of new Set([...Object.keys(br), ...Object.keys(ar)])) {
-    if (k === 'colors') continue;
-    if (JSON.stringify(br[k]) !== JSON.stringify(ar[k])) ringLines.push((NAMES[k] || k) + ': ' + (br[k] ?? 'default') + ' \u2192 ' + (ar[k] ?? 'default'));
+    if (k === 'colors' || k === 'look') continue;
+    if (JSON.stringify(br[k]) !== JSON.stringify(ar[k])) (own(RING_LOOK, k) ? lookLines : ringLines).push((NAMES[k] || lookLabel(k)) + ': ' + (br[k] ?? 'default') + ' \u2192 ' + (ar[k] ?? 'default'));
   }
   const bc = br.colors || {}, ac = ar.colors || {};
   for (const k of new Set([...Object.keys(bc), ...Object.keys(ac)])) {
-    if (bc[k] !== ac[k]) ringLines.push('Colour ' + k + ': ' + (bc[k] || 'default') + ' \u2192 ' + (ac[k] || 'default'));
+    if (bc[k] !== ac[k]) lookLines.push('Colour ' + k + ': ' + (bc[k] || 'default') + ' \u2192 ' + (ac[k] || 'default'));
   }
+  if (lookLines.length) groups.push({ area: 'Look', lines: lookLines });
   if (ringLines.length) groups.push({ area: 'Settings', lines: ringLines });
   const bb = before.bridge || {}, ab = after.bridge || {};
   const bridgeLines = [];
@@ -5504,7 +5627,7 @@ function describeChanges() {
   if (bridgeLines.length) groups.push({ area: 'ZBrush bridge', lines: bridgeLines });
   const bwb = before.browser || {}, bwa = after.browser || {};
   if ((bwb.hotkey || '') !== (bwa.hotkey || '')) groups.push({ area: 'Browser', lines: ['Hotkey: ' + (bwb.hotkey || 'none') + ' → ' + (bwa.hotkey || 'none')] });
-  const known = new Set(['menus', 'ring', 'bridge', 'browser']);
+  const known = new Set(['menus', 'ring', 'looks', 'bridge', 'browser']);
   const other = [...new Set([...Object.keys(before), ...Object.keys(after)])].filter(k => !known.has(k) && JSON.stringify(before[k]) !== JSON.stringify(after[k]));
   if (other.length) groups.push({ area: 'Other', lines: other.map(k => 'Changed ' + k) });
   return groups;
@@ -5680,7 +5803,8 @@ const buildLookScreenLazy = root => { if (typeof window.buildLookScreen === 'fun
 /* What look-screen.js needs from this closure: it is loaded after app.js and cannot see inside it. */
 window.ZStudio = { h, $, $$, S, R, icon, iconBtn, linkBtn, card, choiceCards, sliderRow, sizeRow, toggleSwitch, call, clamp, own, normHex,
   commit, toast, ring, ringNum, ranges, ensureRing, tidyRing, usableIdx, menuOf, kindOf, isLib, firstTag, isFull, setMode, fullOnlyChanges,
-  RingLoader, SAMPLE_MENU, COLOR_INFO, FALLBACK_DEFAULTS, showScreen, railTitle };
+  RingLoader, SAMPLE_MENU, COLOR_INFO, FALLBACK_DEFAULTS, showScreen, railTitle,
+  lookCtx, clearedText, modal, promptModal, popover, undoToast, sealSnap, previewSoon, plural, hasMenu, selectMenu, debounce, FALLBACK_RANGES };
 const SCREEN_BUILD = { menus: buildMenusScreen, look: buildLookScreenLazy, library: buildLibraryScreen, settings: buildSettingsScreen, status: buildStatusScreen, setup: buildSetupScreen };
 const SCREENS = Object.fromEntries(SCREEN_ORDER.map(k => [k, SCREEN_BUILD[k]]));
 // the element that scrolls on each screen (its position is remembered when you leave and put back when you return)

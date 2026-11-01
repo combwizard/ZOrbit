@@ -71,6 +71,10 @@ SHOTS = {
     "studio": dict(q="screen=menus"),
     "studio-item": dict(q="screen=menus&menu=tools&item=8"),
     "studio-look": dict(q="screen=look"),
+    # look-presets: the Look screen with the gallery of looks under the preview scrolled into view.
+    "look-presets": dict(q="screen=look", steps=["document.querySelector('.lk-gallery').scrollIntoView({block: 'start'})"]),
+    # look-menu: the menu level, after the Tiles look is used for the menu on show (badges say Look: Tiles and This menu).
+    "look-menu": dict(q="screen=look", steps=["document.querySelector('[data-level=\"menu\"]').click()", "document.querySelector('[data-fk=\"look:card/tiles/use\"]').click()"]),
     "studio-library": dict(q="screen=library"),
     "studio-settings": dict(q="screen=settings"),
     "studio-settings-simple": dict(q="screen=settings&mode=simple"),
@@ -90,6 +94,10 @@ SHOTS = {
     "library-tag": dict(q="screen=library", steps=["click('Blocking')"]),
     # Details
     "settings-theme": dict(q="screen=settings&theme=zbrush", clip="card('Theme')"),
+    # menu-look: the Look section of the Menu tab, with the Tiles look chosen for the menu.
+    "menu-look": dict(q="screen=menus&tab=menu", steps=["(() => { const s = document.querySelector('select[aria-label=\"Look for this menu\"]'); s.value = 'tiles'; s.dispatchEvent(new Event('change')); })()"],
+                      clip="({getBoundingClientRect: () => { const f = document.querySelector('select[aria-label=\"Look for this menu\"]').closest('.field'); const t = f.previousElementSibling;"
+                           " const a = t.getBoundingClientRect(), b = f.getBoundingClientRect(); return {left: a.left - 10, top: a.top - 10, right: b.right + 10, bottom: b.bottom + 10}; }})"),
     "look-colours": dict(q="screen=look", clip="lookGroup('Colours')"),
     "settings-behaviour": dict(q="screen=settings", clip="card('Behaviour')"),
     "settings-bridge": dict(q="screen=settings", clip="card('ZBrush bridge')"),

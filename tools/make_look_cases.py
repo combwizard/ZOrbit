@@ -2,7 +2,10 @@
 look the real loader and looks.LookSet.explain give for that target. Another resolver (the Studio's look.js) has to
 give the same values and origins for the same snippet; tests/test_look_parity.py checks that.
 
-Run: python tools/make_look_cases.py            (rewrites the file; tests/test_studio_looks.py fails if it is stale)
+It also writes tests/fixtures/look_options.json: the parts of get_options() that Studio's resolver (look.js) takes as its
+context (the look schema, the ring defaults, the theme colours and the animation names), recorded with the Dark theme in use.
+
+Run: python tools/make_look_cases.py            (rewrites both files; tests/test_studio_looks.py fails if one is stale)
 """
 import json
 import os
@@ -13,6 +16,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "zorbit"))
 
 OUT = os.path.join(ROOT, "tests", "fixtures", "look_cases.json")
+OUT_OPTIONS = os.path.join(ROOT, "tests", "fixtures", "look_options.json")
 
 ITEMS = [{"brush": "ClayBuildup"}, {"brush": "Move"}, {"brush": "Standard"}]
 
@@ -107,13 +111,31 @@ def build_cases() -> list:
     return out
 
 
+def build_options() -> dict:
+    """The context the JavaScript resolver needs: get_options() looks, ring_defaults, theme_ring_colors, animations."""
+    import studio
+    real = studio._theme_now
+    studio._theme_now = lambda: "dark"
+    try:
+        opts = studio.Api().get_options()
+    finally:
+        studio._theme_now = real
+    return {"looks": opts["looks"], "ring_defaults": opts["ring_defaults"], "animations": opts["animations"],
+            "theme_ring_colors": {k: v for k, v in opts["theme_ring_colors"].items() if k in ("dark", "light")}}
+
+
+def _write(path, data):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8", newline="\n") as f:
+        json.dump(data, f, indent=1, ensure_ascii=False, sort_keys=True)
+        f.write("\n")
+
+
 def main():
     cases = build_cases()
-    os.makedirs(os.path.dirname(OUT), exist_ok=True)
-    with open(OUT, "w", encoding="utf-8", newline="\n") as f:
-        json.dump(cases, f, indent=1, ensure_ascii=False, sort_keys=True)
-        f.write("\n")
-    print(f"wrote {len(cases)} cases to {OUT}")
+    _write(OUT, cases)
+    _write(OUT_OPTIONS, build_options())
+    print(f"wrote {len(cases)} cases to {OUT} and the options to {OUT_OPTIONS}")
 
 
 if __name__ == "__main__":
