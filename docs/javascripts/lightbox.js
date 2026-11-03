@@ -1,5 +1,5 @@
 /* Click a picture in the docs or the blog to see it larger. A click anywhere, the close button or Esc closes it.
-   On a phone it shows the picture at its own size and you pan across it. Only pictures that would show bigger are offered: one already shown at its full size is left alone, and so is
+   On a phone it shows the picture at its own size and you pan across it, with the close button staying put. Only pictures that would show bigger are offered: one already shown at its full size is left alone, and so is
    one inside a link (the link wins). A picture can opt out with {data-no-zoom} (attr_list). The page keeps its
    scroll position, and focus goes back to the picture. Styles are in stylesheets/extra.css (zo-lightbox). */
 (function () {
@@ -70,7 +70,12 @@
     x.setAttribute("aria-label", "Close");
     x.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
 
-    box.append(fig, x);
+    /* The picture scrolls in its own layer. The close button stays outside it, so panning never moves it. */
+    var pan = document.createElement("div");
+    pan.className = "zo-lightbox-pan";
+    pan.appendChild(fig);
+
+    box.append(pan, x);
     box.addEventListener("click", close);
     document.body.appendChild(box);
     document.documentElement.classList.add("zo-lightbox-open");
