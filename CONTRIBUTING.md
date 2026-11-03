@@ -39,7 +39,7 @@ follow the [code of conduct](CODE_OF_CONDUCT.md).
 
 ## Development setup
 
-You need Windows, Python 3.12 and ZBrush 2026 or newer. A change to the ZScript bridge also needs ZBrush 2022
+You need Windows, Python 3.14 and ZBrush 2026 or newer. A change to the ZScript bridge also needs ZBrush 2022
 installed, to compile it (see [The ZScript bridge](#the-zscript-bridge-zbrush-2022-2025) below).
 
 ```powershell

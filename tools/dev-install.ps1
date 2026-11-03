@@ -16,7 +16,7 @@
 [CmdletBinding(SupportsShouldProcess = $true)]
 param(
     [switch]$Uninstall,
-    [string]$Python = (Join-Path $env:LOCALAPPDATA 'Programs\Python\Python312\python.exe')
+    [string]$Python = (& py -3.14 -c 'import sys; print(sys.executable)' 2>$null)
 )
 
 $ErrorActionPreference = 'Stop'
@@ -46,7 +46,7 @@ if ($Uninstall) {
     return
 }
 
-if (-not (Test-Path $Python)) { throw "Python not found at $Python. Pass -Python <path to python.exe 3.12>." }
+if (-not $Python -or -not (Test-Path $Python)) { throw "Python not found at $Python. Pass -Python <path to python.exe 3.14>." }
 & $Python -I -c 'import PIL, webview' 2>$null
 if ($LASTEXITCODE -ne 0) { throw "This Python lacks the dependencies. Run: `"$Python`" -m pip install -r `"$Root\requirements.txt`"" }
 $Pythonw = Join-Path (Split-Path $Python) 'pythonw.exe'

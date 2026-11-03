@@ -4,6 +4,12 @@ All notable changes to this project are listed here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+
+- ZOrbit is now built and tested on Python 3.14 instead of 3.12. The packaged app bundles the new interpreter; running from a checkout needs Python 3.14.
+
 ## [0.16.0] - 2026-11-02
 
 ZOrbit 0.16.0 adds **Show the hint** to Settings. Turn it off and the ring no longer shows the line of help

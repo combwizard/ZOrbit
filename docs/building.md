@@ -1,7 +1,7 @@
 # Build from source
 
 
-This builds the installer from a checkout of the repository. You need Windows, Python 3.12 and the packages in `requirements-dev.txt`.
+This builds the installer from a checkout of the repository. You need Windows, Python 3.14 and the packages in `requirements-dev.txt`.
 
 ```powershell
 pip install -r requirements-dev.txt

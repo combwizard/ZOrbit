@@ -110,7 +110,7 @@ The [documentation](https://zorbit.lol/docs/) covers every setting and item type
 
 ## Build from source
 
-You need Windows, Python 3.12 and the packages in `requirements-dev.txt`.
+You need Windows, Python 3.14 and the packages in `requirements-dev.txt`.
 
 ```powershell
 pip install -r requirements-dev.txt

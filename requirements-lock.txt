@@ -1,9 +1,9 @@
-# Exact versions of everything the build and the tests need (Python 3.12, Windows).
+# Exact versions of everything the build and the tests need (Python 3.14, Windows).
 # CI and packaging\build.ps1 install from this file, so a release is built from the same packages every time.
 # requirements.txt and requirements-dev.txt stay as the loose ranges; bump this file on purpose.
 #
 # To regenerate it, make a clean venv and freeze it:
-#   py -3.12 -m venv lock-venv
+#   py -3.14 -m venv lock-venv
 #   lock-venv\Scripts\python -m pip install -r requirements.txt pyinstaller pytest
 #   lock-venv\Scripts\python -m pip freeze > requirements-lock.txt
 # then put this header back. That is requirements-dev.txt without mkdocs, which the docs build installs

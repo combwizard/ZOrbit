@@ -3,7 +3,7 @@
   Builds ZOrbit: PyInstaller onedir app, portable zip and (if Inno Setup is present) the installer.
 
 .DESCRIPTION
-  Creates/uses .venv (Python 3.12), installs requirements-lock.txt (requirements-dev.txt if there is no lock
+  Creates/uses .venv (Python 3.14), installs requirements-lock.txt (requirements-dev.txt if there is no lock
   file), makes assets\icon.ico if missing, runs PyInstaller with packaging\zorbit.spec, zips the result and compiles packaging\installer.iss with ISCC.
 
   Output:
@@ -38,23 +38,23 @@ Write-Host "== ZOrbit $Version ==" -ForegroundColor Cyan
 # --- venv -----------------------------------------------------------------------------------------------------
 $VenvPy = Join-Path $Root '.venv\Scripts\python.exe'
 if (-not (Test-Path $VenvPy)) {
-    Write-Host 'Creating .venv (Python 3.12)...'
+    Write-Host 'Creating .venv (Python 3.14)...'
     $created = $false
     if (Get-Command py -ErrorAction SilentlyContinue) {
-        & py -3.12 -m venv (Join-Path $Root '.venv') 2>$null
+        & py -3.14 -m venv (Join-Path $Root '.venv') 2>$null
         $created = ($LASTEXITCODE -eq 0) -and (Test-Path $VenvPy)
     }
     if (-not $created) {
         $cands = @(
             (Get-Command python -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source -First 1),
-            (Join-Path $env:LOCALAPPDATA 'Programs\Python\Python312\python.exe')
+            (Join-Path $env:LOCALAPPDATA 'Programs\Python\Python314\python.exe')
         ) | Where-Object { $_ -and (Test-Path $_) }
         foreach ($c in $cands) {
             $v = & $c -c 'import sys; print("%d.%d" % sys.version_info[:2])'
-            if ($v -eq '3.12') { Invoke-Native $c @('-m', 'venv', (Join-Path $Root '.venv')); $created = $true; break }
+            if ($v -eq '3.14') { Invoke-Native $c @('-m', 'venv', (Join-Path $Root '.venv')); $created = $true; break }
         }
     }
-    if (-not $created -or -not (Test-Path $VenvPy)) { throw 'Python 3.12 not found. Install it and re-run.' }
+    if (-not $created -or -not (Test-Path $VenvPy)) { throw 'Python 3.14 not found. Install it and re-run.' }
 }
 Write-Host 'Installing requirements...'
 Invoke-Native $VenvPy @('-m', 'pip', 'install', '--disable-pip-version-check', '-q', '--upgrade', 'pip')
