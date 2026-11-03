@@ -23,10 +23,9 @@ worked out.
      `File:Open`, `Preferences:Config:Load Ui`.)
    - [#103](https://github.com/combwizard/ZOrbit/issues/103) on the current window code.
    - [#23](https://github.com/combwizard/ZOrbit/issues/23) whenever a standard (non-admin) account is to hand.
-2. **Studio, Simple and Full, in this order:** [#112](https://github.com/combwizard/ZOrbit/issues/112) (quick wins),
-   [#113](https://github.com/combwizard/ZOrbit/issues/113) (open animation on Look), then
-   [#115](https://github.com/combwizard/ZOrbit/issues/115) (folding groups). One PR each; they all edit
-   `studio_ui/app.js`, so merge them one at a time. #111 (gating fixes) and #114 (Setup and tour) are done.
+2. **Studio, Simple and Full:** [#113](https://github.com/combwizard/ZOrbit/issues/113) (open animation on Look), then
+   [#115](https://github.com/combwizard/ZOrbit/issues/115) (folding groups). One PR each; they both edit
+   `studio_ui/app.js`, so merge them one at a time. #111, #112 and #114 are done.
 3. **Medium:** [#108](https://github.com/combwizard/ZOrbit/issues/108) first (small), then
    [#109](https://github.com/combwizard/ZOrbit/issues/109) (pick hide, dim or a message first);
    [#99](https://github.com/combwizard/ZOrbit/issues/99) then
