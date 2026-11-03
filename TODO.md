@@ -49,8 +49,8 @@ Issues #105, #34, #94 and #39 all edit `studio_ui/app.js`, so merge them one at 
 
 ## Checks in ZBrush
 
-- [ ] [#101](https://github.com/combwizard/ZOrbit/issues/101) Check the "(Edit mode is off)" note on brush picks and the leftover request file cleanup, in ZBrush 2022 and 2026
-- [ ] [#102](https://github.com/combwizard/ZOrbit/issues/102) Check that an imported alpha or texture gets a button named by its file stem, and that `Texture:Import` takes .exr
+- [x] [#101](https://github.com/combwizard/ZOrbit/issues/101) Check the "(Edit mode is off)" note on brush picks and the leftover request file cleanup, in ZBrush 2022 and 2026
+- [x] [#102](https://github.com/combwizard/ZOrbit/issues/102) Check that an imported alpha or texture gets a button named by its file stem, and that `Texture:Import` takes .exr
 
 ## Studio
 
