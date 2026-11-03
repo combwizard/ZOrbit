@@ -71,7 +71,7 @@ Issues #105, #34, #94 and #39 all edit `studio_ui/app.js`, so merge them one at 
 - [ ] [#113](https://github.com/combwizard/ZOrbit/issues/113) Set the open animation on the Look screen and drop the Ring look card
 - [ ] [#114](https://github.com/combwizard/ZOrbit/issues/114) Setup and the tour: three steps and six stops
 - [ ] [#115](https://github.com/combwizard/ZOrbit/issues/115) Fold the Look groups and the Menu tab so Full mode is not a cliff
-- [ ] [#110](https://github.com/combwizard/ZOrbit/issues/110) Menus: empty slots, and a switch that keeps items in their slots
+- [x] [#110](https://github.com/combwizard/ZOrbit/issues/110) Menus: empty slots, and a switch that keeps items in their slots
 
 ## Build
 
