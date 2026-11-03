@@ -13,7 +13,7 @@ While Studio is open you can drag an item from the browser onto a menu in Studio
 - Pick a **Browser** slot on a ring (new installs have one in **Tools**).
 - Pick **More...** in a tag's fan: the browser opens on that tag.
 - Choose **Browser** in the tray menu (the ZOrbit icon in the notification area).
-- Press **Browser** in Studio's top bar (on every screen), in the Library toolbar, or on **Settings > Browser**.
+- Press **Browser** in Studio's top bar (on every screen), or in the Library toolbar.
 - Start it from the Start menu (**ZOrbit Browser**).
 - Start it from the command line with `ZOrbit.exe --popout --show` (from a source checkout, `python zorbit\main.py --popout --show`). Add `--kind brush`, `--kind alpha`, `--kind material` or `--kind texture` to open it on that tab, and `--tag KEY` to filter it to one tag. Without `--show` it starts hidden and waits to be called.
 

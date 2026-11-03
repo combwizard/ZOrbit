@@ -172,7 +172,7 @@ In the picture, the Brushes ring has a style on eight slots:
 
 ### Theme
 
-Themes are experimental, and the card says so. The colours, those of **Light** and **Match ZBrush** most of all, will change as they are tuned. If something is hard to read, [open an issue](https://github.com/combwizard/zorbit/issues) with a screenshot and a line about your setup.
+Themes are experimental, and the hint on the **Theme** card says so. The colours, those of **Light** and **Match ZBrush** most of all, will change as they are tuned. If something is hard to read, [open an issue](https://github.com/combwizard/zorbit/issues) with a screenshot and a line about your setup.
 
 The **Theme** card is at the top of **Settings**, in Simple and Full mode. It has four choices:
 
@@ -276,7 +276,7 @@ In Studio, opacities show as percentages (45%) but are 0 to 1 in the file. Contr
 "browser": {"hotkey": "Alt+B"}
 ```
 
-The hotkey that opens the [browser window](browser.md) and, pressed over it, hands the keyboard back to ZBrush. On Settings it is the **Browser** card, where you record it like a menu hotkey and Studio warns if a menu already uses it. New installs get **Alt+B**. An existing `radial.json` has no `browser` section until you add one, so the hotkey does nothing there. Leave it out for no hotkey. The browser then opens from a **Browser** slot, **More...** in a tag's fan, the tray menu, Studio's **Browser** buttons and the Start menu shortcut (see [Opening it](browser.md#opening-it)).
+The hotkey that opens the [browser window](browser.md) and, pressed over it, hands the keyboard back to ZBrush. On Settings it is the **Browser hotkey** row at the end of the **Behaviour** card, where you record it like a menu hotkey and Studio warns if a menu already uses it. New installs get **Alt+B**. An existing `radial.json` has no `browser` section until you add one, so the hotkey does nothing there. Leave it out for no hotkey. The browser then opens from a **Browser** slot, **More...** in a tag's fan, the tray menu, Studio's **Browser** buttons and the Start menu shortcut (see [Opening it](browser.md#opening-it)).
 
 ## Open animations
 

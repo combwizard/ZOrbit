@@ -3207,7 +3207,7 @@ const STUDIO_HOST = {
   },
 };
 
-/* The browser in its own window (the Library toolbar, Settings): the app shows it if it is running, else a new one starts. It needs neither ZBrush nor the app. */
+/* The browser in its own window (the Library toolbar, the top bar): the app shows it if it is running, else a new one starts. It needs neither ZBrush nor the app. */
 async function openBrowserWindow() {
   let r;
   try { r = await call('open_browser'); } catch (e) { r = { ok: false, error: (e && e.message) || String(e) }; }
@@ -3482,7 +3482,8 @@ function makeBrowser({ compact, st, host = STUDIO_HOST, kindUi = compact ? 'comp
         st.tags.size > 1 ? tagModeSwitch() : null,
         userTags.length ? h('div', { class: 'tagchips' }, chips) : h('div', { class: 'tag-none fhint' }, `No tags yet. Select ${W().many} and press Tag to make one.`),
         S.tagsErr ? h('div', { class: 'fhint bad' }, S.tagsErr) : null,
-        isFull() || POPOUT ? manageTagsBtn('btn small tag-manage') : null].filter(Boolean));
+        isFull() || POPOUT ? manageTagsBtn('btn small tag-manage') : null,
+        isFull() && !POPOUT ? h('div', { class: 'fhint mono tag-path', hidden: !S.tagsPath }, S.tagsPath) : null].filter(Boolean));
     }
     if (fk !== null) { const t = $$('[data-tk], [data-tm]', host).find(x => (x.dataset.tk !== undefined ? x.dataset.tk : 'tm:' + x.dataset.tm) === fk); if (t) t.focus(); }
   }
@@ -3896,7 +3897,7 @@ function buildLibraryScreen(root) {
 }
 
 /* ================================================================== SETTINGS screen */
-/* The Browser buttons of the top bar and of Settings: the browser can take a moment to start, so say so first. */
+/* The Browser buttons of the top bar and the Library toolbar: the browser can take a moment to start, so say so first. */
 function openBrowserFromButton() { toast('Opening the browser...', { ms: 2500 }); return openBrowserWindow(); }
 function ensureRing() { if (!S.cfg.ring || typeof S.cfg.ring !== 'object') S.cfg.ring = {}; return S.cfg.ring; }
 function setRing(k, v) { ensureRing()[k] = v; commit(); }
@@ -4170,9 +4171,33 @@ function buildSettingsScreen(root) {
         syncTheme();
       }, 'four', 'Theme'),
       h('div', { class: 'fhint', style: { marginTop: '8px' } }, 'Applies to Studio, the browser and the ring. ' + (full ? 'A colour you set under Look > Colours still wins. ' : '') + 'Themes are experimental: the colours will change as they are tuned.'), zbNote, themeNote);
-    // The badge goes after the title's text node: the contents list and the card's anchor (set-theme) are made from the text only.
-    themeCard.querySelector('.card-title').firstChild.after(h('span', { class: 'tag amber', title: 'The colours will change as they are tuned. Say on GitHub what reads badly.' }, 'Experimental'));
     page.append(themeCard);
+
+    /* --- browser (browser.hotkey; the object is dropped again when it ends up empty) */
+    const browserObj = () => { if (!S.cfg.browser || typeof S.cfg.browser !== 'object') S.cfg.browser = {}; return S.cfg.browser; };
+    const bOwner = hotkey => (hotkey ? hotkeyOwner(hotkey, BROWSER) : null);
+    const bsay = owner => (owner ? `Also used by ${ownerName(owner)}. That menu wins, so this hotkey will not open the browser.` : '');
+    const bhk = hotkeyField({ what: 'Browser hotkey', value: (S.cfg.browser && typeof S.cfg.browser === 'object' && S.cfg.browser.hotkey) || '', placeholder: 'No hotkey', onChange: str => {
+      const b = browserObj();
+      if (str) b.hotkey = str; else delete b.hotkey;
+      if (!Object.keys(b).length) delete S.cfg.browser;
+      const owner = bOwner(str);
+      bhk.say(bsay(owner), 'warn');
+      commit();
+    } });
+
+    /* --- behaviour (with the browser hotkey, a setting of the same kind) */
+    page.append(card('Behaviour', null,
+      switchRow({ label: 'Flick to pick', hint: 'Moving the cursor out past a slot picks it straight away, without releasing the hotkey or clicking.', key: 'flick' }),
+      switchRow({ label: 'Show the hint', hint: 'The line of help under the menu’s title, such as “click a slot, centre or right-click cancels”. Turn it off for a cleaner ring.', key: 'hint' }),
+      ...(full ? [
+        switchRow({ label: 'Open submenus on hover', hint: 'Reaching a submenu slot opens that submenu, centred on the slot. Keep holding the hotkey to pick in it by releasing or flicking.', key: 'hover_submenus' }),
+        sliderRow({ label: 'Tap time', hint: 'A hotkey press shorter than this is a tap: the ring stays open for a click. Holding longer and releasing picks the item under the cursor.', key: 'tap_ms', step: 10, unit: 'ms' }),
+        sliderRow({ label: 'Tag fan slots', hint: 'How many slots a tag fan holds. A tag with more items than that ends in a More slot that opens the browser on the tag.', key: 'tag_limit', unit: ' ' }),   // a blank unit keeps the number box in line with the sliders around it
+        sliderRow({ label: 'Auto-close', hint: 'An open ring closes by itself after this long.', key: 'timeout_s', unit: 's' })] : []),
+      h('div', { class: 'srow' }, h('div', { class: 'slabel' }, h('span', null, 'Browser hotkey'), h('small', null, 'Shows the browser; pressed over it, it gives ZBrush the keyboard back. The browser also opens from a Browser slot, the Browser button at the top and the tray menu.')),
+        h('div', { class: 'sctl' }, bhk))));
+    { const o0 = bOwner(S.cfg.browser && S.cfg.browser.hotkey); if (o0) bhk.say(bsay(o0), 'warn'); }
 
     /* --- ring look: the controls are on the Look screen; this card says what is changed there and opens it */
     page.append(card('Ring look', 'Size, shape, labels and colours',
@@ -4208,94 +4233,6 @@ function buildSettingsScreen(root) {
       h('div', { class: 'fhint' }, ownAnim.length
         ? 'Used by every menu except ' + ownAnim.map(t => '\u201c' + t + '\u201d').join(', ') + ', which ' + (ownAnim.length === 1 ? 'has its own' : 'have their own') + (isFull() ? ' (set on the Menus screen).' : ' (set in Full mode, on the Menus screen).')
         : 'Used by every menu. A menu can have its own instead: pick it on the Menus screen' + (isFull() ? '.' : ' in Full mode.'))));
-
-    /* --- behaviour */
-    page.append(card('Behaviour', null,
-      switchRow({ label: 'Flick to pick', hint: 'Moving the cursor out past a slot picks it straight away, without releasing the hotkey or clicking.', key: 'flick' }),
-      switchRow({ label: 'Show the hint', hint: 'The line of help under the menu’s title, such as “click a slot, centre or right-click cancels”. Turn it off for a cleaner ring.', key: 'hint' }),
-      ...(full ? [
-        switchRow({ label: 'Open submenus on hover', hint: 'Reaching a submenu slot opens that submenu, centred on the slot. Keep holding the hotkey to pick in it by releasing or flicking.', key: 'hover_submenus' }),
-        sliderRow({ label: 'Tap time', hint: 'A hotkey press shorter than this is a tap: the ring stays open for a click. Holding longer and releasing picks the item under the cursor.', key: 'tap_ms', step: 10, unit: 'ms' }),
-        sliderRow({ label: 'Tag fan slots', hint: 'How many slots a tag fan holds. A tag with more items than that ends in a More slot that opens the browser on the tag.', key: 'tag_limit', unit: ' ' }),   // a blank unit keeps the number box in line with the sliders around it
-        sliderRow({ label: 'Auto-close', hint: 'An open ring closes by itself after this long.', key: 'timeout_s', unit: 's' })] : [])));
-
-    /* --- browser (browser.hotkey; the object is dropped again when it ends up empty) */
-    const browserObj = () => { if (!S.cfg.browser || typeof S.cfg.browser !== 'object') S.cfg.browser = {}; return S.cfg.browser; };
-    const bOwner = hotkey => (hotkey ? hotkeyOwner(hotkey, BROWSER) : null);
-    const bsay = owner => (owner ? `Also used by ${ownerName(owner)}. That menu wins, so this hotkey will not open the browser.` : '');
-    const bhk = hotkeyField({ what: 'Browser hotkey', value: (S.cfg.browser && typeof S.cfg.browser === 'object' && S.cfg.browser.hotkey) || '', placeholder: 'No hotkey (open it from a Browser slot)', onChange: str => {
-      const b = browserObj();
-      if (str) b.hotkey = str; else delete b.hotkey;
-      if (!Object.keys(b).length) delete S.cfg.browser;
-      const owner = bOwner(str);
-      bhk.say(bsay(owner), 'warn');
-      commit();
-    } });
-    page.append(card('Browser', 'A window of its own',
-      h('div', { class: 'browser-key' }, field('Hotkey', bhk, 'Shows the browser; pressed over it, it gives ZBrush the keyboard back. The browser also opens from a Browser slot and the tray menu.')),
-      h('div', { class: 'browser-open' }, h('button', { class: 'btn small', type: 'button', title: 'Open the browser in its own window', onclick: openBrowserFromButton }, icon('k_browser', 13), 'Open the browser'))));
-    { const o0 = bOwner(S.cfg.browser && S.cfg.browser.hotkey); if (o0) bhk.say(bsay(o0), 'warn'); }
-
-    if (full) {
-      /* --- bridge */
-      const bridge = () => { if (!S.cfg.bridge || typeof S.cfg.bridge !== 'object') S.cfg.bridge = {}; return S.cfg.bridge; };
-      const bmode = (S.cfg.bridge && S.cfg.bridge.mode) || 'auto';
-      const keyWrap = h('div', { class: 'bridge-key' });
-      let paintZNote = () => {};      // the Older ZBrush card's paragraph about binding the key; set further down
-      const paintKey = () => {
-        const mode = (S.cfg.bridge && S.cfg.bridge.mode) || 'auto';
-        keyWrap.classList.toggle('dim', mode === 'message');
-        keyWrap.replaceChildren(field('Bridge key', hotkeyField({ what: 'Bridge key', value: (S.cfg.bridge && S.cfg.bridge.key) || '', mods: { ctrl: false, alt: false, shift: false }, placeholder: 'F9 (the default)',
-          altMessage: 'Alt cannot be used here: ZBrush does not act on an Alt key that ZOrbit sends. Use a bare F-key.',
-          refuse: k => k === 'F10' ? 'F10 cannot be used here: Windows keeps it for the menu bar, so ZBrush never acts on it. Use F9, F11 or another F-key.' : '',
-          onChange: v => { if (v) bridge().key = v; else { delete bridge().key; dropIfEmpty('bridge'); } commit(); paintZNote(); } }),
-          mode === 'message' ? 'Not used in Message mode, but kept in case you switch back.' : 'Must be bound in ZBrush to Zplugin > ZOrbit > Apply. Use a bare F-key other than F10: ZBrush reads Ctrl and Shift as mask and smooth, and does not act on Alt combinations or F10 when ZOrbit sends them.'));
-      };
-      page.append(card('ZBrush bridge', 'How a pick reaches ZBrush',
-        h('div', { class: 'fhint' }, 'Applies to the profile you are editing. Each profile keeps its own bridge key.'),
-        choiceCards(['auto', 'message', 'key'].map(m => [m, BRIDGE_INFO[m][0], BRIDGE_INFO[m][1]]), bmode, v => { bridge().mode = v; commit(); paintKey(); }, 'bridge-cards', 'How a pick reaches ZBrush'),
-        keyWrap));
-      paintKey();
-
-      /* --- ZScript bridge for ZBrush 2022-2025 (acts straight away, not part of the menus) */
-      const zbox = h('div', { class: 'zrows' }, h('div', { class: 'fhint' }, 'Looking for ZBrush...'));
-      let zCount = null;          // installs found by the last look; null until the first answer
-      const znote = h('div', { class: 'fhint', hidden: true });
-      // The plugin's Apply button brings F9 as its own hotkey (ZOrbitBridge.txt); any other key is bound by hand.
-      // Derived from the key chosen above every time, and compared as a whole chord: "Alt+F9" is not "F9".
-      paintZNote = () => {
-        const zkey = ((S.cfg.bridge && S.cfg.bridge.key) || 'F9').trim();
-        const bind = zkey.toLowerCase() === 'f9'
-          ? ['After installing, restart ZBrush. Apply comes with ', h('b', null, 'F9'), ' as its hotkey, so there is nothing to bind.']
-          : ['After installing, restart ZBrush, Ctrl+Alt+click Zplugin > ZOrbit > Apply, press ', h('b', null, zkey), ' and choose Preferences > Hotkeys > Store. (Only F9 works without this step.)'];
-        znote.hidden = !zCount;
-        znote.replaceChildren('ZBrush 2022 to 2025 cannot run the plugin that ZBrush 2026 loads, so they get a ZScript plugin with the same Zplugin > ZOrbit palette. It cannot receive messages, so every pick there uses the bridge key, whatever the mode above. ', ...bind, ' A ZBrush under Program Files asks for administrator rights to install.');
-      };
-      let zgen = 0;                                              // a slower earlier listing must not replace a newer one
-      const zpaint = async () => {
-        if (R.zpaint && R.zpaint !== zpaint) return R.zpaint();   // this card was rebuilt (undo, reload): paint the live one
-        const gen = ++zgen;
-        let r;
-        try { r = await call('get_zscript_bridge'); if (gen !== zgen) return; } catch (e) { if (gen !== zgen) return; zbox.replaceChildren(h('div', { class: 'fhint bad' }, 'Could not look for ZBrush: ' + e.message)); return; }
-        setZsBadge(zsOutdated(r));
-        lz.paint(r);
-        zCount = r.installs.length;
-        paintZNote();
-      };
-      const lz = legacyRows(zbox, { refresh: zpaint });
-      const addBtn = h('button', { class: 'btn small', type: 'button', onclick: () => lz.addFolder() }, icon('folder', 12), 'Add a ZBrush folder...');
-      page.append(card('Older ZBrush', 'ZBrush 2022 to 2025. Acts straight away.', znote, zbox, h('div', { class: 'btn-row' }, addBtn)));
-      paintZNote();
-      R.zpaint = zpaint;
-      zpaint();
-
-      /* --- tags (saved as they change in tags.json, not part of the menus file) */
-      page.append(card('Tags', 'Labels for your brushes, alphas, materials and textures. Saved straight away.',
-        h('div', { class: 'field row' }, h('div', { class: 'grow' }, h('span', { class: 'flabel' }, 'Brush tags'),
-          h('div', { class: 'fhint' }, 'Tags group your brushes, alphas, materials and textures so you can filter the Library by them. An item can carry several. Tags are not part of Save or Undo.'),
-          h('div', { class: 'fhint mono tag-path', hidden: !S.tagsPath }, S.tagsPath)),
-          manageTagsBtn('btn'))));
-    }
 
     /* --- studio (preferences of this window, saved immediately, not part of the menus file) */
     const updNote = h('div', { class: 'fhint upd-status', role: 'status' });
@@ -4356,6 +4293,59 @@ function buildSettingsScreen(root) {
         h('div', { class: 'fhint' }, 'The file holds your menus, the ring settings and your tags. The Studio window preferences and the usage counts are not included, as they belong to this PC. Export saves what is on screen, unsaved changes included. Import shows what is in a file first, and the menus and settings it loads can be undone.'),
         h('div', { class: 'fhint', style: { marginTop: '6px' } }, 'Export... saves this profile’s menus, settings and tags. To bring a file in as a new profile, use New profile... in the top bar.')),
         h('div', { class: 'btn-row' }, ...ioBtns))));
+    if (full) {
+      /* --- bridge */
+      const bridge = () => { if (!S.cfg.bridge || typeof S.cfg.bridge !== 'object') S.cfg.bridge = {}; return S.cfg.bridge; };
+      const bmode = (S.cfg.bridge && S.cfg.bridge.mode) || 'auto';
+      const keyWrap = h('div', { class: 'bridge-key' });
+      let paintZNote = () => {};      // the Older ZBrush card's paragraph about binding the key; set further down
+      const paintKey = () => {
+        const mode = (S.cfg.bridge && S.cfg.bridge.mode) || 'auto';
+        keyWrap.classList.toggle('dim', mode === 'message');
+        keyWrap.replaceChildren(field('Bridge key', hotkeyField({ what: 'Bridge key', value: (S.cfg.bridge && S.cfg.bridge.key) || '', mods: { ctrl: false, alt: false, shift: false }, placeholder: 'F9 (the default)',
+          altMessage: 'Alt cannot be used here: ZBrush does not act on an Alt key that ZOrbit sends. Use a bare F-key.',
+          refuse: k => k === 'F10' ? 'F10 cannot be used here: Windows keeps it for the menu bar, so ZBrush never acts on it. Use F9, F11 or another F-key.' : '',
+          onChange: v => { if (v) bridge().key = v; else { delete bridge().key; dropIfEmpty('bridge'); } commit(); paintZNote(); } }),
+          mode === 'message' ? 'Not used in Message mode, but kept in case you switch back.' : 'Must be bound in ZBrush to Zplugin > ZOrbit > Apply. Use a bare F-key other than F10: ZBrush reads Ctrl and Shift as mask and smooth, and does not act on Alt combinations or F10 when ZOrbit sends them.'));
+      };
+      page.append(card('ZBrush bridge', 'How a pick reaches ZBrush',
+        h('div', { class: 'fhint' }, 'Applies to the profile you are editing. Each profile keeps its own bridge key.'),
+        choiceCards(['auto', 'message', 'key'].map(m => [m, BRIDGE_INFO[m][0], BRIDGE_INFO[m][1]]), bmode, v => { bridge().mode = v; commit(); paintKey(); }, 'bridge-cards', 'How a pick reaches ZBrush'),
+        keyWrap));
+      paintKey();
+
+      /* --- ZScript bridge for ZBrush 2022-2025 (acts straight away, not part of the menus) */
+      const zbox = h('div', { class: 'zrows' }, h('div', { class: 'fhint' }, 'Looking for ZBrush...'));
+      let zCount = null;          // installs found by the last look; null until the first answer
+      const znote = h('div', { class: 'fhint', hidden: true });
+      // The plugin's Apply button brings F9 as its own hotkey (ZOrbitBridge.txt); any other key is bound by hand.
+      // Derived from the key chosen above every time, and compared as a whole chord: "Alt+F9" is not "F9".
+      paintZNote = () => {
+        const zkey = ((S.cfg.bridge && S.cfg.bridge.key) || 'F9').trim();
+        const bind = zkey.toLowerCase() === 'f9'
+          ? ['After installing, restart ZBrush. Apply comes with ', h('b', null, 'F9'), ' as its hotkey, so there is nothing to bind.']
+          : ['After installing, restart ZBrush, Ctrl+Alt+click Zplugin > ZOrbit > Apply, press ', h('b', null, zkey), ' and choose Preferences > Hotkeys > Store. (Only F9 works without this step.)'];
+        znote.hidden = !zCount;
+        znote.replaceChildren('ZBrush 2022 to 2025 cannot run the plugin that ZBrush 2026 loads, so they get a ZScript plugin with the same Zplugin > ZOrbit palette. It cannot receive messages, so every pick there uses the bridge key, whatever the mode above. ', ...bind, ' A ZBrush under Program Files asks for administrator rights to install.');
+      };
+      let zgen = 0;                                              // a slower earlier listing must not replace a newer one
+      const zpaint = async () => {
+        if (R.zpaint && R.zpaint !== zpaint) return R.zpaint();   // this card was rebuilt (undo, reload): paint the live one
+        const gen = ++zgen;
+        let r;
+        try { r = await call('get_zscript_bridge'); if (gen !== zgen) return; } catch (e) { if (gen !== zgen) return; zbox.replaceChildren(h('div', { class: 'fhint bad' }, 'Could not look for ZBrush: ' + e.message)); return; }
+        setZsBadge(zsOutdated(r));
+        lz.paint(r);
+        zCount = r.installs.length;
+        paintZNote();
+      };
+      const lz = legacyRows(zbox, { refresh: zpaint });
+      const addBtn = h('button', { class: 'btn small', type: 'button', onclick: () => lz.addFolder() }, icon('folder', 12), 'Add a ZBrush folder...');
+      page.append(card('Older ZBrush', 'ZBrush 2022 to 2025. Acts straight away.', znote, zbox, h('div', { class: 'btn-row' }, addBtn)));
+      paintZNote();
+      R.zpaint = zpaint;
+      zpaint();
+    }
     R.preview();
   };
   // Rebuilt after an undo, a revert or a reload: the control that had focus gets it back (found by its data-fk key, else its label), and the scroll stays.
@@ -4726,7 +4716,7 @@ const SETUP_WHERE = [
   ['Menus', 'Edit the rings and what each slot does', 'menus'],
   ['Library', 'Every brush ZBrush can load, with tags', 'library'],
   ['Look', 'Ring size, slot shape, labels and colours', 'look'],
-  ['Settings', 'Theme, animation and behaviour. Full mode adds the bridge', 'settings'],
+  ['Settings', 'Theme, animation, behaviour and the browser hotkey. Full mode adds the bridge', 'settings'],
   ['Status', 'Is everything running, and the logs', 'status'],
   ['User guide', 'The whole manual, at zorbit.lol/docs', null]];
 
@@ -5087,7 +5077,7 @@ function describeProblem(raw) {
   if (raw.startsWith('bridge: must be an object')) return out('The bridge section is not an object, so the defaults are used', bridge);
   if ((m = /^bridge\.(\w+): unknown setting(.*)$/s.exec(raw))) return out(`The bridge setting “${m[1]}” is not known.` + didYouMean(m[2]), bridge);
   if (raw.startsWith('bridge.key ')) return out('The bridge key ' + raw.slice('bridge.key '.length), bridge);
-  const browserCard = { kind: 'settings', card: 'set-browser' };
+  const browserCard = { kind: 'settings', card: 'set-behaviour', fk: 'hk:Browser hotkey' };   // the recorder is the last row of the card, so it is focused too
   if ((m = /^browser\.hotkey (.+) not understood$/s.exec(raw))) return out(`The browser hotkey ${unq(m[1])} is not understood`, browserCard);
   if ((m = /^browser\.hotkey (.+) already used by menu (.+)$/s.exec(raw))) return out(`The browser hotkey ${unq(m[1])} is also used by ${titleOf(m[2])}; that menu wins, so the browser will not open with it`, browserCard);
   if ((m = /^browser\.(\w+): unknown setting(.*)$/s.exec(raw))) return out(`The browser setting “${m[1]}” is not known.` + didYouMean(m[2]), browserCard);
@@ -5146,7 +5136,7 @@ function goToProblem(t) {
   if (t.kind === 'settings') {
     const same = S.screen === 'settings';
     showScreen('settings', { fresh: true });
-    const go = () => { if (R.gotoCard) R.gotoCard(t.card); };
+    const go = () => { if (R.gotoCard) R.gotoCard(t.card); if (t.fk) { const el = $('#screen-settings [data-fk="' + t.fk + '"]'); if (el && !el.disabled) el.focus({ preventScroll: true }); } };
     if (same) go(); else requestAnimationFrame(go);
     return;
   }

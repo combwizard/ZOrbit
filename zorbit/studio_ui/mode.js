@@ -19,7 +19,7 @@
   const FULL_RING = { tag_colors: 'Tag colours', tag_band: 'Tag colours', tag_band_opacity: 'Tag colours', tag_glow_opacity: 'Tag colours', tag_tint_opacity: 'Tag colours',
     tag_tint_style: 'Tag colours', tag_tint_blend: 'Tag colours', colors: 'Colours', hover_submenus: 'Open submenus on hover', tag_limit: 'Tag fan slots', hub: 'Hub', hub_style: 'Hub', hub_color: 'Hub', hub_glow: 'Hub',
     glow_color: 'Glow', glow_opacity: 'Glow', label_color: 'Label colour', slot_corner: 'Slot detail', border_width: 'Slot detail', icon_scale: 'Slot detail', tap_ms: 'Tap time', timeout_s: 'Auto-close' };
-  const FULL_CARDS = new Set(['set-zbrush-bridge', 'set-older-zbrush', 'set-tags']);
+  const FULL_CARDS = new Set(['set-zbrush-bridge', 'set-older-zbrush']);
   /* Of the names above, the ones that live on the Look screen; the rest are on Settings. */
   const LOOK_FULL_NAMES = new Set(['Tag colours', 'Colours', 'Hub', 'Glow', 'Label colour', 'Slot detail']);
 

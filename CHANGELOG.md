@@ -17,7 +17,8 @@ All notable changes to this project are listed here. The format follows
 - **Setup** has three steps. A step that is done folds to one line you can open again. **Your brushes** and **What's where** are gone; Setup ends with a **Next** row of links to the screens and **Take the tour**. The tour is six stops instead of ten.
 - An open browser now changes theme the moment you pick one in Studio, instead of up to half a second later.
 - ZOrbit is now built and tested on Python 3.14 instead of 3.12. The packaged app bundles the new interpreter; running from a checkout needs Python 3.14.
-- On Settings, the **Browser** card now comes before **ZBrush bridge**. The "On this page" list follows the new order.
+- **Settings** is shorter and in a better order: **Theme** and **Behaviour** come first, then **Ring look**, **Open animation**, **Studio**, **Import and export**, and in Full mode **ZBrush bridge** and **Older ZBrush**. The browser hotkey is a row at the end of **Behaviour**, in both modes, and the **Browser** and **Tags** cards are gone (the **Browser** button in the top bar stays; **Manage tags...** in the Library now shows the path of the tags file). The **Theme** card no longer has an **Experimental** badge; its hint still says so.
+- On **Look**, the gallery of looks now sits right under the ring preview, above the **Preview menu** list, so it shows when the screen opens. Simple mode names its levels **All menus** and **This menu**, as Full does, and no longer has an **Applies to** label.
 - In ZBrush 2022 to 2025, `radiald.log` now keeps what every pick did (`pick #12 result: ...`), copied from `zscript_bridge.log`, which only holds the last one. A pick with no result in 15 seconds is logged too.
 
 ### Fixed

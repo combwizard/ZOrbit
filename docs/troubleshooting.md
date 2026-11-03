@@ -115,7 +115,7 @@ In ZBrush 2026 and newer that is intended. A pick waits until you release the mo
 ### The browser does not appear
 
 1. Is ZBrush (or the browser itself) the front window? The browser hotkey is ignored everywhere else. The tray menu, Studio's **Browser** button and the Start menu shortcut work from anywhere.
-2. Does your `radial.json` have a `browser` hotkey (new installs have Alt+B)? Check **Settings > Browser**. If a menu uses the same key, the menu wins and the problems pill says so. A **Browser** slot on a ring opens it too.
+2. Does your `radial.json` have a `browser` hotkey (new installs have Alt+B)? Check **Browser hotkey** under **Settings > Behaviour**. If a menu uses the same key, the menu wins and the problems pill says so. A **Browser** slot on a ring opens it too.
 3. After the app starts, the browser needs a few seconds to be ready. The first press can take a moment when it was not started in advance. If it is open but you cannot see it, it may be behind other windows (Keep on top is off): press the hotkey, or open it from the tray menu. A browser left on a screen you have since unplugged is brought back onto a screen the next time it opens.
 4. Read `radiald.log` (lines that start with `browser`, and `popout exited with code N` when the browser stopped) and `popout.log`. Without the Microsoft Edge WebView2 runtime the browser cannot open: it shows **ZOrbit needs the Microsoft Edge WebView2 runtime for this window** with the download link, and `popout.log` says so. Install the runtime and press the hotkey again. Any other failure while it starts is written to `popout.log` as a traceback; send that with your report.
 
