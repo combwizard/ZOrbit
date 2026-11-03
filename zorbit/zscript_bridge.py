@@ -87,7 +87,11 @@ def request_lines(seq, label, actions) -> list[str]:
     for a in actions:
         asset = next((k for k in ASSET_KINDS if k in a), None)
         if asset:
-            lines += [asset, _line(a[asset]), _line(ascii_path(a.get("file")))]
+            # The button ZBrush gave the item (named after its file, which the app found) before the name in the
+            # menu, as zorbit_bridge.py tries them: Alpha:<name> misses an imported alpha whose file is named
+            # otherwise, and the plugin would import it again on every pick. The file's own name can't be worked
+            # out in ZScript, as the path below may be an 8.3 one.
+            lines += [asset, _line(a.get("button") or a[asset]), _line(ascii_path(a.get("file")))]
         elif "set" in a:
             lines += ["set", _line(a["set"]), _value(a.get("value"))]
         elif "press" in a:

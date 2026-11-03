@@ -67,6 +67,15 @@ def test_request_lines_per_action_kind():
                      "toggle", "Transform:Edit"]
 
 
+def test_request_lines_name_an_asset_by_its_button():
+    # An imported item's button is named after its file: the plugin looks for Alpha:<that>, not the menu name.
+    lines = zb.request_lines(1, "Rock", [
+        {"alpha": "Rock Cliff", "file": "C:/a/RockCliff_01.psd", "button": "RockCliff_01"},
+        {"texture": "Bark", "file": None},
+    ])
+    assert lines[3:] == ["alpha", "RockCliff_01", "C:/a/RockCliff_01.psd", "texture", "Bark", "-"]
+
+
 def test_request_lines_empty_label_and_value_become_a_dash():
     lines = zb.request_lines(1, "", [{"set": "A:B", "value": ""}])
     assert lines == ["ZORBIT 1", "1", "-", "set", "A:B", "-"]

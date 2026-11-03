@@ -10,6 +10,10 @@ All notable changes to this project are listed here. The format follows
 
 - ZOrbit is now built and tested on Python 3.14 instead of 3.12. The packaged app bundles the new interpreter; running from a checkout needs Python 3.14.
 
+### Fixed
+
+- In ZBrush 2022 to 2025, picking an alpha, material or texture whose file is named differently from its name in the menu no longer imports it again every time. The plugin now looks for the button ZBrush names after the file.
+
 ## [0.16.0] - 2026-11-02
 
 ZOrbit 0.16.0 adds **Show the hint** to Settings. Turn it off and the ring no longer shows the line of help
