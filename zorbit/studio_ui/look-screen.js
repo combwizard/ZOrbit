@@ -676,7 +676,7 @@
     function applyTarget() { return level0 === 'preset' ? { level: 'global' } : target(); }
     view.gallery = null;
     const gallery = presetsOn() && sl0 === null ? buildGallery() : null;
-    if (gallery) left.insertBefore(gallery.el, pickLabel);        // under the picture, above the preview menu and the dead-zone hint, so it is on screen when Look opens
+    if (gallery) pickLabel.after(gallery.el);                     // under the picture and its preview menu, above the dead-zone hint, so it is on screen when Look opens
 
     function applyLook(id, keep) {
       const t = applyTarget(), c = lookCtx();

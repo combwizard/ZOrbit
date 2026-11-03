@@ -205,7 +205,7 @@ The animation list stays below it: a menu's open animation is not part of a look
 
 ![The Look screen at the Global level: the ring preview of the Brushes menu, the gallery of looks and a menu picker on the left, and the Slots group with the six slot shapes on the right, each setting with a Default badge](images/studio-look.png)
 
-On the left is a preview of the real ring, drawn by the same code as the app, with the dead zone as a dashed circle, and under it the [gallery of looks](#looks). Hover a slot and it lights up in its own shape and shows the hover glow the app would draw. In Full mode, click a slot to [style it on its own](#styling-one-slot). The **Preview menu** list picks which menu the preview shows. It only changes the preview, not the menu you are editing on the Menus screen. **Sample ring with tags** shows a ring of library brushes in your tag colours, for the tag settings.
+On the left is a preview of the real ring, drawn by the same code as the app, with the dead zone as a dashed circle, and under it the **Preview menu** list and the [gallery of looks](#looks). Hover a slot and it lights up in its own shape and shows the hover glow the app would draw. In Full mode, click a slot to [style it on its own](#styling-one-slot). The **Preview menu** list, just under the picture, picks which menu the preview shows. It only changes the preview, not the menu you are editing on the Menus screen. **Sample ring with tags** shows a ring of library brushes in your tag colours, for the tag settings.
 
 ### Levels
 

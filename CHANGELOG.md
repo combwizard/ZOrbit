@@ -14,6 +14,7 @@ All notable changes to this project are listed here. The format follows
 
 ### Changed
 
+- Studio: on the Look screen the **Preview menu** list sits directly under the ring preview, as a compact list centred under the picture, and the gallery of looks follows it (#124).
 - **Setup** has three steps. A step that is done folds to one line you can open again. **Your brushes** and **What's where** are gone; Setup ends with a **Next** row of links to the screens and **Take the tour**. The tour is six stops instead of ten.
 - An open browser now changes theme the moment you pick one in Studio, instead of up to half a second later.
 - ZOrbit is now built and tested on Python 3.14 instead of 3.12. The packaged app bundles the new interpreter; running from a checkout needs Python 3.14.
