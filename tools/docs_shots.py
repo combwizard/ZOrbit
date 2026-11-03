@@ -90,10 +90,10 @@ SHOTS = {
         " if (document.querySelector('.tour.in') || Date.now() - t0 > 5000) r(); else setTimeout(w, 100); })(); })",
         "document.querySelector('.tour-card .btn.primary').click()",
     ]),
-    # setup: all three steps done and the first one opened, so the picture shows both a folded row and an open one.
-    "setup": dict(q="screen=setup&zb=both&ringtried=done", steps=["document.querySelector('.sstep[data-step=\"found\"] .sfold').click()"]),
+    # setup: all three steps done; the first stays open because a ZBrush 2022 still needs the plugin, so the picture shows both an open step and folded ones.
+    "setup": dict(q="screen=setup&zb=both&ringtried=done"),
     # setup-done: what Setup looks like on a later visit, with every step done and folded to one line.
-    "setup-done": dict(q="screen=setup&zb=both&ringtried=done"),
+    "setup-done": dict(q="screen=setup&zb=2026&ringtried=done"),
     "setup-restart": dict(q="screen=setup&zb=2026&zbstale"),
     "browser": dict(page="popout.html", q="kind=brush", size=(980, 680)),
     "browser-light": dict(page="popout.html", q="kind=brush&theme=light", size=(980, 680)),

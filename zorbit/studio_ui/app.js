@@ -4673,6 +4673,8 @@ function deriveSteps(d, tryFrom, ctx) {
       installed: !!plugin(i).installed, current: !!plugin(i).current, zplugs: plugin(i).zplugs, proc: topProc(i) })) },
     others: (env.other_zorbit || []).map(o => ({ path: o.path, exists: o.exists !== false })),
     bridgeMissing: !!(d.bridge && d.bridge.kind === 'missing') };
+  // Done, but with a row still worth seeing: a ZBrush without the plugin, an update to install, or another ZOrbit registered. The step then stays open.
+  s1.unfinished = unready.length > 0 || s1.legacy.installs.some(z => z.installed && !z.current) || s1.others.length > 0 || s1.bridgeMissing;
   s1.detail = ready.length
     ? list(ready.map(i => i.name)) + (ready.length === 1 ? ' is ready.' : ' are ready.') + (unready.length ? ' ' + list(unready.map(i => i.name)) + (unready.length === 1 ? ' still needs' : ' still need') + ' the plugin.' : '')
     : (installs.length ? 'ZBrush was found, but the ZOrbit plugin is not set up for it yet.' : 'No ZBrush was found. Add its folder if you have one.');
@@ -4859,7 +4861,7 @@ function buildSetupScreen(root) {
 
   /* A step that is done folds to its head (a tick, the title and one line); the user opens it again with a click, and st.open
      remembers that. A step that needs attention, is waiting or is locked never folds: its body is the thing to read. */
-  const foldable = s => s.state === 'ok';
+  const foldable = s => s.state === 'ok' && !s.unfinished;
   const isFolded = s => foldable(s) && !st.open.has(s.id);
   const renderStep = (el, s, n) => {
     const parts = String(s.detail || '').split('{key}');
