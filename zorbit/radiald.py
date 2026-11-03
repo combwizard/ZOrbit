@@ -1013,6 +1013,9 @@ class App:
                 log(f"submenu '{item.data['menu']}' has no usable items; nothing opened")
                 self._toast(MSG_EMPTY_MENU)
             return
+        if item.kind == "empty":                    # the ring cannot pick one; a guard
+            log("empty slot picked; nothing sent")
+            return
         if item.kind in ("auto", "tag"):
             log(f"empty {item.kind} slot picked; nothing sent")
             self._toast(MSG_EMPTY_SLOT)

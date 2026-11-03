@@ -6,6 +6,7 @@
   "menus": {
     "brushes": {
       "title": "Brushes",
+      "keep_slots": true,
       "hotkey": "Q",
       "swallow": false,
       "items": [
@@ -22,6 +23,7 @@
     },
     "more": {
       "title": "More Brushes",
+      "keep_slots": true,
       "items": [
         {"brush": "Pinch"},
         {"brush": "Clay"},
@@ -35,6 +37,7 @@
     },
     "tools": {
       "title": "Tools",
+      "keep_slots": true,
       "items": [
         {"press": "Tool:Masking:Clear", "label": "Clear Mask"},
         {"press": "Tool:Masking:Inverse", "label": "Invert Mask"},
@@ -51,6 +54,7 @@
     },
     "subdiv": {
       "title": "SubDivide",
+      "keep_slots": true,
       "items": [
         {"set": "Stroke:SubDivide Size", "value": 0.25, "label": "0.25"},
         {"set": "Stroke:SubDivide Size", "value": 0.5, "label": "0.50"},

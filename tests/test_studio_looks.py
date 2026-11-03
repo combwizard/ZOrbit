@@ -239,6 +239,28 @@ def test_preview_ring_draws_with_the_menus_look(api):
     assert styled["fit"] == {"items": 5, "capacity": 9, "needed_radius": 77, "full": False, "when_full": "grow"}
 
 
+def test_preview_ring_keeps_empty_slots_in_the_layout_and_the_count(api):
+    cfg = cfg_of(n=0, keep_slots=True)
+    cfg["menus"]["main"]["items"] = [{"brush": "B0"}, {"empty": True}, {"empty": True}, {"brush": "B3"},
+                                     {"empty": True}]
+    res = api.preview_ring(cfg, "main")
+    assert res["image"].startswith("data:image/png") and not res["problems"]
+    assert [s["i"] for s in res["layout"]["slots"]] == [0, 1, 2, 3, 4]
+    assert res["fit"]["items"] == 5
+
+
+def test_preview_ring_of_a_menu_of_only_empty_slots_draws_outlines(api):
+    cfg = cfg_of(n=0, keep_slots=True)
+    cfg["menus"]["main"]["items"] = [{"empty": True}] * 8
+    res = api.preview_ring(cfg, "main")
+    assert res["image"].startswith("data:image/png") and not res["problems"]
+    assert len(res["layout"]["slots"]) == 8 and res["fit"]["items"] == 8
+
+
+def test_get_options_lists_the_empty_action(api):
+    assert "empty" in api.get_options()["actions"]
+
+
 def test_preview_ring_of_a_fan_menu_has_no_fit(api):
     assert api.preview_ring(cfg_of(), "fan")["fit"] is None
 

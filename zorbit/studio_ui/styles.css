@@ -542,6 +542,16 @@ body.dragging, body.dragging * { cursor: grabbing !important; }
 .mk.moving .mk-h { stroke: none; }
 .gap-bar { stroke: var(--accent); stroke-width: 5px; stroke-linecap: round; vector-effect: non-scaling-stroke; filter: drop-shadow(0 0 5px var(--accent)) drop-shadow(0 0 12px color-mix(in srgb, var(--accent) 65%, transparent)); }
 .gap-bar.noop { stroke: var(--muted); opacity: .6; filter: none; }
+.mk.drop .mk-f { fill: color-mix(in srgb, var(--accent) 14%, transparent); }              /* the slot a dropped item lands on (a menu that keeps its slots in place) */
+.mk.drop .mk-r { stroke: var(--accent); stroke-width: 2px; }
+.ring-glide { position: absolute; inset: 0; pointer-events: none; }                      /* the swap: pictures of two slots gliding across the ring (see makeRingView.glide) */
+.gl-arm { position: absolute; width: 0; height: 0; will-change: transform; }
+.gl-ghost { position: absolute; background-repeat: no-repeat; will-change: transform; }
+.stage-slots { position: absolute; left: 12px; top: 10px; display: inline-flex; align-items: center; gap: 2px; padding: 2px; border-radius: 99px; background: color-mix(in srgb, var(--bg2) 90%, transparent); border: 1px solid var(--line); transition: opacity .14s; }
+.stage-slots[hidden] { display: none; }
+.stage-slots .ibtn { width: 24px; height: 24px; border-radius: 99px; }
+.slots-n { min-width: 58px; text-align: center; font-size: 11.5px; color: var(--sub); }
+.stage.can-trash .stage-slots { opacity: 0; pointer-events: none; }                        /* the trash takes this corner while an item is dragged */
 .slot-n { position: absolute; top: -5px; right: -5px; min-width: 18px; height: 18px; padding: 0 4px; display: grid; place-items: center; border-radius: 9px; font-size: 11px; font-weight: 600; color: var(--sub); background: color-mix(in srgb, var(--bg0) 92%, transparent); border: 1px solid var(--line2); transition: all .14s; }
 .slot-ov.hov .slot-n { color: var(--text); border-color: color-mix(in srgb, var(--accent) 60%, transparent); }
 .slot-ov.sel .slot-n { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
@@ -580,6 +590,12 @@ body.dragging, body.dragging * { cursor: grabbing !important; }
 .irow.k-menu { border-left-color: color-mix(in srgb, var(--cyan) 35%, transparent); }
 .irow.k-menu.sel { border-left-color: var(--cyan); background: color-mix(in srgb, var(--cyan) 8%, transparent); }
 .irow.bad { opacity: .75; }
+.irow.k-empty { opacity: .6; }                                                             /* an empty slot: there, but nothing in it */
+.irow.k-empty .iname { font-style: italic; color: var(--sub); }
+.irow.k-empty .thumb.glyph { background: transparent; border-style: dashed; }
+.irow.drop-row { background: color-mix(in srgb, var(--accent) 12%, transparent); box-shadow: inset 0 0 0 1.5px var(--accent); opacity: 1; }      /* the slot a drag over the list lands on */
+.slot-note { display: flex; align-items: flex-start; gap: 9px; margin: 0 0 14px; padding: 9px 12px; border-radius: 8px; font-size: 12.5px; line-height: 1.4; color: var(--sub); background: color-mix(in srgb, var(--sub) 7%, transparent); border: 1px dashed var(--line2); }
+.slot-note .ico { flex: none; margin-top: 1px; }
 .irow.flash, .mrow.flash { animation: rowflash 1.2s ease-out; }
 @keyframes rowflash { 0% { background: color-mix(in srgb, var(--accent) 50%, transparent); box-shadow: inset 0 0 0 1px var(--accent); } 100% { background: transparent; box-shadow: inset 0 0 0 1px transparent; } }
 /* The drag sources (DnD in app.js moves them from pointer events): without this a pen or a finger scrolls or pans the page instead of dragging.

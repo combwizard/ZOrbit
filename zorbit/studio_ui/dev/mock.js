@@ -79,7 +79,7 @@
   var TAG_DEFAULTS = { radius: 145, slot: 72, dead_zone: 38, labels: 'name', slot_corner: 0.28, border_width: 2, icon_scale: 1, hub_style: 'dot', hub_color: 'accent', hub_glow: 1,
     glow_color: '', glow_opacity: 0.55, label_color: 'text', when_full: 'grow', look: undefined,
     hub: 10, slot_shape: 'circle', tag_colors: 'tint', tag_band: 'medium', tag_band_opacity: 0.45, tag_glow_opacity: 0.4, tag_tint_opacity: 0.3, tag_tint_style: 'gradient', tag_tint_blend: 'multiply' };
-  var KINDS = ['brush', 'alpha', 'material', 'texture', 'press', 'set', 'toggle', 'steps', 'menu', 'auto', 'tag', 'browser'];
+  var KINDS = ['brush', 'alpha', 'material', 'texture', 'press', 'set', 'toggle', 'steps', 'menu', 'auto', 'tag', 'browser', 'empty'];
   if (q.has('kinds') && saved.menus && saved.menus.tools) saved.menus.tools.items.push({ tag: 'blocking' }, { browser: '' });
   var mtime = 1700000000000000000, conflictDone = false;
   var FAV = 'favourite';
@@ -127,8 +127,8 @@
     (m.items || []).forEach(function (it, i) {
       var ks = KINDS.filter(function (k) { return k in it; });
       if (ks.length !== 1) return;
-      var k = ks[0];                       // config.py: every string target but a browser's must be non-empty
-      if (k === 'steps' || k === 'auto' || k === 'browser' || (typeof it[k] === 'string' && it[k].trim() !== '')) out.push(i);
+      var k = ks[0];                       // config.py: every string target but a browser's must be non-empty; an empty slot (true) always counts, so the ring keeps its place
+      if (k === 'empty' ? it.empty === true : k === 'steps' || k === 'auto' || k === 'browser' || (typeof it[k] === 'string' && it[k].trim() !== '')) out.push(i);
     });
     return out;
   }
@@ -144,7 +144,7 @@
     'menu odd: not an object', "menu tag:x: ids starting with 'tag:' are reserved for tag submenus", "menu brushes: unknown setting 'hotkye' (did you mean hotkey?)",
     'menu brushes item 1: not an object', 'menu brushes item 2: needs exactly one of brush, alpha, material, texture, press, set, toggle, steps, menu, auto, tag, browser',
     "menu brushes item 3: 'set' needs a 'value'", "menu brushes item 3: 'set' value must be a number", "menu brushes item 4: 'steps' must be a non-empty list of brush/alpha/material/texture/press/set/toggle actions",
-    'menu brushes item 4 step 2: not an object', "menu brushes item 4 step 1: 'brush' must be a non-empty string", 'menu brushes item 4 step 2: steps cannot open menus, nest steps, be auto slots or open tags or the browser',
+    'menu brushes item 4 step 2: not an object', "menu brushes item 4 step 1: 'brush' must be a non-empty string", 'menu brushes item 4 step 2: steps cannot open menus, nest steps, be auto slots, be empty slots or open tags or the browser',
     "menu brushes item 5: 'auto' must be one of brush", "menu brushes item 5: 'browser' must be a string (a tag key, or \"\" for everything)", "menu brushes item 5: browser 'kind' must be one of brush, alpha, material, texture",
     "menu brushes item 6: 'press' must be a non-empty string", "menu brushes item 6: brush name 'C:\\x\\Clay' must not contain \\ / : or ..", "menu brushes item 7: submenu 'nope' does not exist",
     "menu brushes item 7: unknown setting 'lable' (did you mean label?)", "menu brushes item 8: tag 'gone' does not exist; the slot stays empty", "menu brushes item 8: tag 'gone' does not exist; the browser opens unfiltered",
@@ -202,11 +202,12 @@
           if (!Array.isArray(it.steps) || !it.steps.length) { out.push(where + ": 'steps' must be a non-empty list of brush/alpha/material/texture/press/set/toggle actions"); return; }
           for (var j = 0; j < it.steps.length; j++) {
             var sk = KINDS.filter(function (x) { return it.steps[j] && x in it.steps[j]; });
-            if (sk.some(function (x) { return ['menu', 'steps', 'auto', 'tag', 'browser'].indexOf(x) >= 0; })) {
-              out.push(where + ' step ' + (j + 1) + ': steps cannot open menus, nest steps, be auto slots or open tags or the browser'); return;
+            if (sk.some(function (x) { return ['menu', 'steps', 'auto', 'tag', 'browser', 'empty'].indexOf(x) >= 0; })) {
+              out.push(where + ' step ' + (j + 1) + ': steps cannot open menus, nest steps, be auto slots, be empty slots or open tags or the browser'); return;
             }
           }
         }
+        else if (k === 'empty') { if (it.empty !== true) { out.push(where + ": 'empty' must be true"); return; } }
         else if (k === 'browser') { if (typeof it.browser !== 'string') { out.push(where + ": 'browser' must be a string (a tag key, or \"\" for all brushes)"); return; } }
         else if (k === 'set' && !('value' in it)) { out.push(where + ": 'set' needs a 'value'"); return; }
         else if (k === 'set' && typeof it.value !== 'number') { out.push(where + ": 'set' value must be a number"); return; }

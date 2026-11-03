@@ -786,7 +786,8 @@ class Ring:
                 rp = later
         j = int(round((ang - rp.offset) / rp.step)) % rp.n
         off = abs((ang - rp.offset - j * rp.step + 180) % 360 - 180)   # degrees from that slot's direction
-        return rp.first + j if off <= MAX_SECTOR / 2 else None
+        i = rp.first + j
+        return i if off <= MAX_SECTOR / 2 and self.items[i].kind != "empty" else None    # an empty slot is nothing
 
     @staticmethod
     def _shape_of(it, look):
@@ -809,10 +810,11 @@ class Ring:
         for fan in reversed(fans):                 # deepest first
             for k, (px, py) in enumerate(fan.pos):
                 rr = fan.csizes[k] / 2 * 1.12 + 4 * self.scale
-                if self._within(rx - px, ry - py, rr, fan.items[k], fan.look):
+                if fan.items[k].kind != "empty" and self._within(rx - px, ry - py, rr, fan.items[k], fan.look):
                     return fan.path + (k,), "disc"
         for i, (ux, uy) in enumerate(self.seats):
-            if self._within(rx - ux * self.rad[i], ry - uy * self.rad[i], self.sizes[i] / 2, self.items[i], self.look):
+            if self.items[i].kind != "empty" and self._within(rx - ux * self.rad[i], ry - uy * self.rad[i],
+                                                              self.sizes[i] / 2, self.items[i], self.look):
                 return (i,), "disc"
         for fan in reversed(fans):
             if self._in_wedge(fan, rx, ry):
@@ -1112,7 +1114,7 @@ class Ring:
             if (flick or hover_sub) and tuple(self.open[:len(path)]) != path:
                 self._set_open(path, time.time())
             return False
-        if not flick or self._item(path).kind in ("auto", "tag"):   # empty slots: nothing to pick
+        if not flick or self._item(path).kind in ("auto", "tag", "empty"):   # empty slots: nothing to pick
             return False
         self._finish(self._item(path), "flick", self._node_screen(path))
         return True
@@ -1171,6 +1173,12 @@ class Ring:
         m = 30 * self.scale * s                    # margin for ring + glow
         C = int(D + 2 * m + shapes.pad_extra(shape, D))
         c = C / 2
+        if it.kind == "empty":                     # a slot that holds nothing: a faint outline, the same on hover
+            im = Image.new("RGBA", (C, C), (0, 0, 0, 0))
+            shapes.draw(ImageDraw.Draw(im), shape, c, c, D / 2, corner, outline=_rgba(L.text, 0.22),
+                        width=max(1, int(1.5 * self.scale * s)))
+            out = im.resize((int(C / s), int(C / s)), Image.LANCZOS)
+            return out, out
         sub = it.kind == "menu"
         fan = sub and self._fans_out(it)
         more = _is_more(it) and not getattr(it, "icon", "")
@@ -1285,7 +1293,7 @@ class Ring:
     def _label_sprites(self, it, size=None, look=None):
         """(idle, hover) label sprites: the name on a soft pill in the theme's colour, so it reads over a neighbouring disc."""
         L = look or self.look
-        if L.labels == "none":
+        if L.labels == "none" or it.kind == "empty":
             return None
         s = SS
         font = _font_for(it.label, int(11 * self.scale * s))
@@ -1429,6 +1437,8 @@ class Ring:
         r0 = (8 if self.look.hub_style == "dot" else max(8, self._hub() / 2 + 3)) * self.scale * s
         rings = self.plan.rings
         for i, ((ux, uy), it, rad, size) in enumerate(zip(self.seats, self.items, self.rad, self.sizes)):
+            if it.kind == "empty":                  # nothing to point at
+                continue
             r1 = (rad - size / 2 - 6 * self.scale) * s
             start = r0
             if self.plan.seats[i].ring > 0:         # an outer slot's spoke starts just outside the ring before it

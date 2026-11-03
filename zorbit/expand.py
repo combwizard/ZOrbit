@@ -2,6 +2,7 @@
 slots opened up. Used by the app and by the Studio's previews, so both show the same ring.
 
   * auto slots become the brushes usage.py picked for them (an empty slot stays a placeholder);
+  * {"empty": true} slots stay where they are and count toward a page, but the More menu leaves them out;
   * a brush, alpha, material or texture slot gets the colour of the item's first tag (also a steps slot that
     starts with one, since the ring shows that item's icon). The colour is always stamped; whether it shows is the
     ring's call, made per look (tag_colors and tag_band);
@@ -93,6 +94,8 @@ class Expander:
         k = self._page_size(whole)
         if not k or len(whole.items) <= k:
             return whole
+        if all(it.kind == "empty" for it in whole.items[k - 1:]):
+            return dataclasses.replace(whole, items=whole.items[:k])     # nothing to put behind a More slot
         more = C.Item(label="More", kind="menu", data={"menu": MORE_PREFIX + whole.id})
         return dataclasses.replace(whole, items=whole.items[:k - 1] + [more])
 
@@ -104,7 +107,10 @@ class Expander:
             k = self._page_size(parent) if parent is not None else 0
             if not k or len(parent.items) <= k:
                 return None                              # the parent has no More slot
-            return dataclasses.replace(parent, id=mid, hotkey=None, items=parent.items[k - 1:])
+            rest = [it for it in parent.items[k - 1:] if it.kind != "empty"]    # a list has no positions to keep
+            if not rest:
+                return None
+            return dataclasses.replace(parent, id=mid, hotkey=None, items=rest)
         m = self.cfg.menus.get(mid)
         return self._fill(m) if m is not None else None
 

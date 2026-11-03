@@ -1500,3 +1500,61 @@ def test_a_fan_from_an_inner_slot_does_not_crash():
             for px, py in fan.pos:
                 for i in range(14):
                     assert math.hypot(px - r.seats[i][0] * r.rad[i], py - r.seats[i][1] * r.rad[i]) > r.sizes[i] / 2
+
+
+# --- empty slots ------------------------------------------------------------------------------
+def menu_with_gaps(kinds="bebb"):
+    """A menu of brushes (b) and empty slots (e)."""
+    items = [config.Item("", "empty", {"empty": True}) if k == "e" else config.Item(f"Item {i}", "brush", {"brush": f"Item {i}"})
+             for i, k in enumerate(kinds)]
+    return SimpleNamespace(id="m", title="Test", items=items, animation="", fan=False)
+
+
+def test_an_empty_slot_is_a_faint_outline_that_looks_the_same_on_hover():
+    r = prepared(menu_with_gaps())
+    idle, hover = r.sprites[1]
+    assert idle.tobytes() == hover.tobytes()
+    a = idle.getchannel("A")
+    n = a.size[0]
+    assert a.getbbox() is not None and a.getextrema()[1] <= 70       # something drawn, and faint
+    assert a.getpixel((n // 2, n // 2)) == 0                         # no fill
+    assert r.sprites[0][0].getchannel("A").getextrema()[1] > 70      # a filled slot is far stronger
+
+
+def test_an_empty_slot_has_no_label_pill():
+    r = prepared(menu_with_gaps())
+    assert [lab is None for lab in r.labels] == [False, True, False, False]
+
+
+def test_an_empty_slot_is_not_hit_and_the_dead_zone_answer_is_given():
+    r = prepared(menu_with_gaps())
+    r.centre = (0, 0)
+    for i, k in enumerate("bebb"):
+        cx, cy = r.seats[i][0] * r.R, r.seats[i][1] * r.R
+        want = ((i,), "disc") if k == "b" else (None, None)
+        assert r._hit(cx, cy) == want
+        assert r._index_at(cx * 1.4, cy * 1.4) == (i if k == "b" else None)      # the angle past the disc as well
+
+
+def test_an_empty_slot_is_not_picked_by_a_flick():
+    r = prepared(menu_with_gaps())
+    done = []
+    r._finish = lambda item, reason, at=None: done.append(item.label)
+    assert r._flicked((1,), True, True) is False and done == []
+    assert r._flicked((2,), True, True) is True and done == ["Item 2"]
+
+
+def test_a_menu_of_only_empty_slots_renders_and_is_hit_nowhere():
+    menu = menu_with_gaps("eeee")
+    im = ring.Ring.preview(menu, make_cfg(), lambda it: None, hover=1)
+    assert im.getchannel("A").getbbox() is not None
+    r = prepared(menu)
+    r.centre = (0, 0)
+    assert all(r._hit(r.seats[i][0] * r.R, r.seats[i][1] * r.R) == (None, None) for i in range(4))
+
+
+def test_the_layout_map_keeps_the_empty_slots():
+    menu = menu_with_gaps("ebebbe")
+    lay = ring.Ring.preview(menu, make_cfg(), lambda it: None).info["layout"]
+    assert [s["i"] for s in lay["slots"]] == list(range(6))
+    assert lay["full"]["n"] == 6

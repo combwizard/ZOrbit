@@ -968,7 +968,8 @@ def test_steps_cannot_be_nested(load_menus):
     assert [it.kind for it in cfg.menus["main"].items] == ["brush"]
 
 
-@pytest.mark.parametrize("step", [{"menu": "sub"}, {"auto": "brush"}, {"tag": "blocking"}, {"browser": ""}])
+@pytest.mark.parametrize("step", [{"menu": "sub"}, {"auto": "brush"}, {"tag": "blocking"}, {"browser": ""},
+                                  {"empty": True}])
 def test_steps_cannot_open_menus_hold_auto_slots_or_open_tags_and_the_browser(load_menus, step):
     cfg = load_menus({"main": one_item_menu({"steps": [{"brush": "A"}, step]}, {"brush": "B"}),
                       "sub": {"items": [{"brush": "C"}]}})
@@ -1019,6 +1020,58 @@ def test_fan_that_is_not_a_boolean_is_reported_and_treated_as_false(load_menus):
     cfg = load_menus({"main": one_item_menu({"brush": "A"}, fan="false")})
     assert problems(cfg, "menu main: fan")
     assert cfg.menus["main"].fan is False
+
+
+# --- empty slots and keep_slots -------------------------------------------------------------------
+
+
+def test_an_empty_slot_loads_with_no_label(load_menus):
+    cfg = load_menus({"main": one_item_menu({"brush": "A"}, {"empty": True})})
+    assert cfg.errors == []
+    item = cfg.menus["main"].items[1]
+    assert (item.kind, item.label, item.data) == ("empty", "", {"empty": True})
+
+
+@pytest.mark.parametrize("value", [1, False, "true", None, [True]])
+def test_an_empty_slot_must_be_exactly_true(load_menus, value):
+    cfg = load_menus({"main": one_item_menu({"empty": value}, {"brush": "B"})})
+    assert problems(cfg, "menu main item 1: 'empty' must be true")
+    assert [it.kind for it in cfg.menus["main"].items] == ["brush"]
+
+
+def test_an_empty_slot_cannot_hold_another_action(load_menus):
+    cfg = load_menus({"main": one_item_menu({"empty": True, "brush": "A"}, {"brush": "B"})})
+    assert problems(cfg, "menu main item 1: needs exactly one of")
+
+
+def test_a_menu_of_only_empty_slots_loads(load_menus):
+    cfg = load_menus({"main": one_item_menu(*[{"empty": True}] * 8)})
+    assert cfg.errors == []
+    assert [it.kind for it in cfg.menus["main"].items] == ["empty"] * 8
+
+
+def test_a_submenu_of_only_empty_slots_is_usable(load_menus):
+    cfg = load_menus({"main": one_item_menu({"menu": "sub"}), "sub": {"items": [{"empty": True}] * 3}})
+    assert cfg.errors == []
+    assert [it.kind for it in cfg.menus["main"].items] == ["menu"]
+
+
+def test_keep_slots_is_a_known_menu_setting(load_menus):
+    cfg = load_menus({"main": one_item_menu({"empty": True}, keep_slots=True)})
+    assert cfg.errors == []
+
+
+@pytest.mark.parametrize("value", ["yes", 1, None, []])
+def test_keep_slots_must_be_a_boolean(load_menus, value):
+    cfg = load_menus({"main": one_item_menu({"brush": "A"}, keep_slots=value)})
+    assert problems(cfg, "menu main: keep_slots")
+    assert "main" in cfg.menus
+
+
+def test_the_starter_menus_keep_slots():
+    with open(paths.DEFAULT_MENUS, encoding="utf-8-sig") as f:
+        raw = json.load(f)
+    assert raw["menus"] and all(m.get("keep_slots") is True for m in raw["menus"].values())
 
 
 @pytest.mark.parametrize("name", ["a\\b", "a/b", "C:Standard", "..", "a..b", "..\\evil"])

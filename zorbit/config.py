@@ -45,6 +45,7 @@ Schema (all keys optional except menus):
                                        # and the ring stays (default false: a new ring centred on the slot)
       "look": "soft",                  # optional; a look name, or {"preset": "soft", "hub": 14, ...} (look keys)
       "icon": "ClayBuildup",           # optional; the icon of a hub_style "icon" hub (a brush name or a full path)
+      "keep_slots": true,              # optional; Studio only: editing never moves the other items (empty slots stay)
       "items": [ <item>, ... ]         # drawn clockwise from the top
     }
   }
@@ -65,6 +66,7 @@ Schema (all keys optional except menus):
   {"tag": "blocking"}                            a submenu of every brush carrying that tag (tags.py), most used first
   {"browser": "", "kind": "alpha"}               open the browser (tabs: brush alpha material texture) on that
                                                  tab (default brush); a tag key filters it ("" = everything)
+  {"empty": true}                                a slot that holds nothing: drawn as a faint outline, never picked
 
 Menu ids starting with "tag:" are reserved for the submenus a tag slot opens, and ids starting with "more:" for the
 More submenu of a full ring. Ids that are names a JavaScript object already has (__proto__, constructor, toString and the like) are reserved too.
@@ -78,7 +80,7 @@ import looks as L
 import theme as T
 
 ACTION_KEYS = ("brush", "alpha", "material", "texture", "press", "set", "toggle", "steps", "menu", "auto", "tag",
-               "browser")
+               "browser", "empty")
 ASSET_KINDS = ("brush", "alpha", "material", "texture")     # the kinds of the browser and of tags
 AUTO_KINDS = ("brush",)
 ANIMATIONS = L.ANIMATIONS
@@ -106,7 +108,7 @@ _NAMED_VK = {
     "`": 0xC0, "~": 0xC0, "-": 0xBD, "=": 0xBB, "[": 0xDB, "]": 0xDD, "\\": 0xDC, ";": 0xBA,
     "'": 0xDE, ",": 0xBC, ".": 0xBE, "/": 0xBF,
 }
-MENU_KEYS = ("title", "hotkey", "swallow", "animation", "fan", "look", "icon", "items")
+MENU_KEYS = ("title", "hotkey", "swallow", "animation", "fan", "look", "icon", "keep_slots", "items")
 BRIDGE_KEYS = ("mode", "key")
 BROWSER_KEYS = ("hotkey",)
 ITEM_KEYS = ACTION_KEYS + ("label", "icon", "style", "value", "kind")
@@ -314,13 +316,17 @@ def _check_action(a, errors, where, allow_nested=True) -> bool:
         for i, s in enumerate(a["steps"]):
             if not _check_action(s, errors, f"{where} step {i + 1}", allow_nested=False):
                 return False
-            if any(x in s for x in ("menu", "steps", "auto", "tag", "browser")):
-                errors.append(f"{where} step {i + 1}: steps cannot open menus, nest steps, be auto slots "
-                              f"or open tags or the browser")
+            if any(x in s for x in ("menu", "steps", "auto", "tag", "browser", "empty")):
+                errors.append(f"{where} step {i + 1}: steps cannot open menus, nest steps, be auto slots, "
+                              f"be empty slots or open tags or the browser")
                 return False
     elif k == "auto" and a["auto"] not in AUTO_KINDS:
         errors.append(f"{where}: 'auto' must be one of {', '.join(AUTO_KINDS)}")
         return False
+    elif k == "empty":
+        if a[k] is not True:
+            errors.append(f"{where}: 'empty' must be true")
+            return False
     elif k == "browser":
         if not isinstance(a[k], str):
             errors.append(f"{where}: 'browser' must be a string (a tag key, or \"\" for everything)")
@@ -352,6 +358,8 @@ def _default_label(a: dict, menus_raw: dict, tags=None) -> str:
         return (tags.label(a["tag"]) if tags is not None and tags.has(a["tag"]) else "") or a["tag"]
     if "browser" in a:
         return (tags.label(a["browser"]) if tags is not None and tags.has(a["browser"]) else "") or "Browser"
+    if "empty" in a:
+        return ""
     for k in ("press", "set", "toggle"):
         if k in a:
             return a[k].split(":")[-1]
@@ -520,6 +528,8 @@ def load(path: str, tags=None, theme: str = "dark") -> Config:
         if not isinstance(fan, bool):
             errors.append(f"menu {mid}: fan {fan!r} must be true or false; using false")
             fan = False
+        if not isinstance(m.get("keep_slots", False), bool):    # Studio's switch; the ring never reads it
+            errors.append(f"menu {mid}: keep_slots {m['keep_slots']!r} must be true or false; using false")
         spec = _check_menu_look(m.get("look"), mid, cfg.looks, errors)
         look = cfg.looks.menu_look(spec)
         built_items = [it for _, it in items]

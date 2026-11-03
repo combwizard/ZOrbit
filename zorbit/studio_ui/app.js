@@ -58,6 +58,7 @@ const ICONS = {
   status: '<path d="M3 12h4l2.5-6 4 12 2.5-6H21"/>',
   setup: '<path d="M5 7l1.5 1.5L9 6M5 12l1.5 1.5L9 11M5 17l1.5 1.5L9 16"/><path d="M12 7h8M12 12h8M12 17h8"/>',
   plus: '<path d="M12 5v14M5 12h14"/>',
+  minus: '<path d="M5 12h14"/>',
   x: '<path d="M6 6l12 12M18 6L6 18"/>',
   copy: '<rect x="8.5" y="8.5" width="11" height="11" rx="2"/><path d="M15.5 8.5V6.5a2 2 0 0 0-2-2h-7a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h2"/>',
   edit: '<path d="M4 20h4L19 9l-4-4L4 16v4zM13.5 6.5l4 4"/>',
@@ -95,6 +96,7 @@ const ICONS = {
   side_l: '<rect x="3.5" y="4.5" width="17" height="15" rx="2"/><path d="M9 4.5v15"/>',
   side_r: '<rect x="3.5" y="4.5" width="17" height="15" rx="2"/><path d="M15 4.5v15"/>',
   swap_h: '<path d="M4 9h15M15 5l4 4-4 4M20 15H5M9 11l-4 4 4 4"/>',
+  k_empty: '<circle cx="12" cy="12" r="8" stroke-dasharray="3.200 3.200"/>',
   k_browser: '<rect x="4.500" y="4.500" width="6" height="6" rx="1.300"/><rect x="13.500" y="4.500" width="6" height="6" rx="1.300"/><rect x="4.500" y="13.500" width="6" height="6" rx="1.300"/><rect x="13.500" y="13.500" width="6" height="6" rx="1.300"/>',
   tag: '<path d="M20.600 13.400l-7.200 7.200a2 2 0 0 1-2.800 0L3 13V3h10l7.600 7.600a2 2 0 0 1 0 2.800z"/><circle cx="7.500" cy="7.500" r="1.300" fill="currentColor" stroke="none"/>',
   pin: '<path d="M9 4h6l-.8 5.500L17 13H7l2.800-3.500z"/><path d="M12 13v7"/>',
@@ -117,7 +119,7 @@ function setRoving(rows, cur) { const stop = rows.includes(cur) ? cur : rows[0];
 function noTab(btn) { btn.tabIndex = -1; return btn; }
 
 /* ================================================================== state */
-const ACTIONS = ['brush', 'alpha', 'material', 'texture', 'press', 'set', 'toggle', 'steps', 'menu', 'auto', 'tag', 'browser'];
+const ACTIONS = ['brush', 'alpha', 'material', 'texture', 'press', 'set', 'toggle', 'steps', 'menu', 'auto', 'tag', 'browser', 'empty'];
 const KIND = {
   brush: { label: 'Brush', icon: 'k_brush', hint: 'Select a brush' },
   alpha: { label: 'Alpha', icon: 'k_alpha', hint: 'Select an alpha' },
@@ -131,6 +133,7 @@ const KIND = {
   auto: { label: 'Auto', icon: 'k_auto', full: true, hint: 'A slot filled with a brush you pick often' },
   tag: { label: 'Tag', icon: 'tag', full: true, hint: 'Every item with a tag: brushes first, most used first, then alphas, materials and textures' },
   browser: { label: 'Browser', icon: 'k_browser', full: true, hint: 'Open the browser' },
+  empty: { label: 'Empty slot', icon: 'k_empty', hint: 'Holds its place in the ring and does nothing' },
 };
 /* The kinds of asset the library holds (brushes, alphas, materials, textures) and their wording; every "brush/brushes" string reads from here. */
 const KINDS = {
@@ -220,7 +223,7 @@ S.usage = Object.fromEntries(LIB_KINDS.map(k => [k, emptyUsage()]));
 const usageOf = kind => (isLib(kind) ? S.usage[kind] : S.usage.brush);
 
 const kindOf = it => ACTIONS.find(k => it && k in it) || 'brush';
-const targetOf = it => { const k = kindOf(it); return k === 'steps' ? '' : String(it[k] ?? ''); };
+const targetOf = it => { const k = kindOf(it); return k === 'steps' || k === 'empty' ? '' : String(it[k] ?? ''); };
 const isPath = s => /[\\/]/.test(s) || /\.(png|zbp|zmt|psd|jpg|jpeg|bmp|tif|tiff)$/i.test(s);
 const ring = () => S.cfg.ring || {};
 const ringNum = k => { const v = ring()[k]; return typeof v === 'number' ? v : S.defaults[k]; };
@@ -275,7 +278,7 @@ function targetNeedsFull(t) {
 /* One line saying what an item targets; the item rows and the read-only line in Simple share it. */
 function itemSub(it) {
   const k = kindOf(it);
-  return k === 'auto' ? 'filled from your picks' : k === 'tag' ? (it.tag ? 'all items tagged ' + tagName(it.tag) : '(not set)') : k === 'browser' ? 'opens the ' + K(it.kind).one + ' browser' + (it.browser ? ' for ' + tagName(it.browser) : '') : k === 'steps' ? plural((it.steps || []).length, 'step') : (k === 'set' ? `${targetOf(it)} = ${it.value}` : targetOf(it) || '(not set)');
+  return k === 'empty' ? 'nothing here' : k === 'auto' ? 'filled from your picks' : k === 'tag' ? (it.tag ? 'all items tagged ' + tagName(it.tag) : '(not set)') : k === 'browser' ? 'opens the ' + K(it.kind).one + ' browser' + (it.browser ? ' for ' + tagName(it.browser) : '') : k === 'steps' ? plural((it.steps || []).length, 'step') : (k === 'set' ? `${targetOf(it)} = ${it.value}` : targetOf(it) || '(not set)');
 }
 
 function defaultLabel(it) {
@@ -284,6 +287,7 @@ function defaultLabel(it) {
   if (k === 'menu') { const m = menuOf(it.menu); return (m && m.title) || String(it.menu || ''); }
   if (k === 'steps') return 'Steps';
   if (k === 'auto') return 'Auto';
+  if (k === 'empty') return 'Empty slot';
   if (k === 'tag') return tagName(it.tag);
   if (k === 'browser') return it.browser && S.tagMap.has(it.browser) ? tagName(it.browser) : 'Browser';   // as _default_label in config.py
   return String(it[k] || '').split(':').pop();
@@ -300,9 +304,10 @@ function actionValid(a, nested) {
   if (k === 'set' && !(typeof a.value === 'number' && Number.isFinite(a.value))) return false;   // a number, as config.py demands
   if (k === 'steps') {
     if (nested || !Array.isArray(a.steps) || !a.steps.length) return false;
-    return a.steps.every(s => actionValid(s, true) && !('menu' in s) && !('steps' in s) && !('auto' in s) && !('tag' in s) && !('browser' in s));   // steps cannot open menus, nest steps, be auto slots or open tags or the browser
+    return a.steps.every(s => actionValid(s, true) && !('menu' in s) && !('steps' in s) && !('auto' in s) && !('tag' in s) && !('browser' in s) && !('empty' in s));   // steps cannot open menus, nest steps, be auto slots, open tags or the browser, or be an empty slot
   }
   if (k === 'auto') return a.auto === 'brush';
+  if (k === 'empty') return a.empty === true;                                      // always usable: the slot only holds its place
   if (k === 'browser') return typeof a.browser === 'string' && (a.kind === undefined || isLib(a.kind));          // '' = every item; kind: which tab it opens on
   if (typeof a[k] !== 'string') return false;                                       // null or a number from a hand edit: unusable, never a crash
   if (isLib(k) && (/[\\/:]/.test(a[k]) || a[k].includes('..'))) return false;      // an asset is a plain name, never a path (config.py _bad_asset_name)
@@ -336,6 +341,7 @@ function usableIdx(menuId) {
 /* Builds an item with a tidy key order (action, value, label, icon). */
 function makeItem(kind, target, extra = {}) {
   const it = {};
+  if (kind === 'empty') return { empty: true };
   if (kind === 'steps') it.steps = extra.steps || [];
   else if (kind === 'auto') it.auto = 'brush';
   else it[kind] = target || '';
@@ -359,11 +365,12 @@ const libOpts = kind => lib(kind).sorted.map(b => ({ value: b.name, sub: b.categ
 const hasText = v => String(v === undefined || v === null ? '' : v).trim() !== '';
 const joinList = a => (a.length < 2 ? a.join('') : a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1]);
 /* Kinds that cannot be a step (and so are dropped when an item becomes Steps). */
-const NO_STEP = ['menu', 'tag', 'browser'];
+const NO_STEP = ['menu', 'tag', 'browser', 'empty'];
 /* Returns { item, lost }: lost lists, in words, what the switch could not carry over (empty when nothing was lost). */
 function convertItem(it, kind) {
   const old = kindOf(it);
   if (old === kind) return { item: it, lost: [] };
+  if (old === 'empty') return { item: makeItem(kind, '', kind === 'steps' ? { steps: [makeItem('brush', '')] } : {}), lost: [] };      // nothing to carry over
   const label = it.label, icon = it.icon, lost = [];
   const oldSteps = old === 'steps' && Array.isArray(it.steps) ? it.steps : [];
   const oldTarget = targetOf(it);
@@ -1276,7 +1283,7 @@ function selectItem(i, { focusTarget = false, keepTab = false } = {}) {
 }
 function addMenu() {
   const id = uniqueId('New menu');
-  S.cfg.menus[id] = { title: 'New menu', items: [] };
+  S.cfg.menus[id] = { title: 'New menu', keep_slots: true, items: Array.from({ length: 8 }, ZSlots.blank) };     // eight outlines to fill, in places that stay put
   S.menuId = id; S.itemIdx = null; S.tab = 'menu';
   commit({ inspector: true }); if (R.head) R.head();
   if (R.preview) R.preview();
@@ -1305,10 +1312,10 @@ async function deleteMenu(id) {
   const fresh = referrers(id).filter(r => r.menuId !== id);     // the config may have changed while the dialog was open
   sealSnap();
   if (S.itemIdx !== null && S.menuId !== id) {
-    const here = fresh.filter(r => r.menuId === S.menuId).map(r => r.index);
+    const here = keeps(menuOf(S.menuId)) ? [] : fresh.filter(r => r.menuId === S.menuId).map(r => r.index);       // a menu that keeps its slots only empties them
     S.itemIdx = here.includes(S.itemIdx) ? null : S.itemIdx - here.filter(x => x < S.itemIdx).length;
   }
-  fresh.sort((a, b) => b.index - a.index).forEach(r => { const mm = menuOf(r.menuId); if (mm) mm.items.splice(r.index, 1); });
+  fresh.sort((a, b) => b.index - a.index).forEach(r => { const mm = menuOf(r.menuId); if (mm) { if (keeps(mm)) ZSlots.clear(mm.items, r.index); else mm.items.splice(r.index, 1); } });
   const ids = Object.keys(S.cfg.menus), pos = ids.indexOf(id);
   delete S.cfg.menus[id];
   if (S.menuId === id) { const rest = Object.keys(S.cfg.menus); S.menuId = rest[Math.min(pos, rest.length - 1)] || null; S.itemIdx = null; }
@@ -1355,12 +1362,22 @@ function moveMenu(id, beforeId) {
 }
 
 /* ---------- item operations */
+/* A menu that keeps its slots in place (keep_slots): adding puts an item in the first empty slot, deleting empties its slot and a drag swaps two slots,
+   so no other item moves (slots.js). Without the switch an item is inserted and removed with the ones after it shifting, as ever. */
+const keeps = m => !!m && m.keep_slots === true;
+/* Where the selection goes after the item at i left the list. */
+function dropSel(m, menuId, i) {
+  if (menuId !== S.menuId) return;
+  if (S.itemIdx === i) S.itemIdx = m.items.length ? Math.min(i, m.items.length - 1) : null;
+  else if (S.itemIdx !== null && S.itemIdx > i) S.itemIdx--;
+}
 function addItem(kind, at = null) {
   const m = curMenu(); if (!m) return;
   const it = makeItem(kind, '');
   if (kind === 'steps') it.steps = [makeItem('brush', '')];
-  const i = at === null ? m.items.length : at;
-  m.items.splice(i, 0, it);
+  let i;
+  if (keeps(m) && at === null) i = kind === 'empty' ? ZSlots.addSlot(m.items) : ZSlots.place(m.items, it);      // an empty slot is a new slot, not one to fill
+  else { i = at === null ? m.items.length : at; m.items.splice(i, 0, it); }
   S.itemIdx = i; S.tab = 'item';
   commit({ inspector: true }); if (R.head) R.head();
   const row = $('.irow.sel'); if (row) row.scrollIntoView({ block: 'nearest' });
@@ -1368,14 +1385,25 @@ function addItem(kind, at = null) {
 }
 function insertAsset(menuId, kind, name, at = null, silent = false) {
   const m = menuOf(menuId); if (!m || !isLib(kind)) return;
-  const i = at === null || at > m.items.length ? m.items.length : at;
   const sel = menuId === S.menuId ? curItem() : null;
   if (!silent) sealSnap();
-  m.items.splice(i, 0, { [kind]: name });
-  if (sel) S.itemIdx = m.items.indexOf(sel);
+  let i;
+  if (keeps(m) && at === null) i = ZSlots.place(m.items, { [kind]: name });                     // the first empty slot, else a new one at the end
+  else { i = at === null || at > m.items.length ? m.items.length : at; m.items.splice(i, 0, { [kind]: name }); }
+  if (sel) { const j = m.items.indexOf(sel); S.itemIdx = j >= 0 ? j : i; }                        // the empty slot that was selected is now this item
   commit({ inspector: true }); if (R.head) R.head();
   flashRow(menuId, i);
   if (!silent) undoToast(`Added ${name} to "${m.title || menuId}"`);
+}
+/* An asset dropped on slot i of a menu that keeps its slots: it fills an empty slot or replaces what was there (one undo step). */
+function putAsset(menuId, i, kind, name) {
+  const m = menuOf(menuId); if (!m || !m.items[i] || !isLib(kind)) return;
+  const was = m.items[i], title = m.title || menuId;
+  sealSnap();
+  m.items[i] = { [kind]: name };
+  commit({ inspector: true }); if (R.head) R.head();
+  flashRow(menuId, i);
+  undoToast(ZSlots.isEmpty(was) ? `Put ${name} in slot ${i + 1} of "${title}"` : `Replaced "${itemLabel(was)}" with ${name}`);
 }
 /* Scrolls the row to view and flashes it, in whichever item lists are on screen (Menus editor, Library target panel). */
 function flashRow(menuId, i) {
@@ -1388,23 +1416,28 @@ function flashRow(menuId, i) {
 }
 function dupItem(i) {
   const m = curMenu(); if (!m || !m.items[i]) return;
-  m.items.splice(i + 1, 0, clone(m.items[i]));
-  S.itemIdx = i + 1; S.tab = 'item';
+  if (keeps(m)) S.itemIdx = ZSlots.place(m.items, clone(m.items[i]));
+  else { m.items.splice(i + 1, 0, clone(m.items[i])); S.itemIdx = i + 1; }
+  S.tab = 'item';
   commit({ inspector: true }); if (R.head) R.head();
 }
 function delItem(i, menuId = S.menuId) {
   const m = menuOf(menuId); if (!m || !m.items[i]) return;
   sealSnap();
-  const removed = m.items.splice(i, 1)[0];
-  if (menuId === S.menuId) {
-    if (S.itemIdx === i) S.itemIdx = m.items.length ? Math.min(i, m.items.length - 1) : null;
-    else if (S.itemIdx !== null && S.itemIdx > i) S.itemIdx--;
+  if (keeps(m) && !ZSlots.isEmpty(m.items[i])) {                  // the slot stays, empty, and the selection with it
+    const was = ZSlots.clear(m.items, i);
+    commit({ inspector: true }); if (R.head) R.head();
+    undoToast(`Cleared "${itemLabel(was)}"`, { ms: 3800 });
+    return;
   }
+  const removed = m.items.splice(i, 1)[0];                        // an empty slot of a keeping menu goes for good: the way to drop a slot
+  dropSel(m, menuId, i);
   commit({ inspector: true }); if (R.head) R.head();
-  undoToast(`Removed "${itemLabel(removed)}"`, { ms: 3800 });
+  undoToast(ZSlots.isEmpty(removed) ? 'Removed the empty slot' : `Removed "${itemLabel(removed)}"`, { ms: 3800 });
 }
 function moveItem(menuId, from, to) {
   const m = menuOf(menuId); if (!m) return;
+  if (keeps(m)) { swapSlots(menuId, from, to > from ? to - 1 : to); return; }       // `to` counts gaps; a keeping menu swaps instead, so no neighbour moves
   const sel = menuId === S.menuId ? curItem() : null;
   const [it] = m.items.splice(from, 1);
   const t = to > from ? to - 1 : to;
@@ -1412,7 +1445,18 @@ function moveItem(menuId, from, to) {
   if (sel) S.itemIdx = m.items.indexOf(sel);
   commit({ inspector: true });
 }
-/* Moves item `index` of menu fromId to the end of menu toId, or copies it there (a deep copy) when `copy` is set. */
+/* Swaps slots a and b of a menu that keeps its slots (either may be empty, which makes it a move). The picture glides the pictures of the two
+   across the ring first (R.glide, before the config changes), and both rows flash. */
+function swapSlots(menuId, a, b) {
+  const m = menuOf(menuId); if (!m || a === b || !m.items[a] || !m.items[b]) return;
+  const sel = menuId === S.menuId ? curItem() : null;
+  if (menuId === S.menuId && R.glide) R.glide([...(ZSlots.isEmpty(m.items[a]) ? [] : [[a, b]]), ...(ZSlots.isEmpty(m.items[b]) ? [] : [[b, a]])]);
+  if (!ZSlots.swap(m.items, a, b)) return;
+  if (sel) S.itemIdx = m.items.indexOf(sel);
+  commit({ inspector: true });
+  flashRow(menuId, a); flashRow(menuId, b);
+}
+/* Moves item `index` of menu fromId to the end of menu toId (the first empty slot when that menu keeps its slots), or copies it there (a deep copy) when `copy` is set. */
 function transferItem(fromId, index, toId, copy) {
   const src = menuOf(fromId), dst = menuOf(toId);
   if (!src || !dst || fromId === toId || !src.items[index]) return;
@@ -1420,17 +1464,18 @@ function transferItem(fromId, index, toId, copy) {
   if (it.menu === toId) { toast('A menu cannot open itself, so that item stays where it is.', { tone: 'warn' }); return; }
   sealSnap();
   const label = itemLabel(it), dstName = dst.title || toId;
-  if (copy) dst.items.push(clone(it));
+  const put = x => (keeps(dst) ? ZSlots.place(dst.items, x) : dst.items.push(x) - 1);
+  let at;
+  if (copy) at = put(clone(it));
   else {
-    src.items.splice(index, 1); dst.items.push(it);
-    if (S.menuId === fromId) {                                  // stay on this menu: the selection moves on like after a delete
-      if (S.itemIdx === index) S.itemIdx = src.items.length ? Math.min(index, src.items.length - 1) : null;
-      else if (S.itemIdx !== null && S.itemIdx > index) S.itemIdx--;
-    } else if (S.menuId === toId) S.itemIdx = dst.items.length - 1;
+    if (keeps(src)) ZSlots.clear(src.items, index); else src.items.splice(index, 1);
+    at = put(it);
+    if (S.menuId === fromId) { if (!keeps(src)) dropSel(src, fromId, index); }                  // stay on this menu: the selection moves on like after a delete (a keeping menu leaves it on the emptied slot)
+    else if (S.menuId === toId) S.itemIdx = at;
   }
   commit({ inspector: true }); if (R.head) R.head();
   if (!copy && R.preview) R.preview();
-  flashRow(toId, dst.items.length - 1);                         // the new row, if its list is on screen
+  flashRow(toId, at);                                           // the new row, if its list is on screen
   const mrow = $(`.mrow[data-id="${CSS.escape(toId)}"]`);      // and the menu it went to
   if (mrow) { mrow.classList.remove('flash'); void mrow.offsetWidth; mrow.classList.add('flash'); setTimeout(() => mrow.classList.remove('flash'), 1400); }
   undoToast(`${copy ? 'Copied' : 'Moved'} "${label}" to "${dstName}"`);
@@ -1444,6 +1489,13 @@ function moveToMenuPopover(anchor, menuId, index, then) {
 function dropOnMenu(menuId, payload, at) {
   if (payload.type === 'asset') insertAsset(menuId, payload.kind, payload.name, at);
   else if (payload.type === 'item' && payload.menuId === menuId) moveItem(menuId, payload.index, at === null ? menuOf(menuId).items.length : at);
+}
+/* The same for a menu that keeps its slots; `row` is the slot dropped on (null: none, an asset then goes to the first empty slot). */
+function dropOnSlot(menuId, payload, row) {
+  if (!menuOf(menuId)) return;
+  if (payload.type === 'item') { if (payload.menuId === menuId && row !== null) swapSlots(menuId, payload.index, row); }
+  else if (row === null) insertAsset(menuId, payload.kind, payload.name, null);
+  else putAsset(menuId, row, payload.kind, payload.name);
 }
 
 /* ================================================================== shared UI bits */
@@ -1738,7 +1790,7 @@ function renderItemList(box, menuId, compact) {
       row.addEventListener('click', () => selectItem(i));
       row.addEventListener('dblclick', () => { if (k === 'menu' && hasMenu(it.menu)) openSubmenu(it.menu, i); });
     }
-    DnD.source(row, () => ({ type: 'item', menuId, index: i }), () => h('span', { class: 'ghost-chip' }, itemThumb(it, 22), itemLabel(it)));
+    if (k !== 'empty') DnD.source(row, () => ({ type: 'item', menuId, index: i }), () => h('span', { class: 'ghost-chip' }, itemThumb(it, 22), itemLabel(it)));       // an empty slot is only ever dropped on
     box.append(row);
   });
   const insertIndex = y => {
@@ -1746,16 +1798,23 @@ function renderItemList(box, menuId, compact) {
     for (let j = 0; j < rows.length; j++) { const r = rows[j].getBoundingClientRect(); if (y < r.top + r.height / 2) return j; }
     return rows.length;
   };
-  const clear = () => { $$('.ins-before', box).forEach(r => r.classList.remove('ins-before')); box.classList.remove('ins-end', 'drop-over'); };
+  const rowAt = y => { const rows = $$('.irow', box); for (let j = 0; j < rows.length; j++) { const r = rows[j].getBoundingClientRect(); if (y >= r.top && y < r.bottom) return j; } return null; };     // the row under the pointer
+  const clear = () => { $$('.ins-before, .drop-row', box).forEach(r => r.classList.remove('ins-before', 'drop-row')); box.classList.remove('ins-end', 'drop-over'); };
   DnD.zone(box, {
     accept: p => p.type === 'asset' || (p.type === 'item' && p.menuId === menuId),
     over: (p, x, y) => {
       clear(); box.classList.add('drop-over');
-      const j = insertIndex(y), rows = $$('.irow', box);
+      const rows = $$('.irow', box);
+      if (keeps(menuOf(menuId))) {                                 // the row under the pointer is the slot it lands on
+        const j = rowAt(y);
+        if (j !== null && !(p.type === 'item' && p.index === j)) rows[j].classList.add('drop-row');
+        return;
+      }
+      const j = insertIndex(y);
       if (j < rows.length) rows[j].classList.add('ins-before'); else box.classList.add('ins-end');
     },
     leave: clear,
-    drop: (p, x, y) => dropOnMenu(menuId, p, insertIndex(y)),
+    drop: (p, x, y) => (keeps(menuOf(menuId)) ? dropOnSlot(menuId, p, rowAt(y)) : dropOnMenu(menuId, p, insertIndex(y))),
   });
   refreshSel();
   box._sel = compact ? null : S.itemIdx;
@@ -1780,7 +1839,9 @@ const svgEl = (name, attrs) => { const e = document.createElementNS(SVG_NS, name
      opts: { wrap, img, count(): usable items or null to trust the layout, badge(slot, i): the text of a number badge or null for none (omit for no badges) }
      setShown(layout): the layout of the picture now in img.    place(fanBox, D, size): puts the box in wrap (fanBox: { w, h, cx, cy } or null).
      rebuild(): draws the marks again (after the layout, the size of the box or the number of items changed).
-     paint({ hover, sel, moving, gap }): ring indices (or -1/null) and the gap bar { x, y, ang, len, noop } or null.
+     paint({ hover, sel, moving, drop, gap }): ring indices (or -1/null), the slot a drop would land on, and the gap bar { x, y, ang, len, noop } or null.
+     glide(moves): [[from, to], ...] ring indices; ghosts of those slots' pictures glide across the ring to each other's place over the old picture, which
+       is masked there, until endGlide() (called once the new picture is in). Returns the glide { done, settled } or null (reduced motion, no picture).
      valid(), layout(), isMore(i), slotAt(clientX, clientY) -> ring index or null, gapAt(clientX, clientY) -> gap or null. */
 function makeRingView({ wrap, img, count, badge = null }) {
   const box = h('div', { class: 'ring-box' });
@@ -1788,7 +1849,7 @@ function makeRingView({ wrap, img, count, badge = null }) {
   const ov = h('div', { class: 'ring-ov' }, svg);
   box.append(img, ov);
   wrap.prepend(box);
-  let lay = null, marks = [], state = { hover: null, sel: null, moving: null, gap: null };
+  let lay = null, marks = [], state = { hover: null, sel: null, moving: null, drop: null, gap: null }, gl = null;
   const valid = () => { if (!lay || !Array.isArray(lay.slots) || !lay.slots.length || !Array.isArray(lay.size) || !Array.isArray(lay.centre)) return false; const n = count(); return n === null || ZLook.layoutFits(lay, n); };
   /* The point in the picture, measured from the ring's centre. */
   const rel = (cx, cy) => {
@@ -1825,11 +1886,11 @@ function makeRingView({ wrap, img, count, badge = null }) {
     paint(state);
   }
   function paint(next) {
-    state = Object.assign({ hover: null, sel: null, moving: null, gap: null }, next);
+    state = Object.assign({ hover: null, sel: null, moving: null, drop: null, gap: null }, next);
     const bar = svg.querySelector('.gap-bar'); if (bar) bar.remove();
     if (!valid()) return;
     marks.forEach((m, i) => {
-      for (const [cls, on] of [['hov', state.hover === i], ['sel', state.sel === i], ['moving', state.moving === i]]) { m.g.classList.toggle(cls, on); if (m.bd) m.bd.classList.toggle(cls, on); }
+      for (const [cls, on] of [['hov', state.hover === i], ['sel', state.sel === i], ['moving', state.moving === i], ['drop', state.drop === i]]) { m.g.classList.toggle(cls, on); if (m.bd) m.bd.classList.toggle(cls, on); }
     });
     const g = state.gap;
     if (g) {
@@ -1837,8 +1898,46 @@ function makeRingView({ wrap, img, count, badge = null }) {
       svg.append(svgEl('line', { class: 'gap-bar' + (g.noop ? ' noop' : ''), x1: cx - ux * half, y1: cy - uy * half, x2: cx + ux * half, y2: cy + uy * half }));
     }
   }
+  const MASK = ['mask-image', '-webkit-mask-image', 'mask-composite', '-webkit-mask-composite'];
+  /* The moving pictures: the ring picture cropped to a slot's box, on an arm centred on the ring that turns from the slot's angle to the other's
+     (the ghost turns back by the same, so it stays upright). The old picture is masked where the slots were, so nothing shows twice. */
+  function glide(moves) {
+    endGlide(true);
+    const reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (reduce || !moves.length || !valid() || !box.clientWidth || !img.src || img.classList.contains('pending')) return null;
+    const [w, ht] = lay.size, k = box.clientWidth / w, src = img.currentSrc || img.src, [ox, oy] = lay.centre;
+    const at = i => { const sl = lay.slots[i]; return { x: sl.x, y: sl.y, a: Math.atan2(sl.x, -sl.y) * 180 / Math.PI, r: Math.hypot(sl.x, sl.y) * k, size: sl.size }; };
+    const holes = new Set(moves.flat());
+    img.style.setProperty('mask-image', Array.from(holes, i => { const p = at(i), R = p.size * 0.62 * k; return `radial-gradient(circle at ${(ox + p.x) * k}px ${(oy + p.y) * k}px, transparent ${R}px, #000 ${R + 1.5}px)`; }).join(','));
+    img.style.setProperty('-webkit-mask-image', img.style.getPropertyValue('mask-image'));
+    img.style.setProperty('mask-composite', 'intersect'); img.style.setProperty('-webkit-mask-composite', 'source-in');
+    const layer = h('div', { class: 'ring-glide' }), anims = [], opt = { duration: 250, easing: 'ease-in-out', fill: 'both' };
+    moves.forEach(([fi, ti], n) => {
+      const f = at(fi), t = at(ti), gs = f.size * 1.2 * k, d = ((t.a - f.a + 540) % 360) - 180;       // d: the short way round
+      const mid = (f.r + t.r) / 2 + (moves.length > 1 ? (n ? -1 : 1) * 0.45 * f.size * k : 0);          // two passing each other take an outer and an inner lane
+      const arm = h('div', { class: 'gl-arm', style: { left: ox * k + 'px', top: oy * k + 'px' } });
+      const ghost = h('div', { class: 'gl-ghost', style: { width: gs + 'px', height: gs + 'px', left: -gs / 2 + 'px', top: -gs / 2 + 'px', backgroundImage: 'url(' + JSON.stringify(src) + ')',
+        backgroundSize: w * k + 'px ' + ht * k + 'px', backgroundPosition: -((ox + f.x) * k - gs / 2) + 'px ' + -((oy + f.y) * k - gs / 2) + 'px' } });
+      arm.append(ghost); layer.append(arm);
+      anims.push(arm.animate([f.a, f.a + d / 2, f.a + d].map(a => ({ transform: `rotate(${a}deg)` })), opt));
+      anims.push(ghost.animate([[f.r, f.a], [mid, f.a + d / 2], [t.r, f.a + d]].map(([r, a]) => ({ transform: `translateY(${-r}px) rotate(${-a}deg)` })), opt));
+    });
+    box.append(layer);
+    const g = gl = { layer, settled: false, done: null };
+    g.done = Promise.all(anims.map(a => a.finished)).catch(() => {}).then(() => { g.settled = true; });
+    return g;
+  }
+  /* Takes the ghosts away (they fade, or go at once with `now`) and gives the picture its slots back. */
+  function endGlide(now) {
+    if (!gl) return;
+    const g = gl; gl = null;
+    for (const p of MASK) img.style.removeProperty(p);
+    if (now) g.layer.remove();
+    else g.layer.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 160, easing: 'ease-out', fill: 'forwards' }).finished.catch(() => {}).then(() => g.layer.remove());
+  }
   return {
-    box, ov, rebuild, paint, valid,
+    box, ov, rebuild, paint, valid, glide, endGlide,
+    gliding: () => gl,
     layout: () => (valid() ? lay : null),
     setShown(layout) { lay = layout || null; },
     isMore: i => !!(lay && lay.slots[i] && lay.slots[i].more),
@@ -1888,10 +1987,22 @@ function buildStage() {
   const playBtn = h('button', { class: 'btn small stage-play', type: 'button' });
   const tip = h('div', { class: 'stage-tip' }, 'Hover to preview, click to select, drag slots or items between slots');
   const trash = h('div', { class: 'stage-trash', 'aria-hidden': 'true' }, icon('trash', 14), 'Delete');     // only there while an item of this menu is being dragged
+  // + and -: one more empty slot at the end, or one less (only an empty last slot can go); for a menu that keeps its slots in place
+  const minusBtn = iconBtn('minus', 'Remove the last slot', () => {
+    const m = curMenu(); if (!keeps(m) || !ZSlots.trimEnd(m.items)) return;
+    if (S.itemIdx !== null && S.itemIdx >= m.items.length) { S.itemIdx = null; if (S.tab === 'item') S.tab = 'menu'; }
+    commit({ inspector: true }); if (R.head) R.head();
+  });
+  const plusBtn = iconBtn('plus', 'Add an empty slot at the end', () => {
+    const m = curMenu(); if (!keeps(m)) return;
+    ZSlots.addSlot(m.items); commit({ inspector: true }); if (R.head) R.head();
+  });
+  const slotsN = h('span', { class: 'slots-n mono' });
+  const slotsBar = h('div', { class: 'stage-slots', role: 'group', 'aria-label': 'Number of slots', hidden: true }, minusBtn, slotsN, plusBtn);
   const el = h('div', { class: 'stage', tabindex: '0', 'aria-label': 'Ring preview. Use arrow keys to move between items.' },
-    h('div', { class: 'stage-rings', 'aria-hidden': 'true' }), wrap, emptyEl, errEl, info, tip, busy, playBtn, trash);
+    h('div', { class: 'stage-rings', 'aria-hidden': 'true' }), wrap, emptyEl, errEl, info, tip, busy, playBtn, slotsBar, trash);
   el.classList.add('loading');
-  let curSize = 447, hoverRing = null, gap = null, idxs = [], haveImage = false;   // gap: the bar { x, y, ang, len, k, text, noop } while a drag is over the ring
+  let curSize = 447, hoverRing = null, gap = null, dropAt = null, idxs = [], haveImage = false;   // gap: the bar { x, y, ang, len, k, text, noop } while a drag is over the ring; dropAt: { j, ix, text } for a menu that keeps its slots
   let box = null, baseVer = -1, shownPath = '';     // box: size and ring centre of the image while a fan is open (null: square, ring in the middle); baseVer: the version curSize was read at
   // number badges: the item's number; the More slot has none
   const view = makeRingView({ wrap, img, count: () => idxs.length, badge: (s, i) => (s.more || idxs[i] === undefined ? null : String(idxs[i] + 1)) });
@@ -1927,7 +2038,18 @@ function buildStage() {
     return t && t.fan === true && it.menu !== S.menuId ? [j] : null;
   }
   /* The marks again, for the picture and items now. */
+  function paintSlotsBar() {
+    const m = curMenu(), on = keeps(m);
+    slotsBar.hidden = !on;
+    if (!on) return;
+    const n = m.items.length, free = n > 0 && ZSlots.isEmpty(m.items[n - 1]);
+    setText(slotsN, plural(n, 'slot'));
+    minusBtn.disabled = !free;
+    minusBtn.title = n === 0 ? 'No slots to remove' : free ? 'Remove the last slot' : 'The last slot is in use';
+    minusBtn.setAttribute('aria-label', minusBtn.title);
+  }
   function drawMarks() {
+    paintSlotsBar();
     idxs = usableIdx(S.menuId);
     if (hoverRing !== null && hoverRing >= nSlots()) { hoverRing = null; wrap.classList.remove('over-slot'); }   // the ring shrank (undo, menu switch)
     if (gap && gap.k > nSlots()) gap = null;
@@ -1936,16 +2058,20 @@ function buildStage() {
   }
   function paintMarks() {
     const moving = DnD.active && DnD.active.payload.type === 'item' && DnD.active.payload.menuId === S.menuId ? DnD.active.payload : null;   // the slot being dragged
-    view.paint({ hover: hoverRing, sel: ringOf(S.itemIdx), moving: moving ? ringOf(moving.index) : null, gap });
+    view.paint({ hover: hoverRing, sel: ringOf(S.itemIdx), moving: moving ? ringOf(moving.index) : null, drop: dropAt && !dropAt.noop ? dropAt.j : null, gap });
     const m = curMenu();
     if (!idxs.length) { info.classList.remove('on'); return; }
     if (trash.classList.contains('over') && moving) {           // over the trash: say what goes, whatever redraws the ring meanwhile
       const it = m && m.items[moving.index];
       info.replaceChildren(h('span', null, 'Release to delete '), h('b', null, it ? itemLabel(it) : 'this item')); info.classList.add('on');
+    } else if (dropAt) {
+      info.replaceChildren(h('b', null, dropAt.text)); info.classList.add('on');
     } else if (gap) {
       info.replaceChildren(h('b', null, gap.text)); info.classList.add('on');
     } else if (hoverRing !== null && view.isMore(hoverRing)) {
       info.replaceChildren(h('b', null, 'More'), h('span', { class: 'mono' }, ' ' + plural(idxs.length - (nSlots() - 1), 'item') + ' in a submenu')); info.classList.add('on');
+    } else if (hoverRing !== null && m && m.items[itemOf(hoverRing)] && ZSlots.isEmpty(m.items[itemOf(hoverRing)])) {
+      info.replaceChildren(h('b', null, 'Empty slot'), h('span', { class: 'mono' }, ' drop something here')); info.classList.add('on');
     } else if (hoverRing !== null && m && m.items[itemOf(hoverRing)]) {
       const it = m.items[itemOf(hoverRing)];
       info.replaceChildren(h('b', null, itemLabel(it)), h('span', { class: 'mono' }, ' ' + KIND[kindOf(it)].label.toLowerCase() + (['steps', 'auto'].includes(kindOf(it)) ? '' : kindOf(it) === 'tag' ? ' / ' + tagName(it.tag) : kindOf(it) === 'browser' ? ' / ' + (it.browser ? tagName(it.browser) : 'all ' + K(it.kind).many) : ' / ' + targetOf(it))));
@@ -1956,7 +2082,9 @@ function buildStage() {
   const reveal = () => { img.classList.remove('pending'); el.classList.remove('loading'); };   // the shimmer stays until a decoded image can take its place
   /* The picture and its layout (and the fan box) change together. */
   function setImg(url, nextBox, lay) {
-    const apply = () => { box = nextBox; view.setShown(lay); placeImg(); drawMarks(); };
+    const g = view.gliding();
+    if (g && !g.settled) { wantedUrl = url; g.done.then(() => { if (wantedUrl === url) setImg(url, nextBox, lay); }); return; }   // the new picture waits for the ghosts to arrive
+    const apply = () => { box = nextBox; view.setShown(lay); placeImg(); drawMarks(); view.endGlide(); };
     if (img.getAttribute('src') === url) { wantedUrl = url; apply(); return; }
     wantedUrl = url;
     if (!img.getAttribute('src')) {
@@ -2007,6 +2135,7 @@ function buildStage() {
   }
   function refresh() {
     const m = curMenu();
+    paintSlotsBar();
     idxs = usableIdx(S.menuId);
     emptyEl.replaceChildren();
     const has = idxs.length > 0;
@@ -2022,6 +2151,14 @@ function buildStage() {
     drawMarks();
   }
 
+  /* Before a swap: pairs of item indices [from, to]; the picture of each glides to the other's place until the new picture arrives. */
+  let glideTimer = 0;
+  R.glide = pairs => {
+    if (!el.isConnected || !el.offsetParent || player.state !== 'idle' || !view.valid()) return;
+    const moves = pairs.map(([a, b]) => [ringOf(a), ringOf(b)]).filter(([f, t]) => f >= 0 && t >= 0 && f !== t);
+    clearTimeout(glideTimer);
+    if (view.glide(moves)) glideTimer = setTimeout(() => view.endGlide(), 4000);          // the picture never came: give the slots back
+  };
   R.overlay = () => { drawMarks(); if (idxs.length && player.state === 'idle' && (fanPath() || []).join() !== shownPath) requestImage(); };      // a new selection may open or close a fan
   R.preview = () => { player.stop(); refresh(); if (idxs.length) requestImage(); };
   el.addEventListener('keydown', e => {
@@ -2043,8 +2180,8 @@ function buildStage() {
   /* A ring slot is a drag source too: it moves like a row of the item list. A plain click still selects. */
   DnD.source(wrap, e => {
     if (player.state !== 'idle') return null;
-    const j = view.slotAt(e.clientX, e.clientY), ix = j === null ? null : itemOf(j);
-    return ix === null ? null : { type: 'item', menuId: S.menuId, index: ix };
+    const j = view.slotAt(e.clientX, e.clientY), ix = j === null ? null : itemOf(j), m = curMenu();
+    return ix === null || !m || ZSlots.isEmpty(m.items[ix]) ? null : { type: 'item', menuId: S.menuId, index: ix };       // an empty slot is only ever dropped on
   }, e => {
     const m = curMenu(), j = view.slotAt(e.clientX, e.clientY), it = m && j !== null && m.items[itemOf(j)];
     return it ? h('span', { class: 'ghost-chip' }, itemThumb(it, 22), itemLabel(it)) : h('span', null, '...');
@@ -2077,9 +2214,25 @@ function buildStage() {
     if (move && k === n && idxs.indexOf(p.index) === 0) return 'Move to the end';
     return n === 1 ? (move ? 'Move after ' : 'Insert after ') + slotLabel(0) : (move ? 'Move between ' : 'Insert between ') + slotLabel(k - 1) + ' and ' + slotLabel(k % n);
   }
+  /* A menu that keeps its slots: what a drop here does, by the slot under the pointer. ix: that slot's item (null: none, or More), j: its place in the ring. */
+  function slotDrop(p, x, y) {
+    const m = curMenu(), j = view.slotAt(x, y), ix = j === null ? null : itemOf(j), it = ix === null ? null : m.items[ix], name = p.name || 'it';
+    if (p.type === 'item') {
+      if (!it || ix === p.index) return { j: null, ix: null, text: 'Stays in place', noop: true };
+      return { j, ix, text: ZSlots.isEmpty(it) ? 'Move to empty slot' : 'Swap with ' + itemLabel(it) };
+    }
+    if (!it) return { j: null, ix: null, text: ZSlots.firstEmpty(m.items) >= 0 ? `Put ${name} in the first empty slot` : `Add ${name} in a new slot` };
+    return { j, ix, text: ZSlots.isEmpty(it) ? `Put ${name} here` : `Replace ${itemLabel(it)}` };
+  }
   DnD.zone(el, {
     accept: p => !!curMenu() && (!!idxs.length ? (p.type === 'asset' || (p.type === 'item' && p.menuId === S.menuId)) : p.type === 'asset'),   // no menu: nothing to add to
     over: (p, x, y) => {
+      if (keeps(curMenu())) {
+        const d = slotDrop(p, x, y);
+        if (!dropAt || dropAt.j !== d.j || dropAt.text !== d.text) { dropAt = d; gap = null; paintMarks(); }
+        el.classList.add('drop-over'); el.classList.remove('drop-end');
+        return;
+      }
       const g = view.gapAt(x, y), k = g ? g.k : null, noop = !!g && staysPut(p, k);
       if (k !== (gap ? gap.k : null) || (gap && gap.noop !== noop)) {
         gap = g ? Object.assign({}, g, { text: gapText(p, g), noop }) : null;
@@ -2087,8 +2240,9 @@ function buildStage() {
       }
       el.classList.add('drop-over'); el.classList.toggle('drop-end', k === null);
     },
-    leave: () => { gap = null; paintMarks(); el.classList.remove('drop-over', 'drop-end'); },
+    leave: () => { gap = null; dropAt = null; paintMarks(); el.classList.remove('drop-over', 'drop-end'); },
     drop: (p, x, y) => {
+      if (keeps(curMenu())) { dropOnSlot(S.menuId, p, slotDrop(p, x, y).ix); return; }
       const g = view.gapAt(x, y), k = g ? g.k : null, at = itemIndexFor(k);
       if (p.type === 'item') {
         if (!staysPut(p, k) && at !== p.index && at !== p.index + 1) moveItem(S.menuId, p.index, at);
@@ -2133,7 +2287,7 @@ function buildItemInspector() {
     h('div', { class: 'spacer' }), moveBtn, iconBtn('copy', 'Duplicate item', () => dupItem(i)), iconBtn('trash', 'Delete item', e => { if (e.detail > 1) return; delItem(i); const t = $('.irow.sel') || $('.items-panel .col-head .btn'); if (t) t.focus(); }, 'danger')));    // delItem already selected the neighbour, as the row's own button does
 
   /* action type */
-  const seg = h('div', { class: 'kinds', role: 'radiogroup', 'aria-label': 'Action type' }, Object.keys(KIND).filter(kk => isFull() || !KIND[kk].full || kk === k).map(kk =>
+  const seg = h('div', { class: 'kinds', role: 'radiogroup', 'aria-label': 'Action type' }, Object.keys(KIND).filter(kk => kk === k || ((isFull() || !KIND[kk].full) && kk !== 'empty')).map(kk =>
     h('button', { class: 'kind' + (kk === k ? ' on' : '') + ' k-' + kk, type: 'button', role: 'radio', 'aria-checked': kk === k ? 'true' : 'false', title: KIND[kk].hint,
       onclick: () => {
         if (kk === k) return;
@@ -2145,7 +2299,9 @@ function buildItemInspector() {
         if (r.lost.length) undoToast(`Switched to ${KIND[kk].label}. Dropped ${joinList(r.lost)}.`, { ms: 6500 });
       } },
       icon(KIND[kk].icon, 18), h('span', null, KIND[kk].label))));
+  if (k === 'empty') box.append(h('div', { class: 'slot-note' }, icon('k_empty', 15), h('span', null, 'This slot is empty. Drag something into it from the Library, or choose a type below.')));
   box.append(field('Action', seg, KIND[k].hint + '.'));
+  if (k === 'empty') return box;                      // nothing else to set: it has no target, label or icon
 
   const hintEl = h('div', { class: 'fhint' });
   const labelInp = textInput(it.label || '', v => { if (v.trim()) it.label = v; else delete it.label; commit(); updateHead(); }, { placeholder: defaultLabel(it), label: 'Label' });
@@ -2205,7 +2361,7 @@ function buildItemInspector() {
           if (v) { hintEl.classList.add('bad'); hintEl.append('No menu with this id. '); }
           hintEl.append(h('button', { class: 'link', type: 'button', onmousedown: e => e.preventDefault(), onclick: () => {
             const nid = uniqueId(it.label || v || 'submenu'), keep = S.menuId, mi = S.itemIdx;
-            S.cfg.menus[nid] = { title: it.label || (v ? v : 'Submenu'), items: [] };
+            S.cfg.menus[nid] = { title: it.label || (v ? v : 'Submenu'), keep_slots: true, items: [] };
             it.menu = nid; S.menuId = keep; S.itemIdx = mi; commit({ inspector: true }); toast('Created an empty submenu. Open it to add items.', { action: { text: 'Open', fn: () => { if (S.menuId === keep) openSubmenu(nid, mi); else selectMenu(nid); } } });
           } }, 'Create a new submenu'));
         }
@@ -2467,6 +2623,10 @@ function buildMenuProps() {
   } });
   box.append(field('Hotkey', hk, m.hotkey ? 'Hold or tap this key in ZBrush to open the ring. Click the field and press a combination to change it.' : 'Without a hotkey this menu can only be opened as a submenu from another menu.'));
   if (owner0) hk.say(clash(owner0), 'warn');
+
+  box.append(h('div', { class: 'field row' }, h('div', { class: 'grow' }, h('span', { class: 'flabel' }, 'Keep slots in place'),
+    h('div', { class: 'fhint' }, 'Deleting leaves an empty slot and dropping swaps two slots, so the other items never move.')),
+    toggleSwitch(keeps(m), v => { if (v) m.keep_slots = true; else delete m.keep_slots; commit(); }, 'Keep slots in place')));
 
   const swallowSw = toggleSwitch(m.swallow !== false, v => { if (v) delete m.swallow; else m.swallow = false; commit(); }, 'Swallow hotkey');
   const swallowNeed = h('div', { class: 'fhint warn' }, 'Set a hotkey first.');

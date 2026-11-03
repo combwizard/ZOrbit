@@ -23,6 +23,7 @@ A menu has these fields, and no others (a name ZOrbit does not know is reported 
 | `fan` | `true` or `false` (the default): whether the menu fans out as a submenu. |
 | `look` | Optional. How this menu looks, instead of the ring's look. Either the name of a look (`"soft"`), or an object with a `preset` and any look keys that change on top of it (`{"preset": "soft", "hub": 14}`). A name that is no look is listed as a problem and the menu follows the ring. |
 | `icon` | Optional. The picture in the middle of the ring when the hub style is `icon`: a brush name or a full path, as for an item's `icon`. |
+| `keep_slots` | `true` or `false` (the default): whether Studio keeps the slots in place when you add, delete or move items. Studio only. See [Keep slots in place](#keep-slots-in-place). |
 | `items` | The slots, clockwise from the top. |
 
 A new menu's id comes from its title in Studio. **Sculpting** becomes `sculpting`, or `sculpting_2` if that is taken. Accents are dropped (`Détails` becomes `details`), any other run of characters becomes `_`, and a title of digits only gets `m_` in front. Until you save the menu, renaming it changes the id too; after the first save, or once you type an id yourself, the id stays. Auto slots learn under the id, so changing it resets them.
@@ -39,7 +40,7 @@ A ring is full when its slots would sit closer than 1.25 slot widths apart at th
 | `rings` | The ring keeps its radius. The slots that do not fit go on a second ring outside the first. |
 | `more` | The ring keeps its radius and shows as many slots as fit, less one. The last slot is **More**, drawn with three dots, and it opens another ring with the rest. |
 
-With `more`, a menu of 12 items at the defaults shows 8 items and **More**, and **More** opens a ring with the other 4. In the picture, a menu of 14 brushes shows eight and **More**, and **More** opens a ring with the other six. A very long menu pages again: the second ring has its own **More**. Auto slots are filled before the menu is cut, so an auto slot on a later page holds the brush it would have held anyway. The **More** slot always looks like the rest of its menu.
+With `more`, a menu of 12 items at the defaults shows 8 items and **More**, and **More** opens a ring with the other 4. In the picture, a menu of 14 brushes shows eight and **More**, and **More** opens a ring with the other six. A very long menu pages again: the second ring has its own **More**. Auto slots are filled before the menu is cut, so an auto slot on a later page holds the brush it would have held anyway. Empty slots count toward a page like any other slot, but the **More** submenu leaves them out, so if nothing past the first page is left, there is no **More** slot. The **More** slot always looks like the rest of its menu.
 
 ![A ring of eight brushes and a More slot with three dots, hovered, and beside it the ring that More opens, with the other six brushes](images/more-slot.png)
 
@@ -85,8 +86,9 @@ Every item does exactly one thing. Besides the action, an item can have a `label
 | `auto` | A slot that holds a brush you pick often. ZOrbit fills it. |
 | `tag` | Opens a fan of every installed item that carries a tag, or the Favourites tag: brushes first, most used first, then alphas, materials and textures. |
 | `browser` | Opens the [browser](browser.md) on one of its tabs, optionally on one tag. |
+| `empty` | Holds a slot's place in the ring and does nothing. See [Empty](#empty). |
 
-Studio's [Simple mode](studio.md#simple-and-full-mode) offers `brush`, `alpha`, `material`, `texture` and `menu` in **Add item**. The other types (`press`, `set`, `toggle`, `steps`, `auto`, `tag` and `browser`) need Full mode. An existing item of one of those types still shows in the list and on the ring, and still works. Select it in Simple and the inspector shows its type and what it does on one line, with an **Edit in Full mode** link. Its label and icon can still be changed, except on an `auto` slot.
+Studio's [Simple mode](studio.md#simple-and-full-mode) offers `brush`, `alpha`, `material`, `texture`, `menu` and `empty` in **Add item**. The other types (`press`, `set`, `toggle`, `steps`, `auto`, `tag` and `browser`) need Full mode. An existing item of one of those types still shows in the list and on the ring, and still works. Select it in Simple and the inspector shows its type and what it does on one line, with an **Edit in Full mode** link. Its label and icon can still be changed, except on an `auto` slot.
 
 ### Brush
 
@@ -252,8 +254,41 @@ star instead of the tag symbol. New installs have one in the starter **Tools** m
 
 Opens the [browser window](browser.md). `kind` chooses the tab it opens on: `brush` (the default), `alpha`, `material` or `texture`. Nothing is sent to ZBrush until you pick an item in it. `""` shows every item of that kind; a tag key opens it on that tag. A key that is not in `tags.json` is listed as a problem and the browser opens unfiltered. Without a `label`, the slot is called **Browser**, or the tag's name when it filters. In Studio, the **Shows** select in the inspector sets `kind`, and the **Tag filter** field lists your tags.
 
+### Empty
+
+```json
+{"empty": true}
+```
+
+An empty slot takes up its place in the ring and holds nothing. In the ring it is a faint outline of the slot's shape, with no label and no line from the hub. Hovering it highlights nothing, and releasing or clicking over it does nothing, with no message. An empty slot cannot be a step of a `steps` item. A menu made only of empty slots still loads and opens, as a ring of outlines.
+
+Empty slots are how a menu [keeps its slots in place](#keep-slots-in-place). In Studio they show dimmed and in italics in the item list. Drag something into one from the Library, or pick a type for it in the **Item** tab.
+
 ### Labels and icons
 
 - `label`: text shown under the slot. Long labels are shortened with an ellipsis.
 - `icon`: a brush name, the path to a `.zbp`, or the path to a `.png` file (an alpha image or a `.zmt` also works, and shows its thumbnail). Give the full path, such as `C:\Art\clay.png`. A text with a `\` or `/` in it, or one that ends in an image extension, counts as a path. A relative path (`icons\clay.png`) is listed as a problem, because it is looked up from the app's working directory, not from `radial.json`, so it is usually not found and the slot shows a letter tile. A full path to a file that does not exist is listed as a problem too ("icon file not found"); the item still works and picks up the file if it appears. Any other text is taken as a brush name. A network path (`\\server\share\...`) is refused and listed as a problem. Without one, brush, alpha, material and texture items use the item's own thumbnail, and a `steps` item uses the thumbnail of its first asset step. Other items show a round placeholder with a short text.
 - `style`: an object that changes how this one slot looks, over the menu's look. It takes `slot_shape`, `slot_corner` (0 to 0.5), `border_width` (0 to 6), `icon_scale` (0.5 to 1), `label_color` and `glow_color` (they mean the same as the ring settings of those names, see [Appearance](appearance.md#appearance-and-behaviour-settings)), and three that exist only on a slot: `size` (0.75 to 1.25, default 1), `fill_color` and `border_color`. A colour is a theme colour (`bg`, `accent`, `highlight`, `text` or `lines`) or `"#rrggbb"`; `glow_color`, `fill_color` and `border_color` can also be `""` for none. `glow_color` is the colour of the slot's glow: the soft light around it and its rim when the pointer is on it, and the halo when **Glow** is on under [Tag colours](appearance.md#tag-colours). It wins over the slot's tag colour for the glow only; the tint and the band keep the tag colour. A value that is not valid is listed as a problem and left out. [Slot styles](appearance.md#slot-styles) shows each key on a ring.
+
+## Keep slots in place
+
+With **Keep slots in place** on, a menu's slots stay where they are while you edit it in Studio. Adding, deleting or moving an item does not shift the others round the ring. This is for people who know a menu by muscle memory: the brush they reach for is always in the same place.
+
+It is the `keep_slots` setting of a menu, and only Studio reads it. The ring draws the same slots either way.
+
+The switch is on the **Menu** tab. Its defaults:
+
+- **On** for a menu made with **New menu**, which starts with eight empty slots; for a submenu made from an item; and for the starter menus in a fresh install.
+- **Off** for menus you already have, so their behaviour does not change under you. Switch it on there if you want it.
+
+With the switch on:
+
+- Deleting an item (the **Delete** key, the trash button, or dropping it on the trash) leaves an empty slot where it was. The toast says `Cleared "X"` and has **Undo**. Deleting a slot that is already empty removes that slot.
+- A new item fills the first empty slot, or goes in a new slot at the end when none is free. That holds for **Add item**, the **+** or a double-click in the Library, dropping a Library item on the menu in the list, **Duplicate**, and moving an item here from another menu.
+- Dragging an item onto another slot in the ring preview swaps the two, and a short animation shows them trading places. Dropped on an empty slot, the item moves there and its old slot stays empty. A Library item dropped on an empty slot goes there. Dropped on a filled slot, it replaces that item, and **Undo** brings the old one back. The hint under the pointer says which will happen: "Swap with X", "Move to empty slot", "Put X here" or "Replace X".
+- **Alt+Up** and **Alt+Down** swap an item with its neighbour. In the item list, dropping an item on a row swaps the two, or puts it there if the row is empty.
+- **+** and **−** at the top left of the ring preview add an empty slot at the end or remove the last slot, and the count beside them says how many slots the menu has. **−** only removes an empty slot; while the last slot holds an item it is greyed out, with the note "The last slot is in use".
+
+With the switch off, a new item goes in between two slots and the ones after it move along, and a deleted item leaves no gap.
+
+An older version of ZOrbit skips the empty slots, so the items after each one close up, and it warns that `keep_slots` is an unknown setting.

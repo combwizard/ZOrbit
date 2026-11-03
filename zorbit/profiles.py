@@ -68,6 +68,7 @@ KNOWN_STARTERS = frozenset((
     "350804531dad1c84cf9579aa57210b51833f0879cc571f646fcc506b64c3c1be",
     "6b607e6938831e0173f3f9aaf90b62209e7379627d4a904b826d388317657d71",
     "8bf59cff465ff2f863bab477cb141f1500d09fe427797a2bdc25be126d3a4c81",
+    "982715e38e52fb0c9ddc5ee5f5a86cb0a84c89aed0fbd79b3e17a62b2fa23969",       # keep_slots on every starter menu
 ))
 
 _FORBIDDEN = re.compile(r'[\\/:*?"<>|\x00-\x1f]')

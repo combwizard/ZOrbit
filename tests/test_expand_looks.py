@@ -208,6 +208,48 @@ def test_an_unknown_menu_has_no_more_menu(tmp_path):
     assert expander(cfg).resolve("more:nope") is None
 
 
+# --- empty slots --------------------------------------------------------------------------------------
+EMPTY = {"empty": True}
+
+
+def test_empty_slots_keep_their_positions_through_fill(tmp_path):
+    items = [{"brush": "A"}, EMPTY, {"auto": "brush"}, EMPTY, EMPTY, {"brush": "B"}]
+    cfg = load(tmp_path, {"main": menu(items)})
+    m = expander(cfg).menu(cfg.menus["main"])
+    assert [it.kind for it in m.items] == ["brush", "empty", "brush", "empty", "empty", "brush"]
+    assert labels(m) == ["A", "", "Auto1", "", "", "B"]
+
+
+def test_empty_slots_count_toward_the_page(tmp_path):
+    items = brushes(4) + [EMPTY] * 7 + [{"brush": "Z"}]      # 12 slots: eight, then a More slot
+    cfg = load(tmp_path, {"main": menu(items)}, **MORE)
+    m = expander(cfg).menu(cfg.menus["main"])
+    assert [it.kind for it in m.items] == ["brush"] * 4 + ["empty"] * 4 + ["menu"]
+    assert m.items[-1].data == {"menu": "more:main"}
+
+
+def test_the_more_menu_drops_the_empty_slots(tmp_path):
+    items = brushes(8) + [EMPTY, {"brush": "X"}, EMPTY, {"brush": "Y"}]
+    cfg = load(tmp_path, {"main": menu(items)}, **MORE)
+    ex = expander(cfg)
+    assert labels(ex.resolve("more:main")) == ["X", "Y"]
+    assert ex._whole("more:main").id == "more:main"
+
+
+def test_a_page_whose_rest_is_all_empty_has_no_more_slot(tmp_path):
+    items = brushes(7) + [EMPTY] * 5
+    cfg = load(tmp_path, {"main": menu(items)}, **MORE)
+    ex = expander(cfg)
+    m = ex.menu(cfg.menus["main"])
+    assert [it.kind for it in m.items] == ["brush"] * 7 + ["empty", "empty"]
+    assert ex.resolve("more:main") is None
+
+
+def test_a_menu_of_only_empty_slots_is_expanded_as_it_is(tmp_path):
+    cfg = load(tmp_path, {"main": menu([EMPTY] * 8)})
+    assert [it.kind for it in expander(cfg).menu(cfg.menus["main"]).items] == ["empty"] * 8
+
+
 # --- tag colours --------------------------------------------------------------------------------------
 @pytest.mark.parametrize("ring", [{"tag_colors": "none", "tag_band": "none"}, {"tag_colors": "none"}, {}])
 def test_a_slot_always_carries_its_tag_colour(tmp_path, ring):
