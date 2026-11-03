@@ -21,6 +21,7 @@ All notable changes to this project are listed here. The format follows
 
 ### Fixed
 
+- Studio: Simple mode no longer says the hint line was changed in Full mode, Press and Toggle items are everyday items, a look you pick for one menu is not a Full-mode setting, and problem links for a look, **Swallow hotkey** or **Fan out when opened from another menu** switch to Full mode first. The Look screen's note about settings changed in Full mode now covers a single menu, and a few hints in Simple no longer name controls only Full has.
 - In ZBrush 2022 to 2025, picking an alpha, material or texture whose file is named differently from its name in the menu no longer imports it again every time. The plugin now looks for the button ZBrush names after the file.
 - `app_stderr.log` no longer grows for ever: it moves to `app_stderr.log.old` at 200 KB. `radiald.log` is now kept under 1 MB while the app runs, not only when it starts.
 

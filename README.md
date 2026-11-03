@@ -89,7 +89,7 @@ To continue, click **More info**, then **Run anyway**. If you would rather not r
 
 1. Open **ZOrbit Studio** from the Start menu (or from ZBrush: **Zplugin > ZOrbit > Studio**). On a fresh install it opens on the **Setup** screen: work down its steps, then press **Finish**.
 2. On the **Menus** screen (Alt+1), pick a menu on the left. The ring preview in the middle is drawn by the same code that draws it inside ZBrush.
-3. Drag brushes from the **Library** onto the ring, or use **Add item** to add a brush, alpha, material, texture or submenu. Studio starts in **Simple** mode, which shows the everyday controls. Press **Full** in the top bar for buttons, sliders, switches and the rest.
+3. Drag brushes from the **Library** onto the ring, or use **Add item** to add a brush, alpha, material, texture, press, toggle or submenu. Studio starts in **Simple** mode, which shows the everyday controls. Press **Full** in the top bar for buttons, sliders, switches and the rest.
 4. Click **Save** (Ctrl+S). The next time you open the ring in ZBrush it uses your changes. There is no need to restart anything.
 
 <p align="center">

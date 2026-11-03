@@ -308,7 +308,7 @@
     };
     const syncPin = () => { if (glowSw) { const on = glowPinned(), inp = glowSw.querySelector('input'); if (inp.checked !== on) inp.checked = on; } };
     const left = h('aside', { class: 'look-left', 'aria-label': 'Ring preview and looks' }, stage, liveLine, glowRow, pickLabel,
-      h('div', { class: 'fhint' }, 'The dashed circle is the dead zone: no slot is picked this close to the centre.'));
+      isFull() ? h('div', { class: 'fhint' }, 'The dashed circle is the dead zone: no slot is picked this close to the centre.') : null);
 
     /* ---- level bar */
     const full = isFull();
@@ -367,7 +367,7 @@
     }
     const levelNote = level0 === 'preset' ? 'You are editing a look. Menus that use it follow your changes.'
       : sl0 !== null ? "Only this slot. What you leave alone follows the menu's look."
-      : level0 === 'menu' ? 'Only this menu. What you leave alone follows the look for all menus.' : presetsOn() ? 'The look every menu starts from.' : 'The look every menu starts from.';
+      : level0 === 'menu' ? 'Only this menu. What you leave alone follows the look for all menus.' : full ? 'The look every menu starts from.' : 'The look for every menu.';
     levelBar.append(h('span', { class: 'look-levelnote' }, levelNote));
 
     /* ---- the pieces every control row is made from */
@@ -420,7 +420,7 @@
     const sizeRowFor = () => {
       const KEYS = ['radius', 'slot', 'dead_zone'], A = Object.fromEntries(KEYS.map(k => [k, lookAccess(k)]));
       let base = null, last = null;
-      const row = sliderRow({ label: 'Ring size', hint: 'How big the ring is. Slots and the dead zone scale with it.', key: 'radius', unit: 'px', onLive: live, limits: limitsOf('radius'),
+      const row = sliderRow({ label: 'Ring size', hint: 'How big the ring is. Slots and the dead zone (the dashed circle) scale with it.', key: 'radius', unit: 'px', onLive: live, limits: limitsOf('radius'),
         get: () => A.radius.get(),
         put: v => {
           if (!base || A.radius.get() !== last) base = { radius: A.radius.get(), slot: A.slot.get(), dead_zone: A.dead_zone.get() };
@@ -526,7 +526,7 @@
       const shapes = choicesOf('slot_shape');
       const many = shapes.length > 2;
       const each = slotT() ? 'this slot' : 'each slot';
-      rows.push(choiceRow({ label: 'Slot shape', key: 'slot_shape', cls: many ? 'lk-shapes' : 'two', items: itemsOf(shapes, SHAPE) }));
+      rows.push(choiceRow({ label: 'Slot shape', key: 'slot_shape', cls: many ? 'lk-shapes' : 'two', items: itemsOf(shapes, full ? SHAPE : { ...SHAPE, rounded: [SHAPE.rounded[0], 'Square with rounded corners.', SHAPE.rounded[2]] }) }));
       if (full && hasKey('slot_corner')) {
         const off = () => valueNow('slot_shape') !== 'rounded';
         const r1 = slider('slot_corner', { label: 'Corner roundness', hint: 'How round the corners of a Rounded square are', unit: '%', scale: 100, step: 1 });
@@ -838,7 +838,8 @@
     }
 
     /* ---- right column: the banner, the group nav, then the groups */
-    const hidden = full ? [] : (level0 === 'global' ? fullOnlyChanges(S.cfg, 'look') : []);
+    const hidden = full ? [] : level0 === 'global' ? fullOnlyChanges(S.cfg, 'look')
+      : level0 === 'menu' ? window.ZMode.fullOnlyLookNames(Z.settings(S.cfg, { level: 'menu', menu: target0.menu }, lookCtx())) : [];
     const nav = h('nav', { class: 'look-nav', 'aria-label': 'Groups of settings' });
     const groupsBox = h('div', { class: 'look-groups' });
     const readOnly = level0 === 'preset' && own(Z.prep(lookCtx()).builtin, target0.name);
@@ -942,6 +943,7 @@
   function fixTarget() {
     const t = view.target, c = lookCtx();
     if (!Z.hasPresets(c)) { view.target = { level: 'global' }; return; }
+    if (t.level === 'preset' && !isFull()) { view.target = { level: 'global' }; return; }       // editing a look is Full only
     if (t.level === 'menu' && !hasMenu(t.menu)) view.target = { level: 'global' };
     else if (t.level === 'preset' && !Z.lookDict(S.cfg, t.name, c)) view.target = { level: 'global' };
     else if (Z.isSlot(t) && (!isFull() || !usableIdx(t.menu).includes(t.slot))) view.target = { level: 'menu', menu: t.menu };      // no slot level in Simple, or the item is gone or unusable
