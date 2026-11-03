@@ -4693,6 +4693,8 @@ function deriveSteps(d, tryFrom, ctx) {
     elevated,
     app: { running: !!(d.app && d.app.running), zbrush: !!zb.running, checkOk: zb.check_ok !== false },
     startLog: Array.isArray(ctx.startLog) ? ctx.startLog : [] };
+  // Done, but with its body still worth seeing: the app is not running (Start app is in there), a failed start's log, or a ZBrush run as administrator. The step then stays open.
+  s2.unfinished = !s2.app.running || s2.startLog.length > 0 || elevated;
   if (loaded.length) {
     const names = [...new Set(loaded.map(p => p.name))];
     s2.state = 'ok'; s2.detail = list(names) + (names.length === 1 ? ' has the plugin.' : ' have the plugin.');
@@ -4897,7 +4899,7 @@ function buildSetupScreen(root) {
     steps.forEach((s, i) => {
       let el = els.get(s.id);
       if (!el) { el = h('li', { class: 'sstep', dataset: { step: s.id } }); els.set(s.id, el); list.append(el); }
-      if (!force && (el._sig === sigOf(s) || el.querySelector('.btn.running'))) { el.className = 'sstep ' + s.state + (s.locked ? ' locked' : '') + (isFolded(s) ? ' folded' : ''); return; }
+      if (!force && (el._sig === sigOf(s) || el.querySelector('.btn.running'))) { el.className = 'sstep ' + s.state + (s.locked ? ' locked' : '') + (el.classList.contains('folded') ? ' folded' : ''); return; }   // the body is not redrawn, so the fold class stays as drawn
       draw(el, s, i + 1);
     });
     paintStart();
