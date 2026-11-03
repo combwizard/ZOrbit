@@ -60,7 +60,7 @@ Issues #105, #34, #94 and #39 all edit `studio_ui/app.js`, so merge them one at 
 
 - [ ] [#103](https://github.com/combwizard/ZOrbit/issues/103) Test the window after the 0.10.1 flash fix: the PC that reported it, dragging off the top, another monitor, snap layouts
 - [ ] [#104](https://github.com/combwizard/ZOrbit/issues/104) Draw the title bar through `WM_NCCALCSIZE` instead of removing `WS_CAPTION`
-- [ ] [#105](https://github.com/combwizard/ZOrbit/issues/105) Put the Browser card ahead of ZBrush bridge in Settings
+- [x] [#105](https://github.com/combwizard/ZOrbit/issues/105) Put the Browser card ahead of ZBrush bridge in Settings
 
 ## Build
 
@@ -69,7 +69,7 @@ Issues #105, #34, #94 and #39 all edit `studio_ui/app.js`, so merge them one at 
 ## Browser
 
 - [ ] [#106](https://github.com/combwizard/ZOrbit/issues/106) Quit after a while unused and start again on the next press
-- [ ] [#97](https://github.com/combwizard/ZOrbit/issues/97) Show a theme picked in Studio at once, not on the next half-second check
+- [x] [#97](https://github.com/combwizard/ZOrbit/issues/97) Show a theme picked in Studio at once, not on the next half-second check
 
 ## Themes, profiles and platforms
 
@@ -89,11 +89,11 @@ Ring and items:
 
 Tags:
 
-- [ ] [#34](https://github.com/combwizard/ZOrbit/issues/34) Any / All switch for tag filters
+- [x] [#34](https://github.com/combwizard/ZOrbit/issues/34) Any / All switch for tag filters
 - [ ] [#35](https://github.com/combwizard/ZOrbit/issues/35) Show every tag on a slot's border
 - [ ] [#36](https://github.com/combwizard/ZOrbit/issues/36) Group slots by tag on the ring
 - [ ] [#37](https://github.com/combwizard/ZOrbit/issues/37) Tag band along a fan's arc
-- [ ] [#38](https://github.com/combwizard/ZOrbit/issues/38) Setting for how many slots a tag fan holds
+- [x] [#38](https://github.com/combwizard/ZOrbit/issues/38) Setting for how many slots a tag fan holds
 
 Browser and ZBrush:
 
