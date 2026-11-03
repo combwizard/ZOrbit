@@ -42,7 +42,7 @@ EDGE = [
 
 # Steps can use these: click(text) clicks the innermost visible element whose text starts with it (the click bubbles
 # to whatever handles it), card(name) is a Settings card by its title, alone at the top of the screen, and
-# lookGroup(name) is the same for a group on the Look screen (Slots, Hub, Labels, Colours, Tag colours).
+# lookGroup(name) is the same for a group on the Look screen (Slots, Hub, Labels, Colours, Tag colours, Opening).
 HELPERS = """
 window.click = t => new Promise((ok, fail) => { const t0 = Date.now(); (function poll() {
   const hits = [...document.querySelectorAll('body *')].filter(e => e.offsetParent && e.textContent.trim().startsWith(t));
@@ -105,6 +105,8 @@ SHOTS = {
                       clip="({getBoundingClientRect: () => { const f = document.querySelector('select[aria-label=\"Look for this menu\"]').closest('.field'); const t = f.previousElementSibling;"
                            " const a = t.getBoundingClientRect(), b = f.getBoundingClientRect(); return {left: a.left - 10, top: a.top - 10, right: b.right + 10, bottom: b.bottom + 10}; }})"),
     "look-colours": dict(q="screen=look", clip="lookGroup('Colours')"),
+    # look-opening: the Opening group of the Look screen (the open animation tiles and the Play button).
+    "look-opening": dict(q="screen=look", clip="lookGroup('Opening')"),
     "settings-behaviour": dict(q="screen=settings", clip="card('Behaviour')"),
     "settings-bridge": dict(q="screen=settings", clip="card('ZBrush bridge')"),
     "settings-older-zbrush": dict(q="screen=settings&zb=both", clip="card('Older ZBrush')"),

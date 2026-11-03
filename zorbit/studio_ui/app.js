@@ -787,7 +787,7 @@ function makePlayer(getImg, restore, onState) {
     try { res = await FrameLoader.get(menuId, ringAnim); } catch (e) { /* toast below */ }
     if (tok !== p.token) return;
     if (!res || !res.frames || !res.frames.length) {
-      set('idle'); toast((res && res.problems && res.problems[0]) || 'Could not render the animation.', { tone: 'warn' }); return;
+      set('idle'); toast((res && res.problems && res.problems[0]) || 'Could not render the animation.', { tone: 'warn' }); restore(); return;
     }
     set('playing');
     let i = 0;
@@ -1204,7 +1204,7 @@ function undoToast(msg, o = {}) {
   } } }));
 }
 /* What the Settings screen draws from the config: when this is the same before and after an undo, Settings is left alone (and keeps focus). */
-const settingsSig = () => JSON.stringify([S.cfg.ring, S.cfg.bridge, S.cfg.browser, S.menuId, Object.entries(S.cfg.menus).map(([id, m]) => [id, m.title, m.animation])]);
+const settingsSig = () => JSON.stringify([S.cfg.ring, S.cfg.bridge, S.cfg.browser, S.menuId]);
 function applySnap(e) {
   const sigBefore = R.settings ? settingsSig() : '', lookBefore = R.look ? lookSig() : '';
   S.cfg = JSON.parse(e.cfg);
@@ -1707,7 +1707,6 @@ function buildMenusScreen(root) {
     }
     if (S.tab !== 'brushes') R.badges = null;
   };
-  R.playAnim = () => stageBox.playAnim();
   R.libRefresh = kind => { if (dock && kind === S.dock.kind) dock.refresh(); };
 
   R.head(); R.menuList(); R.itemList(); R.right();
@@ -2253,7 +2252,6 @@ function buildStage() {
 
   return {
     el,
-    playAnim: () => { if (idxs.length) player.play(S.menuId); },
     start() { refresh(); if (idxs.length) requestImage(); },
   };
 }
@@ -2628,7 +2626,7 @@ function buildMenuProps() {
     swallowSw));
 
   if (!full && menuFullSet(m)) {
-    const set = [m.animation ? 'Open animation' : '', m.fan === true ? 'Fan out' : '', m.swallow === false ? 'Swallow hotkey' : '', MODE.lookHasOwn(m.look) ? 'A look with its own settings' : ''].filter(Boolean);
+    const set = [m.fan === true ? 'Fan out' : '', m.swallow === false ? 'Swallow hotkey' : '', MODE.lookHasOwn(m.look) ? 'A look with its own settings' : ''].filter(Boolean);
     box.append(h('div', { class: 'fhint' }, joinList(set) + (set.length === 1 ? ' is' : ' are') + ' set for this menu in Full mode. ', linkBtn('Switch to Full mode', () => setMode('full'))));
   }
   const refs = referrers(id);
@@ -2639,23 +2637,11 @@ function buildMenuProps() {
 
   if (full && S.opts && S.opts.looks) box.append(sectionTitle('Look', 'Shapes, hub, glow and colours of this menu'), buildMenuLook(id));
 
-  const anims = (S.opts && S.opts.animations) || Object.keys(ANIM_INFO);
-  const animTitle = a => a[0].toUpperCase() + a.slice(1);
+  const animTitle = a => { const t = typeof a === 'string' ? a : String(a === undefined || a === null ? '' : a); return t ? t[0].toUpperCase() + t.slice(1) : ''; };
   const ringAnim = () => ring().animation || S.defaults.animation;
-  const animHint = h('div', { class: 'fhint' });
-  const paintAnimHint = () => setText(animHint, m.animation
-    ? (ANIM_INFO[m.animation] || '') + ' Only this menu opens this way; the others use ' + animTitle(ringAnim()) + ' from Settings.'
-    : 'Uses the open animation set in Settings (' + animTitle(ringAnim()) + '). Pick one to give this menu its own.');
-  const animSel = h('select', { class: 'inp sel', 'aria-label': 'Open animation for this menu', onchange: () => {
-    if (animSel.value) m.animation = animSel.value; else delete m.animation;
-    paintAnimHint(); commit();
-    previewSoon.flush();                       // the debounced preview would stop the player a moment after it started
-    if (R.playAnim) R.playAnim();
-  } }, h('option', { value: '', selected: !m.animation }, 'Same as Settings (' + animTitle(ringAnim()) + ')'),
-    anims.map(a => h('option', { value: a, selected: m.animation === a }, animTitle(a))));
-  paintAnimHint();
-  if (full) box.append(sectionTitle('Open animation'), h('div', { class: 'field' }, animSel, animHint), h('div', { class: 'btn-row' },
-    h('button', { class: 'btn', type: 'button', onclick: () => R.playAnim && R.playAnim() }, icon('play', 13), 'Preview animation')));
+  box.append(sectionTitle('Open animation'), h('div', { class: 'field' }, h('div', { class: 'fhint' },
+    m.animation ? 'Opens with ' + animTitle(m.animation) + '. ' : 'Opens like all menus (' + animTitle(ringAnim()) + '). ',
+    S.opts && S.opts.looks ? linkBtn('Edit in Look', () => goToProblem({ kind: 'look', level: 'menu', menuId: id, key: 'animation', group: 'opening' })) : null)));
   if (full) box.append(sectionTitle('As a submenu'), h('div', { class: 'field row' }, h('div', { class: 'grow' }, h('span', { class: 'flabel' }, 'Fan out when opened from another menu'),
     h('div', { class: 'fhint' }, 'Instead of a new ring, the items spread out around this menu\'s slot and the ring stays in view.' + (m.hotkey ? ' This only applies when it is opened as a submenu; its hotkey still opens a ring.' : ''))),
     toggleSwitch(m.fan === true, v => { if (v) m.fan = true; else delete m.fan; commit(); }, 'Fan out when opened from another menu')));
@@ -4161,7 +4147,7 @@ function buildSettingsScreen(root) {
   const build = () => {
     const full = isFull();
     page.replaceChildren();
-    page.append(h('div', { class: 'page-head' }, h('h1', null, 'Settings', h('em', null, 'Appearance and behaviour')), h('p', null, (full ? 'The theme, how the ring opens and behaves, and how the app talks to ZBrush.' : 'The theme, and how the ring opens and behaves.') + ' The ring\u2019s size, shape and colours are on the Look screen. Changes are saved with the Save button.')));
+    page.append(h('div', { class: 'page-head' }, h('h1', null, 'Settings', h('em', null, 'Appearance and behaviour')), h('p', null, (full ? 'The theme, how the ring behaves, and how the app talks to ZBrush.' : 'The theme, and how the ring behaves.') + ' The ring\u2019s size, shape, colours and open animation are on the Look screen. Changes are saved with the Save button.')));
     const hiddenSet = full ? [] : fullOnlyChanges(S.cfg, 'settings');      // not a .card, so it is not in the contents list
     if (hiddenSet.length) page.append(h('div', { class: 'mode-note', role: 'status' }, 'Changed in Full mode and not shown here: ' + hiddenSet.join(', ') + '. ', linkBtn('Switch to Full mode', () => setMode('full'))));
 
@@ -4216,41 +4202,6 @@ function buildSettingsScreen(root) {
       h('div', { class: 'srow' }, h('div', { class: 'slabel' }, h('span', null, 'Browser hotkey'), h('small', null, 'Shows the browser; pressed over it, it gives ZBrush the keyboard back. The browser also opens from a Browser slot, the Browser button at the top and the tray menu.')),
         h('div', { class: 'sctl' }, bhk))));
     { const o0 = bOwner(S.cfg.browser && S.cfg.browser.hotkey); if (o0) bhk.say(bsay(o0), 'warn'); }
-
-    /* --- ring look: the controls are on the Look screen; this card says what is changed there and opens it */
-    page.append(card('Ring look', 'Size, shape, labels and colours',
-      h('div', { class: 'field row' }, h('div', { class: 'grow' }, h('span', { class: 'flabel' }, 'Set on the Look screen'), h('div', { class: 'fhint' }, typeof window.lookSummary === 'function' ? window.lookSummary() : 'Set on the Look screen.')),
-        h('button', { class: 'btn small', type: 'button', onclick: () => showScreen('look') }, 'Open Look', icon('chevR', 12)))));
-
-    /* --- animation */
-    const aimg = h('img', { class: 'ring-img', alt: 'Animation preview', draggable: false });
-    const abtn = h('button', { class: 'btn small stage-play', type: 'button' });
-    const astage = h('div', { class: 'mini-stage anim' }, h('div', { class: 'stage-rings', 'aria-hidden': 'true' }), h('div', { class: 'mini-wrap' }, aimg), abtn);
-    const restoreStatic = async () => { const res = await RingLoader.get(S.menuId, null); if (res && res.image && settingsPlayer.state === 'idle') aimg.src = res.image; };
-    const settingsPlayer = makePlayer(() => aimg, restoreStatic, st => {
-      abtn.replaceChildren(st === 'loading' ? h('span', { class: 'spin' }) : icon(st === 'playing' ? 'stop' : 'play', 12), st === 'loading' ? 'Rendering...' : (st === 'playing' ? 'Stop' : 'Replay'));
-      abtn.disabled = st === 'loading';
-    });
-    settingsPlayer.stop(); abtn.replaceChildren(icon('play', 12), 'Replay');
-    abtn.onclick = () => { if (usableIdx(S.menuId).length) settingsPlayer.play(S.menuId, true); else toast('The current menu has no usable items to animate.', { tone: 'warn' }); };
-    restoreStatic();
-    R.preview = async () => {
-      const none = !curMenu() || !usableIdx(S.menuId).length;
-      astage.classList.toggle('none', none);
-      if (none) return;
-      const ver = S.version;
-      const res = await RingLoader.get(S.menuId, null);
-      if (!res || ver !== S.version || !res.image) return;
-      if (settingsPlayer.state === 'idle') aimg.src = res.image;
-    };
-    const anims = (S.opts && S.opts.animations) || Object.keys(ANIM_INFO);
-    const cur = ring().animation || S.defaults.animation;
-    const ownAnim = Object.entries(S.cfg.menus).filter(([, m]) => m.animation).map(([id, m]) => m.title || id);
-    page.append(card('Open animation', 'Pick one to see it play', h('div', { class: 'split anim-split' }, astage,
-      choiceCards(anims.map(a => [a, a[0].toUpperCase() + a.slice(1), ANIM_INFO[a] || '']), cur, v => { settingsPlayer.stop(); setRing('animation', v); setTimeout(() => abtn.onclick(), 0); }, 'anim-cards', 'Open animation')),
-      h('div', { class: 'fhint' }, ownAnim.length
-        ? 'Used by every menu except ' + ownAnim.map(t => '\u201c' + t + '\u201d').join(', ') + ', which ' + (ownAnim.length === 1 ? 'has its own' : 'have their own') + (isFull() ? ' (set on the Menus screen).' : ' (set in Full mode, on the Menus screen).')
-        : 'Used by every menu. A menu can have its own instead: pick it on the Menus screen' + (isFull() ? '.' : ' in Full mode.'))));
 
     /* --- studio (preferences of this window, saved immediately, not part of the menus file) */
     const updNote = h('div', { class: 'fhint upd-status', role: 'status' });
@@ -4364,7 +4315,6 @@ function buildSettingsScreen(root) {
       R.zpaint = zpaint;
       zpaint();
     }
-    R.preview();
   };
   // Rebuilt after an undo, a revert or a reload: the control that had focus gets it back (found by its data-fk key, else its label), and the scroll stays.
   const fkOf = el => el.dataset.fk || [el.tagName, el.type || '', el.getAttribute('aria-label') || '', (el.closest('[role="radiogroup"]') || el).getAttribute('aria-label') || '', el.dataset.v || ''].join('|');
@@ -4733,8 +4683,8 @@ const USER_GUIDE_URL = 'https://zorbit.lol/docs/';
 const SETUP_WHERE = [
   ['Menus', 'Edit the rings and what each slot does', 'menus'],
   ['Library', 'Every brush ZBrush can load, with tags', 'library'],
-  ['Look', 'Ring size, slot shape, labels and colours', 'look'],
-  ['Settings', 'Theme, animation, behaviour and the browser hotkey. Full mode adds the bridge', 'settings'],
+  ['Look', 'Ring size, slot shape, labels, colours and the open animation', 'look'],
+  ['Settings', 'Theme, behaviour and the browser hotkey. Full mode adds the bridge', 'settings'],
   ['Status', 'Is everything running, and the logs', 'status'],
   ['User guide', 'The whole manual, at zorbit.lol/docs', null]];
 
@@ -4955,11 +4905,11 @@ function updateDirty() {
 }
 /* Turns one message from the loader (config.py) into plain words plus where to go to fix it.
    Returns { text, raw, target }; target is null when the format is not recognised. */
-const RING_CARD = { animation: 'set-open-animation', tap_ms: 'set-behaviour', timeout_s: 'set-behaviour', flick: 'set-behaviour', hover_submenus: 'set-behaviour', hint: 'set-behaviour', tag_limit: 'set-behaviour' };
+const RING_CARD = { tap_ms: 'set-behaviour', timeout_s: 'set-behaviour', flick: 'set-behaviour', hover_submenus: 'set-behaviour', hint: 'set-behaviour', tag_limit: 'set-behaviour' };
 /* The ring keys the Look screen shows, with the group each one is in (look-screen.js has the same groups). */
 const RING_LOOK = { radius: 'slots', slot: 'slots', dead_zone: 'slots', slot_shape: 'slots', slot_corner: 'slots', border_width: 'slots', icon_scale: 'slots', size: 'slots', fill_color: 'slots', border_color: 'slots',
   hub: 'hub', hub_style: 'hub', hub_color: 'hub', hub_glow: 'hub', glow_color: 'glow', glow_opacity: 'glow', labels: 'labels', label_color: 'labels', colors: 'colours',
-  tag_colors: 'tags', tag_band: 'tags', tag_band_opacity: 'tags', tag_glow_opacity: 'tags', tag_tint_opacity: 'tags', tag_tint_style: 'tags', tag_tint_blend: 'tags', when_full: 'when_full' };
+  tag_colors: 'tags', tag_band: 'tags', tag_band_opacity: 'tags', tag_glow_opacity: 'tags', tag_tint_opacity: 'tags', tag_tint_style: 'tags', tag_tint_blend: 'tags', when_full: 'when_full', animation: 'opening' };
 /* Where a problem with a look setting leads: the Look screen at a level ('global', 'menu' with menuId, 'preset' with name), at the group and control of key. */
 const lookTarget = (key, where = {}) => Object.assign({ kind: 'look', level: 'global', key, group: RING_LOOK[key] }, where);
 const RING_NAME = { radius: 'Ring radius', slot: 'Slot size', dead_zone: 'Dead zone', hub: 'Hub', tap_ms: 'Tap time', timeout_s: 'Auto-close', flick: 'Flick to pick',
@@ -5042,7 +4992,7 @@ function describeProblem(raw) {
     if (rest.startsWith(': that id is reserved')) return out(`The id of ${titleOf(mid)} is reserved. Give it another in the Id field`, tgt('id'));
     if (rest.startsWith(': ids starting with')) return out(`The id of ${titleOf(mid)} cannot start with “tag:”; those ids are reserved for tag submenus`, tgt('id'));
     if ((m = /^: hotkey (.+) not understood$/s.exec(rest))) return out(`The hotkey ${unq(m[1])} on ${titleOf(mid)} is not understood`, tgt('hotkey'));
-    if ((m = /^: animation (.+) unknown; using ring\.animation$/s.exec(rest))) return out(`${titleOf(mid)} has an unknown animation (${unq(m[1])}); the one from Settings is used instead`, tgt('animation'));
+    if ((m = /^: animation (.+) unknown; using ring\.animation$/s.exec(rest))) return out(`${titleOf(mid)} has an unknown animation (${unq(m[1])}); the one for all menus is used instead`, known(mid) ? lookTarget('animation', { level: 'menu', menuId: mid }) : null);
     if ((m = /^: unknown setting (.+)$/s.exec(rest))) return out(`${titleOf(mid)} has an unknown setting ${m[1].replace(/\s*\(did you mean .*$/s, '')}.` + didYouMean(m[1]), tgt());
     if ((m = /^: (swallow|fan) (.+) must be true or false; using (true|false)$/s.exec(rest))) return out(`${titleOf(mid)}: ${m[1] === 'fan' ? 'Fan out' : 'Swallow hotkey'} must be on or off, not ${unq(m[2])}; it is ${m[3] === 'true' ? 'on' : 'off'} for now`, tgt(m[1]));
     const lookAt = key => (known(mid) ? lookTarget(key, { level: 'menu', menuId: mid }) : null);
@@ -5169,7 +5119,7 @@ function goToProblem(t) {
     if (!hasMenu(t.menuId)) return;
     selectMenu(t.menuId); S.tab = 'menu'; if (R.right) R.right();
     const mr = $('.mrow.sel'); if (mr) mr.scrollIntoView({ block: 'nearest' });
-    const el = t.field === 'hotkey' ? $('.insp .hk-field') : t.field === 'id' ? $('.insp input[aria-label="Menu id"]') : t.field === 'animation' ? $('.insp select[aria-label="Open animation for this menu"]')
+    const el = t.field === 'hotkey' ? $('.insp .hk-field') : t.field === 'id' ? $('.insp input[aria-label="Menu id"]')
       : t.field === 'swallow' ? $('.insp input[aria-label="Swallow hotkey"]') : t.field === 'fan' ? $('.insp input[aria-label="Fan out when opened from another menu"]') : null;
     if (el) { el.focus(); el.scrollIntoView({ block: 'nearest' }); }
   }
@@ -5783,7 +5733,7 @@ function describeChanges() {
     const lines = [];
     if ((a.title || '') !== (b.title || '')) lines.push('Renamed from ' + q(b.title || id));
     if ((a.hotkey || '') !== (b.hotkey || '')) lines.push('Hotkey: ' + (b.hotkey || 'none') + ' \u2192 ' + (a.hotkey || 'none'));
-    if ((a.animation || '') !== (b.animation || '')) lines.push('Open animation: ' + (b.animation || 'same as Settings') + ' \u2192 ' + (a.animation || 'same as Settings'));
+    if ((a.animation || '') !== (b.animation || '')) lines.push('Open animation: ' + (b.animation || 'same as all menus') + ' \u2192 ' + (a.animation || 'same as all menus'));
     if ((a.fan === true) !== (b.fan === true)) lines.push('Fan out as a submenu: ' + (b.fan === true ? 'on' : 'off') + ' \u2192 ' + (a.fan === true ? 'on' : 'off'));
     if ((a.swallow !== false) !== (b.swallow !== false)) lines.push('Swallow hotkey: ' + (b.swallow !== false ? 'on' : 'off') + ' \u2192 ' + (a.swallow !== false ? 'on' : 'off'));
     if ((a.keep_slots === true) !== (b.keep_slots === true)) lines.push('Keep slots in place: ' + (b.keep_slots === true ? 'on' : 'off') + ' \u2192 ' + (a.keep_slots === true ? 'on' : 'off'));
@@ -6031,7 +5981,7 @@ const buildLookScreenLazy = root => { if (typeof window.buildLookScreen === 'fun
 /* What look-screen.js needs from this closure: it is loaded after app.js and cannot see inside it. */
 window.ZStudio = { h, $, $$, S, R, icon, iconBtn, linkBtn, card, choiceCards, sliderRow, sizeRow, toggleSwitch, call, clamp, own, normHex,
   commit, toast, ring, ringNum, ranges, ensureRing, tidyRing, usableIdx, menuOf, kindOf, isLib, firstTag, isFull, setMode, fullOnlyChanges,
-  RingLoader, SAMPLE_MENU, COLOR_INFO, FALLBACK_DEFAULTS, showScreen, railTitle,
+  RingLoader, SAMPLE_MENU, COLOR_INFO, FALLBACK_DEFAULTS, showScreen, railTitle, makePlayer, FrameLoader, ANIM_INFO,
   lookCtx, clearedText, modal, promptModal, popover, undoToast, sealSnap, previewSoon, plural, hasMenu, selectMenu, debounce, FALLBACK_RANGES, makeRingView, itemLabel };
 const SCREEN_BUILD = { menus: buildMenusScreen, look: buildLookScreenLazy, library: buildLibraryScreen, settings: buildSettingsScreen, status: buildStatusScreen, setup: buildSetupScreen };
 const SCREENS = Object.fromEntries(SCREEN_ORDER.map(k => [k, SCREEN_BUILD[k]]));
@@ -6347,7 +6297,7 @@ const TOUR_STOPS = [
   { screen: null, target: () => $('.rail'), title: 'Screens', text: 'Studio has six screens. Click one here, or press Alt+1 to Alt+6. Status and Setup are there when something is not working.' },
   { screen: 'menus', target: () => $('#screen-menus .stage'), title: 'The ring', text: 'How the ring will look. Drag brushes onto it, drag slots to reorder them, and click one to edit it. The menus are listed on the left: a menu with a hotkey opens over ZBrush, one without is a submenu.' },
   { screen: 'menus', target: () => $('#screen-menus .right-col .tabs'), title: 'Item, Menu, Library', text: 'Item edits the slot you clicked, Menu edits the whole ring, and Library lists brushes to drag in.' },
-  { screen: 'look', target: () => $('#screen-look .look-left .mini-stage'), title: 'Look', text: 'How the ring looks: its size, the shape of the slots, labels and colours. It applies to every menu, and the preview here shows any menu you pick.' },
+  { screen: 'look', target: () => $('#screen-look .look-left .mini-stage'), title: 'Look', text: 'How the ring looks and opens: its size, the shape of the slots, labels, colours and the open animation. It applies to every menu, and the preview here shows any menu you pick and plays the animation.' },
   { screen: null, target: () => $('#modeSeg'), title: 'Simple and Full', text: 'Simple shows the everyday controls. Full shows every control. The ring is the same in both.' },
   { screen: null, target: () => [$('#revertBtn'), $('#saveBtn')], title: 'Save', text: 'Nothing reaches the ring until you save. Then it applies straight away. Revert goes back to what was saved. You can take this tour again from Setup or Settings > Studio.' }
 ];
