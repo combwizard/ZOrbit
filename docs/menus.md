@@ -274,6 +274,8 @@ Empty slots are how a menu [keeps its slots in place](#keep-slots-in-place). In 
 
 With **Keep slots in place** on, a menu's slots stay where they are while you edit it in Studio. Adding, deleting or moving an item does not shift the others round the ring. This is for people who know a menu by muscle memory: the brush they reach for is always in the same place.
 
+![The starter Brushes ring three times: as shipped, then with Move deleted and Keep slots in place off, where DamStandard has moved into Move's place, then with it on, where Move's slot is an empty outline and DamStandard has stayed put](images/empty-slots.png)
+
 It is the `keep_slots` setting of a menu, and only Studio reads it. The ring draws the same slots either way.
 
 The switch is on the **Menu** tab. Its defaults:
