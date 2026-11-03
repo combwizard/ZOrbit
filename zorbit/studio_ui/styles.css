@@ -940,6 +940,14 @@ body.dragging .irow:hover { background: transparent; }
 .sstep.ok .snum svg { stroke-width: 2.6; }
 .smain { flex: 1; min-width: 0; }
 .stitle { display: block; font-size: 15px; font-weight: 600; }
+.shead { display: block; min-width: 0; }
+/* A step that is done is a button: its head folds the step to one line and opens it again. */
+.sfold { display: flex; align-items: flex-start; gap: 6px; width: 100%; margin: 0; padding: 0; background: none; border: 0; border-radius: 6px; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.sfold:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
+.sfold:hover .stitle { text-decoration: underline; text-decoration-color: var(--line2); text-underline-offset: 3px; }
+.schev { flex: none; display: grid; place-items: center; width: 14px; height: 22px; color: var(--sub); }
+.sstep.ok.folded { align-items: center; padding: 10px 16px; border-top-width: 1px; border-top-color: var(--line); }
+.sstep.ok.folded .sdetail { margin-top: 1px; }
 .sdetail { margin-top: 3px; color: var(--sub); font-size: 12.5px; line-height: 1.5; }
 .sdetail .hk { margin: 0 2px; vertical-align: 1px; }
 .sbody { margin-top: 12px; display: flex; flex-direction: column; gap: 10px; }
@@ -956,12 +964,12 @@ body.dragging .irow:hover { background: transparent; }
 .sub-check.pending .sdot.sglyph { background: transparent; border: 1.5px solid var(--c); color: var(--c); opacity: 1; }
 .sdot.sglyph svg { stroke-width: 2.4; }
 .sub-check small { display: block; color: var(--sub); font-size: 12px; }
-.setup-where { display: flex; flex-direction: column; gap: 8px; }
-.setup-where .zrow b { font-weight: 600; }
-.setup-where .zrow small { display: block; color: var(--sub); font-size: 12px; }
+.setup-next { margin: 0 0 16px; display: flex; flex-direction: column; gap: 10px; }
+.setup-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.setup-chips .chip { height: 28px; padding: 0 12px; color: var(--text); cursor: pointer; }
+.setup-chips .chip:hover { border-color: var(--line2); background: var(--bg2); }
 .setup-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
 .setup-foot .foot-note { display: inline-flex; align-items: center; gap: 12px; color: var(--sub); font-size: 12.5px; }
-.setup-ring { max-width: 280px; }
 
 @media (max-height: 800px) {
   /* short windows: the ring stage gives some height back to the item list */

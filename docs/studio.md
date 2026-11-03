@@ -10,7 +10,7 @@ Studio is where you edit everything. Open it from the Start menu (**ZOrbit Studi
 | Library | Alt+3 | Browse the brushes, alphas, materials and textures ZBrush can load, on four tabs, with search, folders and thumbnails. Click an item and press **Add to <menu>**, or drag it onto a menu, the ring or the item list. **Rescan** picks up items saved since Studio opened. Tag items and filter by tag (see [Tags](tags.md)). Star favourites; Recent lists what you have picked in ZBrush (see [Favourites and Recent](browser.md#favourites-and-recent)). |
 | Settings | Alt+4 | The theme, a **Ring look** card with a button that opens Look, the open animation, flick, the browser hotkey, Studio's own preferences, and Import and export (see [Import and export](files.md#import-and-export)). [Full mode](#simple-and-full-mode) adds hover submenus, tap time, auto-close, the bridge, Older ZBrush and tags. |
 | Status | Alt+5 | Four cards: **ZBrush** (running or not), **ZOrbit app** (running or not, with **Start app** when ZBrush is running, or amber with **Restart app** when the app running is older than Studio: see [Older versions](profiles.md#older-versions)), **Bridge listener** (the small window the plugin keeps inside ZBrush: **Connected**, **Found, unverified**, **Stale** or **Not found**; **ZBrush closed** in grey when ZBrush is not running, since there is nothing to listen in; and **Not needed (key bridge)** when the bridge mode is `key` or only a ZBrush 2022 to 2025 is installed) and **Last pick** (the most recent item sent to ZBrush). Below them the last 40 lines of the app log, with **Copy log**, **Open logs folder** and **Open menus folder** (the folder of the profile you are editing, which holds its `radial.json`). The screen refreshes every 3 seconds. A dot on this button in the rail means the app is not running while ZBrush is. |
-| Setup | Alt+6 | A checklist of five steps: ZBrush found (with the plugin set up for it), plugin loaded in ZBrush, try the ring, your brushes, and what's where. It shows live state and offers one action per step. An amber dot on this button in the rail means no ZBrush that Studio found has the plugin set up, or a running ZBrush does not. Finding no ZBrush at all does not count. |
+| Setup | Alt+6 | A checklist of three steps: ZBrush found (with the plugin set up for it), plugin loaded in ZBrush, and try the ring. It shows live state and offers one action per step, and ends with links to the other screens and **Take the tour**. An amber dot on this button in the rail means no ZBrush that Studio found has the plugin set up, or a running ZBrush does not. Finding no ZBrush at all does not count. |
 
 ![The Library screen on the Brushes tab: folders and tags on the left, a grid of brush thumbnails, and the Add to Brushes panel on the right](images/studio-library.png)
 
@@ -73,29 +73,31 @@ The steps:
 1. **ZBrush found.** Every ZBrush version Studio found. For ZBrush 2026 and newer, each row says **Plugin registered** or **Plugin not registered**, which is whether `ZBRUSH_PLUGIN_PATH` points at the plugin; **Fix** adds it the way the installer does. Restart ZBrush afterwards. If another ZOrbit folder is in that variable too, a line says **Also registered** with its path: ZBrush loads both, so remove the old one in Windows' environment variables. Rows for [ZBrush 2022 to 2025](install.md#zbrush-2022-to-2025) say **Plugin installed**, **Plugin not installed** or **Plugin update available**, with the same **Install**, **Update** and **Remove** buttons as **Settings > Older ZBrush** (Full mode). For a ZBrush under Program Files, **Install**, **Update** and **Remove** each ask you to approve a Windows prompt. **Add a ZBrush folder** adds a ZBrush Studio did not find.
 2. **Plugin loaded in ZBrush.** Live: whether ZBrush is running, which version, whether it loaded the plugin, and whether it needs a restart because it was started before the plugin was set up. When it did not load the plugin, the line under it says what to do: press **Fix** in step 1 and restart ZBrush, or close ZBrush completely and start it from the Start menu (a ZBrush started from a program that was already open does not get the new setting), and read `bridge.log` or `zscript_launch.log` if that does not help. A ZBrush running as administrator cannot be read, so Studio says the ring will not open and asks you to start ZBrush without **Run as administrator**; if the plugin's listener is up in it, the plugin still counts as loaded. A ZBrush running from a folder Studio does not know gets a note to add that folder with **Add a ZBrush folder** in step 1. If the check itself fails, Setup says so and keeps showing the last steps that worked. It also shows whether the app is running, with **Start app**.
 3. **Try the ring.** Hover ZBrush's canvas, press Q and flick to a brush. Three checks tick off as it happens: ring opened, pick sent, ZBrush did it. If the app could not send the pick, the hint says why and what to do: the bridge mode is **Message** and the plugin is not answering, no bridge key is set, ZBrush was not the front window, or the app could not write its request file. If ZBrush does not confirm a pick that was sent, the hint says what to look at for the route it took, naming your bridge key (F9 unless you changed it). If ZBrush answered with a failure, the hint is that line from the log instead. **Start over** forgets the try so far. This step reads `activity.json` (see [Files and logs](files.md#files-and-logs)).
-4. **Your brushes.** A preview of the Q ring, and **Change these brushes**, which opens it on the Menus screen.
-5. **What's where.** A line on each of Menus, Look, Library, Settings, Status and the user guide, which links to these pages. It also says that Studio starts in Simple mode and that the switch at the top turns on Full mode (see [Simple and Full mode](#simple-and-full-mode)). **Take the tour** starts [the tour](#the-tour) of the window.
+
+A step that is done folds to one line: a tick, its title and a sentence such as "ZBrush 2026 has the plugin." Press that line (or focus it and press **Enter** or **Space**) to open the step again, and again to fold it. A step that needs attention, is waiting or is locked stays open, so what to do is always in front of you. So does **ZBrush found** while one of your ZBrush versions still needs the plugin or an update, so its **Install** and **Update** buttons stay in view. **Plugin loaded in ZBrush** stays open while the app is not running, so **Start app** is in view. On a later visit a healthy install shows three one-line rows.
+
+![The Setup screen with ZBrush found open, showing a row for each ZBrush version, and Plugin loaded in ZBrush and Try the ring ticked and folded to one line each](images/setup.png)
+
+Under the steps, a **Next** row has a button for each of Menus, Library, Look, Settings, Status and the user guide (hover one to see what it holds), and **Take the tour**, which starts [the tour](#the-tour) of the window. Under it a line says that Studio starts in Simple mode and that the switch at the top turns on Full mode (see [Simple and Full mode](#simple-and-full-mode)).
+
+![The Setup screen on a later visit: the three steps folded to one line each, the Next row below them](images/setup-done.png)
 
 ## The tour
 
-The tour walks you round the Studio window. It lights up one part at a time and puts a card beside it with a title, a sentence or two and a count such as "3 of 10". **Next** moves on (it reads **Done** on the last stop), **Back** goes back, and **End tour** stops at any point.
+The tour walks you round the Studio window. It lights up one part at a time and puts a card beside it with a title, a sentence or two and a count such as "2 of 6". **Next** moves on (it reads **Done** on the last stop), **Back** goes back, and **End tour** stops at any point.
 
-![The tour on its third stop, the ring, with the card beside the ring preview](images/studio-tour.png)
+![The tour on its second stop, the ring, with the card beside the ring preview](images/studio-tour.png)
 
 The tour starts on the Menus screen and stops at:
 
-1. The rail of screens (**Alt+1** to **Alt+6**).
-2. The list of menus.
-3. The ring preview.
-4. The **Item**, **Menu** and **Library** tabs.
-5. The ring preview on the **Look** screen.
-6. The **Library** button in the rail.
-7. The profile button.
-8. The **Simple** / **Full** switch.
-9. **Revert** and **Save**.
-10. **Status** and **Setup** in the rail.
+1. The rail of screens (**Alt+1** to **Alt+6**). **Status** and **Setup** are there for when something is not working.
+2. The ring preview. The list of menus is beside it.
+3. The **Item**, **Menu** and **Library** tabs.
+4. The ring preview on the **Look** screen.
+5. The **Simple** / **Full** switch.
+6. **Revert** and **Save**.
 
-A stop whose part is not on screen, such as the profile button when it is hidden, is skipped and left out of the count.
+A stop whose part cannot be seen, for example in a very small window, is skipped and left out of the count.
 
 **Right** goes to the next stop, **Left** goes back and **Esc** ends the tour. **Tab** moves between the buttons on the card. While the tour is open you cannot click the rest of the window, and Studio's shortcuts (**Ctrl+S**, **Ctrl+Z**, **Alt+1** to **Alt+6**) do nothing until it ends.
 
@@ -103,7 +105,7 @@ The tour changes no menu and no setting. When it ends, Studio goes back to the s
 
 Studio offers the tour once, after you press **Finish** or **Skip for now** on [Setup](#setup): "Take a short tour of Studio?" with **Not now** and **Take the tour**. If you close Studio before answering, it asks at the next start. Whatever you answer, **Esc** included, it does not ask again. People who used Studio before the tour existed are not asked.
 
-To take it later, press **Take the tour** in Setup step 5 (**What's where**) or in **Settings > Studio**, next to **What's new**. Once the tour has been offered or taken, `studio.json` has `tour_seen` set to true.
+To take it later, press **Take the tour** on **Setup** (in the **Next** row) or in **Settings > Studio**, next to **What's new**. Once the tour has been offered or taken, `studio.json` has `tour_seen` set to true.
 
 ## Keyboard shortcuts
 

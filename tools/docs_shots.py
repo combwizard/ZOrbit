@@ -83,15 +83,17 @@ SHOTS = {
     "studio-settings": dict(q="screen=settings"),
     "studio-settings-simple": dict(q="screen=settings&mode=simple"),
     "studio-light": dict(q="screen=settings&theme=light"),
-    # studio-tour opens the guided tour, waits for its card and clicks Next twice: stop 3 of 10, The ring, lit.
+    # studio-tour opens the guided tour, waits for its card and clicks Next once: stop 2 of 6, The ring, lit.
     "studio-tour": dict(q="screen=menus", steps=[
         "startTour()",
         "new Promise(r => { const t0 = Date.now(); (function w() {"
         " if (document.querySelector('.tour.in') || Date.now() - t0 > 5000) r(); else setTimeout(w, 100); })(); })",
         "document.querySelector('.tour-card .btn.primary').click()",
-        "document.querySelector('.tour-card .btn.primary').click()",
     ]),
+    # setup: all three steps done; the first stays open because a ZBrush 2022 still needs the plugin, so the picture shows both an open step and folded ones.
     "setup": dict(q="screen=setup&zb=both&ringtried=done"),
+    # setup-done: what Setup looks like on a later visit, with every step done and folded to one line.
+    "setup-done": dict(q="screen=setup&zb=2026&ringtried=done"),
     "setup-restart": dict(q="screen=setup&zb=2026&zbstale"),
     "browser": dict(page="popout.html", q="kind=brush", size=(980, 680)),
     "browser-light": dict(page="popout.html", q="kind=brush&theme=light", size=(980, 680)),
