@@ -203,9 +203,9 @@ A menu's open animation is not part of a look. It is set in the [Opening](appear
 
 **Look** (Alt+2) is where the ring's looks are set. You can set them for every menu or for one menu, and you can save a group of settings as a named **look** to use again. The bar at the top shows what you are editing.
 
-![The Look screen at the Global level: the ring preview of the Brushes menu, the gallery of looks and a menu picker on the left, and the Slots group with the six slot shapes on the right, each setting with a Default badge](images/studio-look.png)
+![The Look screen at the Global level: the ring preview of the Brushes menu, a menu picker under it and the gallery of looks on the left, and the Slots group with the six slot shapes on the right, each setting with a Default badge](images/studio-look.png)
 
-On the left is a preview of the real ring, drawn by the same code as the app, with the dead zone as a dashed circle, and under it the [gallery of looks](#looks). The [Opening](appearance.md#opening) group plays the open animation on this preview. Hover a slot and it lights up in its own shape and shows the hover glow the app would draw. In Full mode, click a slot to [style it on its own](#styling-one-slot). The **Preview menu** list picks which menu the preview shows. It only changes the preview, not the menu you are editing on the Menus screen. **Sample ring with tags** shows a ring of library brushes in your tag colours, for the tag settings.
+On the left is a preview of the real ring, drawn by the same code as the app, with the dead zone as a dashed circle. Just under it is the **Preview menu** list, which picks which menu the preview shows. It only changes the preview, not the menu you are editing on the Menus screen. The [gallery of looks](#looks) comes after it. The [Opening](appearance.md#opening) group plays the open animation on this preview. Hover a slot and it lights up in its own shape and shows the hover glow the app would draw. In Full mode, click a slot to [style it on its own](#styling-one-slot). **Sample ring with tags** shows a ring of library brushes in your tag colours, for the tag settings.
 
 ### Levels
 
