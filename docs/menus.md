@@ -8,7 +8,7 @@ A menu is a named list of items shown as one ring. Menus live in one file, `%APP
 - A menu **without a hotkey** is a submenu: it opens when you pick an item of type `menu` in another ring.
 - Items are spread evenly around the circle. **Ring radius** is a minimum: when a menu has more items than fit at that radius, the ring grows so the slots keep a gap (see [Appearance](appearance.md#appearance-and-behaviour-settings)). With the default sizes that starts at 10 items. The more items, the smaller the angle between neighbouring slots, so they get harder to hit. Studio shows a note above the item list when the ring is full, saying how many items fit and how big the ring grows. Raise **Ring radius**, lower **Slot size** or split the menu into submenus, or choose what a full ring does instead of growing (see [When a ring is full](#when-a-ring-is-full)).
 - At least one menu needs a hotkey, otherwise nothing can open the ring.
-- A menu can have its own open animation (`"animation": "spiral"`, or pick one in the menu settings in Studio's Full mode). Without one it uses `ring.animation`. See [Open animations](appearance.md#open-animations).
+- A menu can have its own open animation (`"animation": "spiral"`, or pick one in the **Opening** group of the Look screen at **This menu**, in Simple and Full mode). Without one it uses `ring.animation`. See [Opening](appearance.md#opening).
 - A menu can **fan out** when it is opened as a submenu (`"fan": true`, or switch on **Fan out when opened from another menu** in the menu settings in Studio's Full mode). See [Submenu](#submenu).
 
 A menu has these fields, and no others (a name ZOrbit does not know is reported as a problem and ignored):

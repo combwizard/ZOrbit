@@ -16,6 +16,8 @@
    - The preview is a RingView (app.js): the picture with an SVG overlay drawn from the layout map the backend sends, so a slot lights up
      under the pointer in its own shape. In Full mode a click on a slot opens the slot level for it (view.target.slot is the index of
      the item in menu.items); Escape or a click on empty space goes back to the menu level, and the arrow keys step through the slots.
+   - The Opening group is not a look group: the open animation is a ring setting (and a menu's own), so it is drawn here from ring.animation and
+     menu.animation by hand. Its Play button, and a pick, play the animation on the preview in place of the still (lookPlayer).
    Without get_options().looks (an older backend) only the global level and the first pass's controls are shown. */
 (() => {
   'use strict';
@@ -26,6 +28,10 @@
     makeRingView, itemLabel } = K;
 
   const view = { target: { level: 'global' }, menuId: null, back: null, last: null, pinHover: false, pinOff: false };     // outlives a rebuild of the screen
+  /* The open animation plays into the preview's picture. One player for the screen: a rebuild stops it and points lookImg at the new picture;
+     paintPlay is the current build's way of showing the state (the stage class and the Play button). */
+  let lookImg = null, paintPlay = null;
+  const lookPlayer = K.makePlayer(() => lookImg, () => { if (R.preview) R.preview(); }, st => { if (paintPlay) paintPlay(st); });
   const slotT = () => Z.isSlot(view.target);
   const target = () => view.target;
   const presetsOn = () => Z.hasPresets(lookCtx());
@@ -90,20 +96,8 @@
   }
   const valueNow = key => { const r = resolved()[key]; return r ? r.value : undefined; };
 
-  /* What Settings > Ring look says. */
-  const SUMMARY_NAME = { radius: 'Ring size', slot: 'Ring size', dead_zone: 'Ring size', slot_shape: 'Slot shape', slot_corner: 'Slot shape', border_width: 'Slot shape', icon_scale: 'Slot shape', hub: 'Hub',
-    hub_style: 'Hub', hub_color: 'Hub', hub_glow: 'Hub', glow_color: 'Glow', glow_opacity: 'Glow', labels: 'Labels', label_color: 'Labels', colors: 'Colours', when_full: 'When full' };
-  window.lookSummary = () => {
-    const c = lookCtx(), g = { level: 'global' };
-    const names = [];
-    for (const k of Z.changed(S.cfg, g, c)) { const n = SUMMARY_NAME[k] || 'Tag colours'; if (!names.includes(n)) names.push(n); }
-    if (!Z.hasPresets(c)) return names.length ? 'Changed from the default: ' + names.join(', ') + '.' : 'Everything is at its default.';
-    const sum = Z.summary(S.cfg, g, c);
-    const menus = Object.keys(S.cfg.menus || {}).filter(id => Z.summary(S.cfg, { level: 'menu', menu: id }, c).text !== 'Same as all menus').length;
-    return 'Look for all menus: ' + sum.text + '.' + (names.length ? ' Changed from the default: ' + names.join(', ') + '.' : '') + (menus ? ' ' + plural(menus, 'menu') + ' ' + (menus === 1 ? 'has' : 'have') + ' a look of their own.' : '');
-  };
   /* What the screen draws from the config: when this is the same before and after an undo, the screen is left alone (and keeps focus). */
-  window.lookSig = () => JSON.stringify([S.cfg.ring, S.cfg.looks, Object.entries(S.cfg.menus).map(([id, m]) => [id, m && m.title, m && m.look, m && Array.isArray(m.items) ? m.items.map(it => it && it.style) : null]), S.themeEff]);
+  window.lookSig = () => JSON.stringify([S.cfg.ring, S.cfg.looks, Object.entries(S.cfg.menus).map(([id, m]) => [id, m && m.title, m && m.look, m && m.animation, m && Array.isArray(m.items) ? m.items.map(it => it && it.style) : null]), S.themeEff]);
 
   /* Opens the screen at a level: from a problem, the Menu tab's Edit in Look or the ring-full note. rebuild: the screen is showing already. */
   window.lookOpenAt = (t, rebuild) => {
@@ -189,6 +183,8 @@
   }
 
   window.buildLookScreen = root => {
+    paintPlay = null; R.preview = null;                       // the player puts the picture back through R.preview, which this build sets again
+    lookPlayer.stop();
     fixTarget();
     const target0 = view.target, level0 = target0.level, sl0 = Z.isSlot(target0) ? target0.slot : null, curLevel = sl0 !== null ? 'slot' : level0;
     if (Thumbs.theme !== themeNow()) { Thumbs.cache.clear(); Thumbs.shown.clear(); Thumbs.theme = themeNow(); }
@@ -200,6 +196,7 @@
 
     /* ---- the preview (left column) */
     const img = h('img', { class: 'ring-img', alt: 'Ring preview', draggable: false });
+    lookImg = img;
     const dz = h('div', { class: 'dz-ring', 'aria-hidden': 'true' });
     const wrap = h('div', { class: 'mini-wrap' }, dz);
     const cap = h('div', { class: 'mini-cap micro' });
@@ -247,15 +244,16 @@
       paintRing();
     };
     R.preview = async () => {
-      const id = previewId(), sample = id === SAMPLE_MENU, tok = ++ptok;
       paintCap();
+      if (lookPlayer.state !== 'idle') return;                // the animation owns the picture until it ends; it calls this again then
+      const id = previewId(), sample = id === SAMPLE_MENU, tok = ++ptok;
       const none = !sample && (!menuOf(id) || !usableIdx(id).length);
       stage.classList.toggle('none', none);
       wrap.hidden = none;
       if (none) return;
       const ver = S.version, want = hoverNow();
       const res = await RingLoader.get(id, want, null, sample ? 'tags' : 'main', previewVariant(id));
-      if (tok !== ptok || ver !== S.version || !res) return;
+      if (tok !== ptok || ver !== S.version || !res || lookPlayer.state !== 'idle') return;
       if (res.image) showPicture(res);
       else if (res.error || (res.problems || []).length) cap.textContent = 'No preview: ' + (res.problems || [])[0];
       msize = res.size || msize; paintDZ();
@@ -268,7 +266,7 @@
     new ResizeObserver(() => { ring.rebuild(); paintRing(); }).observe(wrap);
 
     /* Hover lights a slot and shows its picture with the hover glow; in Full mode a click opens the slot level for it. */
-    const setHoverPtr = j => { if (j === hoverPtr) return; hoverPtr = j; stage.classList.toggle('over-slot', j !== null && isFull() && previewId() !== SAMPLE_MENU); paintRing(); R.preview(); };
+    const setHoverPtr = j => { if (j === hoverPtr || lookPlayer.state !== 'idle') return; hoverPtr = j; stage.classList.toggle('over-slot', j !== null && isFull() && previewId() !== SAMPLE_MENU); paintRing(); R.preview(); };
     stage.addEventListener('pointermove', e => { if (level0 !== 'preset') setHoverPtr(ring.slotAt(e.clientX, e.clientY)); });
     stage.addEventListener('pointerleave', () => setHoverPtr(null));
     const goSlot = (mid, ix) => { view.last = mid; view.target = { level: 'menu', menu: mid, slot: ix }; view.back = null; R.look(); };
@@ -309,6 +307,27 @@
     const syncPin = () => { if (glowSw) { const on = glowPinned(), inp = glowSw.querySelector('input'); if (inp.checked !== on) inp.checked = on; } };
     const left = h('aside', { class: 'look-left', 'aria-label': 'Ring preview and looks' }, stage, liveLine, glowRow, pickLabel,
       isFull() ? h('div', { class: 'fhint' }, 'The dashed circle is the dead zone: no slot is picked this close to the centre.') : null);
+
+    /* ---- the open animation, played on the preview */
+    let playBtn = null;                                         // the Play button of the Opening group, when the group is on show
+    const animTitle = a => a[0].toUpperCase() + a.slice(1);
+    paintPlay = st => {
+      stage.classList.toggle('playing', st === 'playing');      // hides the dashed circle and the hover marks, and ignores the pointer
+      if (st !== 'idle') { hoverPtr = null; stage.classList.remove('over-slot'); }
+      if (!playBtn) return;
+      playBtn.replaceChildren(st === 'loading' ? h('span', { class: 'spin' }) : icon(st === 'playing' ? 'stop' : 'play', 12), st === 'loading' ? 'Rendering...' : (st === 'playing' ? 'Stop' : 'Replay'));
+      playBtn.disabled = st === 'loading';
+    };
+    /* The ring's animation at the global level (even for a menu that has its own), the menu's own or inherited one at the menu level. The sample
+       ring is no menu: the first one with something to show stands in. */
+    const playNow = () => {
+      if (lookPlayer.state === 'loading') return;
+      const pid = previewId(), id = pid !== SAMPLE_MENU ? pid : Object.keys(S.cfg.menus).find(m => usableIdx(m).length);
+      if (!id || !hasMenu(id) || !usableIdx(id).length) { K.toast('The current menu has no usable items to animate.', { tone: 'warn' }); return; }
+      stage.scrollIntoView({ block: 'nearest' });               // the stacked layout of a narrow window
+      lookPlayer.play(id, level0 !== 'menu');
+    };
+    R.lookPlay = playNow;                                       // a pick rebuilds the screen, then plays on the new one
 
     /* ---- level bar */
     const full = isFull();
@@ -668,7 +687,31 @@
       return card('When full', 'What a crowded ring does',
         choiceRow({ label: 'When there are more items than fit', key: 'when_full', cls: 'three', items: choicesOf('when_full').map(v => [v, (FULL_WHEN[v] || [v, ''])[0], (FULL_WHEN[v] || [v, ''])[1]]) }), fit);
     };
-    const GROUP_BUILD = { slots: groupSlots, hub: groupHub, glow: groupGlow, labels: groupLabels, colours: groupColours, tags: groupTags, when_full: groupWhenFull };
+    /* Opening: ring.animation at the global level, menu.animation (or none, to follow the ring) at the menu level. Not a look key, so Z.resolve
+       never sees it and the origin is worked out here. */
+    const groupOpening = () => {
+      const atMenu = level0 === 'menu', m = atMenu ? menuOf(target0.menu) : null;
+      const allA = K.ring().animation || S.defaults.animation;
+      const items = ((S.opts && S.opts.animations) || Object.keys(K.ANIM_INFO)).map(a => [a, animTitle(a), K.ANIM_INFO[a] || '']);
+      if (atMenu) items.unshift(['', 'Same as all menus (' + animTitle(allA) + ')', 'Follows the animation set for all menus.']);
+      const tiles = choiceCards(items, atMenu ? ((m && m.animation) || '') : allA, v => {
+        if (atMenu) { if (!m) return; if (v) m.animation = v; else delete m.animation; } else K.ensureRing().animation = v;
+        commit(); R.look();
+        if (R.lookPlay) R.lookPlay();
+      }, 'anim-cards', 'Open animation');
+      for (const b of $$('.choice', tiles)) b.dataset.fk = 'look:animation/' + (b.dataset.v || 'inherit');
+      playBtn = h('button', { class: 'btn small', type: 'button', dataset: { fk: 'look:opening-play' }, onclick: playNow }, icon('play', 12), 'Play');
+      const row = [playBtn];
+      if (!atMenu && K.ring().animation) row.push(h('button', { class: 'btn small', type: 'button', dataset: { fk: 'look:animation/reset' }, title: 'Go back to the default (' + animTitle(S.defaults.animation) + ')',
+        onclick: () => { delete K.ensureRing().animation; tidyRing(); commit(); R.look(); } }, icon('undo', 12), 'Reset to default'));
+      const origin = atMenu ? (m && m.animation ? 'Set for this menu only.' : 'This menu follows the animation for all menus.')
+        : K.ring().animation ? 'Set for all menus.' : 'The default. Every menu uses it unless it has its own.';
+      const own = atMenu ? [] : Object.entries(S.cfg.menus).filter(([, mm]) => mm && mm.animation);
+      const goOwn = id => { view.last = id; view.target = { level: 'menu', menu: id }; view.back = null; R.look(); if (R.lookGoto) R.lookGoto('animation', 'opening'); };
+      return card('Opening', 'How the ring appears', h('div', { class: 'btn-row', style: { marginBottom: '10px' } }, ...row), tiles, h('div', { class: 'fhint', style: { marginTop: '8px' } }, origin),
+        own.length ? h('div', { class: 'fhint', style: { marginTop: '4px' } }, 'With an animation of their own: ', ...own.flatMap(([id, mm], i) => [i ? ', ' : '', linkBtn(menuTitle(id), () => goOwn(id)), ' (' + animTitle(mm.animation) + ')']), '.') : null);
+    };
+    const GROUP_BUILD = { slots: groupSlots, hub: groupHub, glow: groupGlow, labels: groupLabels, colours: groupColours, tags: groupTags, when_full: groupWhenFull, opening: groupOpening };
 
     /* ---- the gallery */
     const menuTitle = id => { const m = menuOf(id); return (m && m.title) || id; };
@@ -861,6 +904,7 @@
     const toast2 = m => K.toast(m, { ms: 3200 });
     if (hidden.length) groupsBox.append(h('div', { class: 'mode-note look-modenote', role: 'status' }, 'Changed in Full mode and not shown here: ' + hidden.join(', ') + '. ', linkBtn('Switch to Full mode', () => setMode('full'))));
     const shown = Z.groups(lookCtx(), curLevel).filter(g => full || !g.full);
+    if (curLevel === 'global' || curLevel === 'menu') shown.push({ id: 'opening', title: 'Opening', full: false });      // in both modes; not a look group, so the schema does not list it
     const inner = h('div', { class: 'look-ctl' + (readOnly ? ' ro' : '') });
     if (readOnly) inner.inert = true;
     groupsBox.append(inner);
