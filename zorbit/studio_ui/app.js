@@ -1286,6 +1286,7 @@ async function deleteMenu(id) {
   if (!hasMenu(id)) return;
   const fresh = referrers(id).filter(r => r.menuId !== id);     // the config may have changed while the dialog was open
   sealSnap();
+  delete menuMore[id];
   if (S.itemIdx !== null && S.menuId !== id) {
     const here = keeps(menuOf(S.menuId)) ? [] : fresh.filter(r => r.menuId === S.menuId).map(r => r.index);       // a menu that keeps its slots only empties them
     S.itemIdx = here.includes(S.itemIdx) ? null : S.itemIdx - here.filter(x => x < S.itemIdx).length;
@@ -1318,7 +1319,7 @@ function moveMenuId(oldId, newId) {
   S.cfg.menus = out;
   for (const m of Object.values(out)) (m.items || []).forEach(it => { if (it && it.menu === oldId) it.menu = newId; });
   if (S.menuId === oldId) S.menuId = newId;
-  if (oldId in menuMore) { menuMore[newId] = menuMore[oldId]; delete menuMore[oldId]; }
+  if (own(menuMore, oldId)) { menuMore[newId] = menuMore[oldId]; delete menuMore[oldId]; }
 }
 function renameMenuId(oldId, newId) {
   newId = newId.trim();
@@ -2655,7 +2656,9 @@ function buildMenuProps() {
       return { n, text: 'Look, open animation, fan out' + (n ? ' · ' + n + ' set' : '') };
     };
     const ms = moreSum();
-    const sec = foldSection({ id: 'menu-more', flat: true, title: 'More', summary: ms.text, open: menuMore[id] ?? ms.n > 0,
+    const openNow = own(menuMore, id) ? menuMore[id] : ms.n > 0;
+    if (openNow) menuMore[id] = true;                           // built open by the rule: it stays open until the person closes it
+    const sec = foldSection({ id: 'menu-more', flat: true, title: 'More', summary: ms.text, open: openNow,
       onToggle: v => { menuMore[id] = v; foldSum(sec, moreSum().text); } }, ...more);      // the fan switch does not rebuild the panel, so the summary is made again on every toggle
     box.append(sec);
   } else box.append(...animBox);

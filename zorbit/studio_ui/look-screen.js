@@ -923,7 +923,12 @@
     const animSetHere = () => (level0 === 'menu' ? !!(menuOf(target0.menu) || {}).animation : level0 === 'global' && K.ring().animation !== undefined && K.ring().animation !== S.defaults.animation);
     const setCounts = () => {
       const out = {};
-      for (const k of Z.settings(S.cfg, target(), lookCtx())) {
+      let keys = Z.settings(S.cfg, target(), lookCtx());
+      if (level0 === 'preset' && readOnly) {                    // a built-in look is not in cfg.looks, so Z.settings does not see it: read its own definition
+        const dict = Z.lookDict(S.cfg, target0.name, lookCtx()) || {};
+        keys = Object.keys(dict).filter(k => k !== 'preset').flatMap(k => (k === 'colors' && isObj(dict.colors) ? Object.keys(dict.colors).map(n => 'colors.' + n) : [k]));
+      }
+      for (const k of keys) {
         let gid; try { gid = groupOfKey(k.split('.')[0]); } catch (e) { continue; }
         out[gid] = (out[gid] || 0) + 1;
       }
@@ -934,9 +939,9 @@
     const colourWord = v => (v === '' || v === undefined || v === null ? 'automatic' : COLOR_INFO[v] ? COLOR_INFO[v][0].toLowerCase() : 'custom');      // a role by name, never a hex
     const GROUP_SUM = {
       slots: v => [v.radius !== undefined ? 'Radius ' + v.radius : '', v.slot !== undefined ? 'slot ' + v.slot : '', v.slot_shape ? (SHAPE[v.slot_shape] ? SHAPE[v.slot_shape][0] : v.slot_shape).toLowerCase() : ''].filter(Boolean).join(', '),
-      hub: v => [HUB[v.hub_style] ? HUB[v.hub_style][0] : '', Number(v.hub) > 0 ? v.hub + ' px' : 'no hub'].filter(Boolean).join(', ').replace(/^no hub$/, 'None'),
-      glow: v => [v.glow_color !== undefined ? colourWord(v.glow_color) + ' glow' : '', pct(v.glow_opacity)].filter(Boolean).join(', '),
-      labels: v => (v.labels && LABELS[v.labels] ? LABELS[v.labels][0] : v.label_color !== undefined ? colourWord(v.label_color) + ' label colour' : ''),
+      hub: v => (Number(v.hub) > 0 ? [HUB[v.hub_style] ? HUB[v.hub_style][0] : '', v.hub + ' px'].filter(Boolean).join(', ') : 'No hub'),
+      glow: v => [valueNow('glow_color') !== undefined ? colourWord(valueNow('glow_color')) + ' glow' : '', pct(v.glow_opacity)].filter(Boolean).join(', '),
+      labels: v => (v.labels && LABELS[v.labels] ? LABELS[v.labels][0] : valueNow('label_color') !== undefined ? colourWord(valueNow('label_color')) + ' label colour' : ''),
       colours: () => plural(Z.ROLES.length, 'colour'),
       tags: v => (['tint', 'both'].includes(v.tag_colors) ? 'Tint, ' : '') + (['glow', 'both'].includes(v.tag_colors) ? 'glow, ' : '') + (v.tag_band && v.tag_band !== 'none' ? 'band, ' : '') || 'Off',
       when_full: v => (FULL_WHEN[v.when_full] ? FULL_WHEN[v.when_full][0] : ''),
@@ -962,8 +967,10 @@
     };
     const foldGroup = (gid, cdv, counts, vals) => {
       const kids = [...cdv.children], head = kids.shift(), em = head.querySelector('em');
+      const open = view.fold[gid] ?? (gid === 'slots' || !!counts[gid]);
+      if (open) view.fold[gid] = true;                          // built open by the rule: it stays open until the person closes it, whatever the next rebuild computes
       return foldSection({ id: 'look-g-' + gid, title: head.childNodes[0].textContent, sub: em ? em.textContent : null, summary: sumOf(gid, vals, counts),
-        open: view.fold[gid] ?? (gid === 'slots' || !!counts[gid]), onToggle: v => { view.fold[gid] = v; if (!v) paintSums(); } }, ...kids);
+        open, onToggle: v => { view.fold[gid] = v; if (!v) paintSums(); markActive(); } }, ...kids);
     };
     const shown = Z.groups(lookCtx(), curLevel).filter(g => full || !g.full);
     if (curLevel === 'global' || curLevel === 'menu') shown.push({ id: 'opening', title: 'Opening', full: false });      // in both modes; not a look group, so the schema does not list it
@@ -985,7 +992,9 @@
     const navH = () => nav.offsetHeight || 0;
     const markActive = () => {
       if (!sectionRefs.length) return;
-      const atEnd = scroll.scrollHeight > scroll.clientHeight + 4 && scroll.scrollTop + scroll.clientHeight >= scroll.scrollHeight - 4;      // with the groups folded the page may not scroll at all
+      const lastCard = sectionRefs[sectionRefs.length - 1].card;
+      // at the bottom the last chip is the one in view, but only when its group is open: a folded heading is no more in view than the group above it
+      const atEnd = scroll.scrollHeight > scroll.clientHeight + 4 && scroll.scrollTop + scroll.clientHeight >= scroll.scrollHeight - 4 && (!lastCard.classList.contains('fold') || foldIsOpen(lastCard));
       let active = sectionRefs[0];
       for (const s of sectionRefs) if (sectionTop(s.card) <= scroll.scrollTop + navH() + 24) active = s;
       if (atEnd) active = sectionRefs[sectionRefs.length - 1];
