@@ -4,7 +4,9 @@
 
 The look settings are on the Look screen in Studio, the rest on Settings, and all are under `"ring"` in `radial.json`. A [look](#looks) holds the same look settings under a name, so a menu or a slot can have its own. Studio shows live previews. The [theme](#theme) is on Settings, but it is a Studio preference and not in `radial.json`.
 
-![The Look screen in Studio: a ring preview on the left, and Slots with sliders for ring radius, slot size and dead zone on the right, above Hub and Labels](images/studio-look.png)
+In Full mode the groups on the Look screen fold. **Slots** starts open, and a closed group shows a one-line summary of what it holds (for example "Dot, 10 px" for **Hub**) with how many of its settings the level you are editing sets. A group with settings of its own at that level opens by itself. See [Settings](studio.md#settings) on the Look screen.
+
+![The Look screen in Studio: a ring preview on the left, and the Slots group with sliders for ring radius, slot size and dead zone on the right, with the other groups folded below it](images/studio-look.png)
 
 | Setting (`ring.`) and its label in Studio | Default | Range | Meaning |
 |---|---|---|---|
@@ -18,7 +20,7 @@ The look settings are on the Look screen in Studio, the rest on Settings, and al
 | `tag_limit` (**Tag fan slots**) | 12 | 4 to 24, whole numbers | How many slots a [tag fan](menus.md#tag) holds. A tag with more items than that ends in a **More...** slot. Only [Full mode](studio.md#simple-and-full-mode) shows it. |
 | `tap_ms` (**Tap time**) | 250 | 0 to 1000 | A hotkey press shorter than this is a tap. |
 | `timeout_s` (**Auto-close**) | 20 | 2 to 120 | An open ring closes itself after this many seconds. |
-| `animation` (**Open animation**) | `smooth` | see [Open animations](#open-animations) | The open animation. |
+| `animation` (**Open animation**) | `smooth` | see [Opening](#opening) | The open animation. |
 | `labels` (**Labels**: **Icon and name**, **Icon only**) | `name` | `name`, `none` | Show names under the slots, or icons only. A name sits on a soft pill (dark in the Dark theme, light in the Light theme), so it stays readable when a neighbouring slot is close. |
 | `label_color` (**Label colour**) | `text` | a theme colour or `#rrggbb` | The colour of the names under the slots. The pill behind them follows the theme. |
 | `glow_color` (**Glow colour**) | `""` | a theme colour, `#rrggbb` or `""` | The colour of the soft light around a slot and of its rim when the pointer is on it. `""` is **Automatic**: the slot's tag colour when it has one, else the accent (the highlight for a submenu slot). |
@@ -44,7 +46,7 @@ Sizes are scaled for high-DPI screens automatically.
 
 The radius is a minimum. When a menu has so many items that neighbouring slots would sit closer than 1.25 slot widths apart, the ring grows until they do not. With the default slot size that starts at 10 items: 12 items make a ring about 174 pixels in radius, 24 items about 345. The Studio preview grows the same way, so lowering **Ring radius** changes nothing once a menu is past that point. Studio shows a note above the item list when that happens, and says so if the grown ring is too big for your screen. Lower **Slot size** or cut the number of items to keep the ring smaller. Names in Chinese, Japanese or Korean are drawn with Microsoft YaHei, Yu Gothic or Malgun Gothic, whichever Windows has; other names use Segoe UI.
 
-Studio's [Simple mode](studio.md#simple-and-full-mode) shows only some of these. Its **Ring size** slider moves `radius`, `slot` and `dead_zone` together and keeps their proportions. Full mode has the three separate sliders, and is the only mode that shows `slot_corner`, `border_width`, `icon_scale`, the hub settings, `glow_color`, `glow_opacity`, `label_color`, `hover_submenus`, `tag_limit`, `tap_ms`, `timeout_s`, the `tag_` settings and `colors`. The animation, `labels`, `slot_shape`, `when_full`, `flick` and the theme are in both. What Simple hides keeps its value.
+Studio's [Simple mode](studio.md#simple-and-full-mode) shows only some of these. Its **Ring size** slider moves `radius`, `slot` and `dead_zone` together and keeps their proportions. Full mode has the three separate sliders, and is the only mode that shows `slot_corner`, `border_width`, `icon_scale`, the hub settings, `glow_color`, `glow_opacity`, `label_color`, `hover_submenus`, `tag_limit`, `tap_ms`, `timeout_s`, the `tag_` settings and `colors`. The open animation, `labels`, `slot_shape`, `when_full`, `flick` and the theme are in both. What Simple hides keeps its value.
 
 ### Looks
 
@@ -278,11 +280,13 @@ In Studio, opacities show as percentages (45%) but are 0 to 1 in the file. Contr
 
 The hotkey that opens the [browser window](browser.md) and, pressed over it, hands the keyboard back to ZBrush. On Settings it is the **Browser hotkey** row at the end of the **Behaviour** card, where you record it like a menu hotkey and Studio warns if a menu already uses it. New installs get **Alt+B**. An existing `radial.json` has no `browser` section until you add one, so the hotkey does nothing there. Leave it out for no hotkey. The browser then opens from a **Browser** slot, **More...** in a tag's fan, the tray menu, Studio's **Browser** buttons and the Start menu shortcut (see [Opening it](browser.md#opening-it)).
 
-## Open animations
+## Opening
 
-Set `ring.animation` (or pick one in Studio, which plays a preview). Closing is always instant, so a pick never waits for an animation.
+The open animation is set on the **Look** screen, in the **Opening** group (see [The Look screen](studio.md#the-look-screen)). Pick a tile and it plays on the preview; **Play** plays it again. You can also set `ring.animation` in `radial.json`. Closing is always instant, so a pick never waits for an animation.
 
-Any menu or submenu can use a different one: give it its own `animation`, or pick one under **Open animation** in its menu settings in Studio. Menus without one use `ring.animation`.
+![The Opening group on the Look screen: the Play button and a tile for each of the twelve open animations, with Smooth chosen](images/look-opening.png)
+
+Any menu or submenu can use a different one: give it its own `animation`, or choose **This menu** at the top of the Look screen and pick a tile in **Opening** (the first tile, **Same as all menus**, takes it away again). The **Menu** tab in Studio shows which one the menu uses and has an **Edit in Look** link. Menus without one use `ring.animation`.
 
 ```json
 "more": {

@@ -27,8 +27,9 @@
 
   /* A menu look that only names a look ("soft", or {preset: "soft"}) is what Simple's Use for button writes. Any other key is a Full setting. */
   const lookHasOwn = look => isObj(look) && Object.keys(look).some(k => k !== 'preset');
-  /* A menu with an open animation, fan out or swallow turned off, or a look with settings of its own: the Menu tab shows those fields only in Full. */
-  const menuFullSet = m => !!m && (!!m.animation || m.fan === true || m.swallow === false || lookHasOwn(m.look));
+  /* A menu with fan out or swallow turned off, or a look with settings of its own: the Menu tab shows those fields only in Full. (A menu's own
+     open animation is set on the Look screen, which Simple has.) */
+  const menuFullSet = m => !!m && (m.fan === true || m.swallow === false || lookHasOwn(m.look));
 
   /* Names (deduplicated, in settings order) of Full-only settings that differ from the defaults. where: 'look' or 'settings' keeps the ones that screen shows. */
   function fullOnlyChanges(cfg, where, ctx) {
@@ -67,7 +68,7 @@
     if (!t) return false;
     if (t.kind === 'settings') return FULL_CARDS.has(t.card) || !!(t.key && FULL_RING[t.key]);
     if (t.kind === 'look') return Number.isInteger(t.slot) || t.level === 'preset' || !!(t.key && FULL_RING[t.key] && LOOK_FULL_NAMES.has(FULL_RING[t.key]));      // the slot level and editing a look are Full only
-    if (t.kind === 'menu') return t.field === 'id' || t.field === 'animation' || t.field === 'swallow' || t.field === 'fan';
+    if (t.kind === 'menu') return t.field === 'id' || t.field === 'swallow' || t.field === 'fan';
     if (t.kind === 'item') { const m = ctx.menuOf(t.menuId), it = m && m.items && m.items[t.index]; return !!it && kindIsFull(ctx.kindOf(it)); }
     return false;
   }
