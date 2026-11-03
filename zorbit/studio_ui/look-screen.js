@@ -330,14 +330,14 @@
     };
     if (presetsOn()) {
       const lvls = [['global', full ? 'Global' : 'All menus', full ? 'The look every menu starts from.' : 'The look for every menu.'],
-        ['menu', full ? 'This menu' : 'Only', full ? 'Only the menu you pick. Whatever you do not set here follows Global.' : 'Only the menu you pick.']];
+        ['menu', 'This menu', full ? 'Only the menu you pick. Whatever you do not set here follows Global.' : 'Only the menu you pick.']];
       if (full) lvls.push(['slot', 'This slot', 'Only one slot of the menu. Whatever you do not set here follows the menu.']);
       const noSlots = () => !usableIdx(view.last && hasMenu(view.last) ? view.last : S.menuId).length;
       const chips = lvls.map(([id, label, hint]) => h('button', { class: 'look-chip' + (id === curLevel ? ' on' : ''), type: 'button', role: 'radio', 'aria-checked': id === curLevel ? 'true' : 'false',
         tabindex: id === curLevel || (curLevel === 'preset' && id === 'global') ? '0' : '-1', title: id === 'slot' && noSlots() && curLevel !== 'slot' ? 'The menu has no slot to pick yet.' : hint, dataset: { level: id, fk: 'look:level/' + id },
         'aria-disabled': id === 'slot' && noSlots() && curLevel !== 'slot' ? 'true' : null,
         onclick: () => { if (id === 'slot' && noSlots() && curLevel !== 'slot') return; if (id !== curLevel || curLevel === 'preset') goLevel(id); } }, label));
-      const group = h('div', { class: 'look-chips', role: 'radiogroup', 'aria-label': full ? 'Where the look applies' : 'Applies to' }, ...chips);
+      const group = h('div', { class: 'look-chips', role: 'radiogroup', 'aria-label': 'Where the look applies' }, ...chips);
       group.addEventListener('keydown', e => {
         const at = chips.indexOf(document.activeElement);
         if (at < 0 || !['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(e.key)) return;
@@ -345,7 +345,6 @@
         const to = e.key === 'Home' ? 0 : e.key === 'End' ? chips.length - 1 : (at + (e.key === 'ArrowLeft' || e.key === 'ArrowUp' ? chips.length - 1 : 1)) % chips.length;
         chips[to].click(); const again = $('[data-level="' + lvls[to][0] + '"]', root); if (again) again.focus();
       });
-      if (!full) levelBar.append(h('span', { class: 'micro look-applies' }, 'Applies to'));
       levelBar.append(group);
       if (level0 === 'menu') {
         const ms = h('select', { class: 'inp sel look-menusel', 'aria-label': 'Menu the look applies to', dataset: { fk: 'look:level-menu' }, onchange: () => { view.last = ms.value; view.target = { level: 'menu', menu: ms.value }; R.look(); } },
@@ -677,7 +676,7 @@
     function applyTarget() { return level0 === 'preset' ? { level: 'global' } : target(); }
     view.gallery = null;
     const gallery = presetsOn() && sl0 === null ? buildGallery() : null;
-    if (gallery) left.append(gallery.el);
+    if (gallery) left.insertBefore(gallery.el, pickLabel);        // under the picture, above the preview menu and the dead-zone hint, so it is on screen when Look opens
 
     function applyLook(id, keep) {
       const t = applyTarget(), c = lookCtx();

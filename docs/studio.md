@@ -8,7 +8,7 @@ Studio is where you edit everything. Open it from the Start menu (**ZOrbit Studi
 | Menus | Alt+1 | Create and edit menus and their items, with a live ring preview. |
 | Look | Alt+2 | How the ring looks, for every menu or for one: its size, slot shape, hub, glow, labels, colours and tag colours, a gallery of looks to use, and a live preview. See [The Look screen](#the-look-screen). |
 | Library | Alt+3 | Browse the brushes, alphas, materials and textures ZBrush can load, on four tabs, with search, folders and thumbnails. Click an item and press **Add to <menu>**, or drag it onto a menu, the ring or the item list. **Rescan** picks up items saved since Studio opened. Tag items and filter by tag (see [Tags](tags.md)). Star favourites; Recent lists what you have picked in ZBrush (see [Favourites and Recent](browser.md#favourites-and-recent)). |
-| Settings | Alt+4 | The theme, a **Ring look** card with a button that opens Look, the open animation, flick, the browser hotkey, Studio's own preferences, and Import and export (see [Import and export](files.md#import-and-export)). [Full mode](#simple-and-full-mode) adds hover submenus, tap time, auto-close, the bridge, Older ZBrush and tags. |
+| Settings | Alt+4 | The theme, a **Ring look** card with a button that opens Look, the open animation, flick, the browser hotkey, Studio's own preferences, and Import and export (see [Import and export](files.md#import-and-export)). [Full mode](#simple-and-full-mode) adds hover submenus, tap time, auto-close, the bridge and Older ZBrush. |
 | Status | Alt+5 | Four cards: **ZBrush** (running or not), **ZOrbit app** (running or not, with **Start app** when ZBrush is running, or amber with **Restart app** when the app running is older than Studio: see [Older versions](profiles.md#older-versions)), **Bridge listener** (the small window the plugin keeps inside ZBrush: **Connected**, **Found, unverified**, **Stale** or **Not found**; **ZBrush closed** in grey when ZBrush is not running, since there is nothing to listen in; and **Not needed (key bridge)** when the bridge mode is `key` or only a ZBrush 2022 to 2025 is installed) and **Last pick** (the most recent item sent to ZBrush). Below them the last 40 lines of the app log, with **Copy log**, **Open logs folder** and **Open menus folder** (the folder of the profile you are editing, which holds its `radial.json`). The screen refreshes every 3 seconds. A dot on this button in the rail means the app is not running while ZBrush is. |
 | Setup | Alt+6 | A checklist of three steps: ZBrush found (with the plugin set up for it), plugin loaded in ZBrush, and try the ring. It shows live state and offers one action per step, and ends with links to the other screens and **Take the tour**. An amber dot on this button in the rail means no ZBrush that Studio found has the plugin set up, or a running ZBrush does not. Finding no ZBrush at all does not count. |
 
@@ -26,13 +26,13 @@ The mode only changes what Studio shows. The ring, the app, `radial.json`, Save,
 |---|---|---|
 | Menus, **Add item** | Brush, Alpha, Material, Texture, Press, Toggle, Submenu and Empty slot. | Set, Steps, Auto, Tag and Browser. |
 | Menus, **Menu** tab | Title, Hotkey, **Keep slots in place**, **Duplicate**, **Export menu...** and **Delete**. | Id, **Swallow hotkey**, **Used by**, **Look**, **Open animation** and **Fan out when opened from another menu**. |
-| Library and the dock | Everything, with starring, tag chips and the right-click tag picker. | **Manage tags...**. |
+| Library and the dock | Everything, with starring, tag chips and the right-click tag picker. | **Manage tags...**, with the path of the tags file under it. |
 | Look | **Applies to** (all menus or one), **Ring size**, **Slot shape**, **Labels** and **When full**, and the gallery with **Use for ...** and **New from current**. | **Ring radius**, **Slot size** and **Dead zone** in place of **Ring size**, **Corner roundness**, **Rim width**, **Icon size**, **Hub**, **Glow**, **Label colour**, **Colours** and **Tag colours**, **Edit**, **Duplicate**, **Rename** and **Delete** on a look, and the **This slot** level. |
 | Menus, **Item** tab | A read-only **Style** line when the item has a style. | **Style** with **Edit in Look** and **Reset style**. |
-| Settings | **Theme**, **Ring look**, **Open animation** (with its **Preview animation** button), **Behaviour** with **Flick to pick** and **Show the hint**, **Browser**, **Studio** and **Import and export**. | **Open submenus on hover**, **Tag fan slots**, **Tap time**, **Auto-close**, **ZBrush bridge**, **Older ZBrush** and **Tags**. |
+| Settings | **Theme**, **Behaviour** with **Flick to pick**, **Show the hint** and **Browser hotkey**, **Ring look**, **Open animation** (with its **Preview animation** button), **Studio** and **Import and export**. | **Open submenus on hover**, **Tag fan slots**, **Tap time** and **Auto-close** in **Behaviour**, then **ZBrush bridge** and **Older ZBrush** after **Import and export**. |
 | Status and Setup | The same. | The same. |
 
-![The Settings screen in Simple mode: a shorter list of sections on the left, with the Theme, Ring look and Open animation cards](images/studio-settings-simple.png)
+![The Settings screen in Simple mode: a shorter list of sections on the left, with the Theme, Behaviour, Ring look and Open animation cards](images/studio-settings-simple.png)
 
 In Simple, the **Ring size** slider on **Look** moves **Ring radius**, **Slot size** and **Dead zone** together and keeps their proportions. Its reset button puts all three back to their defaults.
 
@@ -209,7 +209,7 @@ On the left is a preview of the real ring, drawn by the same code as the app, wi
 
 ### Levels
 
-The bar at the top says where what you set applies. In Simple mode it reads **Applies to**, with **All menus** and **Only** and a list of menus.
+The bar at the top says where what you set applies. In Simple mode it has **All menus** and **This menu** and a list of menus; Full mode calls the first one **Global** and adds **This slot**.
 
 - **Global** is the look every menu starts from. What you set here is used by every menu.
 - **This menu** is the look of one menu, picked in the list beside it. The whole screen then edits that menu and the preview shows it. A setting you leave alone follows Global.
