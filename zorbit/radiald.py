@@ -65,6 +65,7 @@ LOG_FILE = os.path.join(DATA_DIR, "radiald.log")
 REQUEST_FILE = os.path.join(DATA_DIR, "request.json")
 LISTENER_FILE = os.path.join(DATA_DIR, "listener.json")
 BRIDGE_LOG = os.path.join(DATA_DIR, "bridge.log")      # written by the plugin inside ZBrush
+ZSCRIPT_LOG = os.path.join(DATA_DIR, "zscript_bridge.log")   # the ZScript plugin's last pick, rewritten each time
 MUTEX_NAME = "Local\\ZOrbit"
 TAKEOVER_MUTEX = "Local\\ZOrbitTakeover"      # held while a new app replaces an older one
 POPOUT_MUTEX = "Local\\ZOrbitPopout"          # the browser's (popout.MUTEX)
@@ -89,7 +90,9 @@ ACK_WAIT_S = 0.5                      # a listener pick not picked up in this lo
 RESULT_TRIES = 30                     # ticks (100 ms) to wait for the plugin to log what a picked-up request did
 ACK_HOLD_MAX_S = 30                   # ... but not while the left button is down, for this long at most
 LEGACY_SCAN_S = 60                    # how long the scan for ZBrush 2022-2025 installations is kept
-TIMER_WATCH, TIMER_ACK, TIMER_REHOOK, TIMER_CONFIG, TIMER_BROWSER_PICK, TIMER_PREWARM, TIMER_POPOUT_SHOW = range(1, 8)
+TIMER_WATCH, TIMER_ACK, TIMER_REHOOK, TIMER_CONFIG, TIMER_BROWSER_PICK, TIMER_PREWARM, TIMER_POPOUT_SHOW, \
+    TIMER_ZS_RESULT = range(1, 9)
+ZS_RESULT_S = 15                      # how long to look for the ZScript plugin's line about a pick (a stroke delays it)
 COPYDATA_PICK, COPYDATA_SHOW, COPYDATA_QUIT = 1, 10, 12   # WM_COPYDATA ids: popout -> app, app -> popout
 COPYDATA_THEME = 13                                       # Studio -> popout: look at the theme now (no payload)
 POPOUT_CLASS = "ZOrbitPopoutCtl"      # the popout's message-only control window
@@ -135,6 +138,30 @@ TIP_FROZEN = f"ZOrbit {paths.VERSION}: your files were changed by a newer ZOrbit
 # A line of bridge.log: "2026-10-31 12:00:00 #7 'Clay' via listener: brush Clay: ...; press Tool:X: ..."
 _PLUGIN_LINE = re.compile(r"^([0-9]{4}-[0-9]{2}-[0-9]{2} [0-9:]{8}) #([0-9]+) '(.*)' via ([^:]*): (.*)$")
 _PLUGIN_BAD = re.compile(r"^([a-z]+) (.+): (NOT loaded in ZBrush and no file known|no such interface item)$")
+
+
+def _read_bytes(path):
+    """The whole file, or None when it cannot be read (not there yet, or being written)."""
+    try:
+        with open(path, "rb") as f:
+            return f.read()
+    except OSError:
+        return None
+
+
+def _zscript_result(seq, before, path=None):
+    """What the ZScript plugin did with pick number seq: its line in zscript_bridge.log without the "#seq " in
+    front, or None while the file has no line for it. The plugin rewrites the file with the last pick only and
+    stamps no time, and the numbers start again with every run of the app, so a line counts only once the file
+    differs from `before`, its bytes when the pick was sent."""
+    data = _read_bytes(path or ZSCRIPT_LOG)
+    if data is None or data == before:
+        return None
+    line = data.decode("mbcs", errors="replace").strip().splitlines()      # ZScript writes the ANSI code page
+    head = f"#{seq} "
+    if not line or not line[0].startswith(head):
+        return None
+    return line[0][len(head):]
 
 
 def _plugin_result(seq, since=0.0, path=None):
@@ -338,6 +365,7 @@ class App:
         self._ack = None                # [seq, deadline, give up at, logged] of a message-mode pick awaiting pickup
         self._pick_time = 0.0           # when that pick was handed over
         self._result = None             # [seq, since, ticks left]: a picked-up request whose outcome is not logged yet
+        self._zs_result = None          # [seq, bytes of zscript_bridge.log before, give up at]: a ZScript pick to log
         self._config_error = None       # why the last load of radial.json failed, else None
         self._have_cfg = False          # self.cfg came from a radial.json that loaded (not the empty stand-in)
         self._unreadable = set()        # pids of foreground windows whose process could not be read, logged
@@ -827,6 +855,8 @@ class App:
                     self._prewarm()
                 elif wparam == TIMER_POPOUT_SHOW:
                     self._popout_show_tick()
+                elif wparam == TIMER_ZS_RESULT:
+                    self._zs_result_tick()
                 return 0
         except Exception:
             log("control error:\n" + traceback.format_exc())
@@ -1266,9 +1296,12 @@ class App:
         if legacy is not None:
             # A listener can only be a ZBrush 2026+ (perhaps running as well), never the one in front.
             log(f"pick #{seq} '{item.label}': {legacy['name']} in front, so the ZScript bridge (bridge key)")
+            before = _read_bytes(ZSCRIPT_LOG)          # before the key: the plugin may answer at once
             sent, reason = self.press_bridge_key(seq)
             self.activity.note_pick(seq, item, "zscript", sent, source, self._activity_menu, reason)
-            if not sent:
+            if sent:
+                self._watch_zscript_result(seq, before)
+            else:
                 self._drop_request(seq)
             W.nudge_mouse()
             return
@@ -1351,6 +1384,27 @@ class App:
             log(f"pick #{seq}: ZBrush reported: {'; '.join(problems)}")
             self._toast(problems[0])
 
+    def _watch_zscript_result(self, seq, before):
+        """Copies the ZScript plugin's line about pick seq into this log once it appears, since the plugin keeps
+        only the last pick. An older pick still waiting is given up: the plugin has carried out the picks in order."""
+        if self._zs_result is not None:
+            self._zs_result_tick(final=True)
+        self._zs_result = [seq, before, time.time() + ZS_RESULT_S]
+        W.SetTimer(self.ctrl, TIMER_ZS_RESULT, 100, None)
+
+    def _zs_result_tick(self, final=False):
+        seq, before, give_up = self._zs_result
+        got = _zscript_result(seq, before)
+        if got is None and not final and time.time() < give_up:
+            return
+        self._zs_result = None
+        W.KillTimer(self.ctrl, TIMER_ZS_RESULT)
+        if got is not None:
+            log(f"pick #{seq} result: {got}")
+        else:
+            log(f"pick #{seq}: the ZScript plugin wrote no result" + ("" if final else f" in {ZS_RESULT_S} s") +
+                " (a macro ends its script before it can; otherwise the bridge key did not reach Apply)")
+
     def press_bridge_key(self, seq):
         key = self.cfg.bridge_key
         if key is None:
@@ -1395,6 +1449,7 @@ class App:
         self.activity.note_elevated(any(self._elevated.values()))
 
     def _watch_target(self):
+        _trim_log()                     # every 3 s, not only at start: a long session must not grow the log for ever
         self._check_elevated()
         if not self.exit_with_target:
             return

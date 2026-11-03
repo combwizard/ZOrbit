@@ -16,10 +16,12 @@ All notable changes to this project are listed here. The format follows
 - An open browser now changes theme the moment you pick one in Studio, instead of up to half a second later.
 - ZOrbit is now built and tested on Python 3.14 instead of 3.12. The packaged app bundles the new interpreter; running from a checkout needs Python 3.14.
 - On Settings, the **Browser** card now comes before **ZBrush bridge**. The "On this page" list follows the new order.
+- In ZBrush 2022 to 2025, `radiald.log` now keeps what every pick did (`pick #12 result: ...`), copied from `zscript_bridge.log`, which only holds the last one. A pick with no result in 15 seconds is logged too.
 
 ### Fixed
 
 - In ZBrush 2022 to 2025, picking an alpha, material or texture whose file is named differently from its name in the menu no longer imports it again every time. The plugin now looks for the button ZBrush names after the file.
+- `app_stderr.log` no longer grows for ever: it moves to `app_stderr.log.old` at 200 KB. `radiald.log` is now kept under 1 MB while the app runs, not only when it starts.
 
 ## [0.16.0] - 2026-11-02
 

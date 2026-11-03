@@ -286,3 +286,16 @@ def test_a_request_held_back_for_a_long_stroke_is_still_carried_out(bridge):
     bridge.apply_request("listener, after stroke")
     assert bridge.stub.presses() == ["Brush:Standard"]
     assert "ignored" not in log_text(bridge)
+
+
+def test_the_app_output_log_moves_aside_when_it_grows(bridge, monkeypatch, tmp_path):
+    # The app prints every log line, so app_stderr.log would gain a copy of radiald.log on every start.
+    errlog = Path(bridge.DATA_DIR) / "app_stderr.log"
+    errlog.write_bytes(b"x" * 200_001)
+    started = []
+    monkeypatch.setattr(bridge.subprocess, "Popen", lambda cmd, **kw: started.append(kw["stdout"].name))
+    bridge._spawn([str(tmp_path / "ZOrbit.exe")], "app_stderr.log")
+    assert (Path(bridge.DATA_DIR) / "app_stderr.log.old").stat().st_size == 200_001
+    assert errlog.stat().st_size == 0 and started == [str(errlog)]
+    bridge._spawn([str(tmp_path / "ZOrbit.exe")], "app_stderr.log")     # small again: kept as it is
+    assert (Path(bridge.DATA_DIR) / "app_stderr.log.old").stat().st_size == 200_001

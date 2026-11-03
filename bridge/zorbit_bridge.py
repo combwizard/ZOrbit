@@ -364,6 +364,14 @@ def _spawn(cmd, errlog_name=None):
     # PYTHONHOME/PYTHONPATH can die before running a line, so drop every PYTHON* variable.
     env = {k: v for k, v in os.environ.items() if not k.upper().startswith("PYTHON")}
     os.makedirs(DATA_DIR, exist_ok=True)
+    if errlog_name:
+        # The app prints every log line too, so this file would grow by a copy of radiald.log on every start.
+        errlog = os.path.join(DATA_DIR, errlog_name)
+        try:
+            if os.path.getsize(errlog) > 200_000:
+                os.replace(errlog, errlog + ".old")
+        except OSError:
+            pass
     out = open(os.path.join(DATA_DIR, errlog_name), "a", encoding="utf-8") if errlog_name else subprocess.DEVNULL
     try:
         return subprocess.Popen(cmd, cwd=os.path.dirname(cmd[0]), env=env, creationflags=flags, close_fds=True,
