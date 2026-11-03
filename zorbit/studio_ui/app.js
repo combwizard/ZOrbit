@@ -787,7 +787,7 @@ function makePlayer(getImg, restore, onState) {
     try { res = await FrameLoader.get(menuId, ringAnim); } catch (e) { /* toast below */ }
     if (tok !== p.token) return;
     if (!res || !res.frames || !res.frames.length) {
-      set('idle'); toast((res && res.problems && res.problems[0]) || 'Could not render the animation.', { tone: 'warn' }); return;
+      set('idle'); toast((res && res.problems && res.problems[0]) || 'Could not render the animation.', { tone: 'warn' }); restore(); return;
     }
     set('playing');
     let i = 0;
@@ -2619,7 +2619,7 @@ function buildMenuProps() {
 
   if (full && S.opts && S.opts.looks) box.append(sectionTitle('Look', 'Shapes, hub, glow and colours of this menu'), buildMenuLook(id));
 
-  const animTitle = a => a[0].toUpperCase() + a.slice(1);
+  const animTitle = a => { const t = typeof a === 'string' ? a : String(a === undefined || a === null ? '' : a); return t ? t[0].toUpperCase() + t.slice(1) : ''; };
   const ringAnim = () => ring().animation || S.defaults.animation;
   box.append(sectionTitle('Open animation'), h('div', { class: 'field' }, h('div', { class: 'fhint' },
     m.animation ? 'Opens with ' + animTitle(m.animation) + '. ' : 'Opens like all menus (' + animTitle(ringAnim()) + '). ',

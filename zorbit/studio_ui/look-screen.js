@@ -31,7 +31,7 @@
   /* The open animation plays into the preview's picture. One player for the screen: a rebuild stops it and points lookImg at the new picture;
      paintPlay is the current build's way of showing the state (the stage class and the Play button). */
   let lookImg = null, paintPlay = null;
-  const lookPlayer = K.makePlayer(() => lookImg, () => { if (R.preview) R.preview(); }, st => { if (paintPlay) paintPlay(st); });
+  const lookPlayer = K.makePlayer(() => lookImg, () => { if (S.screen === 'look' && R.preview) R.preview(); }, st => { if (paintPlay) paintPlay(st); });      // R belongs to the next screen once Look is left
   const slotT = () => Z.isSlot(view.target);
   const target = () => view.target;
   const presetsOn = () => Z.hasPresets(lookCtx());
@@ -310,7 +310,7 @@
 
     /* ---- the open animation, played on the preview */
     let playBtn = null;                                         // the Play button of the Opening group, when the group is on show
-    const animTitle = a => a[0].toUpperCase() + a.slice(1);
+    const animTitle = a => { const t = typeof a === 'string' ? a : String(a === undefined || a === null ? '' : a); return t ? t[0].toUpperCase() + t.slice(1) : ''; };
     paintPlay = st => {
       stage.classList.toggle('playing', st === 'playing');      // hides the dashed circle and the hover marks, and ignores the pointer
       if (st !== 'idle') { hoverPtr = null; stage.classList.remove('over-slot'); }
@@ -702,10 +702,15 @@
       for (const b of $$('.choice', tiles)) b.dataset.fk = 'look:animation/' + (b.dataset.v || 'inherit');
       playBtn = h('button', { class: 'btn small', type: 'button', dataset: { fk: 'look:opening-play' }, onclick: playNow }, icon('play', 12), 'Play');
       const row = [playBtn];
-      if (!atMenu && K.ring().animation) row.push(h('button', { class: 'btn small', type: 'button', dataset: { fk: 'look:animation/reset' }, title: 'Go back to the default (' + animTitle(S.defaults.animation) + ')',
-        onclick: () => { delete K.ensureRing().animation; tidyRing(); commit(); R.look(); } }, icon('undo', 12), 'Reset to default'));
+      const ringSet = K.ring().animation !== undefined && K.ring().animation !== S.defaults.animation;       // the starter file holds the default; that is not a choice
+      if (!atMenu && ringSet) row.push(h('button', { class: 'btn small', type: 'button', dataset: { fk: 'look:animation/reset' }, title: 'Go back to the default (' + animTitle(S.defaults.animation) + ')',
+        onclick: () => {
+          delete K.ensureRing().animation; tidyRing(); commit(); R.look();
+          const on = $('#look-g-opening .choice.on'); if (on) on.focus({ preventScroll: true });
+          if (R.lookPlay) R.lookPlay();
+        } }, icon('undo', 12), 'Reset to default'));
       const origin = atMenu ? (m && m.animation ? 'Set for this menu only.' : 'This menu follows the animation for all menus.')
-        : K.ring().animation ? 'Set for all menus.' : 'The default. Every menu uses it unless it has its own.';
+        : ringSet ? 'Set for all menus.' : 'The default. Every menu uses it unless it has its own.';
       const own = atMenu ? [] : Object.entries(S.cfg.menus).filter(([, mm]) => mm && mm.animation);
       const goOwn = id => { view.last = id; view.target = { level: 'menu', menu: id }; view.back = null; R.look(); if (R.lookGoto) R.lookGoto('animation', 'opening'); };
       return card('Opening', 'How the ring appears', h('div', { class: 'btn-row', style: { marginBottom: '10px' } }, ...row), tiles, h('div', { class: 'fhint', style: { marginTop: '8px' } }, origin),
