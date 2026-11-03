@@ -22,7 +22,8 @@ The lists below group issues by area. This is the order to take them in, worked 
      `File:Open`, `Preferences:Config:Load Ui`.)
    - [#103](https://github.com/combwizard/ZOrbit/issues/103) on the current window code.
    - [#23](https://github.com/combwizard/ZOrbit/issues/23) whenever a standard (non-admin) account is to hand.
-2. **Medium:** [#108](https://github.com/combwizard/ZOrbit/issues/108) first (small);
+2. **Medium:** [#108](https://github.com/combwizard/ZOrbit/issues/108) first (small), then
+   [#109](https://github.com/combwizard/ZOrbit/issues/109) (pick hide, dim or a message first);
    [#99](https://github.com/combwizard/ZOrbit/issues/99) then
    [#94](https://github.com/combwizard/ZOrbit/issues/94) (`--profile next` is the hotkey's plumbing);
    [#106](https://github.com/combwizard/ZOrbit/issues/106) (timer inside the browser);
@@ -66,6 +67,7 @@ Issues #105, #34, #94 and #39 all edit `studio_ui/app.js`, so merge them one at 
 
 - [ ] [#106](https://github.com/combwizard/ZOrbit/issues/106) Quit after a while unused and start again on the next press
 - [ ] [#108](https://github.com/combwizard/ZOrbit/issues/108) Picks fall back to the bridge key when the browser was opened before the app
+- [ ] [#109](https://github.com/combwizard/ZOrbit/issues/109) With an older ZBrush in front, items it can't load are listed and picking one does nothing
 - [x] [#97](https://github.com/combwizard/ZOrbit/issues/97) Show a theme picked in Studio at once, not on the next half-second check
 
 ## Themes, profiles and platforms
