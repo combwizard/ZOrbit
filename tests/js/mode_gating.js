@@ -54,12 +54,18 @@ test('a look picked for a menu by name is not a Full setting; one with settings 
   assert(needs(cfg));
 });
 
-test('an open animation, fan out or a swallowed hotkey turned off on a menu needs Full', () => {
-  for (const set of [m => { m.animation = 'spin'; }, m => { m.fan = true; }, m => { m.swallow = false; }]) {
+test('fan out or a swallowed hotkey turned off on a menu needs Full', () => {
+  for (const set of [m => { m.fan = true; }, m => { m.swallow = false; }]) {
     const cfg = fresh();
     set(cfg.menus.main);
     assert(needs(cfg));
   }
+});
+
+test('an open animation on a menu does not need Full: Look sets it in both modes', () => {
+  const cfg = fresh();
+  cfg.menus.main.animation = 'spiral';
+  assert(!needs(cfg));
 });
 
 test('a Full ring setting that differs from the default needs Full', () => {
@@ -84,13 +90,14 @@ test('problem targets: a named look, Swallow hotkey and Fan out switch to Full; 
   assert(target({ kind: 'menu', menuId: 'main', field: 'swallow' }));
   assert(target({ kind: 'menu', menuId: 'main', field: 'fan' }));
   assert(target({ kind: 'menu', menuId: 'main', field: 'id' }));
-  assert(target({ kind: 'menu', menuId: 'main', field: 'animation' }));
   assert(target({ kind: 'look', level: 'global', key: 'hub' }));
   assert(target({ kind: 'look', level: 'menu', menuId: 'main', slot: 0 }));
   assert(target({ kind: 'settings', card: 'set-zbrush-bridge' }));
 });
 
 test('problem targets: the everyday places stay in Simple', () => {
+  assert(!target({ kind: 'look', level: 'menu', menuId: 'main', key: 'animation', group: 'opening' }));
+  assert(!target({ kind: 'look', level: 'global', key: 'animation', group: 'opening' }));
   assert(!target({ kind: 'look', level: 'global', key: 'radius' }));
   assert(!target({ kind: 'look', level: 'menu', menuId: 'main', key: 'slot_shape' }));
   assert(!target({ kind: 'menu', menuId: 'main', field: 'hotkey' }));

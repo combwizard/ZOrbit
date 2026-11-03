@@ -14,12 +14,13 @@ All notable changes to this project are listed here. The format follows
 
 ### Changed
 
-- Studio: on the Look screen the **Preview menu** list sits directly under the ring preview, as a compact list centred under the picture, and the gallery of looks follows it (#124).
 - **Setup** has three steps. A step that is done folds to one line you can open again. **Your brushes** and **What's where** are gone; Setup ends with a **Next** row of links to the screens and **Take the tour**. The tour is six stops instead of ten.
 - An open browser now changes theme the moment you pick one in Studio, instead of up to half a second later.
 - ZOrbit is now built and tested on Python 3.14 instead of 3.12. The packaged app bundles the new interpreter; running from a checkout needs Python 3.14.
-- **Settings** is shorter and in a better order: **Theme** and **Behaviour** come first, then **Ring look**, **Open animation**, **Studio**, **Import and export**, and in Full mode **ZBrush bridge** and **Older ZBrush**. The browser hotkey is a row at the end of **Behaviour**, in both modes, and the **Browser** and **Tags** cards are gone (the **Browser** button in the top bar stays; **Manage tags...** in the Library now shows the path of the tags file). The **Theme** card no longer has an **Experimental** badge; its hint still says so.
-- On **Look**, the gallery of looks now sits right under the ring preview, above the **Preview menu** list, so it shows when the screen opens. Simple mode names its levels **All menus** and **This menu**, as Full does, and no longer has an **Applies to** label.
+- **Settings** is shorter and in a better order: **Theme** and **Behaviour** come first, then **Studio**, **Import and export**, and in Full mode **ZBrush bridge** and **Older ZBrush**. The browser hotkey is a row at the end of **Behaviour**, in both modes, and the **Browser** and **Tags** cards are gone (the **Browser** button in the top bar stays; **Manage tags...** in the Library now shows the path of the tags file). The **Theme** card no longer has an **Experimental** badge; its hint still says so.
+- The open animation is set on the **Look** screen, in a new **Opening** group, and plays on the preview there. A menu can pick its own there, in Simple mode too, and the **Menu** tab links to it. The **Ring look** and **Open animation** cards are gone from Settings.
+- On **Look**, the **Preview menu** list is a compact list centred right under the ring preview, and the gallery of looks follows it, so both show when the screen opens (#124). Simple mode names its levels **All menus** and **This menu**, as Full does, and no longer has an **Applies to** label.
+- In Full mode the groups on the **Look** screen fold: **Slots** is open and the others show a one-line summary until you open them, and a group with settings of its own opens by itself. The **Menu** tab keeps Id, **Look**, the **Open animation** line and **Fan out when opened from another menu** under a **More** section. (#115)
 - In ZBrush 2022 to 2025, `radiald.log` now keeps what every pick did (`pick #12 result: ...`), copied from `zscript_bridge.log`, which only holds the last one. A pick with no result in 15 seconds is logged too.
 
 ### Fixed

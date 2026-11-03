@@ -23,11 +23,7 @@ worked out.
      `File:Open`, `Preferences:Config:Load Ui`.)
    - [#103](https://github.com/combwizard/ZOrbit/issues/103) on the current window code.
    - [#23](https://github.com/combwizard/ZOrbit/issues/23) whenever a standard (non-admin) account is to hand.
-2. **Studio, Simple and Full, in this order:** [#112](https://github.com/combwizard/ZOrbit/issues/112) (quick wins),
-   [#113](https://github.com/combwizard/ZOrbit/issues/113) (open animation on Look), then
-   [#115](https://github.com/combwizard/ZOrbit/issues/115) (folding groups). One PR each; they all edit
-   `studio_ui/app.js`, so merge them one at a time. #111 (gating fixes) and #114 (Setup and tour) are done.
-3. **Medium:** [#108](https://github.com/combwizard/ZOrbit/issues/108) first (small), then
+2. **Medium:** [#108](https://github.com/combwizard/ZOrbit/issues/108) first (small), then
    [#109](https://github.com/combwizard/ZOrbit/issues/109) (pick hide, dim or a message first);
    [#99](https://github.com/combwizard/ZOrbit/issues/99) then
    [#94](https://github.com/combwizard/ZOrbit/issues/94) (`--profile next` is the hotkey's plumbing);
@@ -37,10 +33,10 @@ worked out.
    [#24](https://github.com/combwizard/ZOrbit/issues/24) if the check in step 1 works out;
    [#104](https://github.com/combwizard/ZOrbit/issues/104) (the #103 checks of 3 Nov failed on monitors of
    different sizes and found no snap layouts flyout; #103's checks are its test list).
-4. **Ring look, back to back:** [#37](https://github.com/combwizard/ZOrbit/issues/37) (band helper), then
+3. **Ring look, back to back:** [#37](https://github.com/combwizard/ZOrbit/issues/37) (band helper), then
    [#35](https://github.com/combwizard/ZOrbit/issues/35) (`Item.colors`), then
    [#36](https://github.com/combwizard/ZOrbit/issues/36). Retake the ring pictures once at the end.
-5. **Design first:** [#98](https://github.com/combwizard/ZOrbit/issues/98),
+4. **Design first:** [#98](https://github.com/combwizard/ZOrbit/issues/98),
    [#39](https://github.com/combwizard/ZOrbit/issues/39) then [#40](https://github.com/combwizard/ZOrbit/issues/40)
    (settle the favourites data first),
    [#26](https://github.com/combwizard/ZOrbit/issues/26) last. Keep new IPC code out of `win32.py` and `radiald.py`.
