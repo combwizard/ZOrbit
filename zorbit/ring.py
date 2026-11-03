@@ -75,6 +75,8 @@ SLOT_GAP = layout.SLOT_GAP       # neighbouring slot centres are at least this m
 SPRITE_MENUS = 8            # menus whose sprites are kept between opens
 _instances = {}
 _sprite_cache = OrderedDict()   # key (see Ring._sprite_key) -> (sprites, labels, dot), least recently used first
+SLOT_SPRITES = 160          # single slots kept, so a menu that changed by one slot redraws only that slot
+_slot_cache = OrderedDict()     # key (see Ring._slot_key) -> (slot sprites, label sprites), least recently used first
 _sprite_lock = threading.Lock()
 _class_registered = False
 _wndproc_ref = None
@@ -204,6 +206,22 @@ def _sprite_get(key):
         if val is not None:
             _sprite_cache.move_to_end(key)
         return val
+
+
+def _slot_get(key, make):
+    """One slot's (sprites, label) for key, from _slot_cache or made now. A menu whose whole-menu entry missed
+    (a slot added, moved or changed) then draws only the slots that are new."""
+    with _sprite_lock:
+        val = _slot_cache.get(key)
+        if val is not None:
+            _slot_cache.move_to_end(key)
+            return val
+    val = make()
+    with _sprite_lock:
+        _slot_cache[key] = val
+        while len(_slot_cache) > SLOT_SPRITES:
+            _slot_cache.popitem(last=False)
+    return val
 
 
 def _sprite_put(key, val):
@@ -1131,9 +1149,11 @@ class Ring:
         cached = _sprite_get(key)
         hit = cached is not None
         if not hit:
-            cached = ([self._slot_sprites(it, self.sizes[i]) for i, it in enumerate(self.items)],
-                      [self._label_sprites(it, self.sizes[i]) for i, it in enumerate(self.items)],
-                      self._dot_sprite())
+            per = [_slot_get(self._slot_key(it, self.sizes[i]),
+                             lambda it=it, i=i: (self._slot_sprites(it, self.sizes[i]),
+                                                 self._label_sprites(it, self.sizes[i])))
+                   for i, it in enumerate(self.items)]
+            cached = ([p[0] for p in per], [p[1] for p in per], self._dot_sprite())
             _sprite_put(key, cached)
         self.sprites, self.labels, self._dot = cached
         ms = (time.perf_counter() - t0) * 1000
@@ -1161,6 +1181,12 @@ class Ring:
         if self.look.hub > 0 and self.look.hub_style == "icon":
             hub = (getattr(self.menu, "icon", "") or "", self.menu.title, _icon_sig(self._hub_icon()))   # the menu's icon
         return self.menu.id, items, self.look.sig, self.scale, hub
+
+    def _slot_key(self, it, size):
+        """What one slot's sprites and label are drawn from: the item, its icon by content, whether it fans out,
+        its width, and the ring's look, scale and slot size."""
+        return (_item_sig(it), _icon_sig(self._icon(it)), self._fans_out(it) if it.kind == "menu" else False,
+                size, self.look.sig, self.scale, self.slot)
 
     def _slot_sprites(self, it, size=None, look=None):
         """(idle, hover) RGBA sprites, drawn at the 1.12x hover size so scaling always reduces. size: the slot's

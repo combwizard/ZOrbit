@@ -289,6 +289,6 @@ With the switch on:
 - **Alt+Up** and **Alt+Down** swap an item with its neighbour. In the item list, dropping an item on a row swaps the two, or puts it there if the row is empty.
 - **+** and **−** at the top left of the ring preview add an empty slot at the end or remove the last slot, and the count beside them says how many slots the menu has. **−** only removes an empty slot; while the last slot holds an item it is greyed out, with the note "The last slot is in use".
 
-With the switch off, a new item goes in between two slots and the ones after it move along, and a deleted item leaves no gap.
+With the switch off, a new item goes in between two slots and the ones after it move along, and a deleted item leaves no gap. Switching it off also removes the menu's empty slots, so the items close up round the ring. The toast says how many went, and **Undo** brings them back.
 
 An older version of ZOrbit skips the empty slots, so the items after each one close up, and it warns that `keep_slots` is an unknown setting.

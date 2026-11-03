@@ -1163,7 +1163,9 @@ function refreshRegions(inspector) {
   if (R.badges) R.badges();
   if (inspector && R.right && S.tab !== 'brushes') R.right();
 }
-function commit({ inspector = false } = {}) { touch(); refreshRegions(inspector); }
+/* now: ask for the ring picture at once instead of after previewSoon's pause, for a single click (+, -, a swap) rather than typing.
+   Quick clicks still cost at most one picture in flight and one waiting, since the loader keeps only the latest request. */
+function commit({ inspector = false, now = false } = {}) { touch(); refreshRegions(inspector); if (now && R.preview) { previewSoon.cancel(); R.preview(); } }
 function renderAllMenus() { refreshRegions(true); if (R.head) R.head(); }
 
 /* History entries are { cfg, menuId, itemIdx, id }: cfg is the JSON string (cheap to compare), the selection is where the
@@ -1338,6 +1340,22 @@ function moveMenu(id, beforeId) {
 /* A menu that keeps its slots in place (keep_slots): adding puts an item in the first empty slot, deleting empties its slot and a drag swaps two slots,
    so no other item moves (slots.js). Without the switch an item is inserted and removed with the ones after it shifting, as ever. */
 const keeps = m => !!m && m.keep_slots === true;
+/* The Keep slots in place switch. Off, the menu closes up like any other, so its empty slots go; on, nothing moves. Either way it is one undo step. */
+function setKeepSlots(menuId, on) {
+  const m = menuOf(menuId); if (!m || keeps(m) === on) return;
+  const title = m.title || menuId, sel = menuId === S.menuId ? curItem() : null;
+  sealSnap();
+  let gone = 0;
+  if (on) m.keep_slots = true;
+  else {
+    delete m.keep_slots;
+    const kept = m.items.filter(it => !ZSlots.isEmpty(it));
+    gone = m.items.length - kept.length; m.items = kept;
+    if (menuId === S.menuId) { const j = sel ? kept.indexOf(sel) : -1; S.itemIdx = j >= 0 ? j : null; if (S.itemIdx === null && S.tab === 'item') S.tab = 'menu'; }
+  }
+  commit({ inspector: true, now: gone > 0 }); if (R.head) R.head();
+  undoToast(on ? `Slots in "${title}" now stay in place` : `Slots in "${title}" no longer stay in place` + (gone ? `. Removed ${plural(gone, 'empty slot')}.` : ''), { ms: 3800 });
+}
 /* Where the selection goes after the item at i left the list. */
 function dropSel(m, menuId, i) {
   if (menuId !== S.menuId) return;
@@ -1426,7 +1444,7 @@ function swapSlots(menuId, a, b) {
   if (menuId === S.menuId && R.glide) R.glide([...(ZSlots.isEmpty(m.items[a]) ? [] : [[a, b]]), ...(ZSlots.isEmpty(m.items[b]) ? [] : [[b, a]])]);
   if (!ZSlots.swap(m.items, a, b)) return;
   if (sel) S.itemIdx = m.items.indexOf(sel);
-  commit({ inspector: true });
+  commit({ inspector: true, now: menuId === S.menuId });
   flashRow(menuId, a); flashRow(menuId, b);
 }
 /* Moves item `index` of menu fromId to the end of menu toId (the first empty slot when that menu keeps its slots), or copies it there (a deep copy) when `copy` is set. */
@@ -1964,11 +1982,11 @@ function buildStage() {
   const minusBtn = iconBtn('minus', 'Remove the last slot', () => {
     const m = curMenu(); if (!keeps(m) || !ZSlots.trimEnd(m.items)) return;
     if (S.itemIdx !== null && S.itemIdx >= m.items.length) { S.itemIdx = null; if (S.tab === 'item') S.tab = 'menu'; }
-    commit({ inspector: true }); if (R.head) R.head();
+    commit({ inspector: true, now: true }); if (R.head) R.head();
   });
   const plusBtn = iconBtn('plus', 'Add an empty slot at the end', () => {
     const m = curMenu(); if (!keeps(m)) return;
-    ZSlots.addSlot(m.items); commit({ inspector: true }); if (R.head) R.head();
+    ZSlots.addSlot(m.items); commit({ inspector: true, now: true }); if (R.head) R.head();
   });
   const slotsN = h('span', { class: 'slots-n mono' });
   const slotsBar = h('div', { class: 'stage-slots', role: 'group', 'aria-label': 'Number of slots', hidden: true }, minusBtn, slotsN, plusBtn);
@@ -2599,7 +2617,7 @@ function buildMenuProps() {
 
   box.append(h('div', { class: 'field row' }, h('div', { class: 'grow' }, h('span', { class: 'flabel' }, 'Keep slots in place'),
     h('div', { class: 'fhint' }, 'Deleting leaves an empty slot and dropping swaps two slots, so the other items never move.')),
-    toggleSwitch(keeps(m), v => { if (v) m.keep_slots = true; else delete m.keep_slots; commit(); }, 'Keep slots in place')));
+    toggleSwitch(keeps(m), v => setKeepSlots(S.menuId, v), 'Keep slots in place')));
 
   const swallowSw = toggleSwitch(m.swallow !== false, v => { if (v) delete m.swallow; else m.swallow = false; commit(); }, 'Swallow hotkey');
   const swallowNeed = h('div', { class: 'fhint warn' }, 'Set a hotkey first.');
@@ -5756,7 +5774,7 @@ function describeChanges() {
   const after = S.cfg || {};
   const groups = [];
   const q = s => '\u201c' + s + '\u201d';
-  const itemName = it => it.label || it.brush || it.alpha || it.material || it.texture || it.press || it.toggle || it.set || (it.menu ? 'Submenu ' + it.menu : it.steps ? 'Steps' : it.tag ? 'Tag ' + it.tag : 'browser' in it ? 'Browser' + (it.browser ? ' ' + it.browser : '') : 'item');
+  const itemName = it => it.empty === true ? 'Empty slot' : it.label || it.brush || it.alpha || it.material || it.texture || it.press || it.toggle || it.set || (it.menu ? 'Submenu ' + it.menu : it.steps ? 'Steps' : it.tag ? 'Tag ' + it.tag : 'browser' in it ? 'Browser' + (it.browser ? ' ' + it.browser : '') : 'item');
   const bm = before.menus || {}, am = after.menus || {};
   for (const id of Object.keys(am)) {
     const a = am[id] || {}, b = own(bm, id) ? bm[id] : undefined;
@@ -5768,6 +5786,8 @@ function describeChanges() {
     if ((a.animation || '') !== (b.animation || '')) lines.push('Open animation: ' + (b.animation || 'same as Settings') + ' \u2192 ' + (a.animation || 'same as Settings'));
     if ((a.fan === true) !== (b.fan === true)) lines.push('Fan out as a submenu: ' + (b.fan === true ? 'on' : 'off') + ' \u2192 ' + (a.fan === true ? 'on' : 'off'));
     if ((a.swallow !== false) !== (b.swallow !== false)) lines.push('Swallow hotkey: ' + (b.swallow !== false ? 'on' : 'off') + ' \u2192 ' + (a.swallow !== false ? 'on' : 'off'));
+    if ((a.keep_slots === true) !== (b.keep_slots === true)) lines.push('Keep slots in place: ' + (b.keep_slots === true ? 'on' : 'off') + ' \u2192 ' + (a.keep_slots === true ? 'on' : 'off'));
+    if ((a.icon || '') !== (b.icon || '')) lines.push('Hub icon: ' + (b.icon || 'none') + ' \u2192 ' + (a.icon || 'none'));
     if (JSON.stringify(a.look) !== JSON.stringify(b.look)) {
       const tb = ZLook.summary(before, { level: 'menu', menu: id }, lookCtx()).text, ta = ZLook.summary(after, { level: 'menu', menu: id }, lookCtx()).text;
       lines.push(tb === ta ? 'Look settings changed (' + ta + ')' : 'Look: ' + tb + ' \u2192 ' + ta);
@@ -5784,8 +5804,11 @@ function describeChanges() {
       const i = added.findIndex(x => itemName(x) === itemName(r));
       if (i >= 0) { changed.push([added[i], r]); added.splice(i, 1); removed.splice(removed.indexOf(r), 1); }
     }
-    for (const it of added) lines.push('Added ' + q(itemName(it)));
-    for (const it of removed) lines.push('Removed ' + q(itemName(it)));
+    const blanks = l => l.filter(it => it && it.empty === true).length;      // empty slots are counted, not named one by one
+    if (blanks(added)) lines.push('Added ' + plural(blanks(added), 'empty slot'));
+    if (blanks(removed)) lines.push('Removed ' + plural(blanks(removed), 'empty slot'));
+    for (const it of added) if (!(it && it.empty === true)) lines.push('Added ' + q(itemName(it)));
+    for (const it of removed) if (!(it && it.empty === true)) lines.push('Removed ' + q(itemName(it)));
     for (const [it, was] of changed) {
       const bare = x => { const c = Object.assign({}, x); delete c.style; return JSON.stringify(c); };
       lines.push(bare(it) === bare(was) ? 'Style of ' + q(itemName(it)) + ' changed' : 'Changed ' + q(itemName(it)));      // only the style differs
@@ -5795,6 +5818,7 @@ function describeChanges() {
     for (const k of kept) left.set(k, (left.get(k) || 0) + 1);
     const keptBefore = bi.map(key).filter(k => (left.get(k) || 0) > 0 && left.set(k, left.get(k) - 1));
     if (JSON.stringify(keptBefore) !== JSON.stringify(kept)) lines.push('Items reordered');
+    if (!lines.length && JSON.stringify(a) !== JSON.stringify(b)) lines.push('Changed');      // a setting this list has no words for yet
     if (lines.length) groups.push({ area: 'Menu ' + q(title), lines });
   }
   for (const id of Object.keys(bm)) if (!am[id]) groups.push({ area: 'Menu ' + q(bm[id].title || id), lines: ['Deleted'] });
@@ -5843,9 +5867,9 @@ function unsavedBody(doing, intro) {
   const count = groups.reduce((n, g) => n + g.lines.length, 0);
   return h('div', { class: 'changes' },
     h('p', null, intro ? intro(count) : count ? `You have ${count} unsaved change${count === 1 ? '' : 's'}. ${doing} without saving loses ${count === 1 ? 'it' : 'them'}.` : `You have unsaved changes. ${doing} without saving loses them.`),
-    h('div', { class: 'changes-list' }, groups.map(g => h('div', { class: 'chg-group' },
+    groups.length ? h('div', { class: 'changes-list' }, groups.map(g => h('div', { class: 'chg-group' },
       h('div', { class: 'micro' }, g.area),
-      h('ul', null, g.lines.map(l => h('li', null, l)))))));
+      h('ul', null, g.lines.map(l => h('li', null, l)))))) : null);
 }
 async function openCloseDialog() {
   if (S.closeDialogOpen) return;

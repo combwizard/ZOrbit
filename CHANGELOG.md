@@ -8,7 +8,7 @@ All notable changes to this project are listed here. The format follows
 
 ### Added
 
-- **Empty slots** (#110): an `{"empty": true}` item keeps its place in the ring with nothing in it. With **Keep slots in place** on (the **Menu** tab), adding, deleting or dragging an item in Studio leaves the others where they are: a delete leaves an empty slot, a new item fills the first one, and a drag swaps two slots. **+** and **−** on the ring preview add and remove slots. It is on for new menus and the starter menus.
+- **Empty slots** (#110): an `{"empty": true}` item keeps its place in the ring with nothing in it. With **Keep slots in place** on (the **Menu** tab), adding, deleting or dragging an item in Studio leaves the others where they are: a delete leaves an empty slot, a new item fills the first one, and a drag swaps two slots. **+** and **−** on the ring preview add and remove slots. Switching it off removes the menu's empty slots. It is on for new menus and the starter menus.
 - A **Match** switch for tag filters, in the Library and the browser. With two or more tags chosen, **Any** (the default) shows items with at least one of them and **All** shows only items with every one. Under **All**, each tag's number is what choosing it would leave.
 - **Tag fan slots** in Settings (Full mode) sets how many slots a tag fan holds, from 4 to 24 (`ring.tag_limit` in `radial.json`). It stays at 12 unless you change it.
 

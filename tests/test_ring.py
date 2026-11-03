@@ -42,8 +42,10 @@ def make_ring(menu=None, icon_for=None, log=None, **over):
 @pytest.fixture(autouse=True)
 def empty_sprite_cache():
     ring._sprite_cache.clear()
+    ring._slot_cache.clear()
     yield
     ring._sprite_cache.clear()
+    ring._slot_cache.clear()
 
 
 # --- radius ------------------------------------------------------------------------------------
@@ -1558,3 +1560,15 @@ def test_the_layout_map_keeps_the_empty_slots():
     lay = ring.Ring.preview(menu, make_cfg(), lambda it: None).info["layout"]
     assert [s["i"] for s in lay["slots"]] == list(range(6))
     assert lay["full"]["n"] == 6
+
+
+def test_a_slot_added_to_a_menu_draws_only_that_slot(monkeypatch):
+    """Studio's + adds one slot: the menu's sprites miss, but every slot that was there comes from the slot cache."""
+    ring.Ring.preview(menu_with_gaps("bbbe"), make_cfg(), lambda it: None)
+    drawn = []
+    real = ring.Ring._slot_sprites
+    monkeypatch.setattr(ring.Ring, "_slot_sprites", lambda self, it, *a, **k: drawn.append(it.kind) or real(self, it, *a, **k))
+    ring.Ring.preview(menu_with_gaps("bbbee"), make_cfg(), lambda it: None)
+    assert drawn == []                                   # the new slot is an empty one like the last: same picture
+    ring.Ring.preview(menu_with_gaps("bbbeeb"), make_cfg(), lambda it: None)
+    assert drawn == ["brush"]                            # Item 5 is new; Items 0 to 2 and the empty slots are not
