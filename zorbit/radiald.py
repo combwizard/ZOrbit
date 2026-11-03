@@ -91,6 +91,7 @@ ACK_HOLD_MAX_S = 30                   # ... but not while the left button is dow
 LEGACY_SCAN_S = 60                    # how long the scan for ZBrush 2022-2025 installations is kept
 TIMER_WATCH, TIMER_ACK, TIMER_REHOOK, TIMER_CONFIG, TIMER_BROWSER_PICK, TIMER_PREWARM, TIMER_POPOUT_SHOW = range(1, 8)
 COPYDATA_PICK, COPYDATA_SHOW, COPYDATA_QUIT = 1, 10, 12   # WM_COPYDATA ids: popout -> app, app -> popout
+COPYDATA_THEME = 13                                       # Studio -> popout: look at the theme now (no payload)
 POPOUT_CLASS = "ZOrbitPopoutCtl"      # the popout's message-only control window
 POPOUT_START_S = 15                   # a popout asked to show gets this long to appear before we ask again
 THUMB_PX = 128                        # thumbnail cache size, shared with the Studio

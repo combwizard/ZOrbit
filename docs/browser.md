@@ -21,7 +21,7 @@ A browser that was hidden (it starts hidden, and the **X** button hides it again
 
 The Studio button and the Start menu shortcut work without ZBrush running, so you can browse and tag items on their own. The browser has its own icon in the taskbar, different from ZOrbit's. The first time it appears centred on a screen. After that it comes back where, and as large as, you left it, maximised or not.
 
-The browser follows the Theme setting (**Dark**, **Light**, **Follow Windows** or **Match ZBrush**, see [Theme](appearance.md#theme)). An open browser changes within about half a second when you pick another theme in Studio, when Windows changes its colour mode under **Follow Windows**, and when ZBrush stores a new scheme under **Match ZBrush**. A hidden browser takes the change the next time it appears.
+The browser follows the Theme setting (**Dark**, **Light**, **Follow Windows** or **Match ZBrush**, see [Theme](appearance.md#theme)). An open browser changes at once when you pick another theme in Studio. It changes within about half a second when Windows changes its colour mode under **Follow Windows**, and when ZBrush stores a new scheme under **Match ZBrush**. A hidden browser takes the change the next time it appears.
 
 ## Using it
 

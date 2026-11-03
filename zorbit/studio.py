@@ -1726,6 +1726,7 @@ class Api(webapi.LibraryApi, webapi.TagApi):
             _write_studio_file(data)
         if key == "theme":
             self._apply_frame_theme()
+            _tell_popout_theme()
         return self.get_prefs()
 
     def check_update(self):
@@ -2060,6 +2061,17 @@ def _read_studio_file() -> dict:
 
 STUDIO_UNREADABLE = ("studio.json could not be read just now, so nothing was changed. If it keeps happening, "
                      "fix or delete it (it is in %APPDATA%\\ZOrbit).")
+
+
+def _tell_popout_theme():
+    """Tells an open browser to look at the theme now, so a pick in Studio shows there at once instead of at the
+    browser's next poll. No browser running is fine; so is one that does not answer."""
+    try:
+        hwnd = W.find_message_window(radiald.POPOUT_CLASS)
+        if hwnd:
+            W.send_copydata(hwnd, radiald.COPYDATA_THEME, b"")
+    except Exception as e:                      # the browser's own poll still gets there
+        _startup(f"browser theme nudge failed: {e!r}")
 
 
 def _studio_for_update() -> dict | None:

@@ -24,6 +24,7 @@ Talks to the app with WM_COPYDATA (ids in radiald.py):
                                       result 1 taken, 0 refused
   app -> ZOrbitPopoutCtl     10   SHOW {"tag": key|null, "kind": kind|null, "zbrush_hwnd": N, "toggle": bool}
   app -> ZOrbitPopoutCtl     12   QUIT (ignored while the window is up)
+  Studio -> ZOrbitPopoutCtl  13   THEME, no payload: look at the theme now (the poll still catches the other causes)
 
 SHOW: a hidden window appears (afresh: no search, this tag only, on the given tab); one that is visible comes to the front; one that
 is already in front hands the keyboard back to ZBrush when asked to toggle (the hotkey), but never closes. A pick
@@ -382,10 +383,13 @@ class Popout:
         return W.DefWindowProcW(hwnd, msg, wparam, lparam)
 
     def _on_copydata(self, lparam) -> int:
-        """SHOW and QUIT from the app. Answered at once (the sender waits); the work happens on another thread."""
+        """SHOW and QUIT from the app, THEME from Studio. Answered at once (the sender waits); the work happens on another thread."""
         cds = W.COPYDATASTRUCT.from_address(lparam)
         if cds.dwData == radiald.COPYDATA_QUIT:
             self._work.put((self.app_gone, ("the app asked",)))
+            return 1
+        if cds.dwData == radiald.COPYDATA_THEME:       # Studio saved a theme: look now, not at the next poll
+            self._work.put((self.theme_tick, ()))
             return 1
         if cds.dwData != radiald.COPYDATA_SHOW or not cds.lpData or not 0 < cds.cbData <= 4096:
             return 0
@@ -477,7 +481,9 @@ class Popout:
 
     def _watch_theme(self):
         """While the window is up, a theme picked in Studio (or Windows' colour mode, or a new stored ZBrush scheme)
-        reaches it within THEME_POLL_S, so Studio's Theme card can be tried with the browser open beside it."""
+        reaches it within THEME_POLL_S, so Studio's Theme card can be tried with the browser open beside it. A theme
+        picked in Studio also sends COPYDATA_THEME, which makes the same look at once; the poll stays for Windows'
+        colour mode and a new ZBrush scheme."""
         while not self.quitting:
             time.sleep(THEME_POLL_S)
             try:

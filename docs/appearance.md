@@ -182,7 +182,7 @@ The **Theme** card is at the top of **Settings**, in Simple and Full mode. It ha
 
 ![The Theme card on Settings: Dark, Light, Follow Windows and Match ZBrush, with Match ZBrush picked and the ZBrush version it reads shown under it](images/settings-theme.png)
 
-The theme applies to Studio, the browser and the ring. It belongs to the PC, not to a profile: it is kept as `theme` in `studio.json` (`dark`, `light`, `system` or `zbrush`), not in `radial.json`, so it is not part of an [export](files.md#import-and-export). An open [browser](browser.md) changes with it within about half a second. The plain colour Windows shows for a moment while Studio or the browser is being resized is the one the window started with; it changes when the window is next opened.
+The theme applies to Studio, the browser and the ring. It belongs to the PC, not to a profile: it is kept as `theme` in `studio.json` (`dark`, `light`, `system` or `zbrush`), not in `radial.json`, so it is not part of an [export](files.md#import-and-export). An open [browser](browser.md) changes with it at once when you pick a theme in Studio, and within about half a second when Windows or ZBrush changes. The plain colour Windows shows for a moment while Studio or the browser is being resized is the one the window started with; it changes when the window is next opened.
 
 ![The Brushes ring in the Light theme, over a light grey background: pale slots with dark labels on white pills](images/ring-light.png)
 

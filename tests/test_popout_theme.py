@@ -249,3 +249,39 @@ def test_the_frame_follows_zbrush(monkeypatch, tmp_path, zb, frames):
     pop = _pop(monkeypatch, tmp_path)
     assert popout.PopoutApi(pop).popout_theme_changed("zbrush") is True
     assert frames == [(0x1234, theme.preset("zbrush")["window"])]
+
+
+# --- Studio tells an open browser at once ----------------------------------------------------------------
+
+def _cds(dw, payload=b""):
+    import ctypes
+    buf = ctypes.create_string_buffer(payload, len(payload) or 1)
+    cds = popout.W.COPYDATASTRUCT(dw, len(payload), ctypes.cast(buf, ctypes.c_void_p))
+    return cds, buf
+
+
+def test_a_theme_message_makes_the_browser_look_now(monkeypatch, tmp_path):
+    import ctypes
+    import radiald
+    pop = _pop(monkeypatch, tmp_path)
+    cds, _keep = _cds(radiald.COPYDATA_THEME)
+    assert pop._on_copydata(ctypes.addressof(cds)) == 1
+    fn, args = pop._work.get_nowait()                  # done off the control window's thread
+    assert fn == pop.theme_tick and args == ()
+
+
+def test_studio_saving_a_theme_nudges_a_running_browser(monkeypatch):
+    import radiald
+    import studio
+    sent = []
+    monkeypatch.setattr(studio.W, "find_message_window", lambda cls: 77 if cls == radiald.POPOUT_CLASS else 0)
+    monkeypatch.setattr(studio.W, "send_copydata", lambda hwnd, dw, payload, *a: sent.append((hwnd, dw, payload)))
+    studio._tell_popout_theme()
+    assert sent == [(77, radiald.COPYDATA_THEME, b"")]
+
+
+def test_no_browser_running_means_no_nudge(monkeypatch):
+    import studio
+    monkeypatch.setattr(studio.W, "find_message_window", lambda cls: 0)
+    monkeypatch.setattr(studio.W, "send_copydata", lambda *a: pytest.fail("sent to nobody"))
+    studio._tell_popout_theme()

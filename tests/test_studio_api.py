@@ -415,6 +415,16 @@ def test_the_theme_is_saved_and_the_effective_one_is_not(api, tmp_path):
     assert "theme_effective" not in _studio_json(tmp_path)
 
 
+def test_a_saved_theme_nudges_the_browser_and_a_refused_one_does_not(api, monkeypatch):
+    nudges = []
+    monkeypatch.setattr(studio, "_tell_popout_theme", lambda: nudges.append(1))
+    api.set_pref("theme", "blue")
+    api.set_pref("check_updates", False)
+    assert nudges == []
+    api.set_pref("theme", "light")
+    assert nudges == [1]
+
+
 def test_follow_windows_is_accepted_and_resolved(api, tmp_path, monkeypatch):
     monkeypatch.setattr(theme, "_apps_use_light", lambda: True)
     res = api.set_pref("theme", "system")
