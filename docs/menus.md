@@ -9,7 +9,7 @@ A menu is a named list of items shown as one ring. Menus live in one file, `%APP
 - Items are spread evenly around the circle. **Ring radius** is a minimum: when a menu has more items than fit at that radius, the ring grows so the slots keep a gap (see [Appearance](appearance.md#appearance-and-behaviour-settings)). With the default sizes that starts at 10 items. The more items, the smaller the angle between neighbouring slots, so they get harder to hit. Studio shows a note above the item list when the ring is full, saying how many items fit and how big the ring grows. Raise **Ring radius**, lower **Slot size** or split the menu into submenus, or choose what a full ring does instead of growing (see [When a ring is full](#when-a-ring-is-full)).
 - At least one menu needs a hotkey, otherwise nothing can open the ring.
 - A menu can have its own open animation (`"animation": "spiral"`, or pick one in the **Opening** group of the Look screen at **This menu**, in Simple and Full mode). Without one it uses `ring.animation`. See [Opening](appearance.md#opening).
-- A menu can **fan out** when it is opened as a submenu (`"fan": true`, or switch on **Fan out when opened from another menu** in the menu settings in Studio's Full mode). See [Submenu](#submenu).
+- A menu can **fan out** when it is opened as a submenu (`"fan": true`, or switch on **Fan out when opened from another menu** under **More** on the **Menu** tab in Studio's Full mode). See [Submenu](#submenu).
 
 A menu has these fields, and no others (a name ZOrbit does not know is reported as a problem and ignored):
 
@@ -206,7 +206,7 @@ The steps run one straight after another. A brush, alpha, material or texture th
 
 A submenu slot has a small badge at its lower right, in the ring's highlight colour: an arrow when it opens a ring, a fan symbol when its menu is set to fan out (see below).
 
-A submenu can open another way. Give its menu `"fan": true` (or switch on **Fan out when opened from another menu** in the menu settings in Studio) and its items spread out in an arc beyond its slot, joined to it by dashed lines, instead of a new ring opening on the slot. The ring you came from stays visible. An item of a fan can itself be a submenu of a fan, and it fans out further (up to three deep). The option only matters when the menu is opened as a submenu. A menu with a hotkey still opens as a normal ring when you press it. See [Pick modes](hotkeys.md#pick-modes) for how to pick from a fan.
+A submenu can open another way. Give its menu `"fan": true` (or switch on **Fan out when opened from another menu** under **More** on the **Menu** tab in Studio's Full mode) and its items spread out in an arc beyond its slot, joined to it by dashed lines, instead of a new ring opening on the slot. The ring you came from stays visible. An item of a fan can itself be a submenu of a fan, and it fans out further (up to three deep). The option only matters when the menu is opened as a submenu. A menu with a hotkey still opens as a normal ring when you press it. See [Pick modes](hotkeys.md#pick-modes) for how to pick from a fan.
 
 ![More Brushes fanned out from the Brushes ring, with ClayTubes hovered](images/fan.png)
 

@@ -42,7 +42,7 @@ EDGE = [
 
 # Steps can use these: click(text) clicks the innermost visible element whose text starts with it (the click bubbles
 # to whatever handles it), card(name) is a Settings card by its title, alone at the top of the screen, and
-# lookGroup(name) is the same for a group on the Look screen (Slots, Hub, Labels, Colours, Tag colours, Opening).
+# lookGroup(name) is the same for a group on the Look screen (Slots, Hub, Labels, Colours, Tag colours, Opening); it opens the group if it starts folded.
 HELPERS = """
 window.click = t => new Promise((ok, fail) => { const t0 = Date.now(); (function poll() {
   const hits = [...document.querySelectorAll('body *')].filter(e => e.offsetParent && e.textContent.trim().startsWith(t));
@@ -56,6 +56,7 @@ window.card = n => { const c = document.getElementById('set-' + n.toLowerCase().
   for (const o of c.parentElement.children) if (o !== c) o.hidden = true;
   c.closest('.settings-scroll').scrollTop = 0; return c; };
 window.lookGroup = n => { const c = document.getElementById('look-g-' + ({'Tag colours': 'tags'}[n] || n.toLowerCase())); if (!c) throw new Error('no Look group ' + n);
+  const f = c.querySelector('.fold-head[aria-expanded="false"]'); if (f) f.click();     // a group the Look screen starts folded
   for (const o of c.parentElement.children) if (o !== c) o.hidden = true;
   c.closest('.look-scroll').scrollTop = 0; return c; };
 """
@@ -100,8 +101,9 @@ SHOTS = {
     "library-tag": dict(q="screen=library", steps=["click('Blocking')"]),
     # Details
     "settings-theme": dict(q="screen=settings&theme=zbrush", clip="card('Theme')"),
-    # menu-look: the Look section of the Menu tab, with the Tiles look chosen for the menu.
-    "menu-look": dict(q="screen=menus&tab=menu", steps=["(() => { const s = document.querySelector('select[aria-label=\"Look for this menu\"]'); s.value = 'tiles'; s.dispatchEvent(new Event('change')); })()"],
+    # menu-look: the Look section of the Menu tab (under More, which the first step opens), with the Tiles look chosen for the menu.
+    "menu-look": dict(q="screen=menus&tab=menu", steps=["document.querySelector('#menu-more .fold-head').click()", "(() => { const s = document.querySelector('select[aria-label=\"Look for this menu\"]'); s.value = 'tiles'; s.dispatchEvent(new Event('change')); })()",
+                       "document.querySelector('select[aria-label=\"Look for this menu\"]').scrollIntoView({block: 'center'})"],
                       clip="({getBoundingClientRect: () => { const f = document.querySelector('select[aria-label=\"Look for this menu\"]').closest('.field'); const t = f.previousElementSibling;"
                            " const a = t.getBoundingClientRect(), b = f.getBoundingClientRect(); return {left: a.left - 10, top: a.top - 10, right: b.right + 10, bottom: b.bottom + 10}; }})"),
     "look-colours": dict(q="screen=look", clip="lookGroup('Colours')"),

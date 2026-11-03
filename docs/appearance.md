@@ -4,7 +4,9 @@
 
 The look settings are on the Look screen in Studio, the rest on Settings, and all are under `"ring"` in `radial.json`. A [look](#looks) holds the same look settings under a name, so a menu or a slot can have its own. Studio shows live previews. The [theme](#theme) is on Settings, but it is a Studio preference and not in `radial.json`.
 
-![The Look screen in Studio: a ring preview on the left, and Slots with sliders for ring radius, slot size and dead zone on the right, above Hub and Labels](images/studio-look.png)
+In Full mode the groups on the Look screen fold. **Slots** starts open, and a closed group shows a one-line summary of what it holds (for example "Dot, 10 px" for **Hub**) with how many of its settings the level you are editing sets. A group with settings of its own at that level opens by itself. See [Settings](studio.md#settings) on the Look screen.
+
+![The Look screen in Studio: a ring preview on the left, and the Slots group with sliders for ring radius, slot size and dead zone on the right, with the other groups folded below it](images/studio-look.png)
 
 | Setting (`ring.`) and its label in Studio | Default | Range | Meaning |
 |---|---|---|---|
