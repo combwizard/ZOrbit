@@ -27,7 +27,13 @@
       if (version && a.classList.contains('primary')) {
         var label = a.dataset.baseLabel || a.textContent.trim();
         a.dataset.baseLabel = label.indexOf('Download') === 0 ? 'Download' : label;
-        if (a.dataset.baseLabel === 'Download') a.textContent = 'Download v' + version;
+        if (a.dataset.baseLabel === 'Download') {
+          a.textContent = 'Download';
+          var v = document.createElement('span');
+          v.className = 'dl-ver';
+          v.textContent = ' v' + version;
+          a.appendChild(v);
+        }
       }
     });
     if (portableUrl) {
@@ -162,6 +168,27 @@
       if (!queued) { queued = true; requestAnimationFrame(update); }
     }, { passive: true });
     update();
+  }
+
+  // The phone layout hides the nav links; this button opens them as a panel under the bar.
+  function mobileMenu() {
+    var btn = document.querySelector('.menu-btn');
+    var panel = document.getElementById('menu-panel');
+    if (!btn || !panel) return;
+    function set(open) {
+      panel.hidden = !open;
+      btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+      btn.setAttribute('aria-label', open ? 'Close menu' : 'Menu');
+    }
+    btn.addEventListener('click', function () { set(panel.hidden); });
+    panel.addEventListener('click', function (e) { if (e.target.closest('a')) set(false); });
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && !panel.hidden) { set(false); btn.focus(); }
+    });
+    document.addEventListener('click', function (e) {
+      if (!panel.hidden && !e.target.closest('.menu-btn, .menu-panel')) set(false);
+    });
+    window.matchMedia('(min-width: 901px)').addEventListener('change', function (e) { if (e.matches) set(false); });
   }
 
   function heroSpotlight() {
@@ -432,6 +459,7 @@
     enhanceDownloads();
     reveal();
     scrollProgress();
+    mobileMenu();
     heroSpotlight();
     tilt();
     countUp();
