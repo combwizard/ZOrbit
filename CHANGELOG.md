@@ -4,7 +4,12 @@ All notable changes to this project are listed here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.17.0] - 2026-11-03
+
+ZOrbit 0.17.0 adds empty slots. With **Keep slots in place** on, deleting an item leaves its slot empty and a new
+item fills the first gap, so the rest of the ring stays where your hand expects it. Studio also asks less of you:
+Setup has three steps, Settings is shorter, the open animation is set on **Look**, and Look's groups fold in Full
+mode. ZOrbit now runs on Python 3.14.
 
 ### Added
 
@@ -894,6 +899,7 @@ First public release.
   only brushes included with ZBrush.
 - Documentation: README, user guide, third-party notices and contributing guide.
 
+[0.17.0]: https://github.com/combwizard/zorbit/releases/tag/v0.17.0
 [0.16.0]: https://github.com/combwizard/zorbit/releases/tag/v0.16.0
 [0.15.0]: https://github.com/combwizard/zorbit/releases/tag/v0.15.0
 [0.14.0]: https://github.com/combwizard/zorbit/releases/tag/v0.14.0

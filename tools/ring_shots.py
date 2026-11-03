@@ -1,6 +1,6 @@
 """Draws the ring pictures in docs/images (ring.png, ring-light.png, ring-zbrush.png, fan.png, tag-colours.png,
-animations.png, the look pictures slot-shapes.png, hub-styles.png, slot-styles.png, looks.png, second-ring.png and
-more-slot.png, and the two GIFs) with the real renderer, zorbit/ring.py, so they follow the ring's look whenever it
+animations.png, the look pictures slot-shapes.png, hub-styles.png, slot-styles.png, looks.png, second-ring.png,
+more-slot.png and empty-slots.png, and the two GIFs) with the real renderer, zorbit/ring.py, so they follow the ring's look whenever it
 changes. No window is opened and no ZBrush is needed, but the brush pictures come from the installed ZBrush's
 presets, so a ZBrush has to be installed.
 
@@ -529,6 +529,23 @@ def shot_fan_out(w):
     return r.save()
 
 
+def shot_empty_slots(w):
+    """The Brushes ring as shipped, then with Move deleted: keep_slots off (the rest close up) and on (Move's slot
+    stays empty). DamStandard is hovered in each, so the eye can follow it."""
+    w.fans(False)
+    items = w.cfg.menus["brushes"].items
+    move = next(i for i, it in enumerate(items) if it.data.get("brush") == "Move")
+    dam = next(i for i, it in enumerate(items) if it.data.get("brush") == "DamStandard")
+    empty = C.Item(label="", kind="empty", data={"empty": True})
+    closed = items[:move] + items[move + 1:]
+    kept = items[:move] + [empty] + items[move + 1:]
+    return gallery([look_panel(w, "As shipped", "the starter Brushes menu", hover=dam, big=True),
+                    look_panel(w, "Keep slots in place off", "Move deleted: the rest close up", hover=dam - 1,
+                               big=True, fields={"items": closed}),
+                    look_panel(w, "Keep slots in place on", "Move deleted: its slot stays empty", hover=dam,
+                               big=True, fields={"items": kept})], 3)
+
+
 # name -> (file, function, what it shows)
 SHOTS = {
     "ring": ("ring.png", shot_ring, "the starter Brushes menu in hold mode, ClayBuildup hovered, cursor on it"),
@@ -548,6 +565,9 @@ SHOTS = {
                     "14 brushes with when_full rings: nine on the inner ring, five on an outer ring"),
     "more-slot": ("more-slot.png", shot_more_slot,
                   "14 brushes with when_full more: the ring with More hovered, and the ring More opens beside it"),
+    "empty-slots": ("empty-slots.png", shot_empty_slots,
+                    "the Brushes ring as shipped, then with Move deleted with Keep slots in place off and on, "
+                    "DamStandard hovered in each"),
     "fan": ("fan.png", shot_fan, "More Brushes fanned out to the left, ClayTubes in the fan hovered, cursor on it"),
     "tag-colours": ("tag-colours.png", shot_tags, "eight brushes in two tags and two untagged, ClayBuildup hovered"),
     "animations": ("animations.png", shot_animations, "the five open animations part way through opening"),
