@@ -87,8 +87,8 @@ than fit can now spill onto a second ring or end in a **More** slot instead of g
 
 ZOrbit now has an experimental **Theme** setting for the ring, the browser and Studio: Dark, Light, Follow Windows, and
 Match ZBrush, which takes the interface colours you stored in ZBrush. Expect the light colours and the matching to
-change a good deal as more people try them. If something is hard to read with your setup, say so on
-[#32](https://github.com/combwizard/zorbit/issues/32) or in a new issue. Studio also has a short tour of its window.
+change a good deal as more people try them. If something is hard to read with your setup, say so in a
+[new issue](https://github.com/combwizard/zorbit/issues). Studio also has a short tour of its window.
 
 ### Added
 

@@ -45,7 +45,7 @@ Some schemes would put light text on a light button, or something similar. Where
 
 ## Experimental: tell me what reads badly
 
-I tuned the light colours and the matching on one PC and a handful of ZBrush schemes. Your monitor, your scheme and the way you work will turn up cases I haven't seen, and I'd rather fix those than guess at them. If something is hard to read, looks wrong next to ZBrush, or Match ZBrush picks colours you wouldn't, send a screenshot with a line about your setup. Comment on [#32](https://github.com/combwizard/zorbit/issues/32) or [open an issue](https://github.com/combwizard/zorbit/issues).
+I tuned the light colours and the matching on one PC and a handful of ZBrush schemes. Your monitor, your scheme and the way you work will turn up cases I haven't seen, and I'd rather fix those than guess at them. If something is hard to read, looks wrong next to ZBrush, or Match ZBrush picks colours you wouldn't, send a screenshot with a line about your setup. [Open an issue](https://github.com/combwizard/zorbit/issues) for it.
 
 Two follow-ups are already open: [custom themes](https://github.com/combwizard/zorbit/issues/98) you can make, save and share, and a small one about the browser taking a theme from Studio at once instead of within half a second ([#97](https://github.com/combwizard/zorbit/issues/97)).
 

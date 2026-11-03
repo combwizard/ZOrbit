@@ -1,40 +1,102 @@
 # TODO
 
-The roadmap and the ideas list are on GitHub now, one issue per item, so people can comment on each one and add a
-thumbs-up:
+Every open issue is listed here, and every item here is an issue, so the two always match. Tick an item when its
+issue closes. The same issues are on these pages, where people can comment and add a thumbs-up:
 
 - [Roadmap board](https://github.com/users/combwizard/projects/2): Next, In progress, Later, Ideas, Done
 - [Milestone 1.0](https://github.com/combwizard/ZOrbit/milestone/1): what has to be done or checked before 1.0
 - [Ideas, most wanted first](https://github.com/combwizard/ZOrbit/issues?q=is%3Aissue%20is%3Aopen%20label%3Aidea%20sort%3Areactions-%2B1-desc)
 
-Below are my own notes: checks of changes I made and internal clean-ups that nobody else would vote on.
+## Order of work
+
+The lists below group issues by area. This is the order to take them in, worked out on 3 Nov 2026.
+
+1. **One sitting at ZBrush 2022 and 2026**, because it unblocks the most:
+   - [#102](https://github.com/combwizard/ZOrbit/issues/102), likely a real bug on 2022-2025: `request.txt` carries
+     the menu name but not the file stem, and `RM_Alpha`/`RM_Texture` only look for `Alpha:<name>`. Fix by sending
+     the stem, falling back to it in `RM_*`, and recompiling the `.zsc`.
+   - [#101](https://github.com/combwizard/ZOrbit/issues/101) in the same sitting.
+   - For [#24](https://github.com/combwizard/ZOrbit/issues/24): does `ZBrush.exe <script>` reuse the open ZBrush?
+   - For [#28](https://github.com/combwizard/ZOrbit/issues/28): what does `ZPLUGINDATA_` resolve to?
+   - For [#30](https://github.com/combwizard/ZOrbit/issues/30) and [#31](https://github.com/combwizard/ZOrbit/issues/31):
+     the button paths for capture and for loading a tool, project or layout, and whether `{"press": "Macro:..."}`
+     already runs a macro.
+   - [#103](https://github.com/combwizard/ZOrbit/issues/103) on the current window code.
+   - [#23](https://github.com/combwizard/ZOrbit/issues/23) whenever a standard (non-admin) account is to hand.
+2. **Small and separate:** [#97](https://github.com/combwizard/ZOrbit/issues/97) (send a plain "check now" message so
+   #98 can reuse it), [#105](https://github.com/combwizard/ZOrbit/issues/105),
+   [#34](https://github.com/combwizard/ZOrbit/issues/34), [#38](https://github.com/combwizard/ZOrbit/issues/38) (put
+   the limit in the fan cache stamp).
+3. **Medium:** [#99](https://github.com/combwizard/ZOrbit/issues/99) then
+   [#94](https://github.com/combwizard/ZOrbit/issues/94) (`--profile next` is the hotkey's plumbing);
+   [#106](https://github.com/combwizard/ZOrbit/issues/106) (timer inside the browser);
+   [#28](https://github.com/combwizard/ZOrbit/issues/28); [#31](https://github.com/combwizard/ZOrbit/issues/31) then
+   [#30](https://github.com/combwizard/ZOrbit/issues/30) (one "set the file, then press" action);
+   [#24](https://github.com/combwizard/ZOrbit/issues/24) if the check in step 1 works out.
+4. **Ring look, back to back:** [#37](https://github.com/combwizard/ZOrbit/issues/37) (band helper), then
+   [#35](https://github.com/combwizard/ZOrbit/issues/35) (`Item.colors`), then
+   [#36](https://github.com/combwizard/ZOrbit/issues/36). Retake the ring pictures once at the end.
+5. **Design first:** [#98](https://github.com/combwizard/ZOrbit/issues/98) (after #97),
+   [#39](https://github.com/combwizard/ZOrbit/issues/39) then [#40](https://github.com/combwizard/ZOrbit/issues/40)
+   (settle the favourites data first), [#104](https://github.com/combwizard/ZOrbit/issues/104) (after #103 passes; its checks are #104's test list),
+   [#26](https://github.com/combwizard/ZOrbit/issues/26) last. Keep new IPC code out of `win32.py` and `radiald.py`.
+
+Parked for now: [#29](https://github.com/combwizard/ZOrbit/issues/29) (Keep, Remove and Hide need more
+detailing).
+
+Issues #105, #34, #94 and #39 all edit `studio_ui/app.js`, so merge them one at a time.
+
+## Before 1.0
+
+- [ ] [#23](https://github.com/combwizard/ZOrbit/issues/23) Test installing the plugin into a ZBrush under Program Files
+- [ ] [#24](https://github.com/combwizard/ZOrbit/issues/24) Older ZBrush: a slow fallback when the Apply key isn't bound
 
 ## Checks in ZBrush
 
-- [ ] Test two bridge changes in ZBrush: the "(Edit mode is off)" note on brush picks, and deleting a leftover
-      `request.json`/`request.txt` when the bridge loads
-  - [ ] ZScript side: recompile in 2022, install, check `[IGet, "Transform:Edit"]` and `FileDelete` there
-  - [ ] Python side: reload in 2026 and check `bridge.log` ends with "bridge loaded" again
-- [ ] Check in ZBrush 2026 and 2022 that an imported alpha or texture gets a button named by its file stem (else
-      every pick re-imports); check that `Texture:Import` takes .exr
+- [ ] [#101](https://github.com/combwizard/ZOrbit/issues/101) Check the "(Edit mode is off)" note on brush picks and the leftover request file cleanup, in ZBrush 2022 and 2026
+- [ ] [#102](https://github.com/combwizard/ZOrbit/issues/102) Check that an imported alpha or texture gets a button named by its file stem, and that `Texture:Import` takes .exr
 
-## Studio window
+## Studio
 
-- [ ] Test the 0.10.1 flash fix on the PC that reported the black flash (open, and leaving maximised)
-- [ ] Untested after the flash fix: drag a maximised window off the top, Win+Shift+Arrow to another monitor and
-      restore, snap layouts
-- [ ] Custom title bar through `WM_NCCALCSIZE` instead of removing `WS_CAPTION` (`winframe.custom_frame`). With
-      the caption style kept, Windows and WinForms agree on the window size, so the restore correction, the
-      `WM_GETMINMAXINFO` work-area limit and the normal-rectangle tracker can all go, and `GetWindowPlacement`
-      becomes right again. The catch: the top resize edge is inside the area WebView2 covers (keep a thin top
-      border, or hit-test it). Test on Windows 10 and 11, Aero Snap, drag off the top, two monitors
+- [ ] [#103](https://github.com/combwizard/ZOrbit/issues/103) Test the window after the 0.10.1 flash fix: the PC that reported it, dragging off the top, another monitor, snap layouts
+- [ ] [#104](https://github.com/combwizard/ZOrbit/issues/104) Draw the title bar through `WM_NCCALCSIZE` instead of removing `WS_CAPTION`
+- [ ] [#105](https://github.com/combwizard/ZOrbit/issues/105) Put the Browser card ahead of ZBrush bridge in Settings
 
-## Clean-ups
+## Build
 
-- [ ] Reorder the Settings cards: Ring geometry, Colours, Labels, Tag colours (the look); Open animation, Behaviour
-      (the feel); Browser, ZBrush bridge; then the cards that save straight away: Older ZBrush, Tags,
-      Studio. Do it by sorting the built cards by name before the "On this page" list is made, not by moving
-      their code, and put the same order in the Settings row of the user guide's Studio table. Import and export
-      comes last, after Studio. Optionally a
-      **Manage tags...** button in the Tag colours card
-- [ ] Idle exit for the browser process: quit after a while unused and start again on the next press
+- [x] [#100](https://github.com/combwizard/ZOrbit/issues/100) Move from Python 3.12 to 3.14
+
+## Browser
+
+- [ ] [#106](https://github.com/combwizard/ZOrbit/issues/106) Quit after a while unused and start again on the next press
+- [ ] [#97](https://github.com/combwizard/ZOrbit/issues/97) Show a theme picked in Studio at once, not on the next half-second check
+
+## Themes, profiles and platforms
+
+- [ ] [#98](https://github.com/combwizard/ZOrbit/issues/98) Custom themes: make, save and share your own look for the ring, Studio and the browser
+- [ ] [#94](https://github.com/combwizard/ZOrbit/issues/94) Profiles: a hotkey that cycles through them, and switching by ZBrush project name
+- [ ] [#26](https://github.com/combwizard/ZOrbit/issues/26) macOS support
+
+## Ideas
+
+Ring and items:
+
+- [ ] [#99](https://github.com/combwizard/ZOrbit/issues/99) Commands from other programs: open a menu, pick a brush or switch profile from the command line
+- [ ] [#29](https://github.com/combwizard/ZOrbit/issues/29) Right-click the open ring: Keep, Remove, Hide
+- [ ] [#30](https://github.com/combwizard/ZOrbit/issues/30) More item types: macro, and load a tool, project or UI layout
+- [ ] [#31](https://github.com/combwizard/ZOrbit/issues/31) Capture item: save the viewport as a PNG
+- [x] [#32](https://github.com/combwizard/ZOrbit/issues/32) A ring theme that matches ZBrush's interface colours
+
+Tags:
+
+- [ ] [#34](https://github.com/combwizard/ZOrbit/issues/34) Any / All switch for tag filters
+- [ ] [#35](https://github.com/combwizard/ZOrbit/issues/35) Show every tag on a slot's border
+- [ ] [#36](https://github.com/combwizard/ZOrbit/issues/36) Group slots by tag on the ring
+- [ ] [#37](https://github.com/combwizard/ZOrbit/issues/37) Tag band along a fan's arc
+- [ ] [#38](https://github.com/combwizard/ZOrbit/issues/38) Setting for how many slots a tag fan holds
+
+Browser and ZBrush:
+
+- [ ] [#28](https://github.com/combwizard/ZOrbit/issues/28) Follow ZBrush 2026's Asset Directory setting
+- [ ] [#39](https://github.com/combwizard/ZOrbit/issues/39) Favourites: drag to reorder, and several named lists
+- [ ] [#40](https://github.com/combwizard/ZOrbit/issues/40) A strip of favourites over ZBrush
