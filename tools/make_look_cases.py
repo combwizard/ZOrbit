@@ -46,6 +46,8 @@ CASES = [
      None, {}),
     ("ring with a look nobody has", "dark", {"look": "Gone", "hub": 12}, {}, None, {}),
     ("ring with a value out of range", "dark", {"radius": 5000, "slot": 90}, {}, None, {}),
+    ("ring with a tag fan size", "dark", {"tag_limit": 8}, {}, None, {}),
+    ("ring with a tag fan size that is not whole", "dark", {"tag_limit": 8.5}, {}, None, {}),
     ("menu with no look of its own", "dark", {"look": "tiles"}, {}, _menu(), {"menu": "main"}),
     ("menu named after a built-in look", "dark", {}, {}, _menu("minimal"), {"menu": "main"}),
     ("menu look over the ring's look", "dark", {"look": "soft", "hub": 14}, {}, _menu("tiles"), {"menu": "main"}),

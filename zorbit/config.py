@@ -30,6 +30,7 @@ Schema (all keys optional except menus):
            "flick": true,                    # moving out past a slot picks it without releasing the hotkey
            "hover_submenus": true,           # reaching a submenu slot opens that submenu, centred on it
            "hint": true,                     # the line of help under the menu's title; false leaves it out
+           "tag_limit": 12,                  # slots in a tag fan, 4 to 24; a tag with more items ends in More...
            "colors": {"bg": "#222327", "accent": "#f86b33", "highlight": "#4dc8e9", "text": "#f0f0f0",
                       "lines": "#f86b33"}},
   "looks": {"My look": {"slot_shape": "hexagon", "hub": 14}},    # named looks: any of the look keys of "ring"

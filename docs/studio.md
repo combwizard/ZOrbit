@@ -29,7 +29,7 @@ The mode only changes what Studio shows. The ring, the app, `radial.json`, Save,
 | Library and the dock | Everything, with starring, tag chips and the right-click tag picker. | **Manage tags...**. |
 | Look | **Applies to** (all menus or one), **Ring size**, **Slot shape**, **Labels** and **When full**, and the gallery with **Use for ...** and **New from current**. | **Ring radius**, **Slot size** and **Dead zone** in place of **Ring size**, **Corner roundness**, **Rim width**, **Icon size**, **Hub**, **Glow**, **Label colour**, **Colours** and **Tag colours**, **Edit**, **Duplicate**, **Rename** and **Delete** on a look, and the **This slot** level. |
 | Menus, **Item** tab | A read-only **Style** line when the item has a style. | **Style** with **Edit in Look** and **Reset style**. |
-| Settings | **Theme**, **Ring look**, **Open animation**, **Behaviour** with **Flick to pick** and **Show the hint**, **Browser**, **Studio** and **Import and export**. | **Open submenus on hover**, **Tap time**, **Auto-close**, **ZBrush bridge**, **Older ZBrush** and **Tags**. |
+| Settings | **Theme**, **Ring look**, **Open animation**, **Behaviour** with **Flick to pick** and **Show the hint**, **Browser**, **Studio** and **Import and export**. | **Open submenus on hover**, **Tag fan slots**, **Tap time**, **Auto-close**, **ZBrush bridge**, **Older ZBrush** and **Tags**. |
 | Status and Setup | The same. | The same. |
 
 ![The Settings screen in Simple mode: a shorter list of sections on the left, with the Theme, Ring look and Open animation cards](images/studio-settings-simple.png)

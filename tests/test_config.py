@@ -269,7 +269,7 @@ def test_ring_defaults_when_missing(load_menus):
 
 @pytest.mark.parametrize("key, value", [
     ("radius", 5), ("radius", 5000), ("slot", 10), ("dead_zone", 500), ("hub", 99), ("hub", -1),
-    ("tap_ms", -1), ("timeout_s", 1),
+    ("tap_ms", -1), ("timeout_s", 1), ("tag_limit", 3), ("tag_limit", 25), ("tag_limit", 8.5),
     ("tag_band_opacity", 1.5), ("tag_glow_opacity", -0.1), ("tag_tint_opacity", 2),
     ("hub", 65), ("slot_corner", 0.6), ("border_width", 7), ("icon_scale", 0.4), ("hub_glow", 2),
     ("glow_opacity", -1)])

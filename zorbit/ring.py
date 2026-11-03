@@ -293,7 +293,7 @@ SPRITE_LOOK_KEYS = ("slot", "slot_shape", "slot_corner", "border_width", "icon_s
                     "hub_color", "hub_glow", "glow_color", "glow_opacity", "labels", "label_color", "tag_colors",
                     "tag_glow_opacity", "tag_tint_opacity", "tag_tint_style", "tag_tint_blend", "theme", "colors")
 NOT_IN_SPRITES = frozenset(("radius", "dead_zone", "tap_ms", "timeout_s", "animation", "flick", "hover_submenus", "hint",
-                            "tag_band", "tag_band_opacity", "look", "when_full"))
+                            "tag_limit", "tag_band", "tag_band_opacity", "look", "when_full"))
 HUB_STYLES = ("dot", "disc", "ring", "icon")
 
 

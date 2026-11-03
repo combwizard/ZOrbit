@@ -234,12 +234,12 @@ An auto slot that nothing has filled yet is drawn as a faint **+**, and picking 
 
 The name is the tag's key, not its label. The key is made once, from the label, when the tag is created (`Blocking` becomes `blocking`), and it stays the same when you rename the tag, so slots keep working. In Studio you pick the tag from a list and never need to type the key. See [Tags](tags.md).
 
-The slot opens a fan of every installed item with that tag. The brushes come first, most used first (the same count that fills auto slots, so their order can shift after you pick). Then come the alphas, materials and textures with that tag, by name. A fan holds up to 12 slots. If the tag has more items, the last slot is **More...**, which opens the [browser](browser.md) on the tab of the first item in the fan, on that tag. Picking a brush from the fan works like any brush pick and counts towards auto slots. Picking an alpha, material or texture works as it does from the browser. If there is no room for a fan, the tag's items open as a normal ring. The slot is a disc in the tag's colour with a tag symbol and a submenu badge. Without a `label`, it is named after the tag.
+The slot opens a fan of every installed item with that tag. The brushes come first, most used first (the same count that fills auto slots, so their order can shift after you pick). Then come the alphas, materials and textures with that tag, by name. A fan holds up to 12 slots, or the number you set with **Tag fan slots** (4 to 24, see [Tag fans](tags.md#tag-fans)). If the tag has more items, the last slot is **More...**, which opens the [browser](browser.md) on the tab of the first item in the fan, on that tag. Picking a brush from the fan works like any brush pick and counts towards auto slots. Picking an alpha, material or texture works as it does from the browser. If there is no room for a fan, the tag's items open as a normal ring. The slot is a disc in the tag's colour with a tag symbol and a submenu badge. Without a `label`, it is named after the tag.
 
 A tag that has no installed items is a faint tag symbol, and picking it does nothing. So is a key that is not in `tags.json`, which is also listed as a problem ("tag 'x' does not exist; the slot stays empty").
 
 The `favourite` key is the built-in Favourites tag (see [Tags](tags.md)). A `{"tag": "favourite"}` slot opens a fan of
-your starred items, in the same order as any tag, with the same 12-slot cap and **More...** slot. It is drawn with a
+your starred items, in the same order as any tag, with the same slot cap and **More...** slot. It is drawn with a
 star instead of the tag symbol. New installs have one in the starter **Tools** menu.
 
 ### Browser

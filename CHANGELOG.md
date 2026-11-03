@@ -9,6 +9,7 @@ All notable changes to this project are listed here. The format follows
 ### Added
 
 - A **Match** switch for tag filters, in the Library and the browser. With two or more tags chosen, **Any** (the default) shows items with at least one of them and **All** shows only items with every one. Under **All**, each tag's number is what choosing it would leave.
+- **Tag fan slots** in Settings (Full mode) sets how many slots a tag fan holds, from 4 to 24 (`ring.tag_limit` in `radial.json`). It stays at 12 unless you change it.
 
 ### Changed
 

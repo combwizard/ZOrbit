@@ -1,6 +1,8 @@
 """expand.py and the look system: tag colours are always stamped, and a menu whose look says when_full "more" is
 paged into a first page with a More slot and the synthetic menus "more:<id>" behind it."""
 import json
+from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -218,3 +220,92 @@ def test_a_steps_slot_that_starts_with_a_brush_carries_its_colour(tmp_path):
     cfg = load(tmp_path, {"main": menu([{"steps": [{"brush": "Standard"}, {"press": "A:B"}]}])},
                ring={"tag_colors": "none", "tag_band": "none"})
     assert expander(cfg, tags=FakeTags("#abcdef")).menu(cfg.menus["main"]).items[0].color == "#abcdef"
+
+
+# --- how many slots a tag fan holds (ring.tag_limit) ---------------------------------------------------
+class TagFanAssets:
+    """A stand-in for the asset index: n installed brushes, and a generation that never moves."""
+    generation = 1
+
+    def __init__(self, n):
+        self.brushes = {f"brush:{i:02d}": Path(f"C:/x/B{i:02d}.zbp") for i in range(n)}
+
+    def index(self, kind):
+        return {k.split(":", 1)[1]: p for k, p in self.brushes.items()} if kind == "brush" else {}
+
+
+class TagFanTags:
+    mtime = 1
+
+    def __init__(self, n):
+        self.n = n
+
+    def has(self, key):
+        return True
+
+    def items_with(self, key, kind=None):
+        return [f"brush:{i:02d}" for i in range(self.n)] if kind == "brush" else []
+
+    def color(self, key):
+        return "#ff0000"
+
+    def label(self, key):
+        return "Fan"
+
+
+class FanUsage:
+    version = 1
+
+    def load(self):
+        return self
+
+    def rank(self, names):
+        return list(names)
+
+
+def tag_fan(monkeypatch, tmp_path, n, **ring):
+    monkeypatch.setattr(expand, "assets", TagFanAssets(n))
+    cfg = load(tmp_path, {"main": menu(brushes(3))}, ring=ring)
+    return expand.Expander(cfg, FanUsage(), TagFanTags(n)), cfg
+
+
+def test_a_tag_fan_holds_twelve_slots_unless_the_ring_says_otherwise(monkeypatch, tmp_path):
+    ex, cfg = tag_fan(monkeypatch, tmp_path, 20)
+    assert cfg.ring["tag_limit"] == 12 == expand.TAG_SLOTS
+    items = ex.tag_menu("fan").items
+    assert len(items) == 12 and items[-1].kind == "browser" and items[-1].label == "More…"
+    assert [i.label for i in items[:11]] == [f"B{i:02d}" for i in range(11)]
+
+
+@pytest.mark.parametrize("limit", [4, 7, 12, 24])
+def test_the_tag_limit_sets_the_slots_of_a_fan_with_more_items(monkeypatch, tmp_path, limit):
+    ex, _ = tag_fan(monkeypatch, tmp_path, 30, tag_limit=limit)
+    items = ex.tag_menu("fan").items
+    assert len(items) == limit and items[-1].kind == "browser"
+    assert [i.label for i in items[:-1]] == [f"B{i:02d}" for i in range(limit - 1)]
+
+
+def test_a_fan_that_fits_the_limit_has_no_more_slot(monkeypatch, tmp_path):
+    ex, _ = tag_fan(monkeypatch, tmp_path, 9, tag_limit=9)
+    items = ex.tag_menu("fan").items
+    assert len(items) == 9 and all(i.kind == "brush" for i in items)
+    ex, _ = tag_fan(monkeypatch, tmp_path, 9, tag_limit=8)
+    assert len(ex.tag_menu("fan").items) == 8
+
+
+def test_changing_the_tag_limit_rebuilds_a_cached_fan(monkeypatch, tmp_path):
+    ex, cfg = tag_fan(monkeypatch, tmp_path, 30, tag_limit=6)
+    first = ex.tag_menu("fan")
+    assert len(first.items) == 6 and ex.tag_menu("fan") is first            # served from the cache
+    cfg.ring["tag_limit"] = 10                                              # the same Expander, another setting
+    assert len(ex.tag_menu("fan").items) == 10
+    cfg.ring["tag_limit"] = 6
+    assert len(ex.tag_menu("fan").items) == 6
+
+
+@pytest.mark.parametrize("bad", [True, 1, "8", 8.5, None])
+def test_a_tag_limit_that_is_not_usable_falls_back_to_twelve(monkeypatch, tmp_path, bad):
+    ex, cfg = tag_fan(monkeypatch, tmp_path, 30)
+    cfg.ring["tag_limit"] = bad
+    assert len(ex.tag_menu("fan").items) == 12
+

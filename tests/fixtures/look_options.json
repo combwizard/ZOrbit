@@ -525,6 +525,7 @@
   "tag_band_opacity": 0.45,
   "tag_colors": "tint",
   "tag_glow_opacity": 0.4,
+  "tag_limit": 12,
   "tag_tint_blend": "multiply",
   "tag_tint_opacity": 0.3,
   "tag_tint_style": "gradient",

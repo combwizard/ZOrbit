@@ -15,6 +15,7 @@ The look settings are on the Look screen in Studio, the rest on Settings, and al
 | `hub_style` (**Hub style**: **Dot**, **Disc**, **Ring**, **Menu icon**) | `dot` | `dot`, `disc`, `ring`, `icon` | How the hub is drawn. See [Hub styles](#hub-styles). |
 | `hub_color` (**Hub colour**) | `accent` | a theme colour or `#rrggbb` | The colour of the hub and its glow. See [Colour values](#colour-values). |
 | `hub_glow` (**Hub glow**) | 1 | 0 to 1 | How strong the halo around the hub is. 0 turns it off. Studio shows it as a percentage. |
+| `tag_limit` (**Tag fan slots**) | 12 | 4 to 24, whole numbers | How many slots a [tag fan](menus.md#tag) holds. A tag with more items than that ends in a **More...** slot. Only [Full mode](studio.md#simple-and-full-mode) shows it. |
 | `tap_ms` (**Tap time**) | 250 | 0 to 1000 | A hotkey press shorter than this is a tap. |
 | `timeout_s` (**Auto-close**) | 20 | 2 to 120 | An open ring closes itself after this many seconds. |
 | `animation` (**Open animation**) | `smooth` | see [Open animations](#open-animations) | The open animation. |
@@ -43,7 +44,7 @@ Sizes are scaled for high-DPI screens automatically.
 
 The radius is a minimum. When a menu has so many items that neighbouring slots would sit closer than 1.25 slot widths apart, the ring grows until they do not. With the default slot size that starts at 10 items: 12 items make a ring about 174 pixels in radius, 24 items about 345. The Studio preview grows the same way, so lowering **Ring radius** changes nothing once a menu is past that point. Studio shows a note above the item list when that happens, and says so if the grown ring is too big for your screen. Lower **Slot size** or cut the number of items to keep the ring smaller. Names in Chinese, Japanese or Korean are drawn with Microsoft YaHei, Yu Gothic or Malgun Gothic, whichever Windows has; other names use Segoe UI.
 
-Studio's [Simple mode](studio.md#simple-and-full-mode) shows only some of these. Its **Ring size** slider moves `radius`, `slot` and `dead_zone` together and keeps their proportions. Full mode has the three separate sliders, and is the only mode that shows `slot_corner`, `border_width`, `icon_scale`, the hub settings, `glow_color`, `glow_opacity`, `label_color`, `hover_submenus`, `tap_ms`, `timeout_s`, the `tag_` settings and `colors`. The animation, `labels`, `slot_shape`, `when_full`, `flick` and the theme are in both. What Simple hides keeps its value.
+Studio's [Simple mode](studio.md#simple-and-full-mode) shows only some of these. Its **Ring size** slider moves `radius`, `slot` and `dead_zone` together and keeps their proportions. Full mode has the three separate sliders, and is the only mode that shows `slot_corner`, `border_width`, `icon_scale`, the hub settings, `glow_color`, `glow_opacity`, `label_color`, `hover_submenus`, `tag_limit`, `tap_ms`, `timeout_s`, the `tag_` settings and `colors`. The animation, `labels`, `slot_shape`, `when_full`, `flick` and the theme are in both. What Simple hides keeps its value.
 
 ### Looks
 
@@ -79,7 +80,7 @@ Each level is laid over the one before it, and a later layer wins. From the bott
 6. The menu's own settings (the other keys in its `look` object).
 7. The slot's `style`.
 
-A key that a layer leaves out is taken from the layer below. The five `colors` are merged one colour at a time, so a look that sets only `accent` keeps the other four. The ring's behaviour settings (`tap_ms`, `timeout_s`, `flick`, `hover_submenus`, `hint` and `animation`) are not part of a look; `animation` can still be set for one menu on its own, as it always could.
+A key that a layer leaves out is taken from the layer below. The five `colors` are merged one colour at a time, so a look that sets only `accent` keeps the other four. The ring's behaviour settings (`tap_ms`, `timeout_s`, `flick`, `hover_submenus`, `hint`, `tag_limit` and `animation`) are not part of a look; `animation` can still be set for one menu on its own, as it always could.
 
 Your own looks are saved under `looks` in `radial.json`, each with a name of 1 to 32 letters, digits, spaces, `-` or `_`. A name cannot be one of the built-in looks, and two looks cannot differ only in their capitals. A look holds look keys and cannot name another look.
 

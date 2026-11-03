@@ -35,9 +35,9 @@
   const GEOMETRY = ['radius', 'slot', 'dead_zone'];
   const BEHAVIOUR = {
     tap_ms: { kind: 'range', min: 0, max: 1000 }, timeout_s: { kind: 'range', min: 2, max: 120 },
-    flick: { kind: 'switch' }, hover_submenus: { kind: 'switch' }, hint: { kind: 'switch' }, animation: { kind: 'choice' },
+    flick: { kind: 'switch' }, hover_submenus: { kind: 'switch' }, hint: { kind: 'switch' }, tag_limit: { kind: 'range', min: 4, max: 24, whole: true }, animation: { kind: 'choice' },
   };
-  const RING_ONLY = new Set(['tap_ms', 'timeout_s', 'flick', 'hover_submenus', 'hint', 'animation', 'look']);
+  const RING_ONLY = new Set(['tap_ms', 'timeout_s', 'flick', 'hover_submenus', 'hint', 'tag_limit', 'animation', 'look']);
   const RANK = { default: 0, theme: 1, 'global-preset': 2, global: 3, 'menu-preset': 4, menu: 5, slot: 6, preset: 7 };
   const GROUP_ID = { Slots: 'slots', Hub: 'hub', Glow: 'glow', Labels: 'labels', Colours: 'colours', 'Tag colours': 'tags', 'When full': 'when_full' };
   const FALLBACK_DARK = { bg: '#222327', accent: '#f86b33', highlight: '#4dc8e9', text: '#f0f0f0', lines: '#f86b33' };
@@ -121,8 +121,8 @@
         if ((typeof v === 'string' && ROLES.includes(v)) || isHex(v) || (v === '' && s.allow_empty)) out[k] = v;
         else errors.push(prefix + k + ': ' + pyr(v) + ' is not a #rrggbb colour or a theme colour (' + ROLES.join(', ') + ')');
       } else if (s.kind === 'range') {
-        if (typeof v === 'number' && Number.isFinite(v) && v >= s.min && v <= s.max) out[k] = v;
-        else errors.push(prefix + k + ': ' + pyr(v) + ' must be a number from ' + s.min + ' to ' + s.max);
+        if (typeof v === 'number' && Number.isFinite(v) && v >= s.min && v <= s.max && (!s.whole || Number.isInteger(v))) out[k] = v;
+        else errors.push(prefix + k + ': ' + pyr(v) + ' must be a ' + (s.whole ? 'whole number' : 'number') + ' from ' + s.min + ' to ' + s.max);
       } else if (s.kind === 'switch') {
         if (typeof v === 'boolean') out[k] = v; else errors.push(prefix + k + ': ' + pyr(v) + ' must be true or false');
       } else if (s.kind === 'choice') {

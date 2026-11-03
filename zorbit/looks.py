@@ -40,7 +40,7 @@ LOOK_KEYS = ("radius", "slot", "dead_zone", "slot_shape", "slot_corner", "border
              "hub_style", "hub_color", "hub_glow", "glow_color", "glow_opacity", "labels", "label_color", "colors",
              "tag_colors", "tag_band", "tag_band_opacity", "tag_glow_opacity", "tag_tint_opacity", "tag_tint_style",
              "tag_tint_blend", "when_full")
-BEHAVIOUR_KEYS = ("tap_ms", "timeout_s", "flick", "hover_submenus", "hint", "animation")
+BEHAVIOUR_KEYS = ("tap_ms", "timeout_s", "flick", "hover_submenus", "hint", "tag_limit", "animation")
 RING_ONLY_KEYS = BEHAVIOUR_KEYS + ("look",)           # in "ring" only: not part of a look
 RING_KEYS = LOOK_KEYS + BEHAVIOUR_KEYS + ("look",)
 STYLE_KEYS = ("slot_shape", "slot_corner", "border_width", "icon_scale", "label_color", "glow_color", "size",
@@ -51,11 +51,13 @@ EMPTY_COLOUR_KEYS = ("glow_color", "fill_color", "border_color")      # "" = non
 RANGES = {"radius": (60, 400), "slot": (32, 160), "dead_zone": (10, 120), "slot_corner": (0, 0.5),
           "border_width": (0, 6), "icon_scale": (0.5, 1), "hub": (0, 64), "hub_glow": (0, 1),
           "glow_opacity": (0, 1), "tag_band_opacity": (0, 1), "tag_glow_opacity": (0, 1),
-          "tag_tint_opacity": (0, 1), "tap_ms": (0, 1000), "timeout_s": (2, 120), "size": (0.75, 1.25)}
+          "tag_tint_opacity": (0, 1), "tap_ms": (0, 1000), "timeout_s": (2, 120), "tag_limit": (4, 24),
+          "size": (0.75, 1.25)}
 CHOICES = {"slot_shape": SLOT_SHAPES, "hub_style": HUB_STYLES, "labels": LABEL_MODES, "tag_colors": TAG_COLOR_MODES,
            "tag_band": TAG_BANDS, "tag_tint_style": TINT_STYLES, "tag_tint_blend": TINT_BLENDS,
            "when_full": WHEN_FULL, "animation": ANIMATIONS}
 SWITCHES = ("flick", "hover_submenus", "hint")
+WHOLE_NUMBERS = ("tag_limit",)                         # ranges that take whole numbers only
 
 LOOK_DEFAULTS = {"radius": 145, "slot": 72, "dead_zone": 38, "slot_shape": "circle", "slot_corner": 0.28,
                  "border_width": 2, "icon_scale": 1.0, "hub": 10, "hub_style": "dot", "hub_color": "accent",
@@ -64,7 +66,7 @@ LOOK_DEFAULTS = {"radius": 145, "slot": 72, "dead_zone": 38, "slot_shape": "circ
                  "tag_tint_opacity": 0.3, "tag_tint_style": "gradient", "tag_tint_blend": "multiply",
                  "when_full": "grow"}
 BEHAVIOUR_DEFAULTS = {"tap_ms": 250, "timeout_s": 20, "flick": True, "hover_submenus": True, "hint": True,
-                      "animation": "smooth"}
+                      "tag_limit": 12, "animation": "smooth"}
 STYLE_DEFAULTS = {"size": 1.0, "fill_color": "", "border_color": ""}     # the slot-only keys, when a style sets them
 
 _HEX = re.compile(r"#[0-9a-fA-F]{6}")
@@ -184,10 +186,12 @@ def check_look(raw, errors, prefix, allow) -> dict:
                 errors.append(f"{prefix}{k}: {v!r} is not a #rrggbb colour or a theme colour ({', '.join(ROLES)})")
         elif k in RANGES:
             lo, hi = RANGES[k]
-            if not isinstance(v, bool) and isinstance(v, (int, float)) and lo <= v <= hi:
-                out[k] = v
+            whole = k in WHOLE_NUMBERS
+            if (not isinstance(v, bool) and isinstance(v, (int, float)) and lo <= v <= hi
+                    and (not whole or v == int(v))):
+                out[k] = int(v) if whole else v
             else:
-                errors.append(f"{prefix}{k}: {v!r} must be a number from {lo} to {hi}")
+                errors.append(f"{prefix}{k}: {v!r} must be a {'whole number' if whole else 'number'} from {lo} to {hi}")
         elif k in SWITCHES:
             if isinstance(v, bool):
                 out[k] = v

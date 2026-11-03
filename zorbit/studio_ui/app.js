@@ -175,10 +175,10 @@ const BRIDGE_INFO = {
   message: ['Message', 'Posts a message to a small window the plugin keeps inside ZBrush (its listener). No keystroke is sent, so nothing can collide with your own shortcuts. Needs the ZOrbit plugin loaded in ZBrush. If the plugin is not listening, the pick is dropped and logged.'],
   key: ['Key', 'Presses the bridge key. Bind that key in ZBrush to Zplugin > ZOrbit > Apply (Ctrl+Alt+click the button, press the key, then Preferences > Hotkeys > Store).'],
 };
-const FALLBACK_DEFAULTS = { radius: 145, slot: 72, dead_zone: 38, hub: 10, tap_ms: 250, timeout_s: 20, animation: 'smooth', labels: 'name', slot_shape: 'circle', tag_colors: 'tint', flick: true, hover_submenus: true, hint: true,
+const FALLBACK_DEFAULTS = { radius: 145, slot: 72, dead_zone: 38, hub: 10, tap_ms: 250, timeout_s: 20, tag_limit: 12, animation: 'smooth', labels: 'name', slot_shape: 'circle', tag_colors: 'tint', flick: true, hover_submenus: true, hint: true,
   tag_band: 'medium', tag_band_opacity: 0.45, tag_glow_opacity: 0.4, tag_tint_opacity: 0.3, tag_tint_style: 'gradient', tag_tint_blend: 'multiply',
   colors: { bg: '#222327', accent: '#f86b33', highlight: '#4dc8e9', text: '#f0f0f0', lines: '#f86b33' } };
-const FALLBACK_RANGES = { radius: [60, 400], slot: [32, 160], dead_zone: [10, 120], hub: [0, 40], tap_ms: [0, 1000], timeout_s: [2, 120],
+const FALLBACK_RANGES = { radius: [60, 400], slot: [32, 160], dead_zone: [10, 120], hub: [0, 40], tap_ms: [0, 1000], timeout_s: [2, 120], tag_limit: [4, 24],
   tag_band_opacity: [0, 1], tag_glow_opacity: [0, 1], tag_tint_opacity: [0, 1] };
 
 const params = new URLSearchParams(location.search);
@@ -239,7 +239,7 @@ const isFull = () => S.prefs.mode !== 'simple';
 const kindIsFull = k => !!(KIND[k] && KIND[k].full);
 /* Ring settings that only Full shows, with the names the "changed in Full mode" note uses. */
 const FULL_RING = { tag_colors: 'Tag colours', tag_band: 'Tag colours', tag_band_opacity: 'Tag colours', tag_glow_opacity: 'Tag colours', tag_tint_opacity: 'Tag colours',
-  tag_tint_style: 'Tag colours', tag_tint_blend: 'Tag colours', colors: 'Colours', hover_submenus: 'Open submenus on hover', hint: 'Hint line', hub: 'Hub', hub_style: 'Hub', hub_color: 'Hub', hub_glow: 'Hub',
+  tag_tint_style: 'Tag colours', tag_tint_blend: 'Tag colours', colors: 'Colours', hover_submenus: 'Open submenus on hover', hint: 'Hint line', tag_limit: 'Tag fan slots', hub: 'Hub', hub_style: 'Hub', hub_color: 'Hub', hub_glow: 'Hub',
   glow_color: 'Glow', glow_opacity: 'Glow', label_color: 'Label colour', slot_corner: 'Slot detail', border_width: 'Slot detail', icon_scale: 'Slot detail', tap_ms: 'Tap time', timeout_s: 'Auto-close' };
 const FULL_CARDS = new Set(['set-zbrush-bridge', 'set-older-zbrush', 'set-tags']);
 /* Of the names above, the ones that live on the Look screen; the rest are on Settings. */
@@ -4083,6 +4083,7 @@ function buildSettingsScreen(root) {
       ...(full ? [
         switchRow({ label: 'Open submenus on hover', hint: 'Reaching a submenu slot opens that submenu, centred on the slot. Keep holding the hotkey to pick in it by releasing or flicking.', key: 'hover_submenus' }),
         sliderRow({ label: 'Tap time', hint: 'A hotkey press shorter than this is a tap: the ring stays open for a click. Holding longer and releasing picks the item under the cursor.', key: 'tap_ms', step: 10, unit: 'ms' }),
+        sliderRow({ label: 'Tag fan slots', hint: 'How many slots a tag fan holds. A tag with more items than that ends in a More slot that opens the browser on the tag.', key: 'tag_limit', unit: ' ' }),   // a blank unit keeps the number box in line with the sliders around it
         sliderRow({ label: 'Auto-close', hint: 'An open ring closes by itself after this long.', key: 'timeout_s', unit: 's' })] : [])));
 
     /* --- browser (browser.hotkey; the object is dropped again when it ends up empty) */
@@ -4808,7 +4809,7 @@ function updateDirty() {
 }
 /* Turns one message from the loader (config.py) into plain words plus where to go to fix it.
    Returns { text, raw, target }; target is null when the format is not recognised. */
-const RING_CARD = { animation: 'set-open-animation', tap_ms: 'set-behaviour', timeout_s: 'set-behaviour', flick: 'set-behaviour', hover_submenus: 'set-behaviour', hint: 'set-behaviour' };
+const RING_CARD = { animation: 'set-open-animation', tap_ms: 'set-behaviour', timeout_s: 'set-behaviour', flick: 'set-behaviour', hover_submenus: 'set-behaviour', hint: 'set-behaviour', tag_limit: 'set-behaviour' };
 /* The ring keys the Look screen shows, with the group each one is in (look-screen.js has the same groups). */
 const RING_LOOK = { radius: 'slots', slot: 'slots', dead_zone: 'slots', slot_shape: 'slots', slot_corner: 'slots', border_width: 'slots', icon_scale: 'slots', size: 'slots', fill_color: 'slots', border_color: 'slots',
   hub: 'hub', hub_style: 'hub', hub_color: 'hub', hub_glow: 'hub', glow_color: 'glow', glow_opacity: 'glow', labels: 'labels', label_color: 'labels', colors: 'colours',
@@ -4816,7 +4817,7 @@ const RING_LOOK = { radius: 'slots', slot: 'slots', dead_zone: 'slots', slot_sha
 /* Where a problem with a look setting leads: the Look screen at a level ('global', 'menu' with menuId, 'preset' with name), at the group and control of key. */
 const lookTarget = (key, where = {}) => Object.assign({ kind: 'look', level: 'global', key, group: RING_LOOK[key] }, where);
 const RING_NAME = { radius: 'Ring radius', slot: 'Slot size', dead_zone: 'Dead zone', hub: 'Hub', tap_ms: 'Tap time', timeout_s: 'Auto-close', flick: 'Flick to pick',
-  hover_submenus: 'Open submenus on hover', hint: 'Hint line', animation: 'Open animation', labels: 'Labels', slot_shape: 'Slot shape', tag_colors: 'Tag colours',
+  hover_submenus: 'Open submenus on hover', hint: 'Hint line', tag_limit: 'Tag fan slots', animation: 'Open animation', labels: 'Labels', slot_shape: 'Slot shape', tag_colors: 'Tag colours',
   slot_corner: 'Corner roundness', border_width: 'Rim width', icon_scale: 'Icon size', hub_style: 'Hub style', hub_color: 'Hub colour', hub_glow: 'Hub glow',
   glow_color: 'Glow colour', glow_opacity: 'Glow opacity', label_color: 'Label colour', when_full: 'When full', size: 'Size', fill_color: 'Fill colour', border_color: 'Rim colour',
   tag_band: 'Band', tag_band_opacity: 'Band opacity', tag_glow_opacity: 'Glow opacity', tag_tint_opacity: 'Icon tint opacity', tag_tint_style: 'Icon tint style', tag_tint_blend: 'Icon tint blend' };
@@ -4827,7 +4828,7 @@ const didYouMean = s => { const d = /\(did you mean (.+)\?\)\s*$/.exec(String(s)
 /* What is wrong with one look setting, from the loader's text after "<key>: " (nm is the setting's name); null when it is not one it knows. */
 function lookValueReason(nm, body) {
   let r;
-  if ((r = /^(.+) must be a number from (\S+) to (\S+)$/s.exec(body))) return `${nm} ${unq(r[1])} is outside ${r[2]} to ${r[3]}`;
+  if ((r = /^(.+) must be a (?:whole )?number from (\S+) to (\S+)$/s.exec(body))) return `${nm} ${unq(r[1])} is outside ${r[2]} to ${r[3]}`;
   if ((r = /^(.+) must be true or false$/s.exec(body))) return `${nm} must be on or off, not ${unq(r[1])}`;
   if ((r = /^(.+) unknown; one of /s.exec(body))) return `${nm} ${unq(r[1])} is not one of the available choices`;
   if ((r = /^(.+) is not a #rrggbb colour or a theme colour/s.exec(body))) return `${nm} ${unq(r[1])} is not a #rrggbb value or a theme colour`;
@@ -5682,7 +5683,7 @@ function describeChanges() {
   if (lookNames.length) groups.push({ area: 'Looks', lines: lookNames });
   const NAMES = { radius: 'Ring radius', slot: 'Slot size', dead_zone: 'Dead zone', hub: 'Hub', tap_ms: 'Tap time', timeout_s: 'Auto-close', animation: 'Open animation', labels: 'Labels', slot_shape: 'Slot shape', tag_colors: 'Tag colours',
     tag_band: 'Tag band', tag_band_opacity: 'Tag band opacity', tag_glow_opacity: 'Tag glow opacity', tag_tint_opacity: 'Tag tint opacity', tag_tint_style: 'Tag tint style', tag_tint_blend: 'Tag tint blend',
-    flick: 'Flick to pick', hover_submenus: 'Open submenus on hover', hint: 'Hint line' };
+    flick: 'Flick to pick', hover_submenus: 'Open submenus on hover', hint: 'Hint line', tag_limit: 'Tag fan slots' };
   for (const k of new Set([...Object.keys(br), ...Object.keys(ar)])) {
     if (k === 'colors' || k === 'look') continue;
     if (JSON.stringify(br[k]) !== JSON.stringify(ar[k])) (own(RING_LOOK, k) ? lookLines : ringLines).push((NAMES[k] || lookLabel(k)) + ': ' + (br[k] ?? 'default') + ' \u2192 ' + (ar[k] ?? 'default'));

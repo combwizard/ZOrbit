@@ -33,6 +33,10 @@ still counts as untagged.
 
 ![The Library filtered to the Blocking tag: seven brushes, each with an orange dot, and a Clear link beside the Tags heading](images/library-tag.png)
 
+## Tag fans
+
+A [Tag](menus.md#tag) slot opens a fan of the tag's items. A fan holds 12 slots. When the tag has more items than that, the last slot is **More...** and opens the [browser](browser.md) on the tag. To change the 12, turn on [Full mode](studio.md#simple-and-full-mode) and set **Tag fan slots** on **Settings > Behaviour** (`ring.tag_limit`). It takes 4 to 24. With 12 items and a limit of 8, the fan shows seven items and **More...**. A fan of 24 spreads over two staggered rows and reaches a long way from the ring, so the bigger numbers suit a large screen. Save, and the next fan you open uses the new number.
+
 ## Managing tags
 
 **Manage tags...** (under the chips in the Library, or on **Settings > Tags**; both need [Full mode](studio.md#simple-and-full-mode)) opens the tag manager. Each row has:

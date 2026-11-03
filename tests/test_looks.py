@@ -40,8 +40,20 @@ def test_the_range_ends_are_valid_and_just_outside_is_not(key):
     lo, hi = looks.RANGES[key]
     allow = looks.RING_KEYS + ("size",)
     assert check({key: lo}, allow)[1] == [] and check({key: hi}, allow)[1] == []
-    assert check({key: hi + 1}, allow)[1] == [f"x.{key}: {hi + 1!r} must be a number from {lo} to {hi}"]
+    kind = "whole number" if key in looks.WHOLE_NUMBERS else "number"
+    assert check({key: hi + 1}, allow)[1] == [f"x.{key}: {hi + 1!r} must be a {kind} from {lo} to {hi}"]
     assert check({key: True}, allow)[1]                  # a bool is not a number
+
+
+def test_the_tag_limit_is_a_whole_number_from_4_to_24_and_a_ring_setting_only():
+    assert looks.RANGES["tag_limit"] == (4, 24) and looks.BEHAVIOUR_DEFAULTS["tag_limit"] == 12
+    assert "tag_limit" in looks.RING_ONLY_KEYS and "tag_limit" not in looks.LOOK_KEYS
+    assert check({"tag_limit": 16}, looks.RING_KEYS) == ({"tag_limit": 16}, [])
+    got, errors = check({"tag_limit": 8.0}, looks.RING_KEYS)
+    assert got == {"tag_limit": 8} and isinstance(got["tag_limit"], int) and errors == []
+    assert check({"tag_limit": 8.5}, looks.RING_KEYS) == ({}, ["x.tag_limit: 8.5 must be a whole number from 4 to 24"])
+    assert check({"tag_limit": "8"}, looks.RING_KEYS)[0] == {}
+    assert check({"tag_limit": 8}, looks.LOOK_KEYS)[0] == {}                 # not part of a look
 
 
 def test_the_hub_goes_up_to_64_and_the_other_tables_hold_the_new_keys():

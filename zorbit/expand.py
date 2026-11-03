@@ -13,8 +13,8 @@ slots opened up. Used by the app and by the Studio's previews, so both show the 
     in the same way when that is too long: "more:more:<id>"). Fan menus and tag menus are never paged.
 
 A tag menu lists the tag's installed items as a fan: brushes first, most used first, then alphas, materials
-and textures by name. With more than TAG_SLOTS the last slot is "More..." and opens the browser on that tag
-(on the tab of the first item). Item count and order of a menu never change.
+and textures by name. With more than ring.tag_limit (12 unless set) the last slot is "More..." and opens the
+browser on that tag (on the tab of the first item). Item count and order of a menu never change.
 The tag menus are cached until a pick, a usage.json change, a tags.json change or a rebuilt asset index; the
 app builds a new Expander whenever it reloads radial.json or tags.json.
 """
@@ -33,7 +33,7 @@ try:
 except Exception:                  # thumbnails and the asset index are optional
     assets = None
 
-TAG_SLOTS = 12
+TAG_SLOTS = 12                     # slots in a tag fan unless ring.tag_limit says otherwise
 RESCAN_ASK_S = 5.0                 # a tag fan asks for a library rescan of a kind at most this often
 MORE_PREFIX = "more:"              # the id prefix of the menu a More slot opens
 MORE_CAP = 256                     # more slots than any ring holds: the most fit_count is asked to count
@@ -57,7 +57,7 @@ class Expander:
         self.cfg = cfg
         self.usage = usage
         self.tags = tags
-        self._cache = {}               # tag key -> ((usage.version, tags.mtime, assets.generation), Menu or None)
+        self._cache = {}               # tag key -> ((usage.version, tags.mtime, assets.generation, limit), Menu or None)
         self._rescanning = set()       # kinds whose index a worker thread is building again
         self._asked = {}               # kind -> when a rescan was last asked for (time.monotonic)
 
@@ -118,13 +118,19 @@ class Expander:
         m = self.cfg.menus.get(mid)
         return self.menu(m) if m is not None else None
 
+    def _tag_limit(self):
+        """How many slots a tag fan holds: ring.tag_limit, TAG_SLOTS when the ring does not say."""
+        got = self.cfg.ring.get("tag_limit", TAG_SLOTS)
+        return got if isinstance(got, int) and not isinstance(got, bool) and got >= 2 else TAG_SLOTS
+
     def tag_menu(self, key):
         """The fan of a tag's installed items; None if the tag does not exist or has none installed."""
         if assets is None or not self.tags.has(key):
             return None
         for kind in C.ASSET_KINDS:
             assets.index(kind)                           # a first build moves generation: let it happen before the stamp
-        stamp = (self.usage.load().version, self.tags.mtime, assets.generation)   # an index rebuilt: new files
+        limit = self._tag_limit()
+        stamp = (self.usage.load().version, self.tags.mtime, assets.generation, limit)   # an index rebuilt: new files
         hit = self._cache.get(key)
         if hit is not None and hit[0] == stamp:
             return hit[1]
@@ -142,10 +148,10 @@ class Expander:
         menu = None
         if found:
             color = self.tags.color(key)
-            more = len(found) > TAG_SLOTS
+            more = len(found) > limit
             fill = color                                 # the fan's tag, not each item's own
             items = [C.Item(label=n, kind=k, data={k: n}, color=fill)
-                     for k, n in found[:TAG_SLOTS - 1 if more else TAG_SLOTS]]
+                     for k, n in found[:limit - 1 if more else limit]]
             if more:
                 items.append(C.Item(label="More…", kind="browser", data={"browser": key, "kind": found[0][0]},
                                     color=color))
