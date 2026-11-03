@@ -17,26 +17,21 @@ The lists below group issues by area. This is the order to take them in, worked 
      the stem, falling back to it in `RM_*`, and recompiling the `.zsc`.
    - [#101](https://github.com/combwizard/ZOrbit/issues/101) in the same sitting.
    - For [#24](https://github.com/combwizard/ZOrbit/issues/24): does `ZBrush.exe <script>` reuse the open ZBrush?
-   - For [#28](https://github.com/combwizard/ZOrbit/issues/28): what does `ZPLUGINDATA_` resolve to?
-   - For [#30](https://github.com/combwizard/ZOrbit/issues/30) and [#31](https://github.com/combwizard/ZOrbit/issues/31):
-     the button paths for capture and for loading a tool, project or layout, and whether `{"press": "Macro:..."}`
-     already runs a macro.
+   - For [#30](https://github.com/combwizard/ZOrbit/issues/30): whether `{"press": "Macro:..."}` already runs a
+     macro. (The capture and loader buttons exist in 2022 and 2026: `Document:Export`, `Tool:Load Tool`,
+     `File:Open`, `Preferences:Config:Load Ui`.)
    - [#103](https://github.com/combwizard/ZOrbit/issues/103) on the current window code.
    - [#23](https://github.com/combwizard/ZOrbit/issues/23) whenever a standard (non-admin) account is to hand.
-2. **Small and separate:** [#97](https://github.com/combwizard/ZOrbit/issues/97) (send a plain "check now" message so
-   #98 can reuse it), [#105](https://github.com/combwizard/ZOrbit/issues/105),
-   [#34](https://github.com/combwizard/ZOrbit/issues/34), [#38](https://github.com/combwizard/ZOrbit/issues/38) (put
-   the limit in the fan cache stamp).
-3. **Medium:** [#99](https://github.com/combwizard/ZOrbit/issues/99) then
+2. **Medium:** [#99](https://github.com/combwizard/ZOrbit/issues/99) then
    [#94](https://github.com/combwizard/ZOrbit/issues/94) (`--profile next` is the hotkey's plumbing);
    [#106](https://github.com/combwizard/ZOrbit/issues/106) (timer inside the browser);
-   [#28](https://github.com/combwizard/ZOrbit/issues/28); [#31](https://github.com/combwizard/ZOrbit/issues/31) then
+   [#31](https://github.com/combwizard/ZOrbit/issues/31) then
    [#30](https://github.com/combwizard/ZOrbit/issues/30) (one "set the file, then press" action);
    [#24](https://github.com/combwizard/ZOrbit/issues/24) if the check in step 1 works out.
-4. **Ring look, back to back:** [#37](https://github.com/combwizard/ZOrbit/issues/37) (band helper), then
+3. **Ring look, back to back:** [#37](https://github.com/combwizard/ZOrbit/issues/37) (band helper), then
    [#35](https://github.com/combwizard/ZOrbit/issues/35) (`Item.colors`), then
    [#36](https://github.com/combwizard/ZOrbit/issues/36). Retake the ring pictures once at the end.
-5. **Design first:** [#98](https://github.com/combwizard/ZOrbit/issues/98) (after #97),
+4. **Design first:** [#98](https://github.com/combwizard/ZOrbit/issues/98) (after #97),
    [#39](https://github.com/combwizard/ZOrbit/issues/39) then [#40](https://github.com/combwizard/ZOrbit/issues/40)
    (settle the favourites data first), [#104](https://github.com/combwizard/ZOrbit/issues/104) (after #103 passes; its checks are #104's test list),
    [#26](https://github.com/combwizard/ZOrbit/issues/26) last. Keep new IPC code out of `win32.py` and `radiald.py`.
@@ -97,6 +92,6 @@ Tags:
 
 Browser and ZBrush:
 
-- [ ] [#28](https://github.com/combwizard/ZOrbit/issues/28) Follow ZBrush 2026's Asset Directory setting
+- [x] [#28](https://github.com/combwizard/ZOrbit/issues/28) Follow ZBrush 2026's Asset Directory setting
 - [ ] [#39](https://github.com/combwizard/ZOrbit/issues/39) Favourites: drag to reorder, and several named lists
 - [ ] [#40](https://github.com/combwizard/ZOrbit/issues/40) A strip of favourites over ZBrush
