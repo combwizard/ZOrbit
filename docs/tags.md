@@ -28,7 +28,7 @@ A card shows up to three small colour dots, first tag first. Tag names are 1 to 
 
 ## Filtering
 
-Under **Folders** the Library lists your tags as chips (in the small list on the Menus screen they are a row under the folder box). Click a chip to filter. With several chips on, an item shows when it has any of them. The folder and the search box narrow the result further. **Untagged** shows items with no ordinary tag, and **Clear** switches the filter off. A starred item with no other tag
+Under **Folders** the Library lists your tags as chips (in the small list on the Menus screen they are a row under the folder box). Click a chip to filter. With several chips on, an item shows when it has any of them. Once two chips are on, a **Match** switch with **Any** and **All** appears above the chips. **All** shows only the items that have every chosen tag, so a brush tagged Blocking and Hard shows when you choose both, and a brush with only Blocking does not. Under **All** each chip's number is what choosing it would leave: the items that have all the chosen tags and that one, and a tag that would leave nothing is dimmed. **Any** is where the switch starts, and **Clear** puts it back there. The folder and the search box narrow the result further. **Untagged** shows items with no ordinary tag, and **Clear** switches the filter off. A starred item with no other tag
 still counts as untagged.
 
 ![The Library filtered to the Blocking tag: seven brushes, each with an orange dot, and a Clear link beside the Tags heading](images/library-tag.png)

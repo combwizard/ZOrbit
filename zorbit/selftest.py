@@ -34,6 +34,7 @@ def _files() -> list[tuple[str, str]]:
         ("ui/app.js", os.path.join(paths.UI_DIR, "app.js")),
         ("ui/look.js", os.path.join(paths.UI_DIR, "look.js")),
         ("ui/look-screen.js", os.path.join(paths.UI_DIR, "look-screen.js")),
+        ("ui/tagfilter.js", os.path.join(paths.UI_DIR, "tagfilter.js")),
         ("ui/styles.css", os.path.join(paths.UI_DIR, "styles.css")),
         ("ui/popout.html", os.path.join(paths.UI_DIR, "popout.html")),
         ("default menus", paths.DEFAULT_MENUS),

@@ -3164,7 +3164,8 @@ function makeBrowser({ compact, st, host = STUDIO_HOST, kindUi = compact ? 'comp
   const sel = new Set();                 // names of the selected items
   let anchor = null;                     // the last plain or Ctrl click: where a Shift-click range starts
   if (!st.open) st.open = new Set();
-  if (!(st.tags instanceof Set)) st.tags = new Set();     // the tags to show (any of them), kept on the state like st.cat
+  if (!(st.tags instanceof Set)) st.tags = new Set();     // the tags to show, kept on the state like st.cat
+  st.tagAll = !!st.tagAll;                                // how they combine: false = an item with any of them, true = an item with all of them (the Any / All switch)
   st.untagged = !!st.untagged;                            // the virtual "Untagged" chip: items without any tag
   if (st.cat.includes('/')) st.open.add(st.cat.split('/')[0]);   // a folder chosen from outside (a link) starts unfolded
 
@@ -3261,13 +3262,14 @@ function makeBrowser({ compact, st, host = STUDIO_HOST, kindUi = compact ? 'comp
     root.append(side, h('div', { class: 'lib-main' }, tabs ? tabs.el : null, tools, h('div', { class: 'b-sub' }, hint, count), scroll, strip));
   }
 
-  /* --- tag filter: an item shows when it carries any chosen tag; "Untagged" shows the items without a tag */
+  /* --- tag filter: an item shows when it carries any chosen tag (or every one, with the Any / All switch on All); "Untagged" shows the items without a tag */
   const tagFilterOn = () => st.untagged || st.tags.size > 0;
+  const allMode = () => st.tagAll && st.tags.size > 1;     // the switch only shows with two or more tags, and with one tag Any and All are the same
   function pruneTagSel() { if (S.tagsLoaded) for (const k of Array.from(st.tags)) if (!S.tagMap.has(k)) st.tags.delete(k); }
   const tagMatch = b => {
     if (!tagFilterOn()) return true;
     const ks = tagsOf(st.kind, b.name);
-    return st.untagged ? !ks.some(k => k !== FAV) : ks.some(k => st.tags.has(k));     // untagged: no ordinary tag (see tagCounts)
+    return st.untagged ? !ks.some(k => k !== FAV) : ZTagFilter.match(ks, st.tags, st.tagAll);     // untagged: no ordinary tag (see tagCounts)
   };
   /* The items on show: in name order, except Favourites (most used first, by the usage scores) and Recent (newest pick first).
      L().sorted is in name order and sort is stable, so ties keep it. */
@@ -3294,7 +3296,16 @@ function makeBrowser({ compact, st, host = STUDIO_HOST, kindUi = compact ? 'comp
     else { st.untagged = false; if (st.tags.has(key)) st.tags.delete(key); else st.tags.add(key); }
     renderTags(); renderGrid(); rehighlight();
   }
-  function clearTagFilter() { st.tags.clear(); st.untagged = false; renderTags(); renderGrid(); rehighlight(); }
+  function clearTagFilter() { st.tags.clear(); st.untagged = false; st.tagAll = false; renderTags(); renderGrid(); rehighlight(); }
+  function setTagAll(all) { if (st.tagAll === all) return; st.tagAll = all; renderTags(); renderGrid(); rehighlight(); }
+  /* The Any / All switch, shown while two or more tags are chosen. */
+  function tagModeSwitch() {
+    const btn = (all, text, tip) => h('button', { class: 'seg-btn' + (st.tagAll === all ? ' on' : ''), type: 'button', role: 'radio', 'aria-checked': st.tagAll === all ? 'true' : 'false', title: tip,
+      dataset: { tm: all ? 'all' : 'any' }, onclick: () => setTagAll(all) }, text);
+    return h('div', { class: 'tag-mode' }, h('span', { class: 'micro' }, 'Match'),
+      h('div', { class: 'mode-seg', role: 'radiogroup', 'aria-label': 'Match items with any or all of the chosen tags' },
+        btn(false, 'Any', `Show ${W().many} with at least one of the chosen tags`), btn(true, 'All', `Show only ${W().many} with every one of the chosen tags`)));
+  }
   /* The filters that are on, as chips in the toolbar with an x that clears each: a tag filter ("Filtered: Blocking") and a folder ("Folder: My Brushes").
      The folders and tags column shows the same, so the chips only appear when the popout has collapsed it (styles.css). */
   const folderName = cat => cat === '@fav' ? 'Favourites' : cat === '@recent' ? 'Recent' : cat === '@used' ? 'In my menus' : cat.split('/').join(' / ');
@@ -3305,37 +3316,42 @@ function makeBrowser({ compact, st, host = STUDIO_HOST, kindUi = compact ? 'comp
     const chips = [];
     if (st.cat !== 'All') chips.push(chip('Folder: ' + folderName(st.cat), 'Clear the folder filter', () => { setCat('All'); renderAll(); rehighlight(); }));
     if (st.untagged) chips.push(chip('Filtered: Untagged', 'Clear the tag filter', clearTagFilter));
-    else if (st.tags.size) chips.push(chip('Filtered: ' + Array.from(st.tags).map(k => (S.tagMap.get(k) || { label: k }).label).join(', '), 'Clear the tag filter', clearTagFilter));
+    else if (st.tags.size) chips.push(chip('Filtered: ' + Array.from(st.tags).map(k => (S.tagMap.get(k) || { label: k }).label).join(allMode() ? ' + ' : ', '), 'Clear the tag filter', clearTagFilter));
     fchips.hidden = !chips.length;
     fchips.replaceChildren(...chips);
   }
   /* The chips: a list under Folders in the full browser, a wrapped row under the category in the dock. */
   function renderTags() {
     const host = compact ? tagRow : tagSec;
-    const act = document.activeElement, fr = act && host.contains(act) ? act.closest('[data-tk]') : null, fk = fr ? fr.dataset.tk : null;
+    const act = document.activeElement, fr = act && host.contains(act) ? act.closest('[data-tk], [data-tm]') : null, fk = fr ? (fr.dataset.tk !== undefined ? fr.dataset.tk : 'tm:' + fr.dataset.tm) : null;
     pruneTagSel();
     paintFilterChips();
     const counts = tagCounts(st.kind);
+    // With All on, a chip counts the items that carry every chosen tag and this one too: what choosing it would leave. A chip at 0 is dimmed.
+    const narrow = allMode() ? ZTagFilter.narrowedCounts(lib(st.kind).items.map(b => tagsOf(st.kind, b.name)), st.tags, true) : null;
     const chip = (key, label, n, color) => {
       const on = key === '@untagged' ? st.untagged : st.tags.has(key);
-      return h('button', { class: 'tagchip' + (on ? ' on' : ''), type: 'button', 'aria-pressed': on ? 'true' : 'false', title: label + ': ' + plural(n, W().one) + ' on this tab', style: color ? { '--tag': color } : null,
+      const dim = !!narrow && key !== '@untagged' && !on && n === 0;
+      return h('button', { class: 'tagchip' + (on ? ' on' : '') + (dim ? ' none-left' : ''), type: 'button', 'aria-pressed': on ? 'true' : 'false',
+        title: label + ': ' + plural(n, W().one) + (narrow && key !== '@untagged' ? (on ? ' with all the chosen tags' : ' with all the chosen tags and this one') : ' on this tab'), style: color ? { '--tag': color } : null,
         dataset: { tk: key }, onclick: () => toggleTag(key) },
         h('i', { class: 'tdot' + (color ? '' : ' none') }), h('span', { class: 'tc-name' }, label), h('span', { class: 'tc-n mono' }, String(n)));
     };
     const userTags = S.tags.filter(t => t.key !== FAV);                // Favourites has its own folder, not a chip
-    const chips = userTags.map(t => chip(t.key, t.label, counts.byKey.get(t.key) || 0, t.color));
+    const chips = userTags.map(t => chip(t.key, t.label, (narrow ? narrow.get(t.key) : counts.byKey.get(t.key)) || 0, t.color));
     if (userTags.length) chips.push(chip('@untagged', 'Untagged', counts.untagged, null));
     const clear = tagFilterOn() ? h('button', { class: 'link tag-clear', type: 'button', onclick: clearTagFilter }, 'Clear') : null;
     if (compact) {
       tagRow.hidden = !userTags.length;
-      tagRow.replaceChildren(...[...chips, clear, isFull() ? h('button', { class: 'ibtn tag-manage', type: 'button', title: 'Manage tags...', 'aria-label': 'Manage tags', onclick: () => openTagManager() }, icon('tag', 14)) : null].filter(Boolean));
+      tagRow.replaceChildren(...[st.tags.size > 1 ? tagModeSwitch() : null, ...chips, clear, isFull() ? h('button', { class: 'ibtn tag-manage', type: 'button', title: 'Manage tags...', 'aria-label': 'Manage tags', onclick: () => openTagManager() }, icon('tag', 14)) : null].filter(Boolean));
     } else {
       tagSec.replaceChildren(...[h('div', { class: 'tag-head' }, h('span', { class: 'micro side-title' }, 'Tags'), clear),
+        st.tags.size > 1 ? tagModeSwitch() : null,
         userTags.length ? h('div', { class: 'tagchips' }, chips) : h('div', { class: 'tag-none fhint' }, `No tags yet. Select ${W().many} and press Tag to make one.`),
         S.tagsErr ? h('div', { class: 'fhint bad' }, S.tagsErr) : null,
         isFull() || POPOUT ? manageTagsBtn('btn small tag-manage') : null].filter(Boolean));
     }
-    if (fk !== null) { const t = $$('[data-tk]', host).find(x => x.dataset.tk === fk); if (t) t.focus(); }
+    if (fk !== null) { const t = $$('[data-tk], [data-tm]', host).find(x => (x.dataset.tk !== undefined ? x.dataset.tk : 'tm:' + x.dataset.tm) === fk); if (t) t.focus(); }
   }
   const usedCount = () => { let n = 0; if (host.badge) for (const b of L().items) if (host.badge(b.name, st.kind)) n++; return n; }; // the "In my menus" folder
   function paintBadge(card) {
@@ -3506,7 +3522,7 @@ function makeBrowser({ compact, st, host = STUDIO_HOST, kindUi = compact ? 'comp
     if (!list.length) {
       let e;
       if (tagFilterOn()) {
-        e = emptyState('tag', st.untagged ? `Every ${W().one} here has a tag` : `No ${W().many} with ` + (st.tags.size === 1 ? 'that tag' : 'those tags'),
+        e = emptyState('tag', st.untagged ? `Every ${W().one} here has a tag` : `No ${W().many} with ` + (st.tags.size === 1 ? 'that tag' : allMode() ? 'all of those tags' : 'those tags'),
           st.q || st.cat !== 'All' ? 'The search and the folder narrow it too.' : `Select ${W().many} and press Tag, or right-click ${aOrAn(W().one)}.`, { text: 'Clear the tag filter', fn: clearTagFilter });
       } else if (st.q) {
         const where = st.cat === '@used' ? 'In my menus' : st.cat === '@fav' ? 'Favourites' : st.cat === '@recent' ? 'Recent' : st.cat.split('/').join(' / ');
@@ -3649,7 +3665,7 @@ function makeBrowser({ compact, st, host = STUDIO_HOST, kindUi = compact ? 'comp
   }
   /* A fresh look: no search, no folder, only the given tag (or none), the first match highlighted. */
   function setFilter(tag) {
-    clearQuery(); st.untagged = false; st.tags = new Set(tag && tag !== FAV ? [tag] : []);
+    clearQuery(); st.untagged = false; st.tagAll = false; st.tags = new Set(tag && tag !== FAV ? [tag] : []);
     setCat(tag === FAV ? '@fav' : 'All');                       // Favourites is a folder, not a chip
     renderAll(); highlightFirst(); scroll.scrollTop = 0;
   }

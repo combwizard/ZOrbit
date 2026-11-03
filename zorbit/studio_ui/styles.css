@@ -726,6 +726,9 @@ body.dragging .irow:hover { background: transparent; }
 .tag-manage { align-self: flex-start; margin: 8px 0 0 4px; }
 .tagchip { display: inline-flex; align-items: center; gap: 7px; min-width: 0; max-width: 100%; height: 26px; padding: 0 9px; background: var(--bg3); border: 1px solid var(--line); border-radius: 99px; color: var(--text-soft); font-size: 12px; text-align: left; transition: background .12s, border-color .12s, color .12s; }
 .tagchip:hover { border-color: var(--line2); color: var(--text); }
+.tag-mode { display: flex; align-items: center; gap: 8px; padding: 0 10px 8px; }
+.tagrow .tag-mode { padding: 0; }
+.tagchip.none-left { opacity: .5; }
 .tagchip.on { color: var(--text); border-color: var(--tag, var(--accent)); background: color-mix(in srgb, var(--tag, var(--accent)) 18%, var(--bg2)); }
 .tc-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tc-n { flex: none; font-size: 10.5px; color: var(--sub); }

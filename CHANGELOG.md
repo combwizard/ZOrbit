@@ -6,6 +6,10 @@ All notable changes to this project are listed here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- A **Match** switch for tag filters, in the Library and the browser. With two or more tags chosen, **Any** (the default) shows items with at least one of them and **All** shows only items with every one. Under **All**, each tag's number is what choosing it would leave.
+
 ### Changed
 
 - An open browser now changes theme the moment you pick one in Studio, instead of up to half a second later.

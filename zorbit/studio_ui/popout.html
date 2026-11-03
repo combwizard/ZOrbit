@@ -20,6 +20,7 @@
   // Inside pywebview there is no ?mock, so dev/ is never touched. window.js is the Studio's window chrome and is not needed here.
   var mock = /[?&]mock(=|&|$)/.test(location.search);
   if (mock) document.write('<script src="dev/mock_data.js"><\/script><script src="dev/mock.js"><\/script>');
+  document.write('<script src="tagfilter.js"><\/script>');
   document.write('<script src="app.js"><\/script>');
 })();
 </script>
