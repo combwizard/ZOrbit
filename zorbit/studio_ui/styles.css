@@ -895,10 +895,23 @@ body.dragging .irow:hover { background: transparent; }
 .zrow { display: flex; align-items: center; gap: 14px; padding: 10px 12px; border-radius: 8px; background: var(--bg1); border: 1px solid var(--line); }
 .zname { display: flex; align-items: center; gap: 8px; font-weight: 600; }
 .zpath { color: var(--sub); font-size: 11px; margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.more { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); }
-.more summary { display: flex; align-items: center; gap: 8px; cursor: pointer; color: var(--cyan); font-size: 12px; font-weight: 600; margin-bottom: 12px; list-style: none; }
-.more summary::-webkit-details-marker { display: none; }
-.more .field { max-width: 520px; }
+/* A card (or, flat, a section of the Menu tab) that folds: the head is one button, the summary shows only while it is closed. */
+.fold.card { padding: 0; }
+.fold .card-title { margin: 0; display: block; }
+.fold-head { display: flex; align-items: baseline; gap: 10px; width: 100%; margin: 0; padding: 15px 18px; border: 0; border-radius: 8px; background: none; color: inherit; font: inherit; letter-spacing: inherit; text-transform: inherit; text-align: left; cursor: pointer; }
+.fold-head:hover .fold-title { color: var(--accent); }
+.fold-head:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.fold-chev { display: inline-flex; align-self: center; flex: none; width: 13px; color: var(--sub); }
+.fold-title { flex: none; }
+.fold-head em { flex: none; }
+.fold-sum { flex: 1; min-width: 0; margin-left: auto; text-align: right; font-style: normal; font-weight: 400; letter-spacing: .02em; text-transform: none; font-size: 12px; color: var(--sub); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fold.open .fold-sum { display: none; }
+.fold-body { padding: 0 18px 18px; }
+.fold-body[hidden] { display: none; }
+.fold-body > .srow:first-child { border-top: 0; padding-top: 4px; }
+.fold.flat { margin: 22px 0 10px; border-top: 1px solid var(--line); }
+.fold.flat .fold-head { padding: 14px 0 10px; border-radius: 0; font: 700 11px var(--font); letter-spacing: .12em; text-transform: uppercase; color: var(--sub); }
+.fold.flat .fold-body { padding: 0; }
 
 .status-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 16px; }
 .scard { padding: 16px; background: var(--bg3); border: 1px solid var(--line); border-top: 2px solid var(--line2); border-radius: 8px; --c: var(--sub); transition: border-color .2s; }

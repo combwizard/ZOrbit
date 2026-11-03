@@ -1318,6 +1318,7 @@ function moveMenuId(oldId, newId) {
   S.cfg.menus = out;
   for (const m of Object.values(out)) (m.items || []).forEach(it => { if (it && it.menu === oldId) it.menu = newId; });
   if (S.menuId === oldId) S.menuId = newId;
+  if (oldId in menuMore) { menuMore[newId] = menuMore[oldId]; delete menuMore[oldId]; }
 }
 function renameMenuId(oldId, newId) {
   newId = newId.trim();
@@ -2507,6 +2508,7 @@ function buildSteps(it) {
 /* ---------- menu properties */
 /* Whether a mouse button or pen is down right now (a field left by a click sees its change event before the click). */
 let pointerHeld = false;
+const menuMore = {};      // menu id -> whether the Menu tab's More section is open, when the person chose; the panel is rebuilt by every commit
 addEventListener('pointerdown', () => { pointerHeld = true; }, true);
 addEventListener('pointerup', () => { pointerHeld = false; }, true);
 addEventListener('pointercancel', () => { pointerHeld = false; }, true);
@@ -2593,7 +2595,8 @@ function buildMenuProps() {
   idInp.addEventListener('keydown', e => { if (e.key === 'Escape') { e.stopPropagation(); idInp.value = id; idShow(''); } });
   const idNotes = [h('div', { class: 'fhint' }, 'Used to link submenus. Renaming updates the items that open this menu.')];
   if (m.items.some(x => kindOf(x) === 'auto')) idNotes.push(h('div', { class: 'fhint' }, 'Renaming resets the learned auto slots for this menu.'));
-  if (full) box.append(field('Id', idInp, h('div', { class: 'id-notes' }, idErr, ...idNotes)));
+  const more = [];                                                                        // Full: Id, Look, Open animation and Fan out, folded under More
+  if (full) more.push(field('Id', idInp, h('div', { class: 'id-notes' }, idErr, ...idNotes)));
 
   // The file order decides: of two menus with one hotkey, the first opens (and any menu beats the browser).
   const clash = owner => {
@@ -2635,16 +2638,27 @@ function buildMenuProps() {
       icon('k_menu', 12), (menuOf(r.menuId).title || r.menuId) + ' / ' + (r.index + 1))))
     : h('div', { class: 'fhint' }, m.hotkey ? 'Opened from ZBrush by its hotkey.' : 'Nothing opens this menu yet. Add a Submenu item in another menu that points to it.'));
 
-  if (full && S.opts && S.opts.looks) box.append(sectionTitle('Look', 'Shapes, hub, glow and colours of this menu'), buildMenuLook(id));
+  if (full && S.opts && S.opts.looks) more.push(sectionTitle('Look', 'Shapes, hub, glow and colours of this menu'), buildMenuLook(id));
 
   const animTitle = a => { const t = typeof a === 'string' ? a : String(a === undefined || a === null ? '' : a); return t ? t[0].toUpperCase() + t.slice(1) : ''; };
   const ringAnim = () => ring().animation || S.defaults.animation;
-  box.append(sectionTitle('Open animation'), h('div', { class: 'field' }, h('div', { class: 'fhint' },
+  const animBox = [sectionTitle('Open animation'), h('div', { class: 'field' }, h('div', { class: 'fhint' },
     m.animation ? 'Opens with ' + animTitle(m.animation) + '. ' : 'Opens like all menus (' + animTitle(ringAnim()) + '). ',
-    S.opts && S.opts.looks ? linkBtn('Edit in Look', () => goToProblem({ kind: 'look', level: 'menu', menuId: id, key: 'animation', group: 'opening' })) : null)));
-  if (full) box.append(sectionTitle('As a submenu'), h('div', { class: 'field row' }, h('div', { class: 'grow' }, h('span', { class: 'flabel' }, 'Fan out when opened from another menu'),
-    h('div', { class: 'fhint' }, 'Instead of a new ring, the items spread out around this menu\'s slot and the ring stays in view.' + (m.hotkey ? ' This only applies when it is opened as a submenu; its hotkey still opens a ring.' : ''))),
-    toggleSwitch(m.fan === true, v => { if (v) m.fan = true; else delete m.fan; commit(); }, 'Fan out when opened from another menu')));
+    S.opts && S.opts.looks ? linkBtn('Edit in Look', () => goToProblem({ kind: 'look', level: 'menu', menuId: id, key: 'animation', group: 'opening' })) : null))];
+  if (full) {
+    more.push(...animBox, sectionTitle('As a submenu'), h('div', { class: 'field row' }, h('div', { class: 'grow' }, h('span', { class: 'flabel' }, 'Fan out when opened from another menu'),
+      h('div', { class: 'fhint' }, 'Instead of a new ring, the items spread out around this menu\'s slot and the ring stays in view.' + (m.hotkey ? ' This only applies when it is opened as a submenu; its hotkey still opens a ring.' : ''))),
+      toggleSwitch(m.fan === true, v => { if (v) m.fan = true; else delete m.fan; commit(); }, 'Fan out when opened from another menu')));
+    // Open when something in it is set, unless the person has chosen: the choice is kept per menu, outside the panel, which a commit rebuilds
+    const moreSum = () => {
+      const n = [!!m.look && (typeof m.look !== 'object' || Object.keys(m.look).length > 0), !!m.animation, m.fan === true].filter(Boolean).length;
+      return { n, text: 'Look, open animation, fan out' + (n ? ' · ' + n + ' set' : '') };
+    };
+    const ms = moreSum();
+    const sec = foldSection({ id: 'menu-more', flat: true, title: 'More', summary: ms.text, open: menuMore[id] ?? ms.n > 0,
+      onToggle: v => { menuMore[id] = v; foldSum(sec, moreSum().text); } }, ...more);      // the fan switch does not rebuild the panel, so the summary is made again on every toggle
+    box.append(sec);
+  } else box.append(...animBox);
   box.append(sectionTitle('Manage'), h('div', { class: 'btn-row' },
     h('button', { class: 'btn', type: 'button', onclick: () => dupMenu(id) }, icon('copy', 13), 'Duplicate'),
     h('button', { class: 'btn', type: 'button', title: 'Save this menu and the submenus it opens to a file you can share', onclick: e => ioRun([e.currentTarget], () => exportMenu(id)) }, icon('folder', 13), 'Export menu...'),
@@ -4028,6 +4042,31 @@ async function refreshZsBadge() {
 
 function card(title, sub, ...kids) { return h('section', { class: 'card' }, h('h2', { class: 'card-title' }, title, sub ? h('em', null, sub) : null), ...kids); }
 
+/* A card (or, with flat, a section of the Menu tab) whose body folds away. The head is a button that says whether it is open (aria-expanded) and
+   shows a one-line summary while it is closed. o: { id (the element's id; the body's is id + '-body'), title, sub, summary, open, onToggle(open), flat }.
+   The caller keeps the open/closed choice outside the element (the screens are rebuilt wholesale) and passes it back as o.open. foldOpen only
+   changes the DOM and never rebuilds, so the focus stays on the head. */
+function foldSection(o, ...kids) {
+  const body = h('div', { class: 'fold-body', id: o.id + '-body' }, ...kids);
+  const head = h('button', { class: 'fold-head', type: 'button', 'aria-expanded': 'false', 'aria-controls': o.id + '-body', dataset: { fk: 'fold:' + o.id },
+    onclick: () => { const v = !foldIsOpen(el); foldOpen(el, v); if (o.onToggle) o.onToggle(v); } },
+  h('span', { class: 'fold-chev', 'aria-hidden': 'true' }), h('span', { class: 'fold-title' }, o.title), o.sub ? h('em', null, o.sub) : null, h('span', { class: 'fold-sum' }, o.summary || ''));
+  const el = h('section', { class: 'fold' + (o.flat ? ' flat' : ' card'), id: o.id }, h('h2', { class: 'card-title' }, head), body);
+  foldOpen(el, !!o.open);
+  return el;
+}
+const foldIsOpen = el => !!el && el.classList.contains('open');
+/* Opens or closes a foldSection (anything else is left alone). */
+function foldOpen(el, v) {
+  if (!el || !el.classList || !el.classList.contains('fold')) return;
+  const head = el.querySelector('.fold-head'), body = el.querySelector('.fold-body'), chev = el.querySelector('.fold-chev');
+  el.classList.toggle('open', !!v);
+  head.setAttribute('aria-expanded', v ? 'true' : 'false');
+  body.hidden = !v;
+  chev.replaceChildren(icon(v ? 'chevD' : 'chevR', 13));
+}
+const foldSum = (el, text) => { const s = el && el.querySelector && el.querySelector('.fold-sum'); if (s && s.textContent !== text) s.textContent = text; };
+
 /* The rows for the ZScript plugin on ZBrush 2022 to 2025 (install, update, remove, forget, add a folder), shared by
    Settings > Older ZBrush and the Setup screen. paint({installs, bundled}) draws into box; every action ends by calling
    refresh() so the caller can look again (Settings fetches, Setup forces its own poll). extra(z) may add a node to a row. */
@@ -5117,6 +5156,7 @@ function goToProblem(t) {
   }
   if (t.kind === 'menu') {
     if (!hasMenu(t.menuId)) return;
+    if (t.field === 'id' || t.field === 'fan') menuMore[t.menuId] = true;       // a hidden field cannot take the focus
     selectMenu(t.menuId); S.tab = 'menu'; if (R.right) R.right();
     const mr = $('.mrow.sel'); if (mr) mr.scrollIntoView({ block: 'nearest' });
     const el = t.field === 'hotkey' ? $('.insp .hk-field') : t.field === 'id' ? $('.insp input[aria-label="Menu id"]')
@@ -5979,7 +6019,7 @@ const screenKey = e => { const m = /^Digit([1-6])$/.exec(e.code || ''); return m
 // look-screen.js builds the Look screen; it is looked up when the screen is shown, so a missing file only costs that screen
 const buildLookScreenLazy = root => { if (typeof window.buildLookScreen === 'function') window.buildLookScreen(root); else root.replaceChildren(h('div', { class: 'fhint warn', style: { padding: '24px' } }, 'The Look screen could not be loaded.')); };
 /* What look-screen.js needs from this closure: it is loaded after app.js and cannot see inside it. */
-window.ZStudio = { h, $, $$, S, R, icon, iconBtn, linkBtn, card, choiceCards, sliderRow, sizeRow, toggleSwitch, call, clamp, own, normHex,
+window.ZStudio = { h, $, $$, S, R, icon, iconBtn, linkBtn, card, foldSection, foldOpen, foldIsOpen, foldSum, choiceCards, sliderRow, sizeRow, toggleSwitch, call, clamp, own, normHex,
   commit, toast, ring, ringNum, ranges, ensureRing, tidyRing, usableIdx, menuOf, kindOf, isLib, firstTag, isFull, setMode, fullOnlyChanges,
   RingLoader, SAMPLE_MENU, COLOR_INFO, FALLBACK_DEFAULTS, showScreen, railTitle, makePlayer, FrameLoader, ANIM_INFO,
   lookCtx, clearedText, modal, promptModal, popover, undoToast, sealSnap, previewSoon, plural, hasMenu, selectMenu, debounce, FALLBACK_RANGES, makeRingView, itemLabel };
