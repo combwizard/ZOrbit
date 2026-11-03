@@ -53,7 +53,7 @@ Two follow-ups are already open: [custom themes](https://github.com/combwizard/z
 
 Studio has grown a lot over the last few releases: five screens, a library, profiles, a Simple and a Full mode. That is a lot to take in when you open it for the first time, and some of it, like the profile button or the fact that nothing reaches the ring until you save, is easy to miss. So Studio now has a tour ([#41](https://github.com/combwizard/zorbit/issues/41)).
 
-![The tour on its third stop, the ring, with the card beside the ring preview](../../images/studio-tour.png)
+![The tour with a card beside the ring preview, with the card beside the ring preview](../../images/studio-tour.png)
 
 It lights up one part of the window at a time and puts a card next to it with a sentence or two about what it is for. It starts with the screens down the left and the list of menus, then the ring preview, where you drag brushes in and click a slot to edit it, and the **Item**, **Menu** and **Library** tabs beside it. After that come the Library, the profile button and the **Simple** / **Full** switch. It ends with **Save** and **Revert**, and with **Status** and **Setup** for when something isn't working. That's nine stops, and it takes about a minute.
 

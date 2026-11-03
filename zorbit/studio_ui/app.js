@@ -4648,9 +4648,9 @@ function setupMenu() {
   return id ? { id, title: menus[id].title || id, hotkey: hk(id) || '' } : null;
 }
 
-/* The five steps from one get_setup answer. Pure: the same data gives the same steps, and every field in a step is
+/* The three steps from one get_setup answer. Pure: the same data gives the same steps, and every field in a step is
    something that is drawn (nothing that ticks, like ages), so JSON of a step tells whether it needs painting again.
-   ctx: { menu: setupMenu(), done: setup_done, startLog: the lines a failed Start app brought back }. */
+   ctx: { menu: setupMenu() (its hotkey is the key step 3 names), startLog: the lines a failed Start app brought back }. */
 function deriveSteps(d, tryFrom, ctx) {
   const installs = d.installs || [], unmatched = d.unmatched_procs || [], env = d.env || {}, zb = d.zbrush || {};
   const now = typeof d.now === 'number' ? d.now : Date.now() / 1000;
@@ -4741,16 +4741,7 @@ function deriveSteps(d, tryFrom, ctx) {
   s3.state = locked3 ? 'pending' : (all3 ? 'ok' : (hint ? 'warn' : 'pending'));
   s3.detail = locked3 ? 'Available once the plugin is loaded in ZBrush.'
     : (all3 ? 'The ring works. Press {key} over the canvas whenever you want a brush.' : 'Hover over ZBrush’s canvas, press {key}, and flick toward a brush.');
-
-  /* 4. Your brushes */
-  const m = ctx.menu;
-  const s4 = { id: 'brushes', title: 'Your brushes', menu: m,
-    state: m ? 'ok' : 'pending',
-    detail: m ? (m.hotkey ? m.hotkey + ' opens the “' + m.title + '” ring. Swap in your own brushes if you like.' : 'The “' + m.title + '” ring has no hotkey yet. Swap in your own brushes if you like.') : 'There are no menus yet.' };
-
-  /* 5. What's where */
-  const s5 = { id: 'where', title: 'What’s where', state: ctx.done ? 'ok' : 'pending', detail: 'A quick map of Studio.' };
-  return [s1, s2, s3, s4, s5];
+  return [s1, s2, s3];
 }
 
 const USER_GUIDE_URL = 'https://zorbit.lol/docs/';
@@ -4764,13 +4755,21 @@ const SETUP_WHERE = [
 
 function buildSetupScreen(root) {
   root.replaceChildren();
-  const st = S.setup = S.setup || { data: null, tryFrom: Date.now() / 1000, busy: false, lastAsk: 0 };   // tryFrom outlives a screen switch; Start over resets it
+  const st = S.setup = S.setup || { data: null, tryFrom: Date.now() / 1000, busy: false, lastAsk: 0, open: new Set() };   // tryFrom outlives a screen switch; Start over resets it
   const first = S.prefs.setup_done === false;       // decided once: the footer must not swap itself when the switch below is used
   const list = h('ol', { class: 'setup-steps', 'aria-label': 'Setup steps' });
   const errBox = h('div', { hidden: true, role: 'alert' });
   const foot = h('div', { class: 'setup-foot' });
+  // Always there, above the footer: where to go once the steps are done. The description is the tooltip.
+  const next = h('section', { class: 'setup-next', 'aria-label': 'Next' },
+    h('div', { class: 'micro' }, 'Next'),
+    h('div', { class: 'setup-chips' }, ...SETUP_WHERE.map(([name, text, screen]) => h('button', { class: 'chip', type: 'button', title: text,
+      onclick: screen ? () => showScreen(screen) : async () => { try { await call('open_url', USER_GUIDE_URL); } catch (e) { toast('Could not open the link.', { tone: 'warn' }); } } },
+      name, screen ? null : icon('external', 12))),
+      h('button', { class: 'btn small', type: 'button', title: 'A short tour of this window', onclick: () => startTour() }, 'Take the tour')),
+    h('div', { class: 'fhint' }, 'Studio starts in Simple mode, which shows the settings most people use. The switch at the top turns on Full mode.'));
   root.append(h('div', { class: 'settings-scroll' }, h('div', { class: 'settings setup' },
-    h('div', { class: 'page-head' }, h('h1', null, 'Setup'), h('p', null, 'Everything ZOrbit needs, and what still needs doing.')), errBox, list, foot)));
+    h('div', { class: 'page-head' }, h('h1', null, 'Setup'), h('p', null, 'Everything ZOrbit needs, and what still needs doing.')), errBox, list, next, foot)));
 
   const els = new Map();
   let steps = null;                                 // the last steps drawn: tells the timer whether step 3 is being waited on
@@ -4856,46 +4855,48 @@ function buildSetupScreen(root) {
       out.push(h('div', { class: 'btn-row' }, h('button', { class: 'btn small', type: 'button', title: 'Forget what happened so far and watch for a new try',
         onclick: () => { st.tryFrom = Date.now() / 1000; paint(true); } }, icon('refresh', 12), 'Start over')));
       return out;
-    },
-    brushes(s) {
-      if (!s.menu) return [];
-      const img = h('img', { class: 'ring-img pending', alt: 'Ring preview', draggable: false, onload: () => img.classList.remove('pending') });
-      RingLoader.get(s.menu.id, null).then(res => { if (res && res.image && img.isConnected) img.src = res.image; });
-      const stage = h('div', { class: 'mini-stage' }, h('div', { class: 'stage-rings', 'aria-hidden': 'true' }), h('div', { class: 'mini-wrap' }, img),
-        h('div', { class: 'mini-cap micro' }, 'The ' + s.menu.title + ' ring' + (s.menu.hotkey ? ', on ' + s.menu.hotkey : '')));
-      return [h('div', { class: 'setup-ring' }, stage),
-        h('div', { class: 'btn-row' }, h('button', { class: 'btn small', type: 'button', onclick: () => { S.menuId = s.menu.id; S.itemIdx = null; S.tab = 'menu'; showScreen('menus'); } }, 'Change these brushes'))];
-    },
-    where() {
-      return [h('div', { class: 'setup-where' }, ...SETUP_WHERE.map(([name, text, screen]) => h('div', { class: 'zrow' },
-        h('div', { class: 'grow' }, h('b', null, name), h('small', null, text)),
-        screen ? h('button', { class: 'btn small', type: 'button', onclick: () => showScreen(screen) }, 'Open')
-          : h('button', { class: 'btn small', type: 'button', onclick: async () => { try { await call('open_url', USER_GUIDE_URL); } catch (e) { toast('Could not open the link.', { tone: 'warn' }); } } }, icon('external', 12), 'Open')))),
-        h('div', { class: 'btn-row' }, h('button', { class: 'btn small', type: 'button', title: 'A short tour of this window', onclick: () => startTour() }, 'Take the tour')),
-        h('div', { class: 'fhint' }, 'Studio starts in Simple mode, which shows the settings most people use. The switch at the top turns on Full mode.')];
     } };
 
+  /* A step that is done folds to its head (a tick, the title and one line); the user opens it again with a click, and st.open
+     remembers that. A step that needs attention, is waiting or is locked never folds: its body is the thing to read. */
+  const foldable = s => s.state === 'ok';
+  const isFolded = s => foldable(s) && !st.open.has(s.id);
   const renderStep = (el, s, n) => {
     const parts = String(s.detail || '').split('{key}');
     const detail = h('div', { class: 'sdetail' }, ...parts.flatMap((t, i) => (i ? [hkChips(s.key || 'Q', 'sm'), t] : [t])));
     const body = ((own(bodies, s.id) ? bodies[s.id](s) : null) || []).filter(Boolean);
+    const can = foldable(s) && body.length > 0, folded = can && isFolded(s), bodyId = 'sbody-' + s.id;
+    const headKids = [h('b', { class: 'stitle' }, s.title), detail];
+    const head = can
+      ? h('button', { class: 'sfold', type: 'button', 'aria-expanded': String(!folded), 'aria-controls': bodyId, onclick: () => {
+        if (st.open.has(s.id)) st.open.delete(s.id); else st.open.add(s.id);
+        const cur = steps && steps.find(x => x.id === s.id);
+        if (!cur) return;
+        draw(el, cur, n);
+        const again = el.querySelector('.sfold'); if (again) again.focus();         // the button was rebuilt: the keyboard stays on it
+      } }, h('span', { class: 'schev', 'aria-hidden': 'true' }, icon(folded ? 'chevR' : 'chevD', 14)), h('span', { class: 'shead' }, ...headKids))
+      : h('div', { class: 'shead' }, ...headKids);
     el.replaceChildren(h('div', { class: 'snum', 'aria-hidden': 'true' }, s.state === 'ok' ? icon('check', 14) : String(n)),
-      h('div', { class: 'smain' }, h('b', { class: 'stitle' }, s.title), detail, body.length ? h('div', { class: 'sbody' }, ...body) : null));
+      h('div', { class: 'smain' }, head, body.length ? h('div', { class: 'sbody', id: bodyId, hidden: folded }, ...body) : null));
   };
+  /* One step's li: its classes, its signature (what is drawn, folded or not) and its content. */
+  const sigOf = s => JSON.stringify(s) + (isFolded(s) ? '|folded' : '');
+  function draw(el, s, n) {
+    el.className = 'sstep ' + s.state + (s.locked ? ' locked' : '') + (isFolded(s) ? ' folded' : '');
+    el._sig = sigOf(s);
+    renderStep(el, s, n);
+  }
 
   // Draws what changed. force: redraw every step (after an action of ours), else a step that is mid-action keeps its buttons.
   function paint(force) {
     const d = st.data;
     if (!d) return;
-    steps = deriveSteps(d, st.tryFrom, { menu: setupMenu(), done: S.prefs.setup_done !== false, startLog: st.startLog });
+    steps = deriveSteps(d, st.tryFrom, { menu: setupMenu(), startLog: st.startLog });
     steps.forEach((s, i) => {
       let el = els.get(s.id);
       if (!el) { el = h('li', { class: 'sstep', dataset: { step: s.id } }); els.set(s.id, el); list.append(el); }
-      el.className = 'sstep ' + s.state + (s.locked ? ' locked' : '');
-      const sig = JSON.stringify(s);
-      if (!force && (el._sig === sig || el.querySelector('.btn.running'))) return;
-      el._sig = sig;
-      renderStep(el, s, i + 1);
+      if (!force && (el._sig === sigOf(s) || el.querySelector('.btn.running'))) { el.className = 'sstep ' + s.state + (s.locked ? ' locked' : '') + (isFolded(s) ? ' folded' : ''); return; }
+      draw(el, s, i + 1);
     });
     paintStart();
   }
@@ -6351,17 +6352,12 @@ async function afterBoot() {
 /* The guided tour (#41). A stop names the screen it needs and the element to light up. A stop whose element is missing,
    hidden or squeezed to nothing (profiles off, a narrow window) is skipped. */
 const TOUR_STOPS = [
-  { screen: null, target: () => $('.rail'), title: 'Screens', text: 'Studio has six screens. Click one here, or press Alt+1 to Alt+6.' },
-  { screen: 'menus', target: () => $('#screen-menus .menus-col'), title: 'Menus', text: 'Each menu is a ring. A menu with a hotkey opens over ZBrush; one without is a submenu.' },
-  { screen: 'menus', target: () => $('#screen-menus .stage'), title: 'The ring', text: 'How the ring will look. Drag brushes onto it, drag slots to reorder them, and click one to edit it.' },
+  { screen: null, target: () => $('.rail'), title: 'Screens', text: 'Studio has six screens. Click one here, or press Alt+1 to Alt+6. Status and Setup are there when something is not working.' },
+  { screen: 'menus', target: () => $('#screen-menus .stage'), title: 'The ring', text: 'How the ring will look. Drag brushes onto it, drag slots to reorder them, and click one to edit it. The menus are listed on the left: a menu with a hotkey opens over ZBrush, one without is a submenu.' },
   { screen: 'menus', target: () => $('#screen-menus .right-col .tabs'), title: 'Item, Menu, Library', text: 'Item edits the slot you clicked, Menu edits the whole ring, and Library lists brushes to drag in.' },
   { screen: 'look', target: () => $('#screen-look .look-left .mini-stage'), title: 'Look', text: 'How the ring looks: its size, the shape of the slots, labels and colours. It applies to every menu, and the preview here shows any menu you pick.' },
-  { screen: null, target: () => $('.rail-btn[data-screen="library"]'), title: 'Library', text: 'Every brush, alpha, material and texture ZBrush can load, with tags and favourites.' },
-  { screen: null, target: () => $('#profileBtn'), title: 'Profiles', text: 'A whole set of menus and settings for each kind of work.' },
   { screen: null, target: () => $('#modeSeg'), title: 'Simple and Full', text: 'Simple shows the everyday controls. Full shows every control. The ring is the same in both.' },
-  { screen: null, target: () => [$('#revertBtn'), $('#saveBtn')], title: 'Save', text: 'Nothing reaches the ring until you save. Then it applies straight away. Revert goes back to what was saved.' },
-  { screen: null, target: () => [$('.rail-btn[data-screen="status"]'), $('.rail-btn[data-screen="setup"]')], title: 'When something is not working',
-    text: 'Status shows whether ZBrush and the app are running, with the log. Setup is the first-start checklist. You can take this tour again from there or from Settings > Studio.' }
+  { screen: null, target: () => [$('#revertBtn'), $('#saveBtn')], title: 'Save', text: 'Nothing reaches the ring until you save. Then it applies straight away. Revert goes back to what was saved. You can take this tour again from Setup or Settings > Studio.' }
 ];
 /* The bounding box of a stop's element(s) on screen, or null when none of them can be seen. */
 function tourRect(stop) {

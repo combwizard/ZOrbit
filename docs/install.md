@@ -15,7 +15,7 @@
 
 The first time you open **ZOrbit Studio** it starts on its **Setup** screen. Setup walks through the rest: it finds your ZBrush, tells you whether to restart it, lists each ZBrush 2022 to 2025 it finds with an **Install** button (press it for each version you use), and has you try the ring once. You can reopen it any time with Alt+6.
 
-![The Setup screen with ZBrush found, Plugin loaded in ZBrush and Try the ring all ticked, and a row for each ZBrush version with its Install, Update or Remove button](images/setup.png)
+![The Setup screen with ZBrush found open, showing a row for each ZBrush version with its Install, Update or Remove button, and Plugin loaded in ZBrush and Try the ring ticked and folded to one line each](images/setup.png)
 
 The first run puts a starter set of menus in the **Default** profile, `%APPDATA%\ZOrbit\profiles\Default\radial.json`. See [Profiles](profiles.md). They use only brushes that come with ZBrush.
 
