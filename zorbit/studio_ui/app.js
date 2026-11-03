@@ -4177,7 +4177,7 @@ function buildSettingsScreen(root) {
     const browserObj = () => { if (!S.cfg.browser || typeof S.cfg.browser !== 'object') S.cfg.browser = {}; return S.cfg.browser; };
     const bOwner = hotkey => (hotkey ? hotkeyOwner(hotkey, BROWSER) : null);
     const bsay = owner => (owner ? `Also used by ${ownerName(owner)}. That menu wins, so this hotkey will not open the browser.` : '');
-    const bhk = hotkeyField({ what: 'Browser hotkey', value: (S.cfg.browser && typeof S.cfg.browser === 'object' && S.cfg.browser.hotkey) || '', placeholder: 'No hotkey (open it from a Browser slot)', onChange: str => {
+    const bhk = hotkeyField({ what: 'Browser hotkey', value: (S.cfg.browser && typeof S.cfg.browser === 'object' && S.cfg.browser.hotkey) || '', placeholder: 'No hotkey', onChange: str => {
       const b = browserObj();
       if (str) b.hotkey = str; else delete b.hotkey;
       if (!Object.keys(b).length) delete S.cfg.browser;
@@ -5077,7 +5077,7 @@ function describeProblem(raw) {
   if (raw.startsWith('bridge: must be an object')) return out('The bridge section is not an object, so the defaults are used', bridge);
   if ((m = /^bridge\.(\w+): unknown setting(.*)$/s.exec(raw))) return out(`The bridge setting “${m[1]}” is not known.` + didYouMean(m[2]), bridge);
   if (raw.startsWith('bridge.key ')) return out('The bridge key ' + raw.slice('bridge.key '.length), bridge);
-  const browserCard = { kind: 'settings', card: 'set-behaviour' };
+  const browserCard = { kind: 'settings', card: 'set-behaviour', fk: 'hk:Browser hotkey' };   // the recorder is the last row of the card, so it is focused too
   if ((m = /^browser\.hotkey (.+) not understood$/s.exec(raw))) return out(`The browser hotkey ${unq(m[1])} is not understood`, browserCard);
   if ((m = /^browser\.hotkey (.+) already used by menu (.+)$/s.exec(raw))) return out(`The browser hotkey ${unq(m[1])} is also used by ${titleOf(m[2])}; that menu wins, so the browser will not open with it`, browserCard);
   if ((m = /^browser\.(\w+): unknown setting(.*)$/s.exec(raw))) return out(`The browser setting “${m[1]}” is not known.` + didYouMean(m[2]), browserCard);
@@ -5136,7 +5136,7 @@ function goToProblem(t) {
   if (t.kind === 'settings') {
     const same = S.screen === 'settings';
     showScreen('settings', { fresh: true });
-    const go = () => { if (R.gotoCard) R.gotoCard(t.card); };
+    const go = () => { if (R.gotoCard) R.gotoCard(t.card); if (t.fk) { const el = $('#screen-settings [data-fk="' + t.fk + '"]'); if (el && !el.disabled) el.focus({ preventScroll: true }); } };
     if (same) go(); else requestAnimationFrame(go);
     return;
   }
