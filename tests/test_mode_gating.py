@@ -16,3 +16,12 @@ def test_simple_mode_hides_what_the_docs_say_and_problem_links_switch_to_full_wh
                          text=True, timeout=60, encoding="utf-8")
     assert run.returncode == 0, run.stdout + run.stderr
     assert "mode gating checks pass" in run.stdout
+
+
+@pytest.mark.parametrize("page", ["index.html", "popout.html"])
+def test_every_page_that_loads_app_js_loads_mode_js_first(page):
+    """app.js reads window.ZMode when it loads, so both Studio and the browser window must load mode.js before it."""
+    with open(os.path.join(ROOT, "zorbit", "studio_ui", page), encoding="utf-8") as f:
+        html = f.read()
+    assert "app.js" in html
+    assert 0 < html.index('src="mode.js"') < html.index('src="app.js"')
