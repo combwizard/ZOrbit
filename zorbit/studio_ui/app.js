@@ -125,14 +125,14 @@ const KIND = {
   alpha: { label: 'Alpha', icon: 'k_alpha', hint: 'Select an alpha' },
   material: { label: 'Material', icon: 'k_material', hint: 'Select a material' },
   texture: { label: 'Texture', icon: 'k_texture', hint: 'Select a texture' },
-  press: { label: 'Press', icon: 'k_press', full: true, hint: 'Press any ZBrush button' },
-  set: { label: 'Set', icon: 'k_set', full: true, hint: 'Set a slider or value' },
-  toggle: { label: 'Toggle', icon: 'k_toggle', full: true, hint: 'Flip a switch' },
-  steps: { label: 'Steps', icon: 'k_steps', full: true, hint: 'Run several actions in order' },
+  press: { label: 'Press', icon: 'k_press', hint: 'Press any ZBrush button' },
+  set: { label: 'Set', icon: 'k_set', hint: 'Set a slider or value' },
+  toggle: { label: 'Toggle', icon: 'k_toggle', hint: 'Flip a switch' },
+  steps: { label: 'Steps', icon: 'k_steps', hint: 'Run several actions in order' },
   menu: { label: 'Submenu', icon: 'k_menu', hint: 'Open another ring' },
-  auto: { label: 'Auto', icon: 'k_auto', full: true, hint: 'A slot filled with a brush you pick often' },
-  tag: { label: 'Tag', icon: 'tag', full: true, hint: 'Every item with a tag: brushes first, most used first, then alphas, materials and textures' },
-  browser: { label: 'Browser', icon: 'k_browser', full: true, hint: 'Open the browser' },
+  auto: { label: 'Auto', icon: 'k_auto', hint: 'A slot filled with a brush you pick often' },
+  tag: { label: 'Tag', icon: 'tag', hint: 'Every item with a tag: brushes first, most used first, then alphas, materials and textures' },
+  browser: { label: 'Browser', icon: 'k_browser', hint: 'Open the browser' },
   empty: { label: 'Empty slot', icon: 'k_empty', hint: 'Holds its place in the ring and does nothing' },
 };
 /* The kinds of asset the library holds (brushes, alphas, materials, textures) and their wording; every "brush/brushes" string reads from here. */
@@ -239,42 +239,15 @@ const curItem = () => { const m = curMenu(); return m && S.itemIdx !== null ? m.
 /* ---- Simple and Full mode. The mode only changes what Studio shows; the ring, the app and radial.json never see it.
    An undecided mode, a failed get_prefs and the popout (which never reads prefs) all show everything. */
 const isFull = () => S.prefs.mode !== 'simple';
-const kindIsFull = k => !!(KIND[k] && KIND[k].full);
-/* Ring settings that only Full shows, with the names the "changed in Full mode" note uses. */
-const FULL_RING = { tag_colors: 'Tag colours', tag_band: 'Tag colours', tag_band_opacity: 'Tag colours', tag_glow_opacity: 'Tag colours', tag_tint_opacity: 'Tag colours',
-  tag_tint_style: 'Tag colours', tag_tint_blend: 'Tag colours', colors: 'Colours', hover_submenus: 'Open submenus on hover', hint: 'Hint line', tag_limit: 'Tag fan slots', hub: 'Hub', hub_style: 'Hub', hub_color: 'Hub', hub_glow: 'Hub',
-  glow_color: 'Glow', glow_opacity: 'Glow', label_color: 'Label colour', slot_corner: 'Slot detail', border_width: 'Slot detail', icon_scale: 'Slot detail', tap_ms: 'Tap time', timeout_s: 'Auto-close' };
-const FULL_CARDS = new Set(['set-zbrush-bridge', 'set-older-zbrush', 'set-tags']);
-/* Of the names above, the ones that live on the Look screen; the rest are on Settings. */
-const LOOK_FULL_NAMES = new Set(['Tag colours', 'Colours', 'Hub', 'Glow', 'Label colour', 'Slot detail']);
-/* A menu with an open animation, fan out or swallow turned off: the Menu tab shows those fields only in Full. */
-const menuFullSet = m => !!m && (!!m.animation || m.fan === true || m.swallow === false || !!m.look);
+const MODE = window.ZMode;      // mode.js: what Simple hides, shared with look-screen.js and the tests
+const kindIsFull = MODE.kindIsFull;
+const { FULL_CARDS, menuFullSet } = MODE;
+const modeCtx = () => ({ defaults: S.defaults, kindOf, menuOf });
 /* Names (deduplicated, in settings order) of Full-only settings that differ from the defaults. where: 'look' or 'settings' keeps the ones that screen shows. */
-function fullOnlyChanges(cfg, where) {
-  const names = [], add = n => { if (!names.includes(n) && (!where || LOOK_FULL_NAMES.has(n) === (where === 'look'))) names.push(n); };
-  const r = (cfg && cfg.ring && typeof cfg.ring === 'object') ? cfg.ring : {};
-  for (const k of Object.keys(FULL_RING)) {
-    if (k === 'colors' || !(k in r)) continue;
-    if (JSON.stringify(r[k]) !== JSON.stringify(S.defaults[k])) add(FULL_RING[k]);
-  }
-  if (r.colors && typeof r.colors === 'object' && Object.keys(r.colors).some(c => String(r.colors[c]).toLowerCase() !== String((S.defaults.colors || {})[c]).toLowerCase())) add('Colours');
-  const b = cfg && cfg.bridge;
-  if (b && typeof b === 'object') {
-    const key = String(b.key || '').trim().toLowerCase();
-    if ((b.mode !== undefined && b.mode !== 'auto') || (key && key !== 'f9')) add('ZBrush bridge');
-  }
-  return names;
-}
-const needsFull = cfg => fullOnlyChanges(cfg).length > 0 || Object.values((cfg && cfg.menus) || {}).some(m => m && (menuFullSet(m) || (Array.isArray(m.items) && m.items.some(it => kindIsFull(kindOf(it))))));
+const fullOnlyChanges = (cfg, where) => MODE.fullOnlyChanges(cfg, where, modeCtx());
+const needsFull = cfg => MODE.needsFull(cfg, modeCtx());
 /* Would going to this problem target land on something Simple hides? */
-function targetNeedsFull(t) {
-  if (!t) return false;
-  if (t.kind === 'settings') return FULL_CARDS.has(t.card) || !!(t.key && FULL_RING[t.key]);
-  if (t.kind === 'look') return Number.isInteger(t.slot) || !!(t.key && FULL_RING[t.key] && LOOK_FULL_NAMES.has(FULL_RING[t.key]));      // the slot level is Full only
-  if (t.kind === 'menu') return t.field === 'id' || t.field === 'animation';
-  if (t.kind === 'item') { const m = menuOf(t.menuId), it = m && m.items && m.items[t.index]; return !!it && kindIsFull(kindOf(it)); }
-  return false;
-}
+const targetNeedsFull = t => MODE.targetNeedsFull(t, modeCtx());
 /* One line saying what an item targets; the item rows and the read-only line in Simple share it. */
 function itemSub(it) {
   const k = kindOf(it);
@@ -1676,7 +1649,7 @@ function buildMenusScreen(root) {
   };
 
   /* --- items list */
-  const addBtn = h('button', { class: 'btn small', type: 'button', onclick: e => popover(e.currentTarget, Object.keys(KIND).filter(k => isFull() || !KIND[k].full).map(k => ({ icon: KIND[k].icon, label: KIND[k].label, hint: KIND[k].hint, fn: () => addItem(k) }))) }, icon('plus', 13), 'Add item');
+  const addBtn = h('button', { class: 'btn small', type: 'button', onclick: e => popover(e.currentTarget, Object.keys(KIND).filter(k => isFull() || !kindIsFull(k)).map(k => ({ icon: KIND[k].icon, label: KIND[k].label, hint: KIND[k].hint, fn: () => addItem(k) }))) }, icon('plus', 13), 'Add item');
   R.itemList = () => {
     const m = curMenu();
     const back = S.cameFrom && S.cameFrom.menuId !== S.menuId ? menuOf(S.cameFrom.menuId) : null;
@@ -2287,7 +2260,7 @@ function buildItemInspector() {
     h('div', { class: 'spacer' }), moveBtn, iconBtn('copy', 'Duplicate item', () => dupItem(i)), iconBtn('trash', 'Delete item', e => { if (e.detail > 1) return; delItem(i); const t = $('.irow.sel') || $('.items-panel .col-head .btn'); if (t) t.focus(); }, 'danger')));    // delItem already selected the neighbour, as the row's own button does
 
   /* action type */
-  const seg = h('div', { class: 'kinds', role: 'radiogroup', 'aria-label': 'Action type' }, Object.keys(KIND).filter(kk => kk === k || ((isFull() || !KIND[kk].full) && kk !== 'empty')).map(kk =>
+  const seg = h('div', { class: 'kinds', role: 'radiogroup', 'aria-label': 'Action type' }, Object.keys(KIND).filter(kk => kk === k || ((isFull() || !kindIsFull(kk)) && kk !== 'empty')).map(kk =>
     h('button', { class: 'kind' + (kk === k ? ' on' : '') + ' k-' + kk, type: 'button', role: 'radio', 'aria-checked': kk === k ? 'true' : 'false', title: KIND[kk].hint,
       onclick: () => {
         if (kk === k) return;
@@ -2637,7 +2610,7 @@ function buildMenuProps() {
     swallowSw));
 
   if (!full && menuFullSet(m)) {
-    const set = [m.animation ? 'Open animation' : '', m.fan === true ? 'Fan out' : '', m.swallow === false ? 'Swallow hotkey' : '', m.look ? 'A look' : ''].filter(Boolean);
+    const set = [m.animation ? 'Open animation' : '', m.fan === true ? 'Fan out' : '', m.swallow === false ? 'Swallow hotkey' : '', MODE.lookHasOwn(m.look) ? 'A look with its own settings' : ''].filter(Boolean);
     box.append(h('div', { class: 'fhint' }, joinList(set) + (set.length === 1 ? ' is' : ' are') + ' set for this menu in Full mode. ', linkBtn('Switch to Full mode', () => setMode('full'))));
   }
   const refs = referrers(id);
@@ -2732,8 +2705,8 @@ function tagTargetField(it, k, updateHead) {
       hint.append('Pick a tag. ');
     } else if (isTag) {
       if (t && !n) { hint.classList.add('warn'); hint.append('No item has this tag yet; the slot stays empty until one does. '); }
-      else if (n > 12) hint.append('Opens a fan of the first 11 of ', h('b', null, plural(n, 'item')), ': brushes first (most used first), then alphas, materials and textures. A fan holds 12 slots, so the last one, More..., opens the browser on this tag. ');
-      else hint.append('Opens a fan of ', h('b', null, plural(n, 'item')), ': brushes first (most used first), then alphas, materials and textures. A fan holds at most 12 slots. ');
+      else if (n > ringNum('tag_limit')) hint.append('Opens a fan of the first ' + (ringNum('tag_limit') - 1) + ' of ', h('b', null, plural(n, 'item')), ': brushes first (most used first), then alphas, materials and textures. A fan holds ' + ringNum('tag_limit') + ' slots, so the last one, More..., opens the browser on this tag. ');
+      else hint.append('Opens a fan of ', h('b', null, plural(n, 'item')), ': brushes first (most used first), then alphas, materials and textures. A fan holds at most ' + ringNum('tag_limit') + ' slots. ');
     } else hint.append(t ? `Opens the browser on ${K(it.kind).tab}, filtered to this tag. ` : `Opens the browser on ${K(it.kind).tab} with every ${K(it.kind).one}. Pick a tag to filter it. `);
     hint.append(h('button', { class: 'link', type: 'button', onmousedown: e => e.preventDefault(), onclick: () => openTagManager() }, 'Manage tags...'));
   };
@@ -4169,7 +4142,7 @@ function buildSettingsScreen(root) {
   const build = () => {
     const full = isFull();
     page.replaceChildren();
-    page.append(h('div', { class: 'page-head' }, h('h1', null, 'Settings', h('em', null, 'Appearance and behaviour')), h('p', null, 'The theme, how the ring opens and behaves, and how the app talks to ZBrush. The ring\u2019s size, shape and colours are on the Look screen. Changes are saved with the Save button.')));
+    page.append(h('div', { class: 'page-head' }, h('h1', null, 'Settings', h('em', null, 'Appearance and behaviour')), h('p', null, (full ? 'The theme, how the ring opens and behaves, and how the app talks to ZBrush.' : 'The theme, and how the ring opens and behaves.') + ' The ring\u2019s size, shape and colours are on the Look screen. Changes are saved with the Save button.')));
     const hiddenSet = full ? [] : fullOnlyChanges(S.cfg, 'settings');      // not a .card, so it is not in the contents list
     if (hiddenSet.length) page.append(h('div', { class: 'mode-note', role: 'status' }, 'Changed in Full mode and not shown here: ' + hiddenSet.join(', ') + '. ', linkBtn('Switch to Full mode', () => setMode('full'))));
 
@@ -4196,7 +4169,7 @@ function buildSettingsScreen(root) {
         if (!ok) { if (R.settings) R.settings(); return; }             // the pick did not stick: draw the old one again
         syncTheme();
       }, 'four', 'Theme'),
-      h('div', { class: 'fhint', style: { marginTop: '8px' } }, 'Applies to Studio, the browser and the ring. A colour you set under Look > Colours still wins. Themes are experimental: the colours will change as they are tuned.'), zbNote, themeNote);
+      h('div', { class: 'fhint', style: { marginTop: '8px' } }, 'Applies to Studio, the browser and the ring. ' + (full ? 'A colour you set under Look > Colours still wins. ' : '') + 'Themes are experimental: the colours will change as they are tuned.'), zbNote, themeNote);
     // The badge goes after the title's text node: the contents list and the card's anchor (set-theme) are made from the text only.
     themeCard.querySelector('.card-title').firstChild.after(h('span', { class: 'tag amber', title: 'The colours will change as they are tuned. Say on GitHub what reads badly.' }, 'Experimental'));
     page.append(themeCard);
@@ -5063,7 +5036,7 @@ function describeProblem(raw) {
     if ((m = /^: hotkey (.+) not understood$/s.exec(rest))) return out(`The hotkey ${unq(m[1])} on ${titleOf(mid)} is not understood`, tgt('hotkey'));
     if ((m = /^: animation (.+) unknown; using ring\.animation$/s.exec(rest))) return out(`${titleOf(mid)} has an unknown animation (${unq(m[1])}); the one from Settings is used instead`, tgt('animation'));
     if ((m = /^: unknown setting (.+)$/s.exec(rest))) return out(`${titleOf(mid)} has an unknown setting ${m[1].replace(/\s*\(did you mean .*$/s, '')}.` + didYouMean(m[1]), tgt());
-    if ((m = /^: (swallow|fan) (.+) must be true or false; using (true|false)$/s.exec(rest))) return out(`${titleOf(mid)}: ${m[1] === 'fan' ? 'Fan out' : 'Swallow hotkey'} must be on or off, not ${unq(m[2])}; it is ${m[3] === 'true' ? 'on' : 'off'} for now`, tgt());
+    if ((m = /^: (swallow|fan) (.+) must be true or false; using (true|false)$/s.exec(rest))) return out(`${titleOf(mid)}: ${m[1] === 'fan' ? 'Fan out' : 'Swallow hotkey'} must be on or off, not ${unq(m[2])}; it is ${m[3] === 'true' ? 'on' : 'off'} for now`, tgt(m[1]));
     const lookAt = key => (known(mid) ? lookTarget(key, { level: 'menu', menuId: mid }) : null);
     if ((m = /^: look (.+) unknown; using the ring's look$/s.exec(rest))) return out(`${titleOf(mid)} uses the look ${unq(m[1])}, which does not exist; the ring's look is used instead`, lookAt('_look'));
     if (rest.startsWith(': look must be a look name or an object')) return out(`The look of ${titleOf(mid)} must be a look name or an object of look settings, so it is ignored`, lookAt('_look'));
@@ -5188,7 +5161,8 @@ function goToProblem(t) {
     if (!hasMenu(t.menuId)) return;
     selectMenu(t.menuId); S.tab = 'menu'; if (R.right) R.right();
     const mr = $('.mrow.sel'); if (mr) mr.scrollIntoView({ block: 'nearest' });
-    const el = t.field === 'hotkey' ? $('.insp .hk-field') : t.field === 'id' ? $('.insp input[aria-label="Menu id"]') : t.field === 'animation' ? $('.insp select[aria-label="Open animation for this menu"]') : null;
+    const el = t.field === 'hotkey' ? $('.insp .hk-field') : t.field === 'id' ? $('.insp input[aria-label="Menu id"]') : t.field === 'animation' ? $('.insp select[aria-label="Open animation for this menu"]')
+      : t.field === 'swallow' ? $('.insp input[aria-label="Swallow hotkey"]') : t.field === 'fan' ? $('.insp input[aria-label="Fan out when opened from another menu"]') : null;
     if (el) { el.focus(); el.scrollIntoView({ block: 'nearest' }); }
   }
 }
