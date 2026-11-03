@@ -10,6 +10,7 @@ All notable changes to this project are listed here. The format follows
 
 - An open browser now changes theme the moment you pick one in Studio, instead of up to half a second later.
 - ZOrbit is now built and tested on Python 3.14 instead of 3.12. The packaged app bundles the new interpreter; running from a checkout needs Python 3.14.
+- On Settings, the **Browser** card now comes before **ZBrush bridge**. The "On this page" list follows the new order.
 
 ### Fixed
 

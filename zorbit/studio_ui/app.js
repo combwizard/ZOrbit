@@ -4069,6 +4069,23 @@ function buildSettingsScreen(root) {
         sliderRow({ label: 'Tap time', hint: 'A hotkey press shorter than this is a tap: the ring stays open for a click. Holding longer and releasing picks the item under the cursor.', key: 'tap_ms', step: 10, unit: 'ms' }),
         sliderRow({ label: 'Auto-close', hint: 'An open ring closes by itself after this long.', key: 'timeout_s', unit: 's' })] : [])));
 
+    /* --- browser (browser.hotkey; the object is dropped again when it ends up empty) */
+    const browserObj = () => { if (!S.cfg.browser || typeof S.cfg.browser !== 'object') S.cfg.browser = {}; return S.cfg.browser; };
+    const bOwner = hotkey => (hotkey ? hotkeyOwner(hotkey, BROWSER) : null);
+    const bsay = owner => (owner ? `Also used by ${ownerName(owner)}. That menu wins, so this hotkey will not open the browser.` : '');
+    const bhk = hotkeyField({ what: 'Browser hotkey', value: (S.cfg.browser && typeof S.cfg.browser === 'object' && S.cfg.browser.hotkey) || '', placeholder: 'No hotkey (open it from a Browser slot)', onChange: str => {
+      const b = browserObj();
+      if (str) b.hotkey = str; else delete b.hotkey;
+      if (!Object.keys(b).length) delete S.cfg.browser;
+      const owner = bOwner(str);
+      bhk.say(bsay(owner), 'warn');
+      commit();
+    } });
+    page.append(card('Browser', 'A window of its own',
+      h('div', { class: 'browser-key' }, field('Hotkey', bhk, 'Shows the browser; pressed over it, it gives ZBrush the keyboard back. The browser also opens from a Browser slot and the tray menu.')),
+      h('div', { class: 'browser-open' }, h('button', { class: 'btn small', type: 'button', title: 'Open the browser in its own window', onclick: openBrowserFromButton }, icon('k_browser', 13), 'Open the browser'))));
+    { const o0 = bOwner(S.cfg.browser && S.cfg.browser.hotkey); if (o0) bhk.say(bsay(o0), 'warn'); }
+
     if (full) {
       /* --- bridge */
       const bridge = () => { if (!S.cfg.bridge || typeof S.cfg.bridge !== 'object') S.cfg.bridge = {}; return S.cfg.bridge; };
@@ -4129,23 +4146,6 @@ function buildSettingsScreen(root) {
           h('div', { class: 'fhint mono tag-path', hidden: !S.tagsPath }, S.tagsPath)),
           manageTagsBtn('btn'))));
     }
-
-    /* --- browser (browser.hotkey; the object is dropped again when it ends up empty) */
-    const browserObj = () => { if (!S.cfg.browser || typeof S.cfg.browser !== 'object') S.cfg.browser = {}; return S.cfg.browser; };
-    const bOwner = hotkey => (hotkey ? hotkeyOwner(hotkey, BROWSER) : null);
-    const bsay = owner => (owner ? `Also used by ${ownerName(owner)}. That menu wins, so this hotkey will not open the browser.` : '');
-    const bhk = hotkeyField({ what: 'Browser hotkey', value: (S.cfg.browser && typeof S.cfg.browser === 'object' && S.cfg.browser.hotkey) || '', placeholder: 'No hotkey (open it from a Browser slot)', onChange: str => {
-      const b = browserObj();
-      if (str) b.hotkey = str; else delete b.hotkey;
-      if (!Object.keys(b).length) delete S.cfg.browser;
-      const owner = bOwner(str);
-      bhk.say(bsay(owner), 'warn');
-      commit();
-    } });
-    page.append(card('Browser', 'A window of its own',
-      h('div', { class: 'browser-key' }, field('Hotkey', bhk, 'Shows the browser; pressed over it, it gives ZBrush the keyboard back. The browser also opens from a Browser slot and the tray menu.')),
-      h('div', { class: 'browser-open' }, h('button', { class: 'btn small', type: 'button', title: 'Open the browser in its own window', onclick: openBrowserFromButton }, icon('k_browser', 13), 'Open the browser'))));
-    { const o0 = bOwner(S.cfg.browser && S.cfg.browser.hotkey); if (o0) bhk.say(bsay(o0), 'warn'); }
 
     /* --- studio (preferences of this window, saved immediately, not part of the menus file) */
     const updNote = h('div', { class: 'fhint upd-status', role: 'status' });
