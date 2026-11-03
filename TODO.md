@@ -29,13 +29,15 @@ The lists below group issues by area. This is the order to take them in, worked 
    [#106](https://github.com/combwizard/ZOrbit/issues/106) (timer inside the browser);
    [#31](https://github.com/combwizard/ZOrbit/issues/31) then
    [#30](https://github.com/combwizard/ZOrbit/issues/30) (one "set the file, then press" action);
-   [#24](https://github.com/combwizard/ZOrbit/issues/24) if the check in step 1 works out.
+   [#24](https://github.com/combwizard/ZOrbit/issues/24) if the check in step 1 works out;
+   [#104](https://github.com/combwizard/ZOrbit/issues/104) (the #103 checks of 3 Nov failed on monitors of
+   different sizes and found no snap layouts flyout; #103's checks are its test list).
 3. **Ring look, back to back:** [#37](https://github.com/combwizard/ZOrbit/issues/37) (band helper), then
    [#35](https://github.com/combwizard/ZOrbit/issues/35) (`Item.colors`), then
    [#36](https://github.com/combwizard/ZOrbit/issues/36). Retake the ring pictures once at the end.
 4. **Design first:** [#98](https://github.com/combwizard/ZOrbit/issues/98) (after #97),
    [#39](https://github.com/combwizard/ZOrbit/issues/39) then [#40](https://github.com/combwizard/ZOrbit/issues/40)
-   (settle the favourites data first), [#104](https://github.com/combwizard/ZOrbit/issues/104) (after #103 passes; its checks are #104's test list),
+   (settle the favourites data first),
    [#26](https://github.com/combwizard/ZOrbit/issues/26) last. Keep new IPC code out of `win32.py` and `radiald.py`.
 
 Parked for now: [#29](https://github.com/combwizard/ZOrbit/issues/29) (Keep, Remove and Hide need more
