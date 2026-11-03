@@ -34,6 +34,10 @@ The switch is on the **Menu** tab. With it on:
 - **Alt+Up** and **Alt+Down** swap an item with its neighbour.
 - **+** and **−** at the top left of the ring preview add an empty slot at the end or remove the last one, so you can decide how many places the ring has before you fill them.
 
+Moving things around is the part I like to watch. The brush glides to its new place along the ring, and when two slots trade, the two pictures pass each other on separate lanes. It takes a quarter of a second, which is enough to see which brush went where.
+
+![The Brushes ring in Studio's preview with an empty slot at the top right. DamStandard is dragged onto the empty slot, a hint under the pointer says Move to empty slot, and the brush glides there. Then ClayBuildup is dragged onto hPolish, the hint says Swap with hPolish, and the two brushes glide past each other and trade places](../../images/slot-move.gif)
+
 With the switch off, Studio edits a menu the way it always has. Turning it off also closes up the menu's gaps, and the toast has **Undo** for that too.
 
 ## Your menus

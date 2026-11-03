@@ -1,6 +1,6 @@
 """Draws the ring pictures in docs/images (ring.png, ring-light.png, ring-zbrush.png, fan.png, tag-colours.png,
 animations.png, the look pictures slot-shapes.png, hub-styles.png, slot-styles.png, looks.png, second-ring.png,
-more-slot.png and empty-slots.png, and the two GIFs) with the real renderer, zorbit/ring.py, so they follow the ring's look whenever it
+more-slot.png and empty-slots.png, and the three GIFs) with the real renderer, zorbit/ring.py, so they follow the ring's look whenever it
 changes. No window is opened and no ZBrush is needed, but the brush pictures come from the installed ZBrush's
 presets, so a ZBrush has to be installed.
 
@@ -19,6 +19,7 @@ Run: python tools/ring_shots.py                         (every picture)
 import atexit
 import dataclasses
 import glob
+import math
 import os
 import shutil
 import sys
@@ -39,7 +40,7 @@ os.environ["ZORBIT_USAGE_FILE"] = os.path.join(SANDBOX, "Local", "ZOrbit", "usag
 atexit.register(shutil.rmtree, SANDBOX, ignore_errors=True)
 sys.path.insert(0, os.path.join(ROOT, "zorbit"))
 
-from PIL import Image, ImageDraw, ImageFont  # noqa: E402
+from PIL import Image, ImageChops, ImageDraw, ImageFont  # noqa: E402
 
 import paths  # noqa: E402
 
@@ -546,6 +547,160 @@ def shot_empty_slots(w):
                                big=True, fields={"items": kept})], 3)
 
 
+def bezier_ease(t, x1=0.42, y1=0.0, x2=0.58, y2=1.0):
+    """CSS ease-in-out: the progress for time t (0 to 1), as the browser works it out for Studio's glide."""
+    def at(u, a, b):
+        return 3 * (1 - u) ** 2 * u * a + 3 * (1 - u) * u ** 2 * b + u ** 3
+    lo, hi = 0.0, 1.0
+    for _ in range(40):
+        mid = (lo + hi) / 2
+        if at(mid, x1, x2) < t:
+            lo = mid
+        else:
+            hi = mid
+    return at((lo + hi) / 2, y1, y2)
+
+
+GLIDE_MS = 250                                 # Studio's swap: the pictures of the two slots glide across in this time
+GLIDE_FRAME_MS = 20
+
+
+def slot_geometry(im, i):
+    """Slot i of a ring picture: where it is from the ring centre, how far, its angle and its size."""
+    s = next(s for s in im.info["layout"]["slots"] if s["i"] == i)
+    return {"x": s["x"], "y": s["y"], "r": (s["x"] ** 2 + s["y"] ** 2) ** 0.5,
+            "a": math.degrees(math.atan2(s["x"], -s["y"])), "size": s["size"]}
+
+
+def glide_frame(before, after, moves, ms):
+    """The ring part way through Studio's swap. The old picture has holes where the moved slots were, and a copy of
+    each moved slot's picture glides along an arc to the other's place (app.js, makeRingView: glide). moves is
+    [(from slot, to slot), ...]; ms is the time since the drop. Returns the picture and its ring centre."""
+    if ms >= GLIDE_MS:
+        return after
+    cx, cy = before.info["centre"]
+    base = before.copy()
+    mask = Image.new("L", base.size, 255)
+    md = ImageDraw.Draw(mask)
+    for i in {i for m in moves for i in m}:
+        g = slot_geometry(before, i)
+        rad = g["size"] * 0.56
+        md.ellipse([cx + g["x"] - rad, cy + g["y"] - rad, cx + g["x"] + rad, cy + g["y"] + rad], fill=0)
+    alpha = ImageChops.multiply(base.getchannel("A"), mask)
+    base.putalpha(alpha)
+    p = bezier_ease(ms / GLIDE_MS)
+    for n, (a, b) in enumerate(moves):
+        f, t = slot_geometry(before, a), slot_geometry(before, b)
+        d = ((t["a"] - f["a"] + 540) % 360) - 180                          # the short way round
+        mid = (f["r"] + t["r"]) / 2 + ((-1 if n else 1) * 0.45 * f["size"] if len(moves) > 1 else 0)
+        r = f["r"] + (mid - f["r"]) * (p / 0.5) if p < 0.5 else mid + (t["r"] - mid) * ((p - 0.5) / 0.5)
+        ang = math.radians(f["a"] + d * p)
+        gs = int(round(f["size"] * 1.2))
+        box = (int(round(cx + f["x"] - gs / 2)), int(round(cy + f["y"] - gs / 2)))
+        ghost = before.crop((box[0], box[1], box[0] + gs, box[1] + gs))
+        base.alpha_composite(ghost, (int(round(cx + r * math.sin(ang) - gs / 2)), int(round(cy - r * math.cos(ang) - gs / 2))))
+    base.info = dict(before.info)
+    return base
+
+
+def drag_hint(canvas, x, y, text):
+    """The small hint Studio shows under the pointer while an item is dragged over a slot."""
+    f = font("segoeui.ttf", 13)
+    d = ImageDraw.Draw(canvas)
+    box = d.textbbox((0, 0), text, font=f)
+    w, h = box[2] - box[0] + 20, box[3] - box[1] + 14
+    if x + w > canvas.width - 6:                                            # no room on the right of the pointer: to its left
+        x -= w + 28
+    d.rounded_rectangle([x, y, x + w, y + h], radius=8, fill=(38, 40, 47, 255), outline=(78, 81, 91, 255))
+    d.text((x + 10 - box[0], y + 7 - box[1]), text, font=f, fill=TEXT)
+
+
+def shot_slot_move(w):
+    """Studio's ring preview with Keep slots in place on: a brush is dragged onto an empty slot and glides there, then
+    two brushes swap places, passing each other on an outer and an inner lane."""
+    w.fans(False)
+    items = list(w.cfg.menus["brushes"].items)
+    move = next(i for i, it in enumerate(items) if it.data.get("brush") == "Move")
+    empty = C.Item(label="", kind="empty", data={"empty": True})
+    s0 = items[:move] + [empty] + items[move + 1:]
+    s1 = list(s0)
+    s1[move], s1[move + 1] = s0[move + 1], s0[move]                         # DamStandard moves into the empty slot
+    s2 = list(s1)
+    s2[1], s2[5] = s1[5], s1[1]                                             # ClayBuildup and hPolish swap
+    scale = 0.9
+    pic = lambda its, hover=None: w.preview("brushes", hover=hover, held=True, scale=scale, fields={"items": its})
+    ring = {k: pic(v) for k, v in (("s0", s0), ("s1", s1), ("s2", s2))}
+    margin = 70
+    cx, cy = ring["s0"].info["centre"]
+    size = (ring["s0"].width + 2 * margin, ring["s0"].height + 2 * margin)
+    out, times = [], []
+
+    def put(im, cur=None, drag=None, hint=None, ms=FRAME_MS):
+        canvas = Image.new("RGBA", size, BG + (255,))
+        canvas.alpha_composite(im, (int(round(margin + cx - im.info["centre"][0])), int(round(margin + cy - im.info["centre"][1]))))
+        if drag is not None:                                                # the picture of the brush being dragged
+            gs = drag.width
+            canvas.alpha_composite(drag, (int(round(margin + cx + cur[0] - gs / 2)), int(round(margin + cy + cur[1] - gs / 2))))
+        if hint:
+            drag_hint(canvas, margin + cx + cur[0] + 16, margin + cy + cur[1] + 22, hint)
+        if cur is not None:
+            with_cursor(canvas, margin + cx + cur[0], margin + cy + cur[1], 0.9)
+        out.append(canvas.convert("RGB"))
+        times.append(ms)
+
+    def slot_at(im, i):
+        g = slot_geometry(im, i)
+        return g["x"] + CURSOR_OFFSET[0], g["y"] + CURSOR_OFFSET[1]
+
+    def lift(im, i):
+        """A translucent copy of slot i's picture, to ride along with the pointer."""
+        g = slot_geometry(im, i)
+        gs = int(round(g["size"] * 1.1))
+        c = im.info["centre"]
+        crop = im.crop((int(c[0] + g["x"] - gs / 2), int(c[1] + g["y"] - gs / 2), int(c[0] + g["x"] - gs / 2) + gs, int(c[1] + g["y"] - gs / 2) + gs))
+        crop.putalpha(crop.getchannel("A").point(lambda v: int(v * 0.78)))
+        return crop
+
+    def travel(a, b, ms, im, hover_from=None, drag=None, hint=None, hint_from=0.7):
+        n = max(1, round(ms / FRAME_MS))
+        for k in range(1, n + 1):
+            p = ease(k / n)
+            cur = (a[0] + (b[0] - a[0]) * p, a[1] + (b[1] - a[1]) * p)
+            put(im, cur, drag, hint if (drag is not None and k / n >= hint_from) else None)
+
+    def still(im, cur, ms):
+        for _ in range(max(1, round(ms / FRAME_MS))):
+            put(im, cur)
+
+    def drop(before, after, moves, cur):
+        for t in range(GLIDE_FRAME_MS, GLIDE_MS + 1, GLIDE_FRAME_MS):
+            put(glide_frame(before, after, moves, t), cur, ms=GLIDE_FRAME_MS)
+
+    away = (ring["s0"].width - cx - 10, -cy + 30)                           # outside the ring, top right
+    # one: DamStandard onto the empty slot
+    src, dst = slot_at(ring["s0"], move + 1), slot_at(ring["s0"], move)
+    still(ring["s0"], away, 700)
+    travel(away, src, 450, ring["s0"])
+    still(pic(s0, move + 1), src, 300)
+    travel(src, dst, 520, ring["s0"], drag=lift(ring["s0"], move + 1), hint="Move to empty slot")
+    still_drag = lift(ring["s0"], move + 1)
+    for _ in range(8):
+        put(ring["s0"], dst, still_drag, "Move to empty slot")
+    drop(ring["s0"], ring["s1"], [(move + 1, move)], dst)
+    still(ring["s1"], dst, 900)
+    # two: ClayBuildup and hPolish swap
+    a, b = slot_at(ring["s1"], 1), slot_at(ring["s1"], 5)
+    travel(dst, a, 450, ring["s1"])
+    still(pic(s1, 1), a, 300)
+    travel(a, b, 700, ring["s1"], drag=lift(ring["s1"], 1), hint="Swap with hPolish")
+    still_drag = lift(ring["s1"], 1)
+    for _ in range(8):
+        put(ring["s1"], b, still_drag, "Swap with hPolish")
+    drop(ring["s1"], ring["s2"], [(1, 5), (5, 1)], b)
+    still(ring["s2"], b, 1300)
+    return out, times
+
+
 # name -> (file, function, what it shows)
 SHOTS = {
     "ring": ("ring.png", shot_ring, "the starter Brushes menu in hold mode, ClayBuildup hovered, cursor on it"),
@@ -568,6 +723,9 @@ SHOTS = {
     "empty-slots": ("empty-slots.png", shot_empty_slots,
                     "the Brushes ring as shipped, then with Move deleted with Keep slots in place off and on, "
                     "DamStandard hovered in each"),
+    "slot-move": ("slot-move.gif", shot_slot_move,
+                  "Keep slots in place on: a brush is dragged onto an empty slot and glides there, then two brushes "
+                  "swap places"),
     "fan": ("fan.png", shot_fan, "More Brushes fanned out to the left, ClayTubes in the fan hovered, cursor on it"),
     "tag-colours": ("tag-colours.png", shot_tags, "eight brushes in two tags and two untagged, ClayBuildup hovered"),
     "animations": ("animations.png", shot_animations, "the five open animations part way through opening"),
