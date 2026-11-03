@@ -30,6 +30,8 @@ The lists below group issues by area. This is the order to take them in, worked 
    edit `studio_ui/app.js`, so merge them one at a time.
 3. **Medium:** [#108](https://github.com/combwizard/ZOrbit/issues/108) first (small), then
    [#109](https://github.com/combwizard/ZOrbit/issues/109) (pick hide, dim or a message first);
+   [#116](https://github.com/combwizard/ZOrbit/issues/116) (Copy report; it edits `studio_ui/app.js`, so after
+   step 2);
    [#99](https://github.com/combwizard/ZOrbit/issues/99) then
    [#94](https://github.com/combwizard/ZOrbit/issues/94) (`--profile next` is the hotkey's plumbing);
    [#106](https://github.com/combwizard/ZOrbit/issues/106) (timer inside the browser);
@@ -71,6 +73,7 @@ Issues #105, #34, #94 and #39 all edit `studio_ui/app.js`, so merge them one at 
 - [ ] [#113](https://github.com/combwizard/ZOrbit/issues/113) Set the open animation on the Look screen and drop the Ring look card
 - [ ] [#114](https://github.com/combwizard/ZOrbit/issues/114) Setup and the tour: three steps and six stops
 - [ ] [#115](https://github.com/combwizard/ZOrbit/issues/115) Fold the Look groups and the Menu tab so Full mode is not a cliff
+- [ ] [#116](https://github.com/combwizard/ZOrbit/issues/116) Copy report on Status, with the user name and folders hidden
 - [x] [#110](https://github.com/combwizard/ZOrbit/issues/110) Menus: empty slots, and a switch that keeps items in their slots
 
 ## Build
