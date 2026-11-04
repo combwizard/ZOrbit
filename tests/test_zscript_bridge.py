@@ -333,3 +333,35 @@ def test_list_main_writes_one_folder_per_line_with_a_bom(tmp_path, monkeypatch):
     assert raw.decode("utf-8-sig").splitlines() == [a_plugs]
     assert zb.list_main(["--zscript-list"]) == 1
     assert zb.list_main(["--zscript-list", str(tmp_path / "no" / "dir" / "x.txt")]) == 1
+
+
+# --- the file action -----------------------------------------------------------------------------
+def test_request_lines_for_the_file_action():
+    lines = zb.request_lines(2, "Capture", [{"filepress": "Document:Export", "file": "C:/Users/you/Shots/a.png"}])
+    assert lines == ["ZORBIT 1", "2", "Capture", "file", "Document:Export", "C:/Users/you/Shots/a.png"]
+
+
+def test_the_file_of_the_file_action_that_is_not_there_yet_gets_its_folders_short_name(monkeypatch):
+    # GetShortPathName only knows files that exist, so the folder (which the app has made) is shortened.
+    monkeypatch.setattr(zb, "ascii_path", lambda p, spaces=False: p if p.isascii() or p.endswith(".png") else "C:/BILDER~1")
+    got = zb.ascii_file("C:/Bilder/Gr\u00f6\u00dfe/a.png")
+    assert got.startswith("C:/BILDER~1") and got.endswith("a.png")
+    lines = zb.request_lines(1, "x", [{"filepress": "Document:Export", "file": "C:/Bilder/Gr\u00f6\u00dfe/a.png"}])
+    assert lines[-1].isascii()
+
+
+def test_a_file_in_a_folder_with_no_short_name_stays_as_it_is(monkeypatch):
+    monkeypatch.setattr(zb, "ascii_path", lambda p, spaces=False: p)
+    assert zb.ascii_file("C:/Gr\u00f6\u00dfe/a.png") == "C:/Gr\u00f6\u00dfe/a.png"
+
+
+def test_the_plugin_reads_the_file_action_as_kind_f():
+    # RM_Apply picks the kind by the first letter of its name: f is free, and file takes two arguments.
+    with open(os.path.join(paths.ZSCRIPT_DIR, zb.SOURCE), encoding="ascii") as f:
+        text = f.read()
+    assert "[If, rmK == 102, [RoutineCall, RM_File]]" in text
+    assert "(rmK == 102)" in text
+    routine = text[text.index("[RoutineDef, RM_File,"):]
+    routine = routine[:routine.index("\n]\n")]
+    assert "[IPress, #rmA]" in routine
+    assert '[IPress, "' not in routine                     # a press goes through a variable (tools/icolors_probe.py)

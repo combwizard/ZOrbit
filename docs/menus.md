@@ -62,6 +62,8 @@ The file holds:
 
 The hotkey and its **Swallow hotkey** switch, the ring settings and the bridge and browser settings stay behind, and so do the brush, alpha, material and texture files themselves. An icon that is a full path to a file on your PC shows as a problem on the other PC.
 
+The folder of a [Capture](#capture) item stays behind too. It usually holds your Windows name, so the item arrives with an empty folder and saves to that person's `Pictures\ZBrush`. **Import menu...** clears the folder of any capture item it brings in, for the same reason.
+
 **Import menu...**, under **Add menu** at the foot of the **Menus** list, asks for the file and shows what it holds before anything changes: the menu and its submenus, any title or id that is already taken, the tags it brings, and any brushes, alphas, materials or textures this PC does not have. Those still import, and show as missing until you install them.
 
 **Import** adds the menus after your current ones and overwrites nothing. A title that is taken gets a number, such as Sculpt 2, and a taken id gets one too, such as `sculpt_2`. The menus have no hotkey: give one in the **Menu** tab, or open the menu from another one. The menus are an unsaved change, so **Undo** takes them out and **Save** keeps them. The tags are saved straight away and merged with yours, as **Merge tags** does in [Import and export](files.md#import-and-export), and **Undo** leaves them.
@@ -81,6 +83,7 @@ Every item does exactly one thing. Besides the action, an item can have a `label
 | `press` | Presses any ZBrush button, by its interface path. |
 | `set` | Sets a slider or value. Needs a `value`. |
 | `toggle` | Flips a switch on or off. |
+| `capture` | Saves ZBrush's document as a PNG in a folder, with no dialog. See [Capture](#capture). |
 | `steps` | Runs a list of the actions above, in order. |
 | `menu` | Opens another ring in place of this one. |
 | `auto` | A slot that holds a brush you pick often. ZOrbit fills it. |
@@ -88,7 +91,7 @@ Every item does exactly one thing. Besides the action, an item can have a `label
 | `browser` | Opens the [browser](browser.md) on one of its tabs, optionally on one tag. |
 | `empty` | Holds a slot's place in the ring and does nothing. See [Empty](#empty). |
 
-Studio's [Simple mode](studio.md#simple-and-full-mode) offers `brush`, `alpha`, `material`, `texture`, `press`, `toggle`, `menu` and `empty` in **Add item**. The other types (`set`, `steps`, `auto`, `tag` and `browser`) need Full mode. An existing item of one of those types still shows in the list and on the ring, and still works. Select it in Simple and the inspector shows its type and what it does on one line, with an **Edit in Full mode** link. Its label and icon can still be changed, except on an `auto` slot.
+Studio's [Simple mode](studio.md#simple-and-full-mode) offers `brush`, `alpha`, `material`, `texture`, `press`, `toggle`, `menu` and `empty` in **Add item**. The other types (`set`, `capture`, `steps`, `auto`, `tag` and `browser`) need Full mode. An existing item of one of those types still shows in the list and on the ring, and still works. Select it in Simple and the inspector shows its type and what it does on one line, with an **Edit in Full mode** link. Its label and icon can still be changed, except on an `auto` slot.
 
 ### Brush
 
@@ -165,6 +168,25 @@ An interface path is the chain of palette and button names, joined with colons, 
 {"toggle": "Stroke:LazyMouse"}
 ```
 
+### Capture
+
+```json
+{"capture": "D:/Pictures/ZBrush", "label": "Capture"}
+{"capture": ""}
+```
+
+A **Capture** slot saves ZBrush's document as a PNG, with no dialog. The file is named for the time you picked it, such as `ZBrush_2026-11-04_14-30-05.png`. A name that is already taken gets `_2`, then `_3` and so on, so nothing is overwritten.
+
+The folder is a full path to a folder on this PC, such as `D:/Pictures/ZBrush`. A network path does not work. The folder is made if it is missing. An empty `""` saves to the **ZBrush** folder in your **Pictures** folder: Windows' own Pictures folder, wherever you have moved it. With Pictures in its usual place, that is `C:\Users\you\Pictures\ZBrush`.
+
+The picture is the canvas document at its own size, so the ring and ZBrush's interface are not in it. A capture can also be a step in `steps`.
+
+In ZBrush 2026 and newer, a capture waits for the pen like any other pick. In ZBrush 2022 to 2025 it needs the plugin to be up to date: press **Update** on the ZBrush's row in Studio's **Setup** step 1. A plugin that is not up to date does not know the action. In ZBrush 2022 to 2025, a folder with characters outside plain ASCII in its name only works if Windows keeps a short name for it. Otherwise the message says so and nothing is sent (see [Troubleshooting](troubleshooting.md#the-ring-opens-but-picks-do-nothing)).
+
+After an update, restart ZBrush 2026 or newer so it loads the new plugin; until then the slot does nothing and `bridge.log` says `unknown action`.
+
+In Studio, **Capture** is a Full mode type. Its **Folder** field has a **Browse...** button that picks the folder.
+
 ### Finding a button's path
 
 A path names the palette, then the sub palette if the button sits in one, then the button or slider, joined with colons. The starter menus have three kinds:
@@ -190,7 +212,7 @@ Some buttons only exist while a 3D model is in Edit mode, such as everything und
  "label": "Fresh Start", "icon": "Standard"}
 ```
 
-Steps run in order. Each step is a `brush`, `alpha`, `material`, `texture`, `press`, `set` or `toggle`. Steps cannot open menus, cannot contain more steps, and cannot hold `auto`, `tag` or `browser` items. Without an `icon`, a `steps` item uses the thumbnail of its first brush, alpha, material or texture step, or a placeholder if it has none.
+Steps run in order. Each step is a `brush`, `alpha`, `material`, `texture`, `press`, `set`, `toggle` or `capture`. Steps cannot open menus, cannot contain more steps, and cannot hold `auto`, `tag` or `browser` items. Without an `icon`, a `steps` item uses the thumbnail of its first brush, alpha, material or texture step, or a placeholder if it has none.
 
 A pick of a `steps` item does not count for auto slots or for **Recent**, even when a step is a brush. Only a brush, alpha, material or texture item picked on its own does (from a ring, a fan or the [browser](browser.md)).
 

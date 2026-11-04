@@ -44,6 +44,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 
 import activity             # noqa: E402
+import capture              # noqa: E402
 import commands             # noqa: E402
 import config as C          # noqa: E402
 import expand               # noqa: E402
@@ -144,6 +145,8 @@ MSG_COMMAND_TEXT = "A dialog or text box has the focus, nothing sent"
 MSG_COMMAND_PINNED = "This ZOrbit runs on one menus file, so it has no profiles"
 MSG_COMMAND_FROZEN = "Your files were changed by a newer ZOrbit, so the profile stays"
 MSG_COMMAND_NO_MENUS = "ZOrbit has no menus loaded"
+MSG_CAPTURE_FOLDER = "The capture folder cannot be used, nothing sent. See radiald.log."
+MSG_CAPTURE_NAME = "ZBrush 2022-2025 cannot save to that capture folder's name, nothing sent"
 TIP_FROZEN = f"ZOrbit {paths.VERSION}: your files were changed by a newer ZOrbit"
 
 # A line of bridge.log: "2026-10-31 12:00:00 #7 'Clay' via listener: brush Clay: ...; press Tool:X: ..."
@@ -180,6 +183,8 @@ def _problems(result):
     """The messages for what went wrong in a plugin's result, its "; "-separated steps (empty when all went well)."""
     problems = []
     for part in result.split("; "):
+        if part.startswith("file ") and ": ok, file " in part:      # a picture saved, even into a folder named FAILED
+            continue
         if "FAILED" in part:
             problems.append(MSG_PICK_FAILED)
             continue
@@ -1436,6 +1441,9 @@ class App:
         out = []
         for a in acts:
             a = dict(a)
+            if "capture" in a:
+                # ZBrush 2022-2025 get a name their plugin can read; a CaptureError stops the whole pick
+                a = {"filepress": capture.BUTTON, "file": capture.target(a["capture"], legacy is not None)}
             got = C.asset_of(a)
             if got and assets is not None:
                 p = assets.find_or_rescan(got[0], got[1], legacy["path"] if legacy else None)
@@ -1532,6 +1540,11 @@ class App:
         legacy = ins if ins is not None and not ins["python"] else None
         try:
             seq = self._write_request(item, legacy)
+        except capture.CaptureError as e:
+            log(f"pick #{self._seq} '{item.label}': {e.reason}; nothing sent")
+            self.activity.note_pick(self._seq, item, "none", False, source, self._activity_menu, e.reason)
+            self._toast(MSG_CAPTURE_NAME if e.kind == "name" else MSG_CAPTURE_FOLDER)
+            return
         except OSError as e:
             reason = "could not write the request file"
             log(f"pick #{self._seq} '{item.label}': {reason}: {e!r}; nothing sent")
@@ -1850,6 +1863,8 @@ def check(cfg_path) -> int:
                          else f"  (tag {key!r} does not exist)")
             elif it.kind == "browser":
                 extra = f"  (opens on {it.data.get('kind', 'brush')})"
+            elif it.kind == "capture":
+                extra = f"  (saves into {it.data['capture'].strip() or capture.default_folder()})"
             print(f"      {it.kind:7s} {it.label}{extra}")
     said = any(e.startswith("tags.json could not be read") for e in cfg.errors)     # config.load says it once
     problems = ([store.error] if store.error and not said else []) + cfg.errors

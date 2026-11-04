@@ -1032,6 +1032,17 @@ def test_the_more_glyph_draws_three_separate_dots():
     assert sum(1 for i in range(1, 60) if row[i] and not row[i - 1]) == 3
 
 
+def test_a_capture_slot_draws_a_camera_not_letters():
+    im = Image.new("RGBA", (60, 60), (0, 0, 0, 0))
+    ring._glyph_camera(ImageDraw.Draw(im), 30, 30, 40, (255, 255, 255, 255))
+    assert im.getbbox() is not None
+    def shown(kind, data):
+        menu = SimpleNamespace(id="m", title="T", items=[config.Item("Capture", kind, data)], animation="", fan=False)
+        return ring.Ring.preview(menu, make_cfg(), lambda it: None)
+    cam = shown("capture", {"capture": "C:/Users/you/Pictures"})
+    assert cam.tobytes() != shown("press", {"press": "A:B"}).tobytes()
+
+
 # --- the sprite key ----------------------------------------------------------------------------
 NEW_LOOK_KEYS = ("slot_shape", "slot_corner", "border_width", "icon_scale", "hub", "hub_style", "hub_color", "hub_glow",
                  "glow_color", "glow_opacity", "label_color", "labels")

@@ -595,3 +595,32 @@ def test_a_file_from_before_looks_still_imports(api, tmp_path, monkeypatch, tagf
     assert res["ok"] and res["looks"] == {"added": [], "joined": [], "renamed": {}}
     done = api.apply_menu_import({"menus": {}})
     assert done["looks"] == {} and done["looks_message"] == ""
+
+
+# --- capture folders stay on the PC ------------------------------------------------------------------
+def _capture_cfg():
+    return {"menus": {
+        "a": {"title": "A", "hotkey": "Q", "items": [{"capture": "C:/Users/you/Pictures/ZBrush", "label": "Shot"},
+                                                      {"menu": "b"}, {"brush": "Move"},
+                                                      {"steps": [{"press": "Tool:Masking:Clear"},
+                                                                 {"capture": "C:/Users/you/Shots"}]}]},
+        "b": {"title": "B", "items": [{"capture": "C:/Users/you/More"}]}}}
+
+
+def test_build_clears_the_capture_folders_in_items_steps_and_submenus():
+    cfg = _capture_cfg()
+    before = json.dumps(cfg, sort_keys=True)
+    menus = menushare.build(cfg, "a", None, "1")["menus"]
+    assert menus["a"]["items"][0] == {"capture": "", "label": "Shot"}
+    assert menus["a"]["items"][3]["steps"] == [{"press": "Tool:Masking:Clear"}, {"capture": ""}]
+    assert menus["b"]["items"] == [{"capture": ""}]
+    assert json.dumps(cfg, sort_keys=True) == before            # the caller's data is untouched
+
+
+def test_a_bundle_with_cleared_capture_folders_loads_with_no_problems(tmp_path):
+    bundle = menushare.build(_capture_cfg(), "a", None, "1")
+    menus, root, _ = menushare.plan_import(bundle["menus"], "a", {"menus": {}})
+    menus[root]["hotkey"] = "Q"                                  # an import brings none
+    p = tmp_path / "radial.json"
+    p.write_text(json.dumps({"menus": menus}), encoding="utf-8")
+    assert config.load(str(p)).errors == []

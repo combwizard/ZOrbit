@@ -14,7 +14,7 @@ ZScript cannot read environment variables or JSON, and its strings stop at 255 c
 one value per line, and paths are absolute, in their 8.3 short form when the long form is not plain ASCII.
 request.txt is the magic line, id and label, then per action its kind and arguments: brush, alpha, material or
 texture with the name and its file (or - when none is known), press with a path, set with a path and a value,
-toggle with a path.
+toggle with a path, file with the path of a button and the file ZBrush is told to use when that button is pressed.
 
 ZBrush 2022-2025 load plugins only from ZStartup\\ZPlugs64 inside the installation, usually under Program
 Files. install()/remove() try a plain copy first and fall back to this program run as administrator
@@ -70,6 +70,18 @@ def ascii_path(p, spaces=False) -> str:
     return p
 
 
+def ascii_file(p) -> str:
+    """ascii_path for a file that may not exist yet (GetShortPathName only knows files that do): the short name of
+    its folder plus its own name. p itself when that is still not plain ASCII."""
+    p = str(p or "")
+    got = ascii_path(p)
+    if got.isascii():
+        return got
+    folder, name = os.path.split(p)
+    short = ascii_path(folder)
+    return os.path.join(short, name) if folder and short.isascii() and name.isascii() else p
+
+
 def _line(v) -> str:
     s = " ".join(str(v).splitlines()).strip()
     return s or "-"
@@ -92,6 +104,8 @@ def request_lines(seq, label, actions) -> list[str]:
             # otherwise, and the plugin would import it again on every pick. The file's own name can't be worked
             # out in ZScript, as the path below may be an 8.3 one.
             lines += [asset, _line(a.get("button") or a[asset]), _line(ascii_path(a.get("file")))]
+        elif "filepress" in a:
+            lines += ["file", _line(a["filepress"]), _line(ascii_file(a.get("file")))]
         elif "set" in a:
             lines += ["set", _line(a["set"]), _value(a.get("value"))]
         elif "press" in a:

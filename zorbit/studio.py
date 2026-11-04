@@ -1349,6 +1349,14 @@ class Api(webapi.LibraryApi, webapi.TagApi):
             return {"ok": False, "message": "That folder is not a ZBrush 2022-2025 installation."}
         return zscript_bridge.remove(path)
 
+    def choose_folder(self):
+        """Folder picker for a capture item's folder: the chosen path as text, or None when cancelled."""
+        import webview
+        picked = self._window.create_file_dialog(webview.FileDialog.FOLDER)
+        if not picked:
+            return None
+        return str(picked[0] if isinstance(picked, (list, tuple)) else picked)
+
     def add_zbrush_folder(self):
         """Folder picker for a ZBrush that was not found automatically; remembered in studio.json."""
         import webview
