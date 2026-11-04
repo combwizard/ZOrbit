@@ -67,7 +67,8 @@ def test_the_messages_are_different_and_fit_the_toast_on_one_line():
     msgs = [radiald.MSG_NO_CONNECTION, radiald.MSG_NO_ANSWER, radiald.MSG_NOT_FRONT, radiald.MSG_EMPTY_SLOT,
             radiald.MSG_EMPTY_MENU, radiald.MSG_PICK_FAILED, radiald.MSG_COMMAND_TEXT,
             radiald.MSG_COMMAND_PINNED, radiald.MSG_COMMAND_FROZEN, radiald.MSG_COMMAND_NO_MENUS,
-            radiald.MSG_CAPTURE_FOLDER, radiald.MSG_CAPTURE_NAME]
+            radiald.MSG_CAPTURE_FOLDER, radiald.MSG_CAPTURE_NAME, radiald.MSG_FILE_MISSING,
+            radiald.MSG_FOLDER_MISSING, radiald.MSG_NO_PROJECT, radiald.MSG_FILE_NAME, radiald.MSG_FILE_LONG]
     assert len(set(msgs)) == len(msgs)
     probe = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
     for m in msgs:
@@ -78,3 +79,12 @@ def test_the_messages_are_different_and_fit_the_toast_on_one_line():
 def test_a_capture_that_could_not_be_made_has_its_own_messages():
     assert "capture folder" in radiald.MSG_CAPTURE_FOLDER
     assert "2022" in radiald.MSG_CAPTURE_NAME
+
+
+def test_a_tool_or_project_that_could_not_be_sent_has_its_own_messages():
+    assert radiald.MSG_FILE_MISSING.startswith("That file is not there, nothing sent")
+    assert radiald.MSG_FOLDER_MISSING.startswith("That folder is not there, nothing sent")
+    assert radiald.MSG_NO_PROJECT == "No project in that folder, nothing sent"
+    assert "2022" in radiald.MSG_FILE_NAME and "2022" in radiald.MSG_FILE_LONG
+    for m in (radiald.MSG_FILE_MISSING, radiald.MSG_FOLDER_MISSING, radiald.MSG_FILE_LONG):
+        assert m.endswith("See radiald.log.")        # the log says which file

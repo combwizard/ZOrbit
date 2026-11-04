@@ -82,6 +82,19 @@ def ascii_file(p) -> str:
     return os.path.join(short, name) if folder and short.isascii() and name.isascii() else p
 
 
+def legacy_path_problem(p):
+    """Why ZBrush 2022-2025 cannot be given the file path p, as (kind, what), or None when it can. Their plugin
+    reads one ANSI line of at most MAX_LINE bytes. kind "name": the path is not plain ASCII and has no short form;
+    "long": it is too long. what completes a sentence that starts "ZBrush 2022-2025 ..."."""
+    sent = ascii_file(p)
+    if not sent.isascii():
+        return "name", "cannot be given a name outside plain ASCII, and the volume has no short name for it"
+    size = len(sent.encode("mbcs", errors="replace"))
+    if size > MAX_LINE:
+        return "long", f"takes a path of at most {MAX_LINE} bytes, and this one is {size}"
+    return None
+
+
 def _line(v) -> str:
     s = " ".join(str(v).splitlines()).strip()
     return s or "-"

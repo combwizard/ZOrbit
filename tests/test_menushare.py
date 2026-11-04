@@ -239,6 +239,19 @@ def test_export_menu_adds_the_tags_note_when_tags_json_is_broken(api, tmp_path, 
     assert "tags" not in json.loads((tmp_path / "a.json").read_text(encoding="utf-8"))
 
 
+def test_export_menu_says_how_many_tool_and_project_items_stayed_out(api, tmp_path, monkeypatch):
+    _save_to(api, monkeypatch, tmp_path / "a.json")
+    res = api.export_menu(_file_cfg(), "a")                 # a and b: 7 Tool or Project actions, steps included
+    assert res["ok"]
+    assert res["message"] == (f'Saved "A" and its 1 submenu to {res["path"]}. 7 Tool or Project items left out of the '
+                              "file, because their paths belong to this PC.")
+    data = json.loads((tmp_path / "a.json").read_text(encoding="utf-8"))
+    assert "tool" not in json.dumps(data) and "project" not in json.dumps(data)   # the paths are not in the file
+    assert "Tool or Project" not in api.export_menu(_cfg(), "sculpt")["message"]
+    assert api.export_menu(_file_cfg(), "b")["message"].endswith(
+        f'1 Tool or Project item left out of the file, because their paths belong to this PC.')
+
+
 # --- Api: pick_menu_import / apply_menu_import -------------------------------------------------------
 
 @pytest.fixture
@@ -624,3 +637,76 @@ def test_a_bundle_with_cleared_capture_folders_loads_with_no_problems(tmp_path):
     p = tmp_path / "radial.json"
     p.write_text(json.dumps({"menus": menus}), encoding="utf-8")
     assert config.load(str(p)).errors == []
+
+
+# --- tool and project paths stay on the PC -------------------------------------------------------------
+def _file_cfg():
+    return {"menus": {
+        "a": {"title": "A", "hotkey": "Q", "items": [
+            {"tool": "C:/Users/you/Models/Hero.ztl", "label": "Hero"},
+            {"menu": "b"},
+            {"project": "C:/Users/you/Projects/Blockout"},
+            {"brush": "Move"},
+            {"steps": [{"press": "Tool:Masking:Clear"}, {"tool": "C:/Users/you/Models/Hero.ztl"},
+                       {"project": "C:/Users/you/Projects/Hero.zpr"}, {"capture": "C:/Users/you/Shots"}],
+             "label": "Mixed"},
+            {"steps": [{"tool": "C:/Users/you/Models/Hero.ztl"}, {"project": "C:/Users/you/Projects/Hero.zpr"}],
+             "label": "Both", "icon": "Move"}]},
+        "b": {"title": "B", "items": [{"project": "C:/Users/you/Projects/Hero.zpr", "label": "Old"}]}}}
+
+
+def test_build_turns_tool_and_project_items_into_empty_slots_that_keep_their_place_and_label():
+    cfg = _file_cfg()
+    before = json.dumps(cfg, sort_keys=True)
+    menus = menushare.build(cfg, "a", None, "1")["menus"]
+    items = menus["a"]["items"]
+    assert items[0] == {"empty": True, "label": "Hero"}
+    assert items[1] == {"menu": "b"} and items[3] == {"brush": "Move"}
+    assert items[2] == {"empty": True}
+    assert menus["b"]["items"] == [{"empty": True, "label": "Old"}]
+    assert json.dumps(cfg, sort_keys=True) == before            # the caller's data is untouched
+
+
+def test_build_removes_tool_and_project_from_steps():
+    items = menushare.build(_file_cfg(), "a", None, "1")["menus"]["a"]["items"]
+    assert items[4] == {"steps": [{"press": "Tool:Masking:Clear"}, {"capture": ""}], "label": "Mixed"}
+
+
+def test_build_makes_a_steps_item_with_nothing_left_an_empty_slot():
+    items = menushare.build(_file_cfg(), "a", None, "1")["menus"]["a"]["items"]
+    assert items[5] == {"empty": True, "label": "Both", "icon": "Move"}
+
+
+def test_a_bundle_without_tool_and_project_paths_loads_with_no_problems(tmp_path):
+    bundle = menushare.build(_file_cfg(), "a", None, "1")
+    assert "Models" not in json.dumps(bundle) and "Blockout" not in json.dumps(bundle)
+    menus, root, _ = menushare.plan_import(bundle["menus"], "a", {"menus": {}})
+    menus[root]["hotkey"] = "Q"
+    p = tmp_path / "radial.json"
+    p.write_text(json.dumps({"menus": menus}), encoding="utf-8")
+    cfg = config.load(str(p))
+    assert cfg.errors == [] and [it.kind for it in cfg.menus[root].items][:3] == ["empty", "menu", "empty"]
+
+
+def test_plan_import_clears_a_file_that_still_holds_paths_and_leaves_the_bundle_alone():
+    bundle = {"a": {"title": "A", "items": [{"project": "C:/Users/you/P/Hero.zpr", "label": "Hero"},
+                                            {"steps": [{"tool": "C:/Users/you/Hero.ztl"}, {"press": "A:B"}]},
+                                            {"steps": [{"tool": "C:/Users/you/Hero.ztl"}]}]}}
+    before = copy.deepcopy(bundle)
+    menus, root, _ = menushare.plan_import(bundle, "a", {"menus": {}})
+    assert menus[root]["items"] == [{"empty": True, "label": "Hero"}, {"steps": [{"press": "A:B"}]},
+                                    {"empty": True}]
+    assert bundle == before
+
+
+def test_left_out_counts_what_a_menu_file_would_lose():
+    menus = _file_cfg()["menus"]
+    assert menushare.left_out(menus) == 7                       # a: 1 + 1 + 2 + 2, b: 1  (the folder item counts)
+    assert menushare.left_out({"x": {"items": [{"brush": "A"}, {"steps": [{"press": "A:B"}]}]}}) == 0
+    assert menushare.left_out({}) == 0 and menushare.left_out({"x": {"items": "no"}, "y": 3}) == 0
+
+
+def test_malformed_items_do_not_break_the_clean_up():
+    menus = menushare.build({"menus": {"a": {"items": [3, None, {"steps": "x"}, {"steps": [{"tool": "T"}]},
+                                                       {"tool": "T"}]}}}, "a", None, "1")["menus"]
+    assert menus["a"]["items"] == [3, None, {"steps": "x"}, {"empty": True}, {"empty": True}]

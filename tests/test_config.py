@@ -1139,6 +1139,118 @@ def test_a_capture_is_not_an_asset():
     assert config.asset_of({"capture": "C:/Users/you/Pictures"}) is None
 
 
+# --- tool and project ----------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("path", ["C:/Users/you/Models/Hero.ztl", "C:\\Users\\you\\Models\\HERO.ZTL", "D:/a b/x.Ztl"])
+def test_a_tool_is_a_full_path_to_a_ztl_file(load_menus, path):
+    cfg = load_menus({"main": one_item_menu({"tool": path})})
+    assert cfg.errors == [] and cfg.menus["main"].items[0].data == {"tool": path}
+    assert cfg.menus["main"].items[0].kind == "tool"
+
+
+@pytest.mark.parametrize("path", ["C:/Users/you/Models/Hero.zpr", "C:/Users/you/Models/Hero", "C:/Users/you/a.ztl.bak",
+                                  "Hero.ztl", "./Hero.ztl", "\\Users\\you\\Hero.ztl", "C:Hero.ztl", "/Hero.ztl"])
+def test_a_tool_must_be_a_full_path_ending_ztl(load_menus, path):
+    cfg = load_menus({"main": one_item_menu({"tool": path}, {"brush": "A"})})
+    assert problems(cfg, "menu main item 1: tool") and [it.kind for it in cfg.menus["main"].items] == ["brush"]
+
+
+@pytest.mark.parametrize("path", ["C:/Users/you/Projects/Hero.zpr", "C:\\Users\\you\\HERO.ZPR"])
+def test_a_project_may_be_a_zpr_file(load_menus, path):
+    cfg = load_menus({"main": one_item_menu({"project": path})})
+    assert cfg.errors == [] and cfg.menus["main"].items[0].kind == "project"
+
+
+@pytest.mark.parametrize("path", ["C:/Users/you/Projects/Blockout", "C:/Users/you/Projects/Blockout/",
+                                  "C:\\Users\\you\\Projects\\Blockout\\"])
+def test_a_project_may_be_a_folder_that_has_no_extension(load_menus, path):
+    assert load_menus({"main": one_item_menu({"project": path})}).errors == []
+
+
+def test_a_project_may_be_a_folder_with_a_dot_in_its_name_when_it_is_there(load_menus, tmp_path):
+    (tmp_path / "Blockout.v2").mkdir()
+    assert load_menus({"main": one_item_menu({"project": str(tmp_path / "Blockout.v2")})}).errors == []
+    assert load_menus({"main": one_item_menu({"project": str(tmp_path / "Gone.v2")})}).errors == []
+
+
+@pytest.mark.parametrize("path", ["C:/Users/you/Projects/Hero.ztl", "C:/Users/you/Projects/HERO.ZTL",
+                                  "Hero.zpr", "Projects", "./Blockout", "C:Blockout"])
+def test_a_project_must_be_a_full_path_to_a_zpr_file_or_a_folder(load_menus, path):
+    cfg = load_menus({"main": one_item_menu({"project": path}, {"brush": "A"})})
+    assert problems(cfg, "menu main item 1: project") and [it.kind for it in cfg.menus["main"].items] == ["brush"]
+
+
+def test_an_existing_project_file_that_is_not_a_zpr_is_refused(load_menus, tmp_path):
+    (tmp_path / "Hero.png").write_bytes(b"x")
+    (tmp_path / "Notes.txt").write_bytes(b"x")
+    for name in ("Hero.png", "Notes.txt"):
+        cfg = load_menus({"main": one_item_menu({"project": str(tmp_path / name)}, {"brush": "A"})})
+        assert problems(cfg, f"menu main item 1: project '{tmp_path / name}' must be a .zpr file or a folder")
+        assert [it.kind for it in cfg.menus["main"].items] == ["brush"]
+
+
+def test_a_missing_folder_with_a_dot_in_its_name_is_a_folder(load_menus):
+    cfg = load_menus({"main": one_item_menu({"project": "C:/Users/you/Work/v1.3"},
+                                            {"project": "C:/Users/you/Work/v1.3/"})})
+    assert cfg.errors == [] and [it.kind for it in cfg.menus["main"].items] == ["project", "project"]
+
+
+@pytest.mark.parametrize("key,path", [("tool", "//server/share/Hero.ztl"), ("tool", "\\\\server\\share\\Hero.ztl"),
+                                      ("project", "//server/share/Hero.zpr"), ("project", "\\\\server\\share\\Work")])
+def test_tool_and_project_cannot_be_on_a_network_share(load_menus, key, path):
+    cfg = load_menus({"main": one_item_menu({key: path}, {"brush": "A"})})
+    assert problems(cfg, f"menu main item 1: {key}") and problems(cfg, "network")
+
+
+@pytest.mark.parametrize("key", ["tool", "project"])
+@pytest.mark.parametrize("value", ["", "  ", 5, None, ["C:/x.ztl"]])
+def test_tool_and_project_must_not_be_empty(load_menus, key, value):
+    cfg = load_menus({"main": one_item_menu({key: value}, {"brush": "A"})})
+    assert problems(cfg, f"'{key}' must be a non-empty string")
+    assert [it.kind for it in cfg.menus["main"].items] == ["brush"]
+
+
+def test_the_file_need_not_be_there_when_the_menus_load(load_menus):
+    cfg = load_menus({"main": one_item_menu({"tool": "Z:/Unplugged/Hero.ztl"}, {"project": "Z:/Unplugged/Work"},
+                                            {"project": "Z:/Unplugged/Hero.zpr"})})
+    assert cfg.errors == [] and len(cfg.menus["main"].items) == 3
+
+
+def test_tool_and_project_are_allowed_in_steps(load_menus):
+    steps = [{"tool": "C:/Users/you/Hero.ztl"}, {"project": "C:/Users/you/Projects/Blockout"}]
+    assert load_menus({"main": one_item_menu({"steps": steps})}).errors == []
+    cfg = load_menus({"main": one_item_menu({"steps": [{"tool": "Hero.ztl"}]}, {"brush": "A"})})
+    assert problems(cfg, "menu main item 1 step 1: tool")
+
+
+def test_the_default_label_is_the_file_name_without_its_extension_or_the_folders_name(load_menus):
+    cfg = load_menus({"main": one_item_menu(
+        {"tool": "C:/Users/you/Models/Hero.v2.ZTL"}, {"project": "C:/Users/you/Projects/Hero.zpr"},
+        {"project": "C:\\Users\\you\\Projects\\Blockout\\"}, {"project": "C:/Users/you/Projects/Blockout"},
+        {"tool": "C:/Users/you/Models/Hero.ztl", "label": "Mine"})})
+    assert [it.label for it in cfg.menus["main"].items] == ["Hero.v2", "Hero", "Blockout", "Blockout", "Mine"]
+
+
+def test_a_folder_with_a_dot_in_its_name_keeps_its_whole_name_as_its_label(load_menus):
+    cfg = load_menus({"main": one_item_menu(
+        {"project": "C:/Users/you/Work/v1.3"}, {"project": "C:/Users/you/Work/Hero.v2.ZPR"},
+        {"project": "C:/Users/you/Work/v1.3/"}, {"tool": "C:/Users/you/Models/Hero.v2.ztl"})})
+    assert [it.label for it in cfg.menus["main"].items] == ["v1.3", "Hero.v2", "v1.3", "Hero.v2"]
+
+
+def test_tool_and_project_are_actions_but_not_assets():
+    assert "tool" in config.ACTION_KEYS and "project" in config.ACTION_KEYS
+    assert "tool" not in config.ASSET_KINDS and "project" not in config.ASSET_KINDS
+    assert config.asset_of({"tool": "C:/Users/you/Hero.ztl"}) is None
+
+
+def test_an_item_cannot_be_a_tool_and_something_else(load_menus):
+    cfg = load_menus({"main": one_item_menu({"tool": "C:/Users/you/Hero.ztl", "project": "C:/Users/you/Work"},
+                                            {"brush": "A"})})
+    assert problems(cfg, "needs exactly one of")
+
+
 # --- steps --------------------------------------------------------------------------------------
 
 

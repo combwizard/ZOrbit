@@ -22,7 +22,7 @@ clock = time.time                  # tests replace it
 _issued = set()                    # names handed out; the file may not be on disk yet when the next pick comes
 _ISSUED_MAX = 200
 MAX_PATH_CHARS = 259               # Windows takes a path up to 259 characters, then the end of the string
-MAX_LEGACY_BYTES = 255             # ZBrush 2022-2025 is given the path as ANSI bytes, in a buffer of 255
+MAX_LEGACY_BYTES = zscript_bridge.MAX_LINE     # ZBrush 2022-2025 is given the path as ANSI bytes, in a buffer of 255
 PICTURES_FOLDER_ID = "{33E28130-4E1E-4676-835A-98395C3BC3BB}"     # FOLDERID_Pictures
 _S_OK = 0
 
@@ -104,14 +104,11 @@ def target(folder, legacy=False) -> str:
         _probe(folder)
     except OSError as e:
         raise CaptureError("folder", f"capture folder {folder!r} cannot be used: {e}") from e
-    if legacy and not zscript_bridge.ascii_file(path).isascii():
-        raise CaptureError("name", f"capture folder {folder!r}: ZBrush 2022-2025 cannot be given a name outside "
-                                   f"plain ASCII, and the volume has no short name for it")
-    if legacy:
-        size = len(zscript_bridge.ascii_file(path).encode("mbcs", errors="replace"))
-        if size > MAX_LEGACY_BYTES:
-            raise CaptureError("folder", f"capture folder {folder!r} cannot be used: ZBrush 2022-2025 takes a path of "
-                                         f"at most {MAX_LEGACY_BYTES} bytes, and this one is {size}")
+    problem = zscript_bridge.legacy_path_problem(path) if legacy else None
+    if problem:
+        kind, what = problem
+        head = f"capture folder {folder!r}" + ("" if kind == "name" else " cannot be used")
+        raise CaptureError("name" if kind == "name" else "folder", f"{head}: ZBrush 2022-2025 {what}")
     if len(_issued) >= _ISSUED_MAX:
         _issued.clear()            # by now the files of the old names are on disk
     _issued.add(key)

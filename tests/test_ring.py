@@ -1043,6 +1043,20 @@ def test_a_capture_slot_draws_a_camera_not_letters():
     assert cam.tobytes() != shown("press", {"press": "A:B"}).tobytes()
 
 
+def test_tool_and_project_slots_draw_their_own_glyphs_not_letters():
+    for glyph in (ring._glyph_cube, ring._glyph_folder):
+        im = Image.new("RGBA", (60, 60), (0, 0, 0, 0))
+        glyph(ImageDraw.Draw(im), 30, 30, 40, (255, 255, 255, 255))
+        assert im.getbbox() is not None
+    def shown(kind, data):
+        menu = SimpleNamespace(id="m", title="T", items=[config.Item("Hero", kind, data)], animation="", fan=False)
+        return ring.Ring.preview(menu, make_cfg(), lambda it: None).tobytes()
+    tool = shown("tool", {"tool": "C:/Users/you/Hero.ztl"})
+    project = shown("project", {"project": "C:/Users/you/Hero.zpr"})
+    plain = shown("press", {"press": "A:B"})
+    assert len({tool, project, plain}) == 3
+
+
 # --- the sprite key ----------------------------------------------------------------------------
 NEW_LOOK_KEYS = ("slot_shape", "slot_corner", "border_width", "icon_scale", "hub", "hub_style", "hub_color", "hub_glow",
                  "glow_color", "glow_opacity", "label_color", "labels")

@@ -14,6 +14,7 @@ All notable changes to this project are listed here. The format follows
 - **Quit hidden browser after** in **Settings > Behaviour** (Full mode) quits a hidden browser that the app started once it has sat unused for that many minutes, to give back its memory. Off by default; the next press starts it again.
 
 - A **Capture** item saves ZBrush's document as a PNG in a folder, with no dialog (Full mode). Pick the folder with **Browse...** in Studio, or leave it empty for the **ZBrush** folder in your **Pictures** folder (Windows' own, wherever you have moved it).
+- **Tool** and **Project** items load a `.ZTL` tool or open a `.ZPR` project, or the newest project in a folder, with no dialog (Full mode). Pick the file with **Browse...** in Studio. Their paths stay out of an exported menu.
 
 ### Fixed
 

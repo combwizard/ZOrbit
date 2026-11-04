@@ -469,6 +469,24 @@ def _glyph_camera(draw, cx, cy, size, fill):
     draw.ellipse((cx - lens, y0 + h - lens, cx + lens, y0 + h + lens), outline=fill, width=max(1, int(size * 0.08)))
 
 
+def _glyph_cube(draw, cx, cy, size, fill):
+    """A cube (outline: a hexagon with the three edges that meet in the middle), size across: the glyph of a Tool slot."""
+    r, w = size * 0.5, max(1, int(size * 0.09))
+    pts = [(cx + r * math.cos(math.radians(a)), cy + r * math.sin(math.radians(a))) for a in range(-90, 270, 60)]
+    draw.line(pts + pts[:1], fill=fill, width=w, joint="curve")
+    for i in (1, 3, 5):                                     # the top-right, bottom and top-left corners
+        draw.line([(cx, cy), pts[i]], fill=fill, width=w)
+
+
+def _glyph_folder(draw, cx, cy, size, fill):
+    """A folder (outline: a body with a tab on top), size across: the glyph of a Project slot."""
+    w, h = size * 0.5, size * 0.3
+    y0 = cy - h + size * 0.06
+    draw.rounded_rectangle((cx - w, y0, cx + w, y0 + 2 * h), radius=size * 0.08, outline=fill,
+                           width=max(1, int(size * 0.09)))
+    draw.rectangle((cx - w, y0 - size * 0.12, cx - w * 0.2, y0 + size * 0.02), fill=fill)
+
+
 def _glyph_fan(draw, ox, oy, radius, fill):
     """A folding fan: three blades with small gaps, a quarter circle from (ox, oy) opening up and right."""
     box = (ox - radius, oy - radius, ox + radius, oy + radius)
@@ -1284,6 +1302,10 @@ class Ring:
                     _glyph_grid(gd, c, c, ins * 0.46, _rgba(it.color or text, 0.95))
                 elif it.kind == "capture":         # Capture: a camera
                     _glyph_camera(gd, c, c, ins * 0.5, _rgba(it.color or text, 0.95))
+                elif it.kind == "tool":            # Tool: a cube
+                    _glyph_cube(gd, c, c, ins * 0.5, _rgba(it.color or text, 0.95))
+                elif it.kind == "project":         # Project: a folder
+                    _glyph_folder(gd, c, c, ins * 0.5, _rgba(it.color or text, 0.95))
                 elif more:                         # a More slot: three dots
                     _glyph_more(gd, c, c, ins * 0.5, _rgba(text, 0.9))
                 else:

@@ -64,6 +64,9 @@ Schema (all keys optional except menus):
   {"toggle": "Transform:Activate Symmetry"}      flip a switch
   {"capture": "D:/Pictures/ZBrush"}              save the document as a time-stamped PNG in that folder ("" = ZBrush in Windows'
                                                  Pictures folder; capture.py)
+  {"tool": "D:/Models/Hero.ztl"}                 load that tool (Tool:Load Tool); fileitem.py
+  {"project": "D:/Projects/Hero.zpr"}            open that project (File:Open); a folder instead of a file means the
+                                                 newest .zpr in it, worked out at each pick
   {"steps": [<action>, ...]}                     run several actions in order
   {"menu": "<id>"}                               open another ring in place
   {"auto": "brush"}                              a slot the app fills with a brush you pick often (usage.py)
@@ -83,8 +86,9 @@ from dataclasses import dataclass, field
 import looks as L
 import theme as T
 
-ACTION_KEYS = ("brush", "alpha", "material", "texture", "press", "set", "toggle", "capture", "steps", "menu", "auto",
-               "tag", "browser", "empty")
+ACTION_KEYS = ("brush", "alpha", "material", "texture", "press", "set", "toggle", "capture", "tool", "project",
+               "steps", "menu", "auto", "tag", "browser", "empty")
+FILE_EXTS = {"tool": ".ztl", "project": ".zpr"}     # what a Tool and a Project item must end with (a project may be a folder)
 ASSET_KINDS = ("brush", "alpha", "material", "texture")     # the kinds of the browser and of tags
 AUTO_KINDS = ("brush",)
 ANIMATIONS = L.ANIMATIONS
@@ -324,6 +328,31 @@ def _capture_problem(folder: str) -> str:
     return ""
 
 
+def project_is_folder(path: str) -> bool:
+    """Whether the path of a Project item names a folder: any value that does not end in .zpr (any case), whether the
+    folder is there or not (a folder on a drive that is not plugged in, or one with a dot in its name)."""
+    return not path.strip().lower().endswith(FILE_EXTS["project"])
+
+
+def _file_problem(kind: str, path: str) -> str:
+    """What is wrong with the path of a tool or project item, or "". A full path on this PC: a tool must end .ztl; a
+    project is a .zpr file or a folder, so an existing file that is not .zpr, or anything ending .ztl, is refused. The
+    file need not be there: a drive may be unplugged."""
+    text = path.strip()
+    ext = FILE_EXTS[kind]
+    if _network_path(text):
+        return "must be on this PC, not a network path"
+    if not (os.path.splitdrive(text)[0] and os.path.isabs(text)):
+        return f"'{path}' must be a full path, such as C:\\Models\\Hero{ext}"
+    if kind == "project":
+        if text.lower().endswith(".ztl") or (not text.lower().endswith(ext) and os.path.isfile(text)):
+            return f"'{path}' must be a .zpr file or a folder"
+        return ""
+    if text.lower().endswith(ext):
+        return ""
+    return f"'{path}' must be a {ext} file"
+
+
 def _check_action(a, errors, where, allow_nested=True) -> bool:
     if not isinstance(a, dict):
         errors.append(f"{where}: not an object")
@@ -342,7 +371,7 @@ def _check_action(a, errors, where, allow_nested=True) -> bool:
     if k == "steps":
         if not allow_nested or not isinstance(a["steps"], list) or not a["steps"]:
             errors.append(f"{where}: 'steps' must be a non-empty list of brush/alpha/material/texture/press/set/"
-                          f"toggle/capture actions")
+                          f"toggle/capture/tool/project actions")
             return False
         for i, s in enumerate(a["steps"]):
             if not _check_action(s, errors, f"{where} step {i + 1}", allow_nested=False):
@@ -374,6 +403,9 @@ def _check_action(a, errors, where, allow_nested=True) -> bool:
     elif k == "capture" and _capture_problem(a[k]):
         errors.append(f"{where}: capture folder {_capture_problem(a[k])}")
         return False
+    elif k in FILE_EXTS and (why := _file_problem(k, a[k])):
+        errors.append(f"{where}: {k} {why}")
+        return False
     elif k in ASSET_KINDS and _bad_asset_name(a[k]):
         errors.append(f"{where}: {k} name '{a[k]}' must not contain \\ / : or ..")
         return False
@@ -402,6 +434,10 @@ def _default_label(a: dict, menus_raw: dict, tags=None) -> str:
             return a[k].split(":")[-1]
     if "capture" in a:
         return "Capture"
+    for k in FILE_EXTS:
+        if k in a:
+            name = os.path.basename(a[k].strip().rstrip("\\/"))
+            return name if k == "project" and project_is_folder(a[k]) else os.path.splitext(name)[0]
     return "?"
 
 
