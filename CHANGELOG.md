@@ -8,7 +8,7 @@ All notable changes to this project are listed here. The format follows
 
 ### Fixed
 
-- **Install update** was never offered. Studio refused every release's setup file, because GitHub spells the repository `ZOrbit` and Studio compared it with `zorbit`, capitals included. The dialog then wrongly said the copy was not installed with Setup, and only offered the download page.
+- **Install update** was not offered. Studio refused every release's setup file, because GitHub spells the repository `ZOrbit` and Studio compared it with `zorbit`, capitals included. The dialog then wrongly said the copy was not installed with Setup, and only offered the download page.
 - When an installed copy cannot trust a release's setup file, the dialog now says that, and `studio.log` has a line about it.
 
 ## [0.18.0] - 2026-11-04
