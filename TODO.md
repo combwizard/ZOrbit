@@ -23,8 +23,6 @@ worked out.
 2. **Medium:** [#108](https://github.com/combwizard/ZOrbit/issues/108) first (small), then
    [#109](https://github.com/combwizard/ZOrbit/issues/109) (pick hide, dim or a message first);
    [#116](https://github.com/combwizard/ZOrbit/issues/116) (Copy report on Status);
-   [#99](https://github.com/combwizard/ZOrbit/issues/99) then
-   [#94](https://github.com/combwizard/ZOrbit/issues/94) (`--profile next` is the hotkey's plumbing);
    [#106](https://github.com/combwizard/ZOrbit/issues/106) (timer inside the browser);
    [#31](https://github.com/combwizard/ZOrbit/issues/31) then
    [#30](https://github.com/combwizard/ZOrbit/issues/30) (one "set the file, then press" action);
@@ -40,8 +38,5 @@ worked out.
    [#26](https://github.com/combwizard/ZOrbit/issues/26) last. Keep new IPC code out of `win32.py` and `radiald.py`.
 
 Parked for now: [#29](https://github.com/combwizard/ZOrbit/issues/29) (Keep, Remove and Hide need more
-detailing).
-
-[#116](https://github.com/combwizard/ZOrbit/issues/116), [#94](https://github.com/combwizard/ZOrbit/issues/94)
-and [#39](https://github.com/combwizard/ZOrbit/issues/39) all edit `studio_ui/app.js`, so merge them one at a
-time.
+detailing); the project-name half of [#94](https://github.com/combwizard/ZOrbit/issues/94) (the window title only
+ever says ZBrush, so the plugin would have to report what is open).
