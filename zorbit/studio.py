@@ -141,7 +141,8 @@ def _setup_asset(release, version) -> dict | None:
     if not asset:
         return None
     url, size = asset.get("browser_download_url"), asset.get("size")
-    if not isinstance(url, str) or not url.startswith(DOWNLOAD_URL) or not url.endswith("/" + name):
+    # Without regard to case: GitHub's API spells the repository as it is named (ZOrbit), and treats any spelling alike.
+    if not isinstance(url, str) or not url.casefold().startswith(DOWNLOAD_URL.casefold()) or not url.endswith("/" + name):
         return None
     if not isinstance(size, int) or isinstance(size, bool) or not 0 < size <= SETUP_MAX_BYTES:
         return None
@@ -1756,7 +1757,8 @@ class Api(webapi.LibraryApi, webapi.TagApi):
         """Asks GitHub for the latest release. {"current", "latest", "url", "newer", "can_install", "skipped"};
         latest is None when the check is off (no request is made) or GitHub could not be reached. can_install: Studio
         can download and install it itself (an installed copy, and the release has a setup file with a known
-        SHA-256). skipped: the user chose "Don't remind me again" for this version (skipped_version), so the top
+        SHA-256). installed, with a newer release: this is the copy Setup installed, so the dialog can say why
+        can_install is false. skipped: the user chose "Don't remind me again" for this version (skipped_version), so the top
         does not point it out; a newer one is pointed out again. notes: the newer release's notes for the update
         dialog, {"version", "date", "url", "summary", "items", "blog"} (changelog.release_notes), else None."""
         out = {"current": VERSION, "latest": None, "url": f"{RELEASES_URL}/tag/v{VERSION}", "newer": False,
@@ -1785,7 +1787,10 @@ class Api(webapi.LibraryApi, webapi.TagApi):
             with self._upd_lock:
                 if self._upd["state"] != "downloading":
                     self._upd_release = setup
-            out["can_install"] = bool(setup) and _installed_here()
+            if not setup:
+                _startup(f"update: {tag} has no setup file Studio can trust, so it offers the download page")
+            out["installed"] = _installed_here()
+            out["can_install"] = bool(setup) and out["installed"]
             out["skipped"] = paths.version_key(prefs["skipped_version"]) == latest
             published = data.get("published_at")
             date = published[:10] if isinstance(published, str) and re.match(r"\d{4}-\d{2}-\d{2}", published) else ""

@@ -105,7 +105,28 @@ def test_the_setup_is_taken_with_the_hash_github_and_the_notes_agree_on():
     assert studio._setup_asset(_release(body_hash=None), "9.0.0")["sha256"] == SHA       # digest only
 
 
+def test_the_setup_url_as_github_really_spells_it_is_trusted():
+    """Written out on purpose, not built from DOWNLOAD_URL: GitHub's API says ZOrbit, the constant says zorbit, and a
+    test built from the constant could not see that. Every release was refused until 0.18.1."""
+    url = "https://github.com/combwizard/ZOrbit/releases/download/v9.0.0/" + NAME
+    assert studio._setup_asset(_release(url=url), "9.0.0")["url"] == url
+
+
+def test_an_installed_copy_that_cannot_trust_the_setup_says_so(api, monkeypatch, tmp_path):
+    """The dialog must not tell an installed copy that it was not installed with Setup."""
+    _serve(monkeypatch, _release(digest=False, body_hash=None))
+    u = api.check_update()
+    assert u["newer"] and u["installed"] and not u["can_install"]
+    assert "no setup file Studio can trust" in (tmp_path / "studio.log").read_text(encoding="utf-8")
+    monkeypatch.setattr(studio, "_installed_here", lambda: False)
+    _serve(monkeypatch, _release())
+    u = api.check_update()
+    assert u["newer"] and not u["installed"] and not u["can_install"]
+
+
 @pytest.mark.parametrize("rel", [
+    _release(url="https://github.com/combwizard/ZOrbit-evil/releases/download/v9.0.0/" + NAME),   # a look-alike repository
+    _release(url="https://github.com.evil.example/combwizard/ZOrbit/releases/download/v9.0.0/" + NAME),
     _release(digest=False, body_hash=None),                                    # no hash anywhere
     _release(digest="0" * 64),                                                 # the two hashes disagree
     _release(url="https://example.com/v9.0.0/" + NAME),                        # not this project's releases

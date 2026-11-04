@@ -6260,7 +6260,9 @@ async function openUpdate(u) {
       const v = await modal({ title: 'Update ZOrbit', body: h('div', { class: 'upd' },
         h('p', { class: 'upd-ver mono' }, `v${u.current} to v${u.latest}`),
         updateNotes(u),
-        h('p', null, 'This copy of ZOrbit was not installed with Setup, so it cannot update itself. Download the new version from its release page.')),
+        h('p', null, u.installed
+          ? 'Studio could not confirm the setup file of this release, so it will not install it. Download the new version from its release page.'
+          : 'This copy of ZOrbit was not installed with Setup, so it cannot update itself. Download the new version from its release page.')),
       actions: [...skip, { text: 'Later', value: 'later' }, { text: 'Open the download page', value: 'page', kind: 'primary', focus: true }] });
       if (v === 'page') openLink(u.url);
       else if (v === 'skip') await skipUpdate(u);
