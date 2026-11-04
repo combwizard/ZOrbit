@@ -117,6 +117,7 @@ ITEM_KEYS = ACTION_KEYS + ("label", "icon", "style", "value", "kind")
 DEFAULT_BRIDGE_KEY = "F9"          # used when radial.json has no usable bridge.key
 VK_F10 = 0x79                       # Windows' menu-bar key: never usable as the bridge key
 _MODS = {"ctrl": "ctrl", "control": "ctrl", "alt": "alt", "shift": "shift"}
+PATH_FIXES = {"transform:polyf": "Transform:Pf"}     # a path that was wrong (the shelf says PolyF): old menus still work
 
 
 @dataclass(frozen=True)
@@ -376,6 +377,17 @@ def default_ring(theme: str = "dark") -> dict:
     return out
 
 
+def _fix_paths(action: dict) -> dict:
+    """The action with any path in PATH_FIXES replaced, steps included. A new dict: the raw action is not changed."""
+    out = dict(action)
+    for k in ("press", "set", "toggle"):
+        if isinstance(out.get(k), str):
+            out[k] = PATH_FIXES.get(out[k].lower(), out[k])
+    if isinstance(out.get("steps"), list):
+        out["steps"] = [_fix_paths(s) if isinstance(s, dict) else s for s in out["steps"]]
+    return out
+
+
 def load(path: str, tags=None, theme: str = "dark") -> Config:
     """tags: a tags.TagStore (anything with has(key) and label(key)); None skips the checks on tag names.
     theme: the preset in force (theme.current()): its colours are the defaults the file's ring.colors fill in,
@@ -483,7 +495,8 @@ def load(path: str, tags=None, theme: str = "dark") -> Config:
             icon = _check_icon(it.get("icon"), where, errors)
             style = L.check_style(it["style"], errors, where) if "style" in it else {}
             items.append((i + 1, Item(label=str(it.get("label") or _default_label(it, menus_raw, tags)), kind=kind,
-                                      data={k: v for k, v in it.items() if k not in ("label", "icon", "style", "glow")},
+                                      data=_fix_paths({k: v for k, v in it.items()
+                                                       if k not in ("label", "icon", "style", "glow")}),
                                       icon=icon, tag=it["tag"] if kind == "tag" else "", style=style)))
         if not items:
             errors.append(f"menu {mid}: no usable items")

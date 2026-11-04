@@ -175,6 +175,8 @@ A path names the palette, then the sub palette if the button sits in one, then t
 | `Transform:Activate Symmetry` | the **Transform** palette, the **Activate Symmetry** switch, with no sub palette (a `toggle`) |
 | `Stroke:SubDivide Size` | the **Stroke** palette, the **SubDivide Size** slider (a `set`, with a `value` such as `0.5`) |
 
+The shelf button says **PolyF**, but its path is `Transform:Pf`. A menu with the old path `Transform:PolyF` still works.
+
 Spell the names the way ZBrush spells them, spaces included. In Studio, the target field suggests paths as you type: a short list of common ones, and the buttons you already gave a hotkey in ZBrush, which Studio reads from `ZStartup\HotKeys\StartupHotkeys.txt` in your user assets folder. Any other path can be pasted in.
 
 A path that does not exist in your ZBrush does nothing in ZBrush. `bridge.log` has a line such as `press Tool:Masking:Cler: no such interface item`, and the app shows a short message near the cursor (see [Troubleshooting](troubleshooting.md#the-ring-opens-but-picks-do-nothing)).

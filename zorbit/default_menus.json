@@ -43,7 +43,7 @@
         {"press": "Tool:Masking:Inverse", "label": "Invert Mask"},
         {"toggle": "Tool:Masking:ViewMask", "label": "View Mask"},
         {"toggle": "Transform:Activate Symmetry", "label": "Symmetry"},
-        {"toggle": "Transform:PolyF", "label": "PolyFrame"},
+        {"toggle": "Transform:Pf", "label": "PolyFrame"},
         {"toggle": "Stroke:LazyMouse", "label": "LazyMouse"},
         {"toggle": "Brush:Auto Masking:BackfaceMask", "label": "Backface"},
         {"menu": "subdiv", "label": "SubDivide"},
