@@ -6,7 +6,7 @@
  "elevated_zbrush": false,                               # a ZBrush running as administrator was seen
  "ring": {"at": 1761800123.4, "menu": "brushes"},        # the last root ring opened (submenus do not count)
  "pick": {"at": 1761800125.0, "seq": 3, "menu": "brushes", "kind": "brush", "label": "ClayBuildup",
-          "route": "listener", "sent": true, "reason": null,      # route: listener | key | zscript | none
+          "route": "listener", "sent": true, "reason": null,      # route: listener | key | zscript | zscript-fallback | none
           "source": "ring", "ack": null}}                         # source: ring | browser | command; ack: picked_up | timeout
 
 The file is disposable: it is written without fsync (a flick can pick 100 ms after the ring opened, so nothing

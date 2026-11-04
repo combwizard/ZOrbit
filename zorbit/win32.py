@@ -102,6 +102,7 @@ CreateWindowExW = _sig(user32, "CreateWindowExW", w.HWND, w.DWORD, w.LPCWSTR, w.
                        w.HWND, w.HMENU, w.HINSTANCE, w.LPVOID)
 DestroyWindow = _sig(user32, "DestroyWindow", w.BOOL, w.HWND)
 IsWindow = _sig(user32, "IsWindow", w.BOOL, w.HWND)
+IsHungAppWindow = _sig(user32, "IsHungAppWindow", w.BOOL, w.HWND)   # true after ~5 s without handling messages
 ShowWindow = _sig(user32, "ShowWindow", w.BOOL, w.HWND, ctypes.c_int)
 SetWindowPos = _sig(user32, "SetWindowPos", w.BOOL, w.HWND, w.HWND, ctypes.c_int, ctypes.c_int,
                     ctypes.c_int, ctypes.c_int, w.UINT)

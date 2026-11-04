@@ -4718,7 +4718,7 @@ function noteSetupStatus(d) {
 const PROC_PRIORITY = ['loaded', 'restart', 'starting', 'unknown', 'not_loaded'];
 const PROC_TAG = { loaded: ['Plugin loaded', 'tag cyan'], restart: ['Restart ZBrush', 'tag amber'], starting: ['Starting', 'tag dim'], unknown: ['Not sure yet', 'tag dim'], not_loaded: ['No plugin loaded', 'tag dim'] };
 const procTag = state => (PROC_TAG[state] ? h('span', { class: PROC_TAG[state][1] }, PROC_TAG[state][0]) : null);
-const PICK_VIA = { listener: 'the plugin', key: 'the bridge key', zscript: 'ZScript' };
+const PICK_VIA = { listener: 'the plugin', key: 'the bridge key', zscript: 'ZScript', 'zscript-fallback': 'ZScript (by script)' };
 const ADMIN_ZBRUSH = 'ZBrush is running as administrator, so ZOrbit cannot see its window and the ring will not open. Close ZBrush and start it without Run as administrator.';
 
 /* The bridge key as the user would say it: what Settings holds, else the default. */
@@ -4731,6 +4731,7 @@ function unsentHint(reason, key) {
   if (/^no live listener/.test(r)) return { text: 'The plugin is not answering in ZBrush, and the bridge mode is Message, so nothing was sent. Restart ZBrush so the plugin loads, or set the bridge mode to Auto.', settings: true };
   if (/not in front/.test(r)) return { text: 'ZBrush was not the front window when you picked, so nothing was sent. Click ZBrush once, press ' + key + ' over the canvas and pick again.' };
   if (/request file/.test(r)) return { text: 'ZOrbit could not save the pick to its data folder, so nothing was sent. Check that the folder can be written to; Status can open it.', status: true };
+  if (/did not take/.test(r)) return { text: 'ZBrush did not take the pick, by the bridge key or by script. Check that Zplugin > ZOrbit > Apply has the bridge key (' + bridgeKeyName() + ') as its hotkey.', settings: true };
   return { text: 'ZOrbit could not send that pick to ZBrush. The app log on Status says why.', status: true };
 }
 
@@ -4823,7 +4824,7 @@ function deriveSteps(d, tryFrom, ctx) {
     const failed = !!(lp && lp.ok === false && pk.seq != null && lp.seq === pk.seq && lp.at >= pk.at - 2);
     hint = failed ? { text: lp.text } : ({ key: { text: 'ZBrush did not react to the bridge key (' + bridgeKey + '). Bind it to Zplugin > ZOrbit > Apply (Settings > ZBrush bridge, in Full mode).', settings: true },
       listener: { text: 'The plugin did not act on the pick. Open the logs folder from Status and read bridge.log.', status: true },
-      zscript: { text: 'ZBrush did not react to ' + bridgeKey + '. Check that Zplugin > ZOrbit > Apply has that hotkey.' } }[pk.route]
+      zscript: { text: 'ZBrush did not react to ' + bridgeKey + '. Check that Zplugin > ZOrbit > Apply has that hotkey.' } }[String(pk.route).replace(/-fallback$/, '')]
       || { text: 'ZBrush did not confirm the pick. Open the logs folder from Status and read bridge.log.', status: true });
   }
   if (!hint && elevated && !opened) hint = { text: ADMIN_ZBRUSH };            // the ring never opens, so there is no pick to explain

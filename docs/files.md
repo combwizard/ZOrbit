@@ -39,6 +39,8 @@ To share one menu, use **Export menu...** in the **Menu** tab. It writes the men
 | `%LOCALAPPDATA%\ZOrbit\activity.json` | The last ring the app opened and the last pick it sent: the route, whether it went out, and whether the plugin picked it up. `elevated_zbrush` is `true` while a ZBrush running as administrator is open (the app cannot work with it). Written by the app; Setup's **Try the ring** step reads it. Safe to delete. |
 | `%LOCALAPPDATA%\ZOrbit\request.json` | The pick in transit. Normally gone in a moment. A pick that could not be handed over is deleted again. |
 | `%LOCALAPPDATA%\ZOrbit\request.txt` | The same pick for the ZBrush 2022 to 2025 plugin. Only written when such a ZBrush is installed. |
+| `%LOCALAPPDATA%\ZOrbit\ApplyFallback.txt` | ZBrush 2022 to 2025: the script that presses **Apply** when the bridge key does not reach it. Written the first time a pick needs it. See [ZBrush 2022 to 2025](bridge.md#zbrush-2022-to-2025). |
+| `%LOCALAPPDATA%\ZOrbit\ApplyFallback.zsc` | ZBrush 2022 to 2025: the compiled copy of `ApplyFallback.txt`, which ZBrush makes beside it. ZOrbit removes it when it rewrites the script. |
 | `%LOCALAPPDATA%\ZOrbit\zscript_bridge.log` | ZBrush 2022 to 2025: what the last pick did. The app copies each of these into `radiald.log`, as a line that starts `pick #<number> result:`, so the earlier ones are kept there. |
 | `%LOCALAPPDATA%\ZOrbit\zscript_launch.log` | ZBrush 2022 to 2025: how the plugin last started the app or Studio. |
 | `%LOCALAPPDATA%\ZOrbit\zscript_hotkey.log` | ZBrush 2022 to 2025: the hotkey Apply had when the plugin loaded, and the one it has after (88 is F9). |

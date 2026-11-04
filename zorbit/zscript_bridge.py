@@ -150,6 +150,55 @@ def write_request(seq, label, actions) -> list[str]:
     return problems
 
 
+# The fallback when the bridge key does not reach Apply: ZBrush.exe <this script> hands it to the ZBrush that is
+# already open, which presses Apply, so the plugin's own code carries out the pick. The press goes through a
+# variable and a routine: ZBrush drops a script given on its command line without a word if it holds
+# [IPress, "<literal path>"], and IGetID on a missing item stops it with a box, hence the IExists.
+APPLY_SCRIPT = os.path.join(paths.DATA_DIR, "ApplyFallback.txt")
+APPLY_TEXT = ('[VarDef, p, ""][RoutineDef, Press, [If, [IExists, #p], [IPress, #p]]]'
+              '[VarSet, p, "Zplugin:ZOrbit:Apply"][RoutineCall, Press]')
+
+
+def apply_script() -> bytes:
+    return (APPLY_TEXT + "\r\n").encode("ascii")
+
+
+def ensure_apply_script(path=None) -> str:
+    """The fallback script on disk, written only when it is missing or differs. ZBrush compiles a .txt it is given
+    to a .zsc beside it and may run that copy later, so a changed script removes the old .zsc. Returns the path as
+    ZBrush is to be told it (the 8.3 name when the real one has spaces or is not plain ASCII, as _command does).
+    OSError when it cannot be written."""
+    path = path or APPLY_SCRIPT
+    want = apply_script()
+    try:
+        with open(path, "rb") as f:
+            if f.read() == want:
+                return ascii_path(path, spaces=True)
+    except OSError:
+        pass
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    tmp = path + ".tmp"
+    with open(tmp, "wb") as f:
+        f.write(want)
+    os.replace(tmp, path)
+    try:
+        os.remove(os.path.splitext(path)[0] + ".zsc")
+    except OSError:
+        pass
+    return ascii_path(path, spaces=True)
+
+
+def pending_request(path=None) -> int | None:
+    """The number of the pick waiting in request.txt: None when there is no file, 0 when the file is not a request
+    of ours (no readable number), else the number. OSError when it exists but cannot be read just now."""
+    try:
+        with open(path or REQUEST_TXT, "rb") as f:
+            head = f.read(256).decode("ascii", errors="replace").splitlines()
+    except FileNotFoundError:
+        return None
+    return int(head[1]) if len(head) > 1 and head[0] == MAGIC and head[1].isdigit() else 0
+
+
 def _command(argv) -> str:
     """A command line for ZScript's ShellExecute, without quotes where 8.3 names make that possible."""
     parts = []

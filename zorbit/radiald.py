@@ -98,9 +98,12 @@ RESULT_TRIES = 30                     # ticks (100 ms) to wait for the plugin to
 ACK_HOLD_MAX_S = 30                   # ... but not while the left button is down, for this long at most
 LEGACY_SCAN_S = 60                    # how long the scan for ZBrush 2022-2025 installations is kept
 TIMER_WATCH, TIMER_ACK, TIMER_REHOOK, TIMER_CONFIG, TIMER_BROWSER_PICK, TIMER_PREWARM, TIMER_POPOUT_SHOW, \
-    TIMER_ZS_RESULT, TIMER_COMMAND = range(1, 10)
+    TIMER_ZS_RESULT, TIMER_COMMAND, TIMER_APPLY = range(1, 11)
 COMMAND_WAIT_S = 2                    # how long a command's pick waits for the one before it to be taken
 ZS_RESULT_S = 15                      # how long to look for the ZScript plugin's line about a pick (a stroke delays it)
+APPLY_KEY_WAIT_S = 1.0                # a ZBrush 2022-2025 pick still in request.txt this long after the key: run the script
+APPLY_SCRIPT_WAIT_S = 6.0             # ... and still there this long after that (4 s measured): drop it
+APPLY_BUSY_MAX_S = 300                # a ZBrush Windows calls not responding is waited for this long at most
 COPYDATA_PICK, COPYDATA_SHOW, COPYDATA_QUIT = 1, 10, 12   # WM_COPYDATA ids: popout -> app, app -> popout
 COPYDATA_THEME = 13                                       # Studio -> popout: look at the theme now (no payload)
 SHOW_QUITTING = 2                     # a popout's answer to SHOW (1 taken, 0 refused): quitting, unused
@@ -138,6 +141,7 @@ def log(msg: str) -> None:
 # What the user is told when the app knows why a pick went nowhere (docs/troubleshooting.md lists them).
 MSG_NO_CONNECTION = "No plugin listener in ZBrush (bridge mode is Message). Check Zplugin > ZOrbit > Status."
 MSG_NO_ANSWER = "The plugin did not answer (bridge mode is Message). Check Zplugin > ZOrbit > Status."
+MSG_BRIDGE_NO_RESPONSE = "ZBrush did not take the pick. Check Zplugin > ZOrbit > Apply."
 MSG_NOT_FRONT = "ZBrush was not the front window, nothing sent"
 MSG_EMPTY_SLOT = "This slot is empty"
 MSG_EMPTY_MENU = "That menu has nothing usable in it"
@@ -403,6 +407,7 @@ class App:
         self._pick_time = 0.0           # when that pick was handed over
         self._result = None             # [seq, since, ticks left]: a picked-up request whose outcome is not logged yet
         self._zs_result = None          # [seq, bytes of zscript_bridge.log before, give up at]: a ZScript pick to log
+        self._apply_watch = None        # {seq, at, deadline, wait, ran, exe}: a ZBrush 2022-2025 pick not yet taken from request.txt
         self._config_error = None       # why the last load of radial.json failed, else None
         self._have_cfg = False          # self.cfg came from a radial.json that loaded (not the empty stand-in)
         self._unreadable = set()        # pids of foreground windows whose process could not be read, logged
@@ -919,6 +924,8 @@ class App:
                     self._popout_show_tick()
                 elif wparam == TIMER_ZS_RESULT:
                     self._zs_result_tick()
+                elif wparam == TIMER_APPLY:
+                    self._apply_tick()
                 elif wparam == TIMER_COMMAND:
                     W.KillTimer(self.ctrl, TIMER_COMMAND)
                     self._run_command()
@@ -1575,6 +1582,7 @@ class App:
             self.activity.note_pick(seq, item, "zscript", sent, source, self._activity_menu, reason)
             if sent:
                 self._watch_zscript_result(seq, before)
+                self._watch_apply(seq, legacy)
             else:
                 self._drop_request(seq)
             W.nudge_mouse()
@@ -1680,6 +1688,99 @@ class App:
         else:
             log(f"pick #{seq}: the ZScript plugin wrote no result" + ("" if final else f" in {ZS_RESULT_S} s") +
                 " (a macro ends its script before it can; otherwise the bridge key did not reach Apply)")
+
+    def _watch_apply(self, seq, legacy, now=None):
+        """The bridge key was pressed for pick seq in a ZBrush 2022-2025 (legacy: its installation). Apply deletes
+        request.txt when it reads it, so a file still there means the key did not reach Apply: after APPLY_KEY_WAIT_S
+        the fixed script that presses Apply is run through ZBrush.exe, and after APPLY_SCRIPT_WAIT_S more the pick is
+        dropped, so that a key bound to Apply later cannot apply it long after the user asked. A newer pick takes
+        the watch over (there is one request file)."""
+        now = time.time() if now is None else now
+        fg = W.GetForegroundWindow()             # ZBrush's own window: press_bridge_key needed it in front
+        self._apply_watch = {"seq": seq, "at": now, "deadline": now + APPLY_KEY_WAIT_S, "wait": APPLY_KEY_WAIT_S,
+                             "fired": False, "ran": False, "exe": os.path.join(legacy["path"], "ZBrush.exe"),
+                             "hwnd": fg if fg and self.target_in_front() else None}
+        W.SetTimer(self.ctrl, TIMER_APPLY, 100, None)
+
+    def _end_apply(self):
+        self._apply_watch = None
+        W.KillTimer(self.ctrl, TIMER_APPLY)
+
+    def _apply_tick(self, now=None):
+        w = self._apply_watch
+        if w is None:
+            W.KillTimer(self.ctrl, TIMER_APPLY)
+            return
+        now = time.time() if now is None else now
+        seq = w["seq"]
+        try:
+            there = zscript_bridge.pending_request()
+        except OSError:                          # being replaced just now: look again, but not for ever
+            if now - w["at"] > ZS_RESULT_S:
+                self._end_apply()
+            return
+        if there != seq:                         # taken by Apply, or replaced by a newer pick, which has its own watch
+            self._end_apply()
+            if there is None and w["ran"]:
+                log(f"pick #{seq}: ZBrush took it after the fallback script")
+                self.activity.note_route(seq, "zscript-fallback", True)
+            return
+        hwnd = w["hwnd"]
+        if hwnd is not None and not W.IsWindow(hwnd):
+            if self.target_exe not in W.running_exe_names():      # ZBrush was closed: nobody will take the pick
+                self._end_apply()
+                log(f"pick #{seq}: {self.target_exe} has closed; request dropped")
+                self._give_up_apply(seq, "ZBrush closed before it took the pick", toast=False)
+                return
+            hwnd = w["hwnd"] = None                               # only the window we remembered went (a menu, a box)
+        if hwnd is not None and now < w["at"] + APPLY_BUSY_MAX_S and W.IsHungAppWindow(hwnd):
+            # ZBrush is busy (a big Dynamesh, a project loading) and the key waits in its queue: dropping the pick
+            # now would lose it, where waiting lets it land late. No second process for a ZBrush that is not listening.
+            w["deadline"] = now + w["wait"]
+            if self._zs_result is not None and self._zs_result[0] == seq:
+                self._zs_result[2] = now + ZS_RESULT_S            # its line comes late too, which is not "no result"
+            return
+        if W.primary_down() and now < w["at"] + ACK_HOLD_MAX_S:
+            w["deadline"] = now + w["wait"]      # a stroke holds the key back, as it holds a listener pick back
+            return
+        if now < w["deadline"]:
+            return
+        if not w["fired"]:
+            w["fired"] = True
+            w["deadline"], w["wait"] = now + APPLY_SCRIPT_WAIT_S, APPLY_SCRIPT_WAIT_S
+            w["ran"] = self._run_apply_script(seq, w["exe"])
+            return
+        self._end_apply()
+        log(f"pick #{seq}: ZBrush took it neither by the bridge key nor by the fallback script; giving it up")
+        self._give_up_apply(seq, "ZBrush did not take the pick", toast=True)
+
+    def _give_up_apply(self, seq, reason, toast):
+        self._drop_request(seq)
+        if self._zs_result is not None and self._zs_result[0] == seq:
+            self._zs_result = None               # its "no result" line would only repeat this one
+            W.KillTimer(self.ctrl, TIMER_ZS_RESULT)
+        self.activity.note_route(seq, "zscript", False, reason)
+        if toast:
+            self._toast(MSG_BRIDGE_NO_RESPONSE)
+
+    def _run_apply_script(self, seq, exe) -> bool:
+        """Starts ZBrush.exe with the script that presses Apply, which the ZBrush already open takes over and the
+        new process ends. Not waited for: a box open in ZBrush can hold the script back. True when it was started."""
+        log(f"pick #{seq}: the bridge key ({self.cfg.bridge_key.text}) did not reach Apply (is it bound to "
+            f"Zplugin > ZOrbit > Apply?); using the fallback, a script that presses Apply")
+        try:
+            if self.target_exe not in W.running_exe_names():
+                log(f"pick #{seq}: {self.target_exe} is not running; fallback script not started")
+                return False
+            script = zscript_bridge.ensure_apply_script()
+            subprocess.Popen([exe, script], cwd=os.path.dirname(exe), env=paths.clean_env(),
+                             creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP,
+                             close_fds=True, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                             stderr=subprocess.DEVNULL)
+        except (OSError, ValueError, subprocess.SubprocessError) as e:
+            log(f"pick #{seq}: could not run the fallback script: {e!r}")
+            return False
+        return True
 
     def press_bridge_key(self, seq):
         key = self.cfg.bridge_key
