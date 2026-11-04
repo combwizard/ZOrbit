@@ -40,6 +40,16 @@ test('Press and Toggle are everyday item types; Set, Steps, Auto, Tag and Browse
   assert(needs(cfg));
 });
 
+test('a next-profile hotkey is a Full setting: the note names it, and it needs Full', () => {
+  const cfg = fresh();
+  cfg.profile = { next_hotkey: 'Alt+P' };
+  assert.deepStrictEqual(M.fullOnlyChanges(cfg, 'settings', ctxFor(cfg)), ['Next profile hotkey']);
+  assert.deepStrictEqual(M.fullOnlyChanges(cfg, 'look', ctxFor(cfg)), []);
+  assert(needs(cfg));
+  delete cfg.profile;
+  assert(!needs(cfg));
+});
+
 test('a look picked for a menu by name is not a Full setting; one with settings of its own is', () => {
   const cfg = fresh();
   cfg.menus.main.look = 'soft';

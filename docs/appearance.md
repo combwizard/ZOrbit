@@ -278,7 +278,23 @@ In Studio, opacities show as percentages (45%) but are 0 to 1 in the file. Contr
 "browser": {"hotkey": "Alt+B"}
 ```
 
-The hotkey that opens the [browser window](browser.md) and, pressed over it, hands the keyboard back to ZBrush. On Settings it is the **Browser hotkey** row at the end of the **Behaviour** card, where you record it like a menu hotkey and Studio warns if a menu already uses it. New installs get **Alt+B**. An existing `radial.json` has no `browser` section until you add one, so the hotkey does nothing there. Leave it out for no hotkey. The browser then opens from a **Browser** slot, **More...** in a tag's fan, the tray menu, Studio's **Browser** buttons and the Start menu shortcut (see [Opening it](browser.md#opening-it)).
+The hotkey that opens the [browser window](browser.md) and, pressed over it, hands the keyboard back to ZBrush. On Settings it is the **Browser hotkey** row in the **Behaviour** card, where you record it like a menu hotkey and Studio warns if a menu already uses it. New installs get **Alt+B**. An existing `radial.json` has no `browser` section until you add one, so the hotkey does nothing there. Leave it out for no hotkey. The browser then opens from a **Browser** slot, **More...** in a tag's fan, the tray menu, Studio's **Browser** buttons and the Start menu shortcut (see [Opening it](browser.md#opening-it)).
+
+### Next profile hotkey
+
+```json
+"profile": {"next_hotkey": "Alt+P"}
+```
+
+The hotkey that steps to the next profile, the same as `ZOrbit.exe --profile next`. The profiles are sorted by name, ignoring capitals, and the step goes round from the last to the first. Holding the key switches once. A message near the cursor names the profile: `Profile: <name>`. The key closes an open ring.
+
+It only works while ZBrush is the front window, and elsewhere the key behaves normally. It is ignored while a native Windows dialog is in front or a Windows text box has the focus. When it works, it is swallowed, so ZBrush does not see it.
+
+There is no default, so the hotkey does nothing until you set it. On Settings it is the **Next profile hotkey** row under **Browser hotkey** in the **Behaviour** card. That row is in Full mode only. You record it like a menu hotkey, and Studio warns if another key clashes. A menu that uses the same key wins, and so does the browser hotkey. Either way the next-profile hotkey is reported as a problem and does nothing.
+
+It is a setting per profile. A new profile copies it from the profile in use. Profiles you already have do not get it, so set the same key in each one you want to step through. A profile without it is a one-way stop: the key does nothing there, so switch away from the tray or Studio. The message near the cursor says so when you arrive, for example **Profile: Third (no next-profile hotkey here)**. Importing a settings file as a new profile drops it, the same as the bridge and browser settings. **Import...** on Settings replaces it with the one in the file, along with the bridge and browser settings.
+
+If this ZOrbit runs on one pinned menus file, or your files were changed by a newer ZOrbit, a press shows the same messages as `--profile` and the profile stays put (see [Troubleshooting](troubleshooting.md)).
 
 ## Opening
 

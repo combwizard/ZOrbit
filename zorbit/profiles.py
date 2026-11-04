@@ -71,6 +71,7 @@ KNOWN_STARTERS = frozenset((
     "982715e38e52fb0c9ddc5ee5f5a86cb0a84c89aed0fbd79b3e17a62b2fa23969",       # keep_slots on every starter menu
 ))
 
+PC_SECTIONS = ("bridge", "browser", "profile")      # the radial.json sections that belong to this PC's keyboard and ZBrush
 _FORBIDDEN = re.compile(r'[\\/:*?"<>|\x00-\x1f]')
 _RESERVED = {"CON", "PRN", "AUX", "NUL", *(f"COM{i}" for i in range(1, 10)), *(f"LPT{i}" for i in range(1, 10))}
 _cache = None                          # ((root, pointer signature), active name); only for a pointer that was good
@@ -573,9 +574,9 @@ def ensure() -> str:
 
 
 def canonical_hash(obj) -> str:
-    """SHA-256 (hex) of a radial.json dict without its bridge and browser sections, as compact JSON with sorted keys:
-    the same for the same menus whatever the indentation, line endings or key order of the file."""
-    body = {k: v for k, v in obj.items() if k not in ("bridge", "browser")}
+    """SHA-256 (hex) of a radial.json dict without its PC sections (bridge, browser, profile), as compact JSON with
+    sorted keys: the same for the same menus whatever the indentation, line endings or key order of the file."""
+    body = {k: v for k, v in obj.items() if k not in PC_SECTIONS}
     text = json.dumps(body, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
     return hashlib.sha256(text.encode("utf-8", "surrogatepass")).hexdigest()
 
@@ -716,9 +717,9 @@ def absorb_stray_usage(now=None) -> int:
 
 
 def _sections(raw) -> dict:
-    """The bridge and browser sections of a raw radial.json that are objects: they belong to this PC, so every new
-    profile takes them from the active one."""
-    return {k: raw[k] for k in ("bridge", "browser") if isinstance(raw, dict) and isinstance(raw.get(k), dict)}
+    """The PC sections (bridge, browser, profile) of a raw radial.json that are objects: they belong to this PC, so
+    every new profile takes them from the active one."""
+    return {k: raw[k] for k in PC_SECTIONS if isinstance(raw, dict) and isinstance(raw.get(k), dict)}
 
 
 def _first_hotkey(raw) -> str:
@@ -763,7 +764,7 @@ def _build(stage, source, bundle) -> list:
         imported = bundle.get("config") if isinstance(bundle, dict) else None
         if not isinstance(imported, dict):
             raise ProfileError("That is not a menus file.")
-        cfg = {k: v for k, v in imported.items() if k not in ("bridge", "browser")}   # from another PC
+        cfg = {k: v for k, v in imported.items() if k not in PC_SECTIONS}   # from another PC
         cfg.update(mine)
         _dump(out, cfg, 2)
         tags = bundle.get("tags")
@@ -777,7 +778,7 @@ def _build(stage, source, bundle) -> list:
             old_cfg = _read_object(found["menus"])
             if old_cfg is None:
                 raise ProfileError("That is not a menus file.")
-            cfg = {k: v for k, v in old_cfg.items() if k not in ("bridge", "browser")}
+            cfg = {k: v for k, v in old_cfg.items() if k not in PC_SECTIONS}
         else:
             with open(paths.DEFAULT_MENUS, encoding="utf-8-sig") as f:
                 cfg = json.load(f)

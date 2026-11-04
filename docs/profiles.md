@@ -18,6 +18,8 @@ If the profile is switched from the tray while Studio is open, Studio follows wh
 
 A Stream Deck or a script can switch too, with `ZOrbit.exe --profile <name>` or `ZOrbit.exe --profile next`. See [Commands from other programs](hotkeys.md#commands-from-other-programs).
 
+A key can step to the next profile too, with the **Next profile hotkey** in **Settings > Behaviour** (Full mode). It is a setting per profile, so set it in each profile you want to step through (see [Next profile hotkey](appearance.md#next-profile-hotkey)).
+
 ## Making a profile
 
 Click the profile button and choose **New profile...**. Type a name, then pick where the new profile's menus, settings and tags come from:
@@ -29,7 +31,7 @@ Click the profile button and choose **New profile...**. Type a name, then pick w
 
 After you make a profile, Studio switches to it. **Duplicate** in the profile list makes a copy the same way.
 
-Every new profile takes the ZBrush bridge settings and the browser hotkey from the profile you are editing. The bridge key must match the hotkey bound to **Apply** inside ZBrush on this PC, so a settings file from another PC never brings its bridge key. The bridge settings (**Settings > ZBrush bridge**) apply to the profile you are editing, and each profile keeps its own. If you change the bridge key in one profile, change it in the others too.
+Every new profile takes the ZBrush bridge settings, the browser hotkey and the next-profile hotkey from the profile you are editing. The bridge key must match the hotkey bound to **Apply** inside ZBrush on this PC, so a settings file from another PC never brings its bridge key. The bridge settings (**Settings > ZBrush bridge**) apply to the profile you are editing, and each profile keeps its own. If you change the bridge key in one profile, change it in the others too.
 
 A name can be up to 60 characters. It must work as a Windows folder name: no `\ / : * ? " < > |`, no leading dot, no trailing dot or space, and not a reserved name such as `CON` or `COM1`. Two profiles cannot differ only by capitals, so `Sculpt` and `sculpt` count as one name.
 

@@ -541,6 +541,56 @@ def test_browser_section_that_is_not_an_object_is_reported(load_menus):
     assert problems(cfg, "browser: must be an object")
 
 
+def test_profile_hotkey_is_read(load_menus):
+    cfg = load_menus(GOOD_MENUS, profile={"next_hotkey": "Alt+P"})
+    assert (cfg.profile_key.vk, cfg.profile_key.alt) == (0x50, True)
+    assert cfg.errors == []
+
+
+def test_profile_hotkey_has_no_default(load_menus):
+    assert load_menus(GOOD_MENUS).profile_key is None
+    assert load_menus(GOOD_MENUS, profile={}).profile_key is None
+    assert load_menus(GOOD_MENUS, profile={"next_hotkey": ""}).profile_key is None
+
+
+def test_profile_hotkey_used_by_a_menu_is_reported_and_dropped(load_menus):
+    cfg = load_menus(GOOD_MENUS, profile={"next_hotkey": "Q"})
+    assert cfg.profile_key is None
+    assert problems(cfg, "profile.next_hotkey 'Q' already used by menu main")
+
+
+def test_profile_hotkey_used_by_the_browser_is_reported_and_the_browser_keeps_it(load_menus):
+    cfg = load_menus(GOOD_MENUS, browser={"hotkey": "Alt+B"}, profile={"next_hotkey": "alt+b"})
+    assert cfg.profile_key is None and cfg.browser_key.text == "Alt+B"
+    assert problems(cfg, "profile.next_hotkey 'alt+b' already used by browser.hotkey")
+
+
+def test_a_browser_hotkey_that_lost_to_a_menu_does_not_hold_the_key_against_the_profile_hotkey(load_menus):
+    cfg = load_menus(GOOD_MENUS, browser={"hotkey": "Q"}, profile={"next_hotkey": "Q"})
+    assert cfg.browser_key is None and cfg.profile_key is None      # both lose to the menu
+    assert problems(cfg, "browser.hotkey 'Q' already used by menu main")
+    assert problems(cfg, "profile.next_hotkey 'Q' already used by menu main")
+
+
+@pytest.mark.parametrize("text", ["Blah", "Alt+", "Win+P", "Alt+Alt"])
+def test_profile_hotkey_not_understood_is_reported(load_menus, text):
+    cfg = load_menus(GOOD_MENUS, profile={"next_hotkey": text})
+    assert cfg.profile_key is None
+    assert problems(cfg, f"profile.next_hotkey {text!r} not understood")
+
+
+def test_profile_section_that_is_not_an_object_is_reported(load_menus):
+    cfg = load_menus(GOOD_MENUS, profile="Alt+P")
+    assert cfg.profile_key is None
+    assert problems(cfg, "profile: must be an object")
+
+
+def test_profile_section_with_an_unknown_setting_is_reported_with_a_suggestion(load_menus):
+    cfg = load_menus(GOOD_MENUS, profile={"next_hotkeys": "Alt+P", "next_hotkey": "Alt+P"})
+    assert cfg.profile_key.text == "Alt+P"
+    assert problems(cfg, "profile.next_hotkeys: unknown setting") and problems(cfg, "next_hotkey")
+
+
 # --- submenus and menus with nothing in them ----------------------------------------------------
 
 

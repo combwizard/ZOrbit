@@ -10,6 +10,7 @@ All notable changes to this project are listed here. The format follows
 
 - Other programs can drive ZOrbit: `ZOrbit.exe --open`, `--pick`, `--press`, `--set`, `--toggle`, `--browser` and `--profile` pass a command to the running app and quit, with an exit code. A Stream Deck, tablet software, AutoHotkey or a script can run them.
 - **Copy report** on Studio's **Status** screen copies what a bug report needs in one block: the versions, your ZBrush installs, the **Status** cards and the ends of the logs, with your Windows user name and folders hidden. **Report a bug** next to it opens the bug form with the versions filled in.
+- A **Next profile hotkey** in **Settings > Behaviour** (Full mode) steps to the next profile while ZBrush is in front, the same as `ZOrbit.exe --profile next`. Each profile has its own.
 
 ### Fixed
 

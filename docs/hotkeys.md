@@ -17,6 +17,7 @@ Q          Alt+G          Ctrl+Shift+1          F9          `
 - Keys sent by a tablet driver (Wacom, Huion or XP-Pen key mappings, for example), a macro tool or a key remapper work like the real key. Only ZOrbit's own key presses are ignored.
 - Press the hotkey again while its ring is open to close it. **Esc** also closes the ring.
 - The browser has a hotkey of its own, `browser.hotkey`, written the same way (see [Browser hotkey](appearance.md#browser-hotkey)). It cannot be a key a menu already uses: the menu wins and the browser hotkey is reported as a problem. It is swallowed like a menu hotkey. Press it again while the browser is in front to hand the keyboard back to ZBrush; the browser stays open.
+- The next-profile hotkey, `profile.next_hotkey`, steps to the next profile while ZBrush is in front. It is a setting per profile (see [Next profile hotkey](appearance.md#next-profile-hotkey)).
 
 By default a menu **swallows** its hotkey: ZBrush never sees it, so it does not also run its own shortcut for that key. Set `"swallow": false` (or switch it off in the menu settings in Studio) if you want the key to keep working in ZBrush too. The starter **Brushes** menu has it off, because **Q** is ZBrush's Draw-mode key: ZBrush goes back to Draw mode as the ring opens, and **Q** still types in ZBrush's own text fields.
 
@@ -77,7 +78,7 @@ There are two ways to pick, and the same hotkey does both.
 
 Turn this off with **Open submenus on hover** in Settings, which needs [Full mode](studio.md#simple-and-full-mode) (`"hover_submenus": false`). Submenus then open when you release or click on them, as before.
 
-![Settings > Behaviour in Full mode: switches for Flick to pick, Show the hint and Open submenus on hover, sliders for Tap time at 250 ms, Tag fan slots at 12 and Auto-close at 20 s, and the Browser hotkey set to Alt+B](images/settings-behaviour.png)
+![Settings > Behaviour in Full mode: switches for Flick to pick, Show the hint and Open submenus on hover, sliders for Tap time at 250 ms, Tag fan slots at 12 and Auto-close at 20 s, the Browser hotkey set to Alt+B, and below it the Next profile hotkey row with no key set](images/settings-behaviour.png)
 
 **Fans.** A submenu whose menu has `"fan": true` opens as a fan instead of a new ring: its items spread out beyond the submenu's slot with dashed lines to each one, and the ring you came from stays where it is. The rules are the same as above:
 
