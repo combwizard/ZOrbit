@@ -4,7 +4,11 @@ All notable changes to this project are listed here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.18.0] - 2026-11-04
+
+ZOrbit 0.18.0 adds the mouse's **Back** and **Forward** buttons. In Studio they go through the screens you have
+visited, and on the Library screen through its tabs and folders first. In the browser they go through its tabs
+and folders.
 
 ### Added
 
@@ -915,6 +919,7 @@ First public release.
   only brushes included with ZBrush.
 - Documentation: README, user guide, third-party notices and contributing guide.
 
+[0.18.0]: https://github.com/combwizard/zorbit/releases/tag/v0.18.0
 [0.17.1]: https://github.com/combwizard/zorbit/releases/tag/v0.17.1
 [0.17.0]: https://github.com/combwizard/zorbit/releases/tag/v0.17.0
 [0.16.0]: https://github.com/combwizard/zorbit/releases/tag/v0.16.0
