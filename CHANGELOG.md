@@ -4,6 +4,16 @@ All notable changes to this project are listed here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- **Copy report** on Studio's **Status** screen copies what a bug report needs in one block: the versions, your ZBrush installs, the **Status** cards and the ends of the logs, with your Windows user name and folders hidden. **Report a bug** next to it opens the bug form with the versions filled in.
+
+### Fixed
+
+- The docs said `--check` was for a source checkout. The exe has it too.
+
 ## [0.18.1] - 2026-11-04
 
 ZOrbit 0.18.1 fixes **Install update**. Studio refused every release's setup file, so it only offered the download

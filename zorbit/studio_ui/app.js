@@ -4491,6 +4491,7 @@ function buildStatusScreen(root) {
   const stamp = h('span', { class: 'stamp mono' });
   let startLog = [];                       // lines a failed start brought back; kept (highlighted) until the app runs or Start is pressed again
   let curLines = [];                       // the raw lines on screen now: what Copy log copies
+  let cardLines = [];                      // [title, text] of the cards on screen now: what Copy report says about them
   let lastAsk = 0;                         // when the last get_status was asked
 
   // The Start app button lives on the app card. One element, moved into each freshly built card.
@@ -4525,18 +4526,36 @@ function buildStatusScreen(root) {
     const ok = await copyText(curLines.join('\n'));
     toast(ok ? `Copied ${curLines.length} line${curLines.length === 1 ? '' : 's'}` : 'Could not copy the log.', { tone: ok ? 'ok' : 'warn', ms: 2200 });
   };
+  const copyReport = async ev => {
+    const btn = ev.currentTarget;
+    btn.disabled = true;
+    try {
+      const res = await call('get_report', cardLines);
+      const ok = await copyText(res.text);
+      toast(ok ? 'Copied the report, with your user name and folders hidden. Look it over before you post it.' : 'Could not copy the report.', { tone: ok ? 'ok' : 'warn', ms: 4000 });
+    } catch (e) { toast('Could not make the report.', { tone: 'warn' }); }
+    btn.disabled = false;
+  };
+  const reportBug = async () => {
+    try { await call('open_url', await call('get_bug_url')); } catch (e) { toast('Could not open the bug form.', { tone: 'warn' }); }
+  };
   page.append(h('div', { class: 'page-head' }, h('h1', null, 'Status'), h('p', null, 'Whether ZBrush and the ZOrbit app are running, and whether the bridge between them is healthy.')),
     grid,
     card('App log', 'Last lines of radiald.log', logBox,
       h('div', { class: 'btn-row between' }, h('div', { class: 'btn-row' },
         h('button', { class: 'btn', type: 'button', onclick: copyLog }, icon('copy', 13), 'Copy log'),
+        h('button', { class: 'btn', type: 'button', title: 'Copy the versions, this screen and the logs for a bug report, with your user name and folders hidden', onclick: copyReport }, icon('copy', 13), 'Copy report'),
+        h('button', { class: 'btn', type: 'button', title: 'Open the bug form on GitHub, with the versions filled in. Paste the report into it.', onclick: reportBug }, icon('external', 13), 'Report a bug'),
         h('button', { class: 'btn', type: 'button', title: 'Where the app log is kept', onclick: folder('data') }, icon('folder', 13), 'Open logs folder'),
         h('button', { class: 'btn', type: 'button', title: 'The folder of the profile you are editing', onclick: folder('config') }, icon('external', 13), 'Open menus folder')),
         h('span', { class: 'live' }, h('i', { class: 'livedot' }), 'Auto-refresh every 3 s ', stamp))));
   root.append(h('div', { class: 'settings-scroll' }, page));
 
-  const stat = (title, ok, text, sub, tone, extra) => h('div', { class: 'scard ' + (tone || (ok ? 'ok' : 'off')) }, h('div', { class: 'micro' }, title),
-    h('div', { class: 'sval' + (extra ? ' has-act' : '') }, h('i', { class: 'sdot' }), text, extra || null), sub ? h('div', { class: 'ssub' }, sub) : null);
+  const stat = (title, ok, text, sub, tone, extra) => {
+    cardLines.push([title, sub ? `${text}. ${sub}` : text]);
+    return h('div', { class: 'scard ' + (tone || (ok ? 'ok' : 'off')) }, h('div', { class: 'micro' }, title),
+      h('div', { class: 'sval' + (extra ? ' has-act' : '') }, h('i', { class: 'sdot' }), text, extra || null), sub ? h('div', { class: 'ssub' }, sub) : null);
+  };
   const tickStamp = () => {
     if (!S.statusAt) { setText(stamp, ''); return; }
     const s = Math.max(0, Math.floor((Date.now() - S.statusAt) / 1000));
@@ -4557,6 +4576,7 @@ function buildStatusScreen(root) {
             : (l.verified ? 'Picks are delivered by message.' : 'The plugin’s listener is there, but it has not answered a pick yet.'))));
     const hadFocus = document.activeElement === startBtn;
     paintStart(st);
+    cardLines = [];
     grid.replaceChildren(
       unsure ? stat('ZBrush', false, 'Could not check', 'Studio could not tell whether ZBrush is running.', 'neutral')
         : stat('ZBrush', st.zbrush_running, st.zbrush_running ? 'Running' : 'Not running', st.zbrush_running ? null : 'The app starts together with ZBrush.'),
@@ -4564,6 +4584,7 @@ function buildStatusScreen(root) {
         st.app_running ? (st.app_older ? `The app running is ZOrbit ${st.app_version || 'older'}, older than this Studio.` : 'Listening for your hotkeys.') : (st.zbrush_running || unsure ? 'Press Start app to launch it.' : 'Open ZBrush first; the app starts with it.'), st.app_running && st.app_older ? 'warn' : null, startBtn),
       stat('Bridge listener', ltone === 'ok', ltext, lsub, ltone),
       h('div', { class: 'scard last' }, h('div', { class: 'micro' }, 'Last pick'), h('div', { class: 'sval mono small' }, st.last_pick || 'Nothing picked yet'), h('div', { class: 'ssub' }, 'The most recent item sent to ZBrush.')));
+    cardLines.push(['Last pick', st.last_pick || 'Nothing picked yet']);
     if (hadFocus && !startBtn.disabled) startBtn.focus();
     if (st.app_running) startLog = [];
     const atBottom = logBox.scrollTop + logBox.clientHeight >= logBox.scrollHeight - 8;
@@ -4586,7 +4607,7 @@ function buildStatusScreen(root) {
   async function refresh() {
     if (statusBusy) return; statusBusy = true; lastAsk = Date.now();
     try { const st = await call('get_status'); noteStatus(st); paint(st); }
-    catch (e) { grid.replaceChildren(h('div', { class: 'scard off' }, h('div', { class: 'micro' }, 'Status'), h('div', { class: 'sval' }, h('i', { class: 'sdot' }), 'Unavailable'), h('div', { class: 'ssub' }, String(e.message || e)))); }
+    catch (e) { cardLines = [['Status', 'Unavailable']]; grid.replaceChildren(h('div', { class: 'scard off' }, h('div', { class: 'micro' }, 'Status'), h('div', { class: 'sval' }, h('i', { class: 'sdot' }), 'Unavailable'), h('div', { class: 'ssub' }, String(e.message || e)))); }
     statusBusy = false;
   }
   R.status = refresh;

@@ -39,17 +39,12 @@ body:
     attributes:
       label: Logs
       description: |
-        The last lines of the logs for the problem, from `%LOCALAPPDATA%\ZOrbit`. Studio's **Status** screen has a
-        button that opens the folder. Which logs to send depends on your ZBrush version:
+        Press **Copy report** on Studio's **Status** screen and paste it here. It holds the versions and the ends of
+        the logs that fit your setup, with your Windows user name and folders hidden. Look it over and remove anything
+        you would rather not share.
 
-        - ZBrush 2026 and newer: `radiald.log` and `bridge.log`
-        - ZBrush 2022 to 2025: `radiald.log`, `zscript_bridge.log`, `zscript_hotkey.log` and `zscript_launch.log`
-        - A crash at start: `app_stderr.log`
-        - Studio problems: `studio.log`
-        - The browser: `popout.log`
-
-        The logs contain file paths with your Windows user name; look them over and remove anything you would rather
-        not share.
+        If Studio does not start, paste the last lines of `app_stderr.log` and `studio.log` from
+        `%LOCALAPPDATA%\ZOrbit` instead, and remove your Windows user name from the paths.
       render: text
   - type: dropdown
     id: install

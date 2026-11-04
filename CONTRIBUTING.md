@@ -9,9 +9,9 @@ Bug reports and ideas are welcome on the
 
 - your Windows and ZBrush versions;
 - what you did, what you expected and what happened;
-- the last lines of the logs for the problem, from `%LOCALAPPDATA%\ZOrbit`, as the
-  [bug report template](.github/ISSUE_TEMPLATE/bug_report.yml) lists them for each ZBrush version. Look them over
-  first and remove anything you would rather not share.
+- the text from **Copy report** on Studio's **Status** screen, which has the logs with your user name and folders
+  hidden. Look it over first and remove anything you would rather not share. The
+  [bug report template](.github/ISSUE_TEMPLATE/bug_report.yml) says what to send if Studio does not start.
 
 What's planned is on the [roadmap board](https://github.com/users/combwizard/projects/2), and every idea there is
 an issue of its own. Add a thumbs-up to the ideas you want and comment on how you'd use them.

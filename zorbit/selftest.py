@@ -16,7 +16,7 @@ import paths
 LIBRARIES = ("webview", "clr", "truststore")
 MODULES = ("radiald", "ring", "popout", "studio", "webapi", "assets", "brushes", "zbp", "config", "tags", "usage",
            "expand", "installs", "onboarding", "zscript_bridge", "winframe", "webview2", "profiles",
-           "changelog", "theme", "zbrush_colors")
+           "changelog", "theme", "zbrush_colors", "report")
 
 
 def _import(name: str) -> str | None:

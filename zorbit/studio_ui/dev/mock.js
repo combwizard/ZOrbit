@@ -1161,6 +1161,13 @@
     win_toggle_maximize: function () { return Promise.resolve(false); },
     win_is_maximized: function () { return Promise.resolve(false); },
     get_app_info: function () { return Promise.resolve({ version: '0.18.1' }); },
+    get_report: function (cards) {
+      var text = 'ZOrbit report (the Windows user name and folders are hidden)\n\nZOrbit: 0.18.1 (source)\n\n--- Status cards ---\n' +
+        (cards || []).map(function (c) { return c[0] + ': ' + c[1]; }).join('\n') + '\n';
+      console.log('[mock] get_report', text);
+      return Promise.resolve({ ok: true, text: text });
+    },
+    get_bug_url: function () { return Promise.resolve('https://github.com/combwizard/zorbit/issues/new?template=bug_report.yml&zorbit=0.18.1&zbrush=2026'); },
     check_update: function () { var p = JSON.parse(localStorage.getItem('rm_prefs') || '{}'); if (p.check_updates === false) return Promise.resolve({ newer: false, current: '0.18.1', latest: null, url: 'https://github.com/combwizard/zorbit/releases' }); return sleep(300).then(function () { if (q.has('unreach')) return { newer: false, current: '0.18.1', latest: null, url: 'https://github.com/combwizard/zorbit/releases' }; return q.has('update') ? { newer: true, current: '0.18.0', latest: '0.18.1', url: 'https://github.com/combwizard/zorbit/releases', can_install: !q.has('portable'), skipped: p.skipped_version === '0.18.1', notes: UPD_NOTES } : { newer: false, current: '0.18.1', latest: '0.18.1', url: 'https://github.com/combwizard/zorbit/releases' }; }); },
     // The update download: about two seconds of progress; ?updatefail ends it with the hash message.
     get_update_progress: function () { return Promise.resolve(Object.assign({}, mockUpd)); },

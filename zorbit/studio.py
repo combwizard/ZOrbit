@@ -13,6 +13,7 @@ import ctypes.wintypes as w
 import io
 import json
 import os
+import platform
 import re
 import subprocess
 import sys
@@ -36,6 +37,7 @@ import onboarding           # noqa: E402
 import paths                # noqa: E402
 import profiles           # noqa: E402
 import radiald              # noqa: E402
+import report               # noqa: E402
 import tags                 # noqa: E402
 import theme                # noqa: E402
 import webapi               # noqa: E402
@@ -1131,6 +1133,73 @@ class Api(webapi.LibraryApi, webapi.TagApi):
         """True when ver is a version older than this Studio. False when either is unknown."""
         theirs, mine = paths.version_key(ver), paths.version_key(VERSION)
         return theirs is not None and mine is not None and theirs < mine
+
+    # --- Copy report ------------------------------------------------------------------------------
+    @staticmethod
+    def _windows_version():
+        return f"Windows {platform.release()} (build {sys.getwindowsversion().build})"
+
+    def _report_zbrush(self):
+        """(every ZBrush known, with a running one the scan missed, and the running ones for report.zbrush_lines). A
+        process whose image cannot be read is one running as administrator, as on the Setup screen."""
+        known = list(self._all_installs())
+        seen = {os.path.normcase(e["path"]) for e in known}
+        procs = []
+        for pid in W.pids_named("zbrush.exe"):
+            image = W.process_image(pid)
+            e = installs.install_of(image) if image else None
+            elevated = W.process_elevated(pid) if image else True
+            if e and os.path.normcase(e["path"]) not in seen:
+                seen.add(os.path.normcase(e["path"]))
+                known.append(e)
+            procs.append({"pid": pid, "path": e["path"] if e else None, "year": e.get("year") if e else None,
+                          "admin": "yes" if elevated else "no" if elevated is False else "cannot tell"})
+        return known, procs
+
+    @staticmethod
+    def _report_menus():
+        """(bridge mode, bridge key, problems) of the menus file the app uses."""
+        newer = profiles.too_new()
+        if newer:
+            return "not read", "not read", [newer]
+        store = tags.TagStore(profiles.tags_file(profiles.active() if profiles.enabled() else None)).load()
+        cfg = C.load(profiles.config_file(), store, theme=_theme_now())
+        return cfg.bridge_mode, cfg.bridge_key.text, list(cfg.errors)
+
+    def get_bug_url(self):
+        """The bug form with its version fields filled in."""
+        try:
+            known, procs = self._report_zbrush()
+            years = [p["year"] for p in procs if p["year"]] or [e["year"] for e in known if e.get("year")]
+        except Exception as e:
+            _startup(f"get_bug_url: no ZBrush version: {e!r}")
+            years = []
+        return report.bug_url(VERSION, str(max(years)) if years else "", self._windows_version())
+
+    def get_report(self, cards=None):
+        """The text of Copy report, with the user name and folders hidden. cards: [[title, text]], the Status cards as
+        the screen shows them. A part that cannot be read says so; the others still go in."""
+        def part(fn, fallback):
+            try:
+                return fn()
+            except Exception as e:
+                _startup(f"get_report: {fn.__name__}: {e!r}")
+                return fallback(e)
+        clean = report.current_redactor()
+        known, procs = part(self._report_zbrush, lambda e: ([], []))
+        mode, key, problems = part(self._report_menus, lambda e: ("unknown", "unknown", [f"could not be read: {e!r}"]))
+        kind = "Setup" if _installed_here() else "portable" if paths.FROZEN else "source"
+        facts = [("ZOrbit", f"{VERSION} ({kind})"), ("Windows", self._windows_version()),
+                 ("App running", part(self._running_version, lambda e: None) or "none"),
+                 ("Profile in use", profiles.active() if profiles.enabled() else "none (one pinned menus file)"),
+                 ("Bridge mode", mode), ("Bridge key", key)]
+        shown = [f"{c[0]}: {c[1]}"[:report.LINE_CHARS] for c in (cards if isinstance(cards, list) else [])[:8]
+                 if isinstance(c, list) and len(c) == 2 and all(isinstance(x, str) for x in c)]
+        modern, legacy = any(e.get("python") for e in known), any(not e.get("python") for e in known)
+        sections = [("ZBrush", report.zbrush_lines(known, procs)), ("Status cards", shown or ["(not shown yet)"]),
+                    ("Problems in the menus file", problems or ["none"])]
+        sections += report.log_sections(DATA_DIR, modern, legacy, clean)
+        return {"ok": True, "text": report.build(facts, sections, clean)}
 
     def get_status(self):
         info = self._listener_info()
