@@ -34,7 +34,8 @@ Schema (all keys optional except menus):
            "colors": {"bg": "#222327", "accent": "#f86b33", "highlight": "#4dc8e9", "text": "#f0f0f0",
                       "lines": "#f86b33"}},
   "looks": {"My look": {"slot_shape": "hexagon", "hub": 14}},    # named looks: any of the look keys of "ring"
-  "browser": {"hotkey": "Alt+B"},         # opens the browser popout (tabs per kind, tags, search, folders)
+  "browser": {"hotkey": "Alt+B",          # opens the browser popout (tabs per kind, tags, search, folders)
+              "quit_after_minutes": 30},  # optional; 0 or absent: off. Minutes (1-1440) a hidden browser waits, then quits
   "profile": {"next_hotkey": "Alt+P"},    # optional, no default: steps to the next profile (needs ZBrush in front)
   "menus": {
     "<id>": {
@@ -111,7 +112,8 @@ _NAMED_VK = {
 }
 MENU_KEYS = ("title", "hotkey", "swallow", "animation", "fan", "look", "icon", "keep_slots", "items")
 BRIDGE_KEYS = ("mode", "key")
-BROWSER_KEYS = ("hotkey",)
+BROWSER_KEYS = ("hotkey", "quit_after_minutes")
+BROWSER_QUIT_MAX = 1440            # minutes: a day
 PROFILE_KEYS = ("next_hotkey",)
 ITEM_KEYS = ACTION_KEYS + ("label", "icon", "style", "value", "kind")
 DEFAULT_BRIDGE_KEY = "F9"          # used when radial.json has no usable bridge.key
@@ -163,11 +165,19 @@ class Config:
     bridge_mode: str = "auto"
     bridge_key: Hotkey = field(default_factory=lambda: parse_hotkey(DEFAULT_BRIDGE_KEY))
     browser_key: Hotkey | None = None
+    browser_quit_minutes: int = 0      # a hidden browser quits after this long unused; 0 = never
     profile_key: Hotkey | None = None
     ring: dict = field(default_factory=lambda: L.LookSet().global_look())    # the resolved global look
     looks: L.LookSet = field(default_factory=L.LookSet)
     menus: dict = field(default_factory=dict)
     errors: list = field(default_factory=list)
+
+
+def idle_quit_minutes(browser) -> int:
+    """browser.quit_after_minutes of a radial.json "browser" section (a dict, else anything): a whole number from 1 to
+    1440 minutes, else 0 (never). The app and the browser process both read the setting through this."""
+    v = browser.get("quit_after_minutes") if isinstance(browser, dict) else None
+    return v if isinstance(v, int) and not isinstance(v, bool) and 1 <= v <= BROWSER_QUIT_MAX else 0
 
 
 def parse_hotkey(text: str) -> Hotkey | None:
@@ -572,6 +582,12 @@ def load(path: str, tags=None, theme: str = "dark") -> Config:
                           f"{used_keys[(hk.vk, hk.ctrl, hk.alt, hk.shift)]}")
         else:
             cfg.browser_key = hk
+    if "quit_after_minutes" in browser:
+        q = browser["quit_after_minutes"]
+        cfg.browser_quit_minutes = idle_quit_minutes(browser)
+        if cfg.browser_quit_minutes == 0 and not (type(q) is int and q == 0):
+            errors.append(f"browser.quit_after_minutes {q!r} must be a whole number of minutes from 1 to "
+                          f"{BROWSER_QUIT_MAX}, or 0 for never; using 0")
     profile = raw.get("profile")
     if profile is None:
         profile = {}

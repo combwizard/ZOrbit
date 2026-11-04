@@ -296,6 +296,20 @@ It is a setting per profile. A new profile copies it from the profile in use. Pr
 
 If this ZOrbit runs on one pinned menus file, or your files were changed by a newer ZOrbit, a press shows the same messages as `--profile` and the profile stays put (see [Troubleshooting](troubleshooting.md)).
 
+### Quit hidden browser after
+
+```json
+"browser": {"quit_after_minutes": 30}
+```
+
+A hidden browser that the app started quits after this many minutes unused, to give back the memory its web view holds. The value is a whole number from 1 to 1440. `0`, or leaving it out, is off, which is the default. A window that is up never quits. One started from Studio or the Start menu when none was running never quits this way. If the app had already started one, Studio and the Start menu just show that one, and it still counts as the app's.
+
+While the setting is on, a browser that quit stays gone until something asks for it, including across a config reload. Turn it off, or switch to a profile where it is off, and the next config load starts the browser hidden again if your config has a browser hotkey or a **Browser** slot. Restarting the app does the same, but only with a browser hotkey or a **Browser** slot.
+
+On Settings it is the **Quit hidden browser after** row under **Browser hotkey** in the **Behaviour** card, in minutes. That row is in Full mode only. A change takes effect within about 3 seconds, with no restart.
+
+It is a setting per profile, like the browser hotkey. A new profile copies it from the profile in use.
+
 ## Opening
 
 The open animation is set on the **Look** screen, in the **Opening** group (see [The Look screen](studio.md#the-look-screen)). Pick a tile and it plays on the preview; **Play** (**Replay** once it has played) plays it again. You can also set `ring.animation` in `radial.json`. Closing is always instant, so a pick never waits for an animation.

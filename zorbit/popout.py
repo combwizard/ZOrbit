@@ -13,6 +13,8 @@ Start menu shortcut open it too, and it stays up when the app quits.
   --managed       started by the app: exits by itself once the app is gone, unless its window is up. A managed
                   popout whose window the user closes only hides it (the app can show it again at once); one that
                   is not managed, or has lost its app, quits when its window is closed
+                  A managed popout that sits hidden for browser.quit_after_minutes (radial.json, off by default) quits
+                  by itself with exit code radiald.POPOUT_EXIT_IDLE, which is how the app tells that from a failure
   --show          show the window as soon as the page is up
   --tag KEY       ... filtered to this tag
   --kind KIND     ... on this tab: brush, alpha, material or texture (default: the tab it was last on, popout.json
@@ -23,6 +25,8 @@ Talks to the app with WM_COPYDATA (ids in radiald.py):
   popout -> ZOrbitControl     1   a pick: {"v": 1, "op": "pick", "kind": "brush|alpha|material|texture", "name": ...}
                                       result 1 taken, 0 refused
   app -> ZOrbitPopoutCtl     10   SHOW {"tag": key|null, "kind": kind|null, "zbrush_hwnd": N, "toggle": bool}
+                                      result 1 taken, 0 refused, 2 (radiald.SHOW_QUITTING) the popout is quitting after
+                                      sitting unused: start another, which waits for it to end and then shows itself
   app -> ZOrbitPopoutCtl     12   QUIT (ignored while the window is up)
   Studio -> ZOrbitPopoutCtl  13   THEME, no payload: look at the theme now (the poll still catches the other causes)
 
@@ -318,6 +322,13 @@ class Popout:
         else:
             self.on_top = True
         self.managed = opts["managed"]       # the app owns us; false once it is gone, or when it never was
+        self.exit_code = 0                   # of the process: radiald.POPOUT_EXIT_IDLE after an idle quit
+        self._now = time.monotonic           # the clock of the idle quit (a test moves its own)
+        self._idle_lock = threading.Lock()   # the idle quit's decision and a SHOW arriving meet here, never both
+        self._hidden_at = None if opts.get("show") else self._now()   # when the window was last hidden (or we started
+        #                                      hidden); None while it is up or about to be
+        self._idle_minutes = 0               # browser.quit_after_minutes as last read from radial.json
+        self._idle_closing = False           # decided to quit unused: a SHOW is answered "quitting"
         self.window = None
         self.hwnd = 0
         self.ctl = 0
@@ -405,6 +416,11 @@ class Popout:
         except (ValueError, AttributeError):
             _log("SHOW refused: unreadable payload")
             return 0
+        with self._idle_lock:
+            if self._idle_closing:                     # going: the app starts a new one rather than lose this press
+                _log("SHOW while quitting unused: answered 'quitting'")
+                return radiald.SHOW_QUITTING
+            self._hidden_at = None                     # asked for: no idle quit before it is hidden again
         self._work.put((self.request_show, (tag, zb, toggle, kind)))
         return 1
 
@@ -503,6 +519,10 @@ class Popout:
         misses = 0
         while not self.quitting and self.managed:
             time.sleep(POLL_S)
+            try:
+                self.idle_tick()
+            except Exception as e:                 # never let a bad read end the watch
+                _log(f"idle check failed: {e!r}")
             if W.find_message_window(APP_CLASS):
                 misses = 0
                 continue
@@ -511,6 +531,49 @@ class Popout:
             if misses >= POLL_MISSES:
                 self.app_gone("the app is gone")
                 return
+
+    def _note_shown(self):
+        with self._idle_lock:
+            self._hidden_at = None
+
+    def _note_hidden(self):
+        with self._idle_lock:
+            self._hidden_at = self._now()
+
+    def _read_idle_minutes(self) -> int:
+        """browser.quit_after_minutes from the active profile's radial.json, read afresh so a change made while the
+        browser waits takes effect without a restart. A file that cannot be read (caught mid-write, say) leaves the
+        last good value."""
+        try:
+            with open(profiles.config_file(), encoding="utf-8-sig") as f:
+                raw = json.load(f)
+        except (OSError, ValueError):
+            return self._idle_minutes
+        minutes = C.idle_quit_minutes(raw.get("browser") if isinstance(raw, dict) else None)
+        if minutes != self._idle_minutes:
+            _log(f"browser.quit_after_minutes: {minutes or 'off'} (was {self._idle_minutes or 'off'})")
+        self._idle_minutes = minutes
+        return minutes
+
+    def idle_tick(self):
+        """--managed: one look at whether a hidden window has sat unused for browser.quit_after_minutes (off unless the
+        setting is on). Unused is the time since it was last hidden, or since a hidden start; being shown ends the
+        count and hiding starts it again. A window that is up, or one nobody started (not managed), never quits."""
+        if not self.managed or not self.ready or self.quitting or self.session_ending or self._idle_closing:
+            return
+        if self.visible():
+            self._note_shown()
+            return
+        minutes = self._read_idle_minutes()
+        with self._lock:                               # not in the middle of a show or hide
+            now = self._now()
+            with self._idle_lock:
+                if self._hidden_at is None:            # hidden, though nothing said so
+                    self._hidden_at = now
+                if not minutes or self.visible() or now - self._hidden_at < minutes * 60:
+                    return
+                self._idle_closing = True              # from here a SHOW is refused, so none is taken and then lost
+        self.quit(f"unused for {minutes} minutes (browser.quit_after_minutes)", idle=True)
 
     def app_gone(self, why):
         """The app quit (or told us to). A hidden window has no reason to stay; one that is up does not depend
@@ -644,6 +707,7 @@ class Popout:
         with self._lock:
             if not self.hwnd or self.quitting:
                 return
+            self._note_shown()
             was_visible = self.visible()
             self._remember_target(zb)
             self._sync_theme()
@@ -746,6 +810,7 @@ class Popout:
             if restore and _is_target(self.prev_fg) and self._holds_foreground():
                 user32.SetForegroundWindow(self.prev_fg)
             self.window.hide()
+            self._note_hidden()
             W.nudge_mouse()
             _log(f"hidden ({why})")
             return True
@@ -785,28 +850,34 @@ class Popout:
             return {"ok": False, "error": "ZOrbit did not answer. Try again in a moment."}
         return {"ok": False, "error": f"ZOrbit did not take that {kind}. Is it up to date?"}
 
-    def quit(self, why=""):
+    def quit(self, why="", idle=False):
+        """idle: it sat unused (idle_tick); the process then exits with radiald.POPOUT_EXIT_IDLE, and the control window
+        stays until the very end (_run closes it), so a press that comes now is answered 'quitting' instead of meeting
+        no window."""
         with self._lock:
             if self.quitting:
                 return
             self.quitting = True
+            if idle:
+                self.exit_code = radiald.POPOUT_EXIT_IDLE
             _log(f"quitting ({why})")
             if self.visible():
                 self._save_placement()
-        self.stop_ctl()
+        if not idle:
+            self.stop_ctl()
 
         def kill():                                   # the window should close by itself; this makes sure the process ends
             time.sleep(5)
             _log("still here after 5 s; exiting")
-            os._exit(0)
+            os._exit(self.exit_code)
         threading.Thread(target=kill, daemon=True).start()
         if self.window is None:
-            os._exit(0)
+            os._exit(self.exit_code)
         try:
             self.window.destroy()
         except Exception as e:
             _log(f"destroy failed: {e!r}")
-            os._exit(0)
+            os._exit(self.exit_code)
 
     def on_closing(self):
         """pywebview 'closing' (UI thread; False cancels): Alt+F4 and the like only close the window, which is hidden
@@ -817,8 +888,13 @@ class Popout:
         return False
 
 
-def _forward(opts) -> int:
-    """A second launch: hand our arguments to the running popout, which may still be starting up."""
+FORWARD_AGAIN = None                  # _forward: the running popout is quitting; start in its place once it has gone
+GONE_WAIT_S = 10                      # how long a launch waits for a quitting popout to end (it exits within 5 s)
+
+
+def _forward(opts):
+    """A second launch: hand our arguments to the running popout, which may still be starting up. 0 when done, 1 when
+    it never came up, FORWARD_AGAIN when it is quitting after sitting unused and so cannot take them."""
     if not opts["show"]:
         _log("a popout is already running; nothing to pass on")
         return 0
@@ -829,10 +905,28 @@ def _forward(opts) -> int:
                                 _show_payload(opts["tag"], opts["zbrush"], kind=opts["kind"]))
             _log(f"a popout is already running: SHOW forwarded to {hwnd} (tag={opts['tag']}, "
                  f"kind={opts['kind']}): result {r}")
+            if r == radiald.SHOW_QUITTING or (r is None and not W.find_message_window(radiald.POPOUT_CLASS)):
+                return FORWARD_AGAIN
             return 0
         time.sleep(0.1)
     _log("a popout is already running, but its control window did not appear")
     return 1
+
+
+def _acquire() -> tuple:
+    """(handle of the single-instance mutex, True when another popout already held it)."""
+    h = kernel32.CreateMutexW(None, False, MUTEX)
+    return h, ctypes.get_last_error() == W.ERROR_ALREADY_EXISTS
+
+
+def _wait_until_gone() -> bool:
+    """True once no process holds the mutex (the quitting popout has ended), False after GONE_WAIT_S."""
+    deadline = time.monotonic() + GONE_WAIT_S
+    while W.mutex_exists(MUTEX):
+        if time.monotonic() >= deadline:
+            return False
+        time.sleep(0.1)
+    return True
 
 
 def main(args) -> int:
@@ -846,9 +940,20 @@ def main(args) -> int:
     if too_new:                                          # files of a newer ZOrbit: the app says so; no window here
         _log(f"fatal: {too_new}")
         return 1
-    mutex = kernel32.CreateMutexW(None, False, MUTEX)
-    if ctypes.get_last_error() == W.ERROR_ALREADY_EXISTS:
-        return _forward(opts)
+    mutex, running = _acquire()
+    if running:
+        code = _forward(opts)
+        if code is not FORWARD_AGAIN:
+            return code
+        _log("the popout running is quitting after sitting unused; waiting for it to end, then starting")
+        kernel32.CloseHandle(mutex)                      # ours is a handle to its mutex: it lives until we let go
+        if not _wait_until_gone():
+            _log(f"it did not end within {GONE_WAIT_S} s; giving up")
+            return 1
+        mutex, running = _acquire()
+        if running:                                      # another launch was quicker: give it ours
+            kernel32.CloseHandle(mutex)
+            return _forward(opts) or 0
     try:
         return _run(opts, mutex)
     except Exception:                                    # the process has no console: popout.log is the only place to see why
@@ -888,7 +993,7 @@ def _run(opts, mutex) -> int:
     pop.stop_ctl()
     kernel32.CloseHandle(mutex)
     _log("popout stopped")
-    return 0
+    return pop.exit_code
 
 
 if __name__ == "__main__":

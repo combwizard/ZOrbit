@@ -101,6 +101,8 @@ COMMAND_WAIT_S = 2                    # how long a command's pick waits for the 
 ZS_RESULT_S = 15                      # how long to look for the ZScript plugin's line about a pick (a stroke delays it)
 COPYDATA_PICK, COPYDATA_SHOW, COPYDATA_QUIT = 1, 10, 12   # WM_COPYDATA ids: popout -> app, app -> popout
 COPYDATA_THEME = 13                                       # Studio -> popout: look at the theme now (no payload)
+SHOW_QUITTING = 2                     # a popout's answer to SHOW (1 taken, 0 refused): quitting, unused
+POPOUT_EXIT_IDLE = 20                 # its exit code then; any other non-zero code is a failure
 COPYDATA_COMMAND = commands.COPYDATA                      # another program -> app: ZOrbit.exe --pick and the rest
 POPOUT_CLASS = "ZOrbitPopoutCtl"      # the popout's message-only control window
 POPOUT_START_S = 15                   # a popout asked to show gets this long to appear before we ask again
@@ -409,6 +411,7 @@ class App:
         self._popout_started = 0.0      # when we last spawned the popout process
         self._popout_show = False       # ... and whether that spawn asked it to show itself
         self._prewarmed = False         # a pre-warm spawn is scheduled or done for this popout
+        self._popout_idle_quit = None   # the Popen that quit unused by itself: no pre-warm until asked for
         self._popout_pid = (0.0, 0)     # (valid until, pid of the popout's control window); hook thread only
         self._popout_zb = None          # (ZBrush hwnd, its install) from when the browser was last opened
         self._browser_pick = None       # brush Item picked in the popout, waiting for ZBrush to have focus
@@ -1110,7 +1113,12 @@ class App:
                 self._popout_spawning = False
             try:                                   # this thread has nothing else to do: it sees how the process ends
                 code = p.wait()
-                log(f"popout exited with code {code}" + (" (popout.log says why)" if code else ""))
+                if code == POPOUT_EXIT_IDLE:       # its own choice (browser.quit_after_minutes), not a failure
+                    self._popout_idle_quit = p
+                    log("browser: the popout quit after sitting unused (browser.quit_after_minutes); "
+                        "it starts again when it is asked for")
+                else:
+                    log(f"popout exited with code {code}" + (" (popout.log says why)" if code else ""))
             except Exception:
                 log("could not wait for the popout:\n" + traceback.format_exc())
         threading.Thread(target=start, daemon=True).start()
@@ -1132,7 +1140,13 @@ class App:
             log(f"browser: SHOW sent to popout {hwnd} (tag={tag or None}, kind={kind}, toggle={bool(toggle)}, "
                 f"zbrush={zb}): "
                 + ("no answer within 0.5 s" if r is None else f"result {r}"))
-            return
+            if r is None and not W.find_message_window(POPOUT_CLASS):
+                r = SHOW_QUITTING                  # the window went away while we asked
+            if r != SHOW_QUITTING:
+                return
+            # It sat unused and is quitting. A new one waits for it to be gone (popout.main) and then shows itself, so
+            # this press is not lost; _spawning() below keeps a second press from starting a third.
+            log("browser: the popout is quitting; starting a new one")
         self._prewarmed = False                    # the popout is gone: the next config load may warm it again
         if self._spawning():
             if self._popout_show:
@@ -1174,13 +1188,26 @@ class App:
     def _schedule_prewarm(self):
         """Starts the popout hidden a few seconds after launch, so the first press is quick. A one-shot timer:
         loading the config must not wait for a process start."""
+        if self._popout_idle_quit_stands():
+            return
         if self.ctrl is None or self._prewarmed or not self._wants_browser():
             return
         self._prewarmed = True
         W.SetTimer(self.ctrl, TIMER_PREWARM, 3000, None)
 
+    def _popout_idle_quit_stands(self) -> bool:
+        """The popout we last started quit by itself after sitting unused, and the setting is still on: it stays gone
+        until someone asks for it (a press starts it; a config load or profile switch must not). Turning the setting
+        off lets it be pre-warmed again."""
+        if self._popout_idle_quit is None or self._popout_idle_quit is not self._popout_proc:
+            return False
+        if self.cfg is not None and self.cfg.browser_quit_minutes:
+            return True
+        self._popout_idle_quit, self._prewarmed = None, False
+        return False
+
     def _prewarm(self):
-        if W.find_message_window(POPOUT_CLASS) or self._spawning():
+        if W.find_message_window(POPOUT_CLASS) or self._spawning() or self._popout_idle_quit_stands():
             return
         log("browser: pre-warming the popout")
         self._spawn_popout(False)
