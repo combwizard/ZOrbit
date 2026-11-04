@@ -2403,7 +2403,7 @@ function buildItemInspector() {
       } else {
         const s = S.suggestions.find(x => x.path.replace(/\s/g, '').toLowerCase() === v.replace(/\s/g, '').toLowerCase());
         if (s) hintEl.append('Known item: ' + s.source);
-        else if (!v) hintEl.append('Type to see suggestions from your ZBrush hotkeys and a built-in list, or paste any ZBrush item path.');
+        else if (!v) hintEl.append('Type to see suggestions from your ZBrush hotkeys, your macros and a built-in list, or paste any ZBrush item path.');
         else hintEl.append('Custom path. ZBrush item paths ignore case.');
       }
     }

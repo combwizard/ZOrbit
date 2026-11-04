@@ -277,6 +277,75 @@ def _title_path(p: str) -> str:
     return ":".join(seg if not seg.isupper() else seg.title() for seg in p.split(":"))
 
 
+MACRO_MAX_FILES = 500           # .txt files read for macros, across every macro folder
+MACRO_MAX_ENTRIES = 2000        # entries listed from one folder, so a huge folder costs a bounded amount
+MACRO_READ_BYTES = 65536        # the most of a macro file that is read
+_MACRO_BUTTON = re.compile(r"\[\s*ibutton", re.IGNORECASE)
+
+
+def _macro_txt_files(folder):
+    """(files, subfolders) directly in folder, each sorted by name: files as (name without .txt, path) for the .txt
+    files, subfolders as (name, path). Both empty when the folder cannot be read."""
+    files, subs = [], []
+    try:
+        with os.scandir(folder) as it:
+            entries = []
+            for e in it:
+                entries.append(e)
+                if len(entries) >= MACRO_MAX_ENTRIES:
+                    break
+            entries.sort(key=lambda e: e.name.lower())
+            for e in entries:
+                try:
+                    if e.is_dir(follow_symlinks=False):
+                        subs.append((e.name, e.path))
+                    elif e.name.lower().endswith(".txt") and e.is_file():
+                        files.append((e.name[:-4], e.path))
+                except OSError:
+                    continue
+    except OSError:
+        return [], []
+    return files, subs
+
+
+def _macro_candidates(folders):
+    """(label, name, path) for each .txt file in the macro folders. A file directly in a folder has the label
+    'Macros'; a file in one of its subfolders has that subfolder's name. Only one level is looked at."""
+    for folder in folders:
+        top, subs = _macro_txt_files(folder)
+        for name, path in top:
+            yield "Macros", name, path
+        for sub, sub_path in subs:
+            if ":" in sub or "," in sub:
+                continue                # not a path ZBrush can name
+            for name, path in _macro_txt_files(sub_path)[0]:
+                yield sub, name, path
+
+
+def _macro_paths(folders) -> list:
+    """Paths such as 'Macro:Misc:Toggle See-Through' for the macros with a button in these folders, sorted by name.
+    ZBrush gives a macro a button only when its file has [IButton (one without ran once when ZBrush compiled it),
+    so the others are left out. ZBrush goes by the name: the same name in two folders gives one path, capitals do
+    not matter, and the first folder wins. At most MACRO_MAX_FILES files are read, and only their first
+    MACRO_READ_BYTES. A missing or unreadable folder is skipped."""
+    found, read = {}, 0                                 # name key -> (name, path)
+    for label, name, path in _macro_candidates(folders):
+        key = name.replace(" ", "").lower()             # the same way add() compares paths
+        if not name.strip() or ":" in name or "," in name or key in found:
+            continue
+        if read >= MACRO_MAX_FILES:
+            break
+        read += 1
+        try:
+            with open(path, "rb") as f:
+                head = f.read(MACRO_READ_BYTES)
+        except OSError:
+            continue
+        if _MACRO_BUTTON.search(head.decode("utf-8", errors="replace")):
+            found[key] = (name, f"Macro:{label}:{name}")
+    return [path for _, path in sorted(found.values(), key=lambda v: v[0].lower())]
+
+
 def _retag(cfg: dict, renamed: dict) -> dict:
     """Points the {"tag": key} and {"browser": key} slots of every menu at the local key when an imported tag
     joined a local tag of the same name (renamed = {incoming key: local key}). Changes cfg and returns it."""
@@ -1043,6 +1112,19 @@ class Api(webapi.LibraryApi, webapi.TagApi):
                   "Tool:Geometry:Higher Res", "Draw:Draw Size", "Draw:Z Intensity", "Stroke:LazyMouse",
                   "Stroke:SubDivide Size", "Brush:Auto Masking:BackfaceMask", "Tool:Polygroups:Auto Groups"):
             add(p, "common")
+        folders = []                                    # where ZBrush 2026 and newer keep macros, and 2022 to 2025
+        try:
+            for e in self._all_installs():
+                if e.get("python"):
+                    folders.append(os.path.join(e["path"], "ZData", "Macros"))
+                    if ua:
+                        folders.append(os.path.join(str(ua), "ZStartup", "Macros"))
+                else:
+                    folders.append(os.path.join(e["path"], "ZStartup", "Macros"))
+        except OSError:
+            folders = []
+        for p in _macro_paths(list(dict.fromkeys(folders))):
+            add(p, "macro")
         return sug
 
     # --- app status / control --------------------------------------------------------------------
