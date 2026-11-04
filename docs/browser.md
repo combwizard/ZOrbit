@@ -64,6 +64,8 @@ slots (see [Files and logs](files.md#files-and-logs)).
 
 The browser is a separate program that sends your pick to the ZOrbit app, which hands it to ZBrush like any other pick (see [bridge modes](bridge.md#how-picks-reach-zbrush-bridge-modes)). In ZBrush 2026 and newer that is a window message to the listener. In ZBrush 2022 to 2025 every pick presses the bridge key, which needs ZBrush to be the front window again. The browser hands the focus back before it sends, and the app waits up to 2 seconds for ZBrush to have it. If it does not, the pick is dropped and logged. So do not click another program right after you pick.
 
+A browser you opened from Studio has no ZBrush of its own, so its picks go to the only ZBrush running. With more than one running, ZOrbit cannot tell which you mean: in `auto` mode it presses the bridge key if a ZBrush is in front, and in `message` mode the pick is dropped.
+
 ## In the background
 
 The browser takes a moment to start, so when your config has a browser hotkey or a **Browser** slot, the app starts it hidden a few seconds after it starts itself, and the first press is quick. It stays hidden until you call it and holds its web view in memory while it waits. Closing it with **X** hides it again, ready for the next press. Without a hotkey or a Browser slot it starts the first time you use **More...**, the tray menu, Studio or the Start menu. Started from Studio, the Start menu or the command line, it is on its own: the app is not waiting for it, so **X** ends it.

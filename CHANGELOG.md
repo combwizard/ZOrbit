@@ -4,6 +4,12 @@ All notable changes to this project are listed here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+
+- Picks from a browser opened from Studio use the listener when one ZBrush is running. They used to press the bridge key, which is slower and needs ZBrush in front.
+
 ## [0.18.1] - 2026-11-04
 
 ZOrbit 0.18.1 fixes **Install update**. Studio refused every release's setup file, so it only offered the download
