@@ -60,7 +60,7 @@ The file holds:
 - the tags its **Tag** and **Browser** items use, with their labels and colours, and the brushes, alphas, materials and textures that carry them, so a tag fan is not empty on the other PC;
 - the looks of your own that these menus use (the `looks` section of `radial.json`, for any menu whose `look` names one). The built-in looks are in every copy of ZOrbit, so they are not in the file.
 
-The hotkey and its **Swallow hotkey** switch, the ring settings and the bridge and browser settings stay behind, and so do the brush, alpha, material and texture files themselves. An icon that is a full path to a file on your PC shows as a problem on the other PC.
+The hotkey and its **Swallow hotkey** switch, the ring settings and the bridge and browser settings stay behind, and so do the brush, alpha, material and texture files themselves. An icon that is a file path, such as `C:\Art\clay.png`, stays behind too, whether it is on an item, a step, a menu or a look. The slot shows its default picture, and a hub of style **icon** shows a placeholder disc in place of the menu's picture. An icon that is a brush name, such as `ClayBuildup`, travels with the file, since it means the same on any PC. **Import menu...** clears an icon path in the same way, so a file that still holds one loads with no problem.
 
 The folder of a [Capture](#capture) item stays behind too. It usually holds your Windows name, so the item arrives with an empty folder and saves to that person's `Pictures\ZBrush`. **Import menu...** clears the folder of any capture item it brings in, for the same reason.
 
