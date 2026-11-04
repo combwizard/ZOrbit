@@ -4,6 +4,13 @@ All notable changes to this project are listed here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+
+- **Install update** was not offered. Studio refused every release's setup file, because GitHub spells the repository `ZOrbit` and Studio compared it with `zorbit`, capitals included. The dialog then wrongly said the copy was not installed with Setup, and only offered the download page.
+- When an installed copy cannot trust a release's setup file, the dialog now says that, and `studio.log` has a line about it.
+
 ## [0.18.0] - 2026-11-04
 
 ZOrbit 0.18.0 adds the mouse's **Back** and **Forward** buttons. In Studio they go through the screens you have
