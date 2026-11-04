@@ -18,6 +18,7 @@ All notable changes to this project are listed here. The format follows
 - In ZBrush 2022 to 2025, a pick that cannot load an item or find a button says so near the cursor, as it already did in ZBrush 2026 and newer. Before, only the log said so.
 - In ZBrush 2026 and newer, a brush that cannot be loaded says so near the cursor when no tool is in Edit mode too. Before, only the log said so.
 - The docs said `--check` was for a source checkout. The exe has it too.
+- **Select in ZBrush** in the browser refused a single selected item and said ZBrush takes one at a time. Double-click and Enter worked.
 
 ## [0.18.1] - 2026-11-04
 

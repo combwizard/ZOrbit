@@ -3337,7 +3337,7 @@ function makeBrowser({ compact, st, host = STUDIO_HOST, kindUi = compact ? 'comp
   /* The selected items and their action strip. A click selects one, Ctrl-click adds or removes one, Shift-click selects a
      range of the items on show. The strip tags them or adds them to the menu being edited. */
   const hint = h('div', { class: 'b-hint' });
-  const addBtn = h('button', { class: 'btn primary small as-add', type: 'button', onclick: () => { const names = shownSel(); if (names.length) host.primaryMany(names, st.kind); } });
+  const addBtn = h('button', { class: 'btn primary small as-add', type: 'button', onclick: () => { const names = shownSel(); if (names.length === 1) host.primary(names[0], st.kind); else if (names.length) host.primaryMany(names, st.kind); } });
   const tagBtn = h('button', { class: 'btn small as-tag', type: 'button', onclick: () => tagPicker(tagBtn, st.kind, Array.from(sel)) },
     icon('tag', 13), compact ? null : 'Tag...');
   const favBtn = h('button', { class: 'btn small as-fav', type: 'button', 'aria-pressed': 'false', onclick: () => toggleFavs(Array.from(sel)) }, icon('star', 13));
@@ -4263,6 +4263,7 @@ function buildSettingsScreen(root) {
       if (!Object.keys(b).length) delete S.cfg.browser;
       const owner = bOwner(str);
       bhk.say(bsay(owner), 'warn');
+      phk.say(psay(pOwner(S.cfg.profile && S.cfg.profile.next_hotkey)), 'warn');
       commit();
     } });
 
@@ -4277,6 +4278,7 @@ function buildSettingsScreen(root) {
       if (!Object.keys(p).length) delete S.cfg.profile;
       const owner = pOwner(str);
       phk.say(psay(owner), 'warn');
+      bhk.say(bsay(bOwner(S.cfg.browser && S.cfg.browser.hotkey)), 'warn');
       commit();
     } });
 
@@ -5826,7 +5828,7 @@ async function doSave({ force = false, allowUnusable = false } = {}) {
 }
 async function revert() {
   if (!dirtyNow()) return;
-  const body = unsavedBody('', n => (n ? `These ${n === 1 ? 'change is' : n + ' changes are'} discarded` : 'Your unsaved changes are discarded') + ' and Studio goes back to the last saved version.');
+  const body = unsavedBody('', n => (n ? (n === 1 ? 'This change is discarded' : `These ${n} changes are discarded`) : 'Your unsaved changes are discarded') + ' and Studio goes back to the last saved version.');
   const ok = await modal({ title: 'Revert changes', body, actions: [{ text: 'Keep editing', value: false, focus: true }, { text: 'Revert', kind: 'danger', value: true }] });
   if (!ok) return;
   S.cfg = JSON.parse(S.savedStr);
