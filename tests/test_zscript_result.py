@@ -56,7 +56,8 @@ def app(monkeypatch, zlog):
     monkeypatch.setattr(radiald, "log", lines.append)
     monkeypatch.setattr(radiald.W, "SetTimer", lambda *a: timers.append("set"))
     monkeypatch.setattr(radiald.W, "KillTimer", lambda *a: timers.append("kill"))
-    a = types.SimpleNamespace(ctrl=None, _zs_result=None)
+    a = types.SimpleNamespace(ctrl=None, _zs_result=None, toasts=[])
+    a._toast = a.toasts.append
     a._zs_result_tick = lambda final=False: radiald.App._zs_result_tick(a, final)
     a._watch_zscript_result = lambda seq, before: radiald.App._watch_zscript_result(a, seq, before)
     return a, write, lines, timers
@@ -101,3 +102,49 @@ def test_the_app_log_is_cut_back_to_its_last_half(monkeypatch, tmp_path):
     assert log.read_bytes() == b"a" * 200 + b"b" * 300
     radiald._trim_log(max_bytes=1000)                          # under the cap: left alone
     assert os.path.getsize(log) == 500
+
+
+# --- what the user is told ------------------------------------------------------------------------
+@pytest.mark.parametrize("line, toast", [
+    ("#4 'Alpha 012': alpha Alpha 012: NOT loaded in ZBrush and no file known", "Alpha 012 could not be found in ZBrush"),
+    ("#4 'ZModeler': brush ZModeler: NOT loaded in ZBrush and no file known", "ZModeler could not be found in ZBrush"),
+    ("#4 'Off': brush Off: NOT loaded in ZBrush and no file known (Edit mode is off)",
+     "Off could not be found in ZBrush"),
+    ("#4 'Mat': material Mat: NOT loaded in ZBrush and no file known", "Mat could not be found in ZBrush"),
+    ("#4 'Tex': texture Tex: NOT loaded in ZBrush and no file known", "Tex could not be found in ZBrush"),
+    ("#4 'Edit': press Tool:Nope: no such interface item", "Tool:Nope is not a ZBrush button"),
+    ("#4 'Bob's': alpha Bob's: NOT loaded in ZBrush and no file known", "Bob's could not be found in ZBrush"),
+])
+def test_a_pick_that_could_not_load_says_so(app, line, toast):
+    a, write, lines, _ = app
+    a._watch_zscript_result(4, None)
+    write(line + "\n")
+    a._zs_result_tick()
+    assert a.toasts == [toast]
+    assert lines == ["pick #4 result: " + line[len("#4 "):]]
+
+
+def test_only_the_first_problem_of_several_steps_is_shown(app):
+    a, write, _, _ = app
+    a._watch_zscript_result(4, None)
+    write("#4 'Two': alpha A: selected; alpha B: NOT loaded in ZBrush and no file known; "
+          "press X:Y: no such interface item\n")
+    a._zs_result_tick()
+    assert a.toasts == ["B could not be found in ZBrush"]
+
+
+@pytest.mark.parametrize("result", ["brush GIO: selected (Edit mode is off)", "alpha A: loaded from file",
+                                    "set X:Y = 1: ok", "nothing to do"])
+def test_a_pick_that_worked_shows_nothing(app, result):
+    a, write, _, _ = app
+    a._watch_zscript_result(4, None)
+    write(f"#4 'Fine': {result}\n")
+    a._zs_result_tick()
+    assert a.toasts == []
+
+
+def test_no_result_shows_nothing(app):
+    a, _, _, _ = app
+    a._watch_zscript_result(4, None)
+    a._zs_result_tick(final=True)
+    assert a.toasts == []

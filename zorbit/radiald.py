@@ -135,7 +135,8 @@ TIP_FROZEN = f"ZOrbit {paths.VERSION}: your files were changed by a newer ZOrbit
 
 # A line of bridge.log: "2026-10-31 12:00:00 #7 'Clay' via listener: brush Clay: ...; press Tool:X: ..."
 _PLUGIN_LINE = re.compile(r"^([0-9]{4}-[0-9]{2}-[0-9]{2} [0-9:]{8}) #([0-9]+) '(.*)' via ([^:]*): (.*)$")
-_PLUGIN_BAD = re.compile(r"^([a-z]+) (.+): (NOT loaded in ZBrush and no file known|no such interface item)$")
+_PLUGIN_BAD = re.compile(r"^([a-z]+) (.+): (NOT loaded in ZBrush and no file known|no such interface item)"
+                         r"(?: \(Edit mode is off\))?$")
 
 
 def _read_bytes(path):
@@ -162,6 +163,21 @@ def _zscript_result(seq, before, path=None):
     return line[0][len(head):]
 
 
+def _problems(result):
+    """The messages for what went wrong in a plugin's result, its "; "-separated steps (empty when all went well)."""
+    problems = []
+    for part in result.split("; "):
+        if "FAILED" in part:
+            problems.append(MSG_PICK_FAILED)
+            continue
+        bad = _PLUGIN_BAD.match(part)
+        if bad:
+            what = bad.group(2)
+            problems.append(f"{what} could not be found in ZBrush" if bad.group(3).startswith("NOT")
+                            else f"{what} is not a ZBrush button")
+    return problems
+
+
 def _plugin_result(seq, since=0.0, path=None):
     """What the plugin did with pick number seq, from the last 4 KB of bridge.log: None while the log has no line
     for it, else the list of messages for what went wrong (empty when all went well). since is the epoch time of
@@ -183,17 +199,7 @@ def _plugin_result(seq, since=0.0, path=None):
             at = None
         if at is not None and at < since - 2:          # the log's clock has whole seconds
             return None
-        problems = []
-        for part in m.group(5).split("; "):
-            if "FAILED" in part:
-                problems.append(MSG_PICK_FAILED)
-                continue
-            bad = _PLUGIN_BAD.match(part)
-            if bad:
-                what = bad.group(2)
-                problems.append(f"{what} could not be found in ZBrush" if bad.group(3).startswith("NOT")
-                                else f"{what} is not a ZBrush button")
-        return problems
+        return _problems(m.group(5))
     return None
 
 
@@ -1406,6 +1412,9 @@ class App:
         W.KillTimer(self.ctrl, TIMER_ZS_RESULT)
         if got is not None:
             log(f"pick #{seq} result: {got}")
+            problems = _problems(got.split("': ", 1)[-1])       # the line is "'label': result"
+            if problems:
+                self._toast(problems[0])
         else:
             log(f"pick #{seq}: the ZScript plugin wrote no result" + ("" if final else f" in {ZS_RESULT_S} s") +
                 " (a macro ends its script before it can; otherwise the bridge key did not reach Apply)")

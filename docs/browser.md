@@ -66,6 +66,8 @@ The browser is a separate program that sends your pick to the ZOrbit app, which 
 
 A browser you opened from Studio has no ZBrush of its own, so its picks go to the only ZBrush running. With more than one running, ZOrbit cannot tell which you mean: in `auto` mode it presses the bridge key if a ZBrush is in front, and in `message` mode the pick is dropped.
 
+The browser's list is the same whichever ZBrush is in front. A pick in ZBrush 2022 to 2025 only searches [that ZBrush's own folders](menus.md#brush), so an item that only a newer ZBrush has can be listed and still not load. The message near the cursor then says it **could not be found in ZBrush**.
+
 ## In the background
 
 The browser takes a moment to start, so when your config has a browser hotkey or a **Browser** slot, the app starts it hidden a few seconds after it starts itself, and the first press is quick. It stays hidden until you call it and holds its web view in memory while it waits. Closing it with **X** hides it again, ready for the next press. Without a hotkey or a Browser slot it starts the first time you use **More...**, the tray menu, Studio or the Start menu. Started from Studio, the Start menu or the command line, it is on its own: the app is not waiting for it, so **X** ends it.
