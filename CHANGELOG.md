@@ -4,6 +4,12 @@ All notable changes to this project are listed here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- The mouse's **Back** and **Forward** buttons work in Studio and in the browser. In Studio they go back and forward through the screens you have visited, and on the Library screen through its tabs and folders first. In the browser they go through its tabs and folders.
+
 ## [0.17.1] - 2026-11-04
 
 ZOrbit 0.17.1 fixes the update check on a freshly installed Windows. Studio could not reach GitHub there until
