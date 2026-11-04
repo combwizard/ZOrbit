@@ -692,3 +692,114 @@ def test_the_bug_link_names_the_zbrush_that_runs_and_opens(report_api):
 def test_the_bug_link_falls_back_to_the_newest_zbrush_known(report_api, monkeypatch):
     monkeypatch.setattr(studio.W, "pids_named", lambda name: [])
     assert "zbrush=2026" in report_api.get_bug_url()
+
+
+# --- macros in the path suggestions ------------------------------------------------------------------
+
+BUTTON = "[IButton,???,0,0,0]\nCommands\n"
+
+
+def _macro(folder, name, text=BUTTON):
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / (name + ".txt")).write_bytes(text.encode("utf-8"))
+
+
+def test_a_macro_with_a_button_is_listed_under_the_macros_folder(tmp_path):
+    _macro(tmp_path, "Toggle See-Through")
+    assert studio._macro_paths([str(tmp_path)]) == ["Macro:Macros:Toggle See-Through"]
+
+
+def test_the_button_marker_is_found_in_any_case_and_spacing(tmp_path):
+    _macro(tmp_path, "Lower", "[ibutton ,???,0]\n")
+    _macro(tmp_path, "Upper", "[ IButton,???,0]\n")
+    assert studio._macro_paths([str(tmp_path)]) == ["Macro:Macros:Lower", "Macro:Macros:Upper"]
+
+
+def test_a_file_without_a_button_is_left_out(tmp_path):
+    _macro(tmp_path, "Bare", "Lot\nof commands\n")
+    assert studio._macro_paths([str(tmp_path)]) == []
+
+
+def test_a_subfolder_gives_its_own_name_in_the_path(tmp_path):
+    _macro(tmp_path / "Misc", "Toggle See-Through")
+    assert studio._macro_paths([str(tmp_path)]) == ["Macro:Misc:Toggle See-Through"]
+
+
+def test_a_file_two_levels_down_is_not_listed(tmp_path):
+    _macro(tmp_path / "Misc" / "Deep", "Hidden")
+    assert studio._macro_paths([str(tmp_path)]) == []
+
+
+def test_the_same_name_in_two_folders_gives_one_path(tmp_path):
+    _macro(tmp_path / "one", "Toggle")
+    _macro(tmp_path / "two" / "Misc", "toggle")
+    assert studio._macro_paths([str(tmp_path / "one"), str(tmp_path / "two")]) == ["Macro:Macros:Toggle"]
+
+
+def test_a_missing_folder_gives_nothing(tmp_path):
+    assert studio._macro_paths([str(tmp_path / "nope")]) == []
+
+
+def test_only_txt_files_are_listed(tmp_path):
+    _macro(tmp_path, "Toggle")
+    (tmp_path / "Other.zsc").write_bytes(BUTTON.encode())
+    (tmp_path / "Old.txt.bak").write_bytes(BUTTON.encode())
+    assert studio._macro_paths([str(tmp_path)]) == ["Macro:Macros:Toggle"]
+
+
+def test_a_name_with_a_comma_is_skipped(tmp_path):
+    _macro(tmp_path, "Real")
+    _macro(tmp_path, "Comma, here")
+    assert studio._macro_paths([str(tmp_path)]) == ["Macro:Macros:Real"]
+
+
+def test_a_name_with_a_colon_is_skipped(tmp_path, monkeypatch):
+    _macro(tmp_path, "Real")
+    real = str(tmp_path / "Real.txt")
+    monkeypatch.setattr(studio, "_macro_txt_files", lambda d: ([("A:B", real)], []))     # Windows cannot hold a colon in a name
+    assert studio._macro_paths([str(tmp_path)]) == []
+
+
+def test_bytes_that_are_not_text_do_not_break_the_scan(tmp_path):
+    (tmp_path / "Junk.txt").write_bytes(b"\xff\xfe\x80\x81 junk")
+    (tmp_path / "Mixed.txt").write_bytes(b"\xff\x80 [IButton,???,0]")
+    assert studio._macro_paths([str(tmp_path)]) == ["Macro:Macros:Mixed"]
+
+
+def test_only_the_first_64_kb_of_a_file_is_read(tmp_path):
+    _macro(tmp_path, "Late", "x" * 65536 + "[IButton,???,0]")
+    assert studio._macro_paths([str(tmp_path)]) == []
+
+
+def test_the_scan_stops_at_the_file_cap(tmp_path):
+    for i in range(studio.MACRO_MAX_FILES + 100):
+        _macro(tmp_path, f"m{i:04d}")
+    assert len(studio._macro_paths([str(tmp_path)])) == studio.MACRO_MAX_FILES
+
+
+def test_the_suggestions_keep_their_sources_and_add_macros_last(api, tmp_path, monkeypatch):
+    ua = tmp_path / "userassets"
+    _macro(ua / "ZStartup" / "Macros", "Tab")
+    install = tmp_path / "ZBrush 2026"
+    _macro(install / "ZData" / "Macros" / "Misc", "Toggle See-Through")
+    _macro(install / "ZData" / "Macros", "toggle see-through")     # the same name again
+    monkeypatch.setattr(studio.brushes, "zbrush_dirs", lambda: {"install": None, "user_assets": str(ua)})
+    monkeypatch.setattr(api, "_all_installs", lambda: [{"name": "ZBrush 2026", "year": 2026, "path": str(install),
+                                                        "python": True, "supported": True}])
+    sug = api.get_suggestions()
+    keys = [s["path"].replace(" ", "").lower() for s in sug]
+    assert len(keys) == len(set(keys))
+    assert "tool:masking:clear" in keys and "stroke:lazymouse" in keys
+    macros = [s for s in sug if s["source"] == "macro"]
+    assert [s["path"] for s in macros] == ["Macro:Macros:Tab", "Macro:Macros:toggle see-through"]
+    assert sug.index(macros[0]) > max(i for i, s in enumerate(sug) if s["source"] == "common")
+
+
+def test_a_2022_install_reads_its_startup_macros_only(api, tmp_path, monkeypatch):
+    install = tmp_path / "ZBrush 2022"
+    _macro(install / "ZStartup" / "Macros", "Old")
+    _macro(install / "ZData" / "Macros", "New")
+    monkeypatch.setattr(studio.brushes, "zbrush_dirs", lambda: {"install": None, "user_assets": None})
+    monkeypatch.setattr(api, "_all_installs", lambda: [{"name": "ZBrush 2022", "year": 2022, "path": str(install),
+                                                        "python": False, "supported": True}])
+    assert [s["path"] for s in api.get_suggestions() if s["source"] == "macro"] == ["Macro:Macros:Old"]
