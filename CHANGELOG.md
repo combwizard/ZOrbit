@@ -4,6 +4,13 @@ All notable changes to this project are listed here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+
+- In ZBrush 2022 to 2025, a pick that cannot load an item or find a button says so near the cursor, as it already did in ZBrush 2026 and newer. Before, only the log said so.
+- In ZBrush 2026 and newer, a brush that cannot be loaded says so near the cursor when no tool is in Edit mode too. Before, only the log said so.
+
 ## [0.18.1] - 2026-11-04
 
 ZOrbit 0.18.1 fixes **Install update**. Studio refused every release's setup file, so it only offered the download
