@@ -50,6 +50,52 @@ python tools\icolors_probe.py auto --year=2022   # another installed version
 
 It starts ZBrush twice with a script and closes it after each, with no clicks. The first run lists the Icolors items. The second sets each colour patch to a marker colour in turn, saves the scheme with **Save Ui Colors** after each, and loads the original back. Nothing is stored, so your colours are as before afterwards. Then it compares the files and prints where each patch sits and how a colour is packed. Everything goes to `%LOCALAPPDATA%\ZOrbit\icolors`, with the map in `icolors_map.json`. The script's header lists the steps it runs and the ZBrush quirks it works around. Run it again when a new ZBrush version comes out, to check the layout has not changed.
 
+## Test on a clean Windows
+
+`tools\vm` makes a Hyper-V VM with a fresh Windows 11 Pro and drives it from your PC: screenshots, keys, mouse, commands and files. Use it to see what a first install does, and to catch what only works because your own PC has been in use for years. You need:
+
+- Windows Pro with Hyper-V turned on, and PowerShell 7 (`pwsh`).
+- Your account in the **Hyper-V Administrators** group. Run `Add-LocalGroupMember -SID S-1-5-32-578 -Member $env:USERNAME` once as administrator, which works whatever your Windows calls the group, then sign out and in. Nothing else needs an administrator terminal.
+- A Windows 11 ISO that has the Pro edition and en-GB. The answer file asks for both, and Setup can stop at an error without them.
+- Your own ZBrush licence.
+
+```powershell
+.\tools\vm\new-test-vm.ps1 -Iso C:\Users\you\Downloads\Windows11.iso -Folder D:\VMs -Password pick-one
+```
+
+This makes a VM called **ZOrbit Test** in that folder. Pick a folder you can write to without elevation, so not Hyper-V's default under `ProgramData`, on a drive with room: the disk can grow to 160 GB, and each checkpoint adds to that. The VM takes a fixed 16 GB of memory and 8 processors, so lower them on a smaller PC. `-MemoryGB`, `-Cpus` and `-DiskGB` change these, and `-WhatIf` shows the settings without making anything. The script installs Windows with no clicks, which takes 15 to 30 minutes, and takes a checkpoint called `windows`. The local account is `tester`, an administrator that signs in by itself. Without `-Password` it gets a random password. Either way the password is saved in plain text in `%LOCALAPPDATA%\ZOrbit-test-vm\vm.json`, so don't use one you use anywhere else. Windows is not activated, and the VM reaches the internet and your network through the Default Switch.
+
+If the script is still waiting after 30 minutes, look at the VM in Hyper-V Manager. It presses a key for the first 8 seconds to boot from the ISO, and if it missed the prompt, or Setup stopped at an error, it waits a full hour before giving up. To start over, run `Remove-VM`, delete the VM's folder, and run the script again. The module drives the VM you made last.
+
+Open the VM in Hyper-V Manager, install the ZBrush versions you want, start each one once to sign in, and close them. Then take the checkpoint your tests start from:
+
+```powershell
+Import-Module .\tools\vm\TestVM.psm1
+Connect-TestVMConsole            # takes the VM's screen back from Hyper-V Manager's enhanced session
+New-TestVMCheckpoint vanilla
+```
+
+A test goes like this:
+
+```powershell
+Restore-TestVM vanilla           # about 35 seconds, back at the desktop
+Copy-ToTestVM .\packaging\Output\ZOrbitSetup-1.2.3.exe C:\zorbit-test     # the second path is a folder
+Start-TestVMApp C:\zorbit-test\ZOrbitSetup-1.2.3.exe
+Save-TestVMScreen                # writes a PNG and returns its path
+Invoke-TestVMClick 1127 721      # screen pixels, the same as in the PNG
+Send-TestVMKeyDown Q             # Send-TestVMKeyUp, Send-TestVMKeys 'Ctrl+S', Send-TestVMText, Move-TestVMMouse
+Invoke-TestVM { Get-Content "$env:LOCALAPPDATA\ZOrbit\radiald.log" -Tail 5 }
+```
+
+Good to know:
+
+- `Invoke-TestVM` runs with no desktop, so anything with a window goes through `Start-TestVMApp`. A program started that way does not get the keyboard: click into it first.
+- Screenshots are 16-bit, so colours are close but not exact.
+- The VM uses the UK keyboard layout, and `Send-TestVMText` is written for it. Any first-run test runs under en-GB.
+- ZBrush opens Lightbox and its Home Page when it starts. Close them and hover over the canvas before you press **Q**.
+- Run a first-run test straight after a restore. Windows adds root certificates when something asks for them, so a browser or `Invoke-WebRequest` in the VM can hide a problem with an HTTPS request.
+- ZBrush 2022.0.7 and 2026.2.1 run in the VM without a graphics card passed through. ZBrush 2027.0.1 did not start, with error `0xc0000142` from its own DLLs, on Windows build 26300. We have not tried it on another Windows build.
+
 ## Test the plugin install under Program Files
 
 ZBrush 2022 to 2025 load plugins only from their own `ZStartup\ZPlugs64` folder, which is usually under Program Files. There Studio's **Install**, **Update** and **Remove** cannot copy the files as you, so ZOrbit runs a helper as administrator instead. `tools\test_uac_install.py` tests that path without a real ZBrush:
