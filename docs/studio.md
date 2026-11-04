@@ -121,7 +121,7 @@ The version at the top links to its release notes. When Studio opens, it asks Gi
 
 **Installing an update.** Click the new version at the top, or **Install update** in **Settings > Studio**. The dialog shows which version you go to and that version's release notes, taken from its page on GitHub, with **Full release notes** and, when the release has one, a link to its blog post.
 
-![The Update ZOrbit dialog: v0.16.0 to v0.17.0, the release notes of 0.17.0 in a box, a note that Studio closes while Setup runs, and the Don't remind me again, Later and Download and install buttons](images/studio-update.png)
+![The Update ZOrbit dialog: v0.17.0 to v0.17.1, the release notes of 0.17.1 in a box, a note that Studio closes while Setup runs, and the Don't remind me again, Later and Download and install buttons](images/studio-update.png)
 
 - **Download and install** fetches the new installer from the GitHub release into `%LOCALAPPDATA%\ZOrbit\updates`, with a progress bar. Nothing is downloaded until you press it. Studio checks the file's size and SHA-256 against the ones the release lists, and deletes a file that does not match.
 - When you have unsaved changes, Studio then asks first: **Save and update**, **Update without saving** or **Keep editing**.
