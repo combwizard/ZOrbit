@@ -1349,8 +1349,8 @@ class App:
             self._toast(why)
             return
         log("profile hotkey: next")
-        self._command_profile("next")
-    def _command_profile(self, name):
+        self._command_profile("next", from_hotkey=True)
+    def _command_profile(self, name, from_hotkey=False):
         names = profiles.names()
         if name == "next" and names:
             name = names[(names.index(self.profile) + 1) % len(names)] if self.profile in names else names[0]
@@ -1365,6 +1365,9 @@ class App:
             self._toast(str(e))
             return
         self._check_profile()
+        if from_hotkey and self.profile == name and self.cfg is not None and self.cfg.profile_key is None:
+            self._toast(f"Profile: {name} (no next-profile hotkey here)")     # a one-way stop: say so on arrival
+            return
         self._toast(f"Profile: {name}")
 
     def _browser_pick_queued(self):

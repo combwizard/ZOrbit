@@ -416,6 +416,32 @@ def test_a_profile_switch_closes_the_ring_so_it_can_happen(three):
     assert closed == ["command"]
 
 
+def arrive_in(a, monkeypatch, keyed):
+    """Stands in for _check_profile: the app has followed the pointer to the profile just set, with or without the key."""
+    def follow(*_a, **_k):
+        a.profile = a.made[-1]
+        a.cfg.profile_key = config.Hotkey(0x50, alt=True, text="Alt+P") if keyed else None
+    monkeypatch.setattr(a, "_check_profile", follow)
+
+
+def test_the_profile_hotkey_says_when_the_new_profile_has_no_key(three, monkeypatch):
+    arrive_in(three, monkeypatch, keyed=False)
+    hotkey_message(three)
+    assert three.made == ["Gamma"] and three.toasts == ["Profile: Gamma (no next-profile hotkey here)"]
+
+
+def test_the_profile_hotkey_says_only_the_name_when_the_new_profile_has_a_key(three, monkeypatch):
+    arrive_in(three, monkeypatch, keyed=True)
+    hotkey_message(three)
+    assert three.toasts == ["Profile: Gamma"]
+
+
+def test_the_profile_command_does_not_say_no_hotkey(three, monkeypatch):
+    arrive_in(three, monkeypatch, keyed=False)
+    assert command(three, "--profile", "Gamma") == 1
+    assert three.toasts == ["Profile: Gamma"]
+
+
 def hotkey_message(a):
     """What the control window does when the hook posts the next-profile hotkey."""
     return a._ctrl_proc(1, radiald.WM_APP_PROFILE, 0, 0)
@@ -431,9 +457,9 @@ def test_the_profile_hotkey_does_what_profile_next_does(three):
 
 def test_the_profile_hotkey_shares_the_code_of_the_command(three, monkeypatch):
     named = []
-    monkeypatch.setattr(three, "_command_profile", named.append)
+    monkeypatch.setattr(three, "_command_profile", lambda name, from_hotkey=False: named.append((name, from_hotkey)))
     hotkey_message(three)
-    assert named == ["next"]
+    assert named == [("next", True)]
 
 
 def test_the_profile_hotkey_closes_an_open_ring(three):
