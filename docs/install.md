@@ -38,7 +38,7 @@ After an update:
 
 ZOrbit used to be called Radial Menu for ZBrush. Run the new installer over the old install. It moves the program to `%LOCALAPPDATA%\Programs\ZOrbit` and removes the old folder, its Start menu shortcut and its plugin path entry. Your menus, settings, tags and learned auto slots are copied on the first start into the **Default** [profile](profiles.md), in `%APPDATA%\ZOrbit\profiles\Default\`. The old `RadialMenu` folders stay where they are; you can delete them.
 
-In ZBrush 2026 the palette is now **Zplugin > ZOrbit**. If you bound F9 to the old **Apply** by hand, bind it again on **Zplugin > ZOrbit > Apply**: Ctrl+Alt+click it, press **F9**, then **Preferences > Hotkeys > Store**. In ZBrush 2022 to 2025, Studio shows the old plugin as **Update available**. **Update** replaces it with the ZOrbit plugin.
+In ZBrush 2026 the palette is now **Zplugin > ZOrbit**. If you bound F9 to the old **Apply** by hand, bind it again on **Zplugin > ZOrbit > Apply**: Ctrl+Alt+click it, press **F9**, then **Preferences > Hotkeys > Store**. In ZBrush 2022 to 2025, Studio shows the old plugin as **Plugin update available**. **Update** replaces it with the ZOrbit plugin.
 
 ### ZBrush 2022 to 2025
 
@@ -48,7 +48,7 @@ These versions load plugins only from their own `ZStartup\ZPlugs64` folder, so S
 2. Click **Install**. A ZBrush under Program Files asks for administrator rights once (the prompt runs ZOrbit's own program as administrator).
 3. Restart that ZBrush.
 
-The plugin has no listener window, so every pick in these versions goes through the bridge key, F9. When ZBrush loads the plugin it binds F9 to **Zplugin > ZOrbit > Apply** if that button has no hotkey yet, and keeps a key you stored for it yourself. That is verified in ZBrush 2022, 2023 and 2025; in 2024, check **Zplugin > ZOrbit > Apply** and bind F9 by hand if it is empty. If you change the bridge key in Studio (a bare F-key other than F10), bind the new key by hand in each version: Ctrl+Alt+click **Apply**, press the key, then **Preferences > Hotkeys > Store**. When a new version of ZOrbit has a newer plugin, **Settings** shows a badge and the row says **Update available**.
+The plugin has no listener window, so every pick in these versions goes through the bridge key, F9. When ZBrush loads the plugin it binds F9 to **Zplugin > ZOrbit > Apply** if that button has no hotkey yet, and keeps a key you stored for it yourself. That is verified in ZBrush 2022, 2023 and 2025; in 2024, check **Zplugin > ZOrbit > Apply** and bind F9 by hand if it is empty. If you change the bridge key in Studio (a bare F-key other than F10), bind the new key by hand in each version: Ctrl+Alt+click **Apply**, press the key, then **Preferences > Hotkeys > Store**. When a new version of ZOrbit has a newer plugin, **Settings** shows a badge and the row says **Plugin update available**.
 
 On a PC where PowerShell is restricted, Studio installs the plugin without its two start shortcuts and says "Installed without the start shortcuts". The plugin still works; it starts ZOrbit the slower way. If the path of the ZOrbit data folder has characters outside the Windows code page and 8.3 short names are off, Studio refuses to install and says what to change. ZBrush 2021 and older are not supported. See [Troubleshooting](troubleshooting.md#zbrush-2022-to-2025-the-ring-opens-but-picks-do-nothing).
 

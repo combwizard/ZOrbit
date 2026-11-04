@@ -158,7 +158,7 @@ class Config:
     path: str
     mtime: float
     bridge_mode: str = "auto"
-    bridge_key: Hotkey | None = field(default_factory=lambda: parse_hotkey(DEFAULT_BRIDGE_KEY))
+    bridge_key: Hotkey = field(default_factory=lambda: parse_hotkey(DEFAULT_BRIDGE_KEY))
     browser_key: Hotkey | None = None
     ring: dict = field(default_factory=lambda: L.LookSet().global_look())    # the resolved global look
     looks: L.LookSet = field(default_factory=L.LookSet)

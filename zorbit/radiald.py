@@ -127,9 +127,7 @@ def log(msg: str) -> None:
 # What the user is told when the app knows why a pick went nowhere (docs/troubleshooting.md lists them).
 MSG_NO_CONNECTION = "No plugin listener in ZBrush (bridge mode is Message). Check Zplugin > ZOrbit > Status."
 MSG_NO_ANSWER = "The plugin did not answer (bridge mode is Message). Check Zplugin > ZOrbit > Status."
-MSG_NO_ANSWER_NO_KEY = "The plugin did not answer, and no bridge key is set. Choose one in Studio."
 MSG_NOT_FRONT = "ZBrush was not the front window, nothing sent"
-MSG_NO_KEY = "No bridge key is set. Choose one in Studio under Settings > ZBrush bridge."
 MSG_EMPTY_SLOT = "This slot is empty"
 MSG_EMPTY_MENU = "That menu has nothing usable in it"
 MSG_PICK_FAILED = "ZBrush could not carry out that pick. See bridge.log."
@@ -441,7 +439,7 @@ class App:
             log(f"config: {err}")
         log(f"config loaded: {len(cfg.menus)} menus, theme={eff}, hotkeys: "
             + ", ".join(f"{m.hotkey.text}->{m.id}" for m in self.slots)
-            + f"; bridge mode={cfg.bridge_mode} key={cfg.bridge_key.text if cfg.bridge_key else None}"
+            + f"; bridge mode={cfg.bridge_mode} key={cfg.bridge_key.text}"
             + f"; browser hotkey={cfg.browser_key.text if cfg.browser_key else None}")
         self._prefetch()
         self._prune_icons()
@@ -1363,16 +1361,15 @@ class App:
         self._ack = None
         W.KillTimer(self.ctrl, TIMER_ACK)
         self.activity.note_ack(seq, "timeout")
-        if self.cfg.bridge_mode == "auto" and self.cfg.bridge_key:
+        if self.cfg.bridge_mode == "message":
+            log(f"pick #{seq}: listener did not pick it up in 0.5 s")
+            self._toast(MSG_NO_ANSWER)
+        else:
             log(f"pick #{seq}: listener did not pick it up in 0.5 s; falling back to the bridge key")
             sent, reason = self.press_bridge_key(seq)
             self.activity.note_route(seq, "key", sent, reason)
             if not sent:
                 self._drop_request(seq)
-        else:
-            log(f"pick #{seq}: listener did not pick it up in 0.5 s")
-            # Here the mode is "message", or "auto" with no bridge key to fall back on: each has its own cause.
-            self._toast(MSG_NO_ANSWER if self.cfg.bridge_mode == "message" else MSG_NO_ANSWER_NO_KEY)
 
     def _result_tick(self):
         """Reads the plugin's outcome for the picked-up request from bridge.log; a toast only for a problem."""
@@ -1410,10 +1407,6 @@ class App:
 
     def press_bridge_key(self, seq):
         key = self.cfg.bridge_key
-        if key is None:
-            log(f"pick #{seq}: no bridge key configured; nothing sent")
-            self._toast(MSG_NO_KEY)
-            return False, "no bridge key configured"
         if not self.target_in_front():
             log(f"pick #{seq}: ZBrush is not in front; bridge key not sent (it would land in another app)")
             self._toast(MSG_NOT_FRONT)
@@ -1592,7 +1585,7 @@ def check(cfg_path) -> int:
     if profiles.enabled() and cfg_path == profiles.config_file():
         print(f"profile: {profiles.active()}")
     print(f"{cfg_path}: {len(cfg.menus)} menus, bridge mode={cfg.bridge_mode} "
-          f"key={cfg.bridge_key.text if cfg.bridge_key else None}, "
+          f"key={cfg.bridge_key.text}, "
           f"browser hotkey={cfg.browser_key.text if cfg.browser_key else None}")
     for m in cfg.menus.values():
         print(f"  [{m.id}] '{m.title}' hotkey={m.hotkey.text if m.hotkey else '-'} swallow={m.swallow}")

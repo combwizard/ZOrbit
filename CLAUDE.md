@@ -16,12 +16,13 @@ The user docs are the Markdown pages in `docs/`. Every push to `main` that touch
 - **Pictures:** the Studio and browser screenshots are made by `python tools/docs_shots.py` (headless Edge on the
   mock UI, recorded from a fresh install; `--record` re-records after a UI or API change, and the `SHOTS` table says
   what each picture shows). When a change alters a screen that has a picture, retake it and look it over before
-  committing. The ring pictures and GIFs (`ring.png`, `fan.png`, `tag-colours.png`, `animations.png`,
-  `open-animation.gif`, `fan-out.gif`) are made by `python tools/ring_shots.py` from the real renderer in the
-  starter menus (its `SHOTS` table says what each shows). When a change alters how the ring looks, run it and look
-  the pictures over before committing.
+  committing. The ring pictures and GIFs (`ring.png`, `fan.png`, `looks.png` and the rest of the `SHOTS` table in
+  the script, which says what each shows) are made by `python tools/ring_shots.py` from the real renderer in the
+  starter menus. When a change alters how the ring looks, run it and look the pictures over before committing.
 - **Build the docs** after editing them: `mkdocs build --strict` (`pip install -r requirements-docs.txt` first). It
-  fails on a broken link or anchor. Link between pages with relative `.md` links so they work on GitHub too.
+  fails on a broken link or anchor. Link between pages with relative `.md` links so they work on GitHub too. It does
+  not look inside raw HTML, where MkDocs leaves paths as they are, so write pictures and links in Markdown
+  (`tests/test_docs.py` checks).
 - **The pre-commit hook** (`tools/hooks/pre-commit`) stops a commit that changes `zorbit/` or `bridge/` without
   touching `docs/` or `README.md`. When there really is nothing to document (a refactor, an internal fix, a bug fix
   that restores what the docs already say), commit with `ZORBIT_NO_DOCS=1` and say in the reply that you did.
@@ -38,6 +39,12 @@ Where each part is documented:
 | `popout.py`, `studio_ui/popout.html`, `assets.py`, `brushes.py` (browser, libraries) | `browser.md` |
 | `radiald.py` (hotkeys, pick modes, picks mid-stroke) | `hotkeys.md` |
 | `ring.py` (look, size, colours, labels, animations) | `appearance.md` |
+| `looks.py`, `shapes.py` (named looks, slot shapes) | `appearance.md` |
+| `layout.py` (where slots go, full rings) | `menus.md`, `appearance.md` |
+| `menushare.py` (**Export menu**, **Import menu**) | `menus.md`, `files.md` |
+| `theme.py`, `zbrush_colors.py` (the theme, **Match ZBrush**) | `appearance.md`, `studio.md` |
+| `main.py` (command-line options) | `building.md`, `browser.md` |
+| `win32.py` (Windows calls) | None of its own; the page for the feature that uses it |
 | `bridge/`, `zscript_bridge.py` (bridge modes, bridge key, the Zplugin palette) | `bridge.md` |
 | `paths.py`, `fsutil.py`, import and export, logs | `files.md` |
 | `installs.py`, `onboarding.py`, `activity.py`, `packaging/` (install, Setup screen) | `install.md`, `getting-started.md` |

@@ -38,13 +38,15 @@ def _timed_out(app, mode, key):
 
 
 def test_listener_that_does_not_answer_in_message_mode_says_so(app):
-    assert _timed_out(app, "message", None) == [radiald.MSG_NO_ANSWER]
+    assert _timed_out(app, "message", config.parse_hotkey("F9")) == [radiald.MSG_NO_ANSWER]
     assert "bridge mode is Message" in radiald.MSG_NO_ANSWER
 
 
-def test_listener_that_does_not_answer_in_auto_mode_without_a_key_names_the_missing_key(app):
-    assert _timed_out(app, "auto", None) == [radiald.MSG_NO_ANSWER_NO_KEY]
-    assert "no bridge key" in radiald.MSG_NO_ANSWER_NO_KEY
+def test_listener_that_does_not_answer_in_auto_mode_falls_back_to_the_bridge_key(app, monkeypatch):
+    pressed = []
+    monkeypatch.setattr(app, "press_bridge_key", lambda seq: (pressed.append(seq), (True, ""))[1])
+    assert _timed_out(app, "auto", config.parse_hotkey("F9")) == []
+    assert pressed == [5]
 
 
 def test_no_listener_in_message_mode_has_its_own_message(app, monkeypatch):
@@ -61,16 +63,9 @@ def test_no_listener_in_message_mode_has_its_own_message(app, monkeypatch):
     assert "No plugin listener" in radiald.MSG_NO_CONNECTION
 
 
-def test_no_bridge_key_has_its_own_message(app):
-    app.cfg.bridge_key = None
-    assert app.press_bridge_key(9) == (False, "no bridge key configured")
-    assert app.toasts == [radiald.MSG_NO_KEY]
-    assert "Choose one in Studio" in radiald.MSG_NO_KEY
-
-
 def test_the_messages_are_different_and_fit_the_toast_on_one_line():
-    msgs = [radiald.MSG_NO_CONNECTION, radiald.MSG_NO_ANSWER, radiald.MSG_NO_ANSWER_NO_KEY, radiald.MSG_NOT_FRONT,
-            radiald.MSG_NO_KEY, radiald.MSG_EMPTY_SLOT, radiald.MSG_EMPTY_MENU, radiald.MSG_PICK_FAILED]
+    msgs = [radiald.MSG_NO_CONNECTION, radiald.MSG_NO_ANSWER, radiald.MSG_NOT_FRONT, radiald.MSG_EMPTY_SLOT,
+            radiald.MSG_EMPTY_MENU, radiald.MSG_PICK_FAILED]
     assert len(set(msgs)) == len(msgs)
     probe = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
     for m in msgs:

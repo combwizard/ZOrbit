@@ -56,7 +56,6 @@ To share one menu, use **Export menu...** in the **Menu** tab. It writes the men
 | `%LOCALAPPDATA%\ZOrbit\zscript_stage\` | A work folder that Studio fills with the ZBrush 2022 to 2025 plugin files while it installs or updates the plugin, and rebuilds each time. Safe to delete when no install is running. |
 | `%LOCALAPPDATA%\ZOrbit\thumbs\` | Cached thumbnails of brushes, alphas, materials and textures. Safe to delete. |
 | `<ZBrush>\ZStartup\ZPlugs64\ZOrbitBridge.zsc` | ZBrush 2022 to 2025: the plugin. Its `ZOrbitData` folder says where picks arrive and how to start the app. |
-
 | `%PUBLIC%\Documents\ZBrushData<year>\ZStartup\CustomUserInterface<year>.cfg`, and for ZBrush 2026.1 and newer `%APPDATA%\Maxon\ZBrush <year>_<id>\ZStartup\UserInterfaceLayouts\CustomUserInterface<year>.cfg` | ZBrush's own file, written when you press **Store Config**. ZOrbit reads the interface colours in it for the **Match ZBrush** [theme](appearance.md#match-zbrush) and never changes it. |
 
 When you report a bug, paste the last lines of `radiald.log` and `bridge.log` (and `popout.log` for a problem with the browser, `studio.log` for one with Studio). The logs hold brush names and menu ids, and also your Windows user name and folder paths: the plugin logs where it loaded from and how it started the app, the app logs the command line of the browser, and `studio.log` and `popout.log` log the working directory. Read what you paste, and black out those parts.

@@ -4,7 +4,7 @@ A profile is a whole setup: the menus and settings, the tags, and the usage that
 
 ## Switching
 
-In Studio, the button right after the **ZOrbit Studio** wordmark in the top bar names the profile you are editing. Click it for the list, which has a tick on that one. Pick another name to switch.
+In Studio, the button right after the **ZOrbit Studio** wordmark in the top bar names the profile you are editing. Click it for the list, which has a tick on that one. If the app is using a different profile, that one says **in use**. Pick another name to switch.
 
 ![The profile picker open in Studio's top bar, listing three profiles with a tick on the one being edited](images/studio-profiles.png)
 
@@ -47,7 +47,7 @@ To send a profile to another PC, press **Settings > Import and export > Export..
 
 ## Where the files are
 
-Each profile is a folder under `%APPDATA%\ZOrbit\profiles\`, named after the profile.
+Each profile is a folder under `%APPDATA%\ZOrbit\profiles\`, named after the profile. **Open profiles folder** at the bottom of the profile list opens it.
 
 | Path | What |
 |---|---|

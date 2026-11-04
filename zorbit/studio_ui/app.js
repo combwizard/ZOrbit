@@ -4637,7 +4637,6 @@ const bridgeKeyName = () => String((S.cfg && S.cfg.bridge && S.cfg.bridge.key) |
 function unsentHint(reason, key) {
   const r = String(reason || '');
   if (/^no live listener/.test(r)) return { text: 'The plugin is not answering in ZBrush, and the bridge mode is Message, so nothing was sent. Restart ZBrush so the plugin loads, or set the bridge mode to Auto.', settings: true };
-  if (/^no bridge key/.test(r)) return { text: 'No bridge key is set, so nothing was sent. Choose one in Settings > ZBrush bridge (F9 is the default).', settings: true };
   if (/not in front/.test(r)) return { text: 'ZBrush was not the front window when you picked, so nothing was sent. Click ZBrush once, press ' + key + ' over the canvas and pick again.' };
   if (/request file/.test(r)) return { text: 'ZOrbit could not save the pick to its data folder, so nothing was sent. Check that the folder can be written to; Status can open it.', status: true };
   return { text: 'ZOrbit could not send that pick to ZBrush. The app log on Status says why.', status: true };

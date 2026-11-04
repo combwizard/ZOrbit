@@ -60,7 +60,7 @@ The file holds:
 - the tags its **Tag** and **Browser** items use, with their labels and colours, and the brushes, alphas, materials and textures that carry them, so a tag fan is not empty on the other PC;
 - the looks of your own that these menus use (the `looks` section of `radial.json`, for any menu whose `look` names one). The built-in looks are in every copy of ZOrbit, so they are not in the file.
 
-The hotkey, the ring settings and the bridge and browser settings stay behind, and so do the brush, alpha, material and texture files themselves. An icon that is a full path to a file on your PC shows as a problem on the other PC.
+The hotkey and its **Swallow hotkey** switch, the ring settings and the bridge and browser settings stay behind, and so do the brush, alpha, material and texture files themselves. An icon that is a full path to a file on your PC shows as a problem on the other PC.
 
 **Import menu...**, under **Add menu** at the foot of the **Menus** list, asks for the file and shows what it holds before anything changes: the menu and its submenus, any title or id that is already taken, the tags it brings, and any brushes, alphas, materials or textures this PC does not have. Those still import, and show as missing until you install them.
 
@@ -97,7 +97,7 @@ Studio's [Simple mode](studio.md#simple-and-full-mode) offers `brush`, `alpha`, 
 {"brush": "Inflat", "label": "Inflate"}
 ```
 
-The name is the brush's name in ZBrush (the file name without `.zbp`). Spaces and capitals do not matter when ZOrbit looks the file up. The slot's icon is the brush's own thumbnail. If ZBrush already has the brush loaded, it is simply selected. If not, ZOrbit looks for a `.zbp` in your ZBrush brush folders and loads it. If it finds none, the pick is logged as "NOT loaded in ZBrush and no file known".
+The name is the brush's name in ZBrush (the file name without `.zbp`), never a path: a name with `\`, `/`, `:` or `..` in it is listed as a problem. Spaces and capitals do not matter when ZOrbit looks the file up. The slot's icon is the brush's own thumbnail. If ZBrush already has the brush loaded, it is simply selected. If not, ZOrbit looks for a `.zbp` in your ZBrush brush folders and loads it. If it finds none, the pick is logged as "NOT loaded in ZBrush and no file known".
 
 ZOrbit searches these folders, in order. The first folder that has the name wins, in the browser's list and on the ring alike:
 
@@ -114,7 +114,7 @@ For a pick in ZBrush 2022 to 2025, only the four folders of that ZBrush's own in
 {"texture": "Txtr01"}
 ```
 
-The name is the file's name without its extension. Spaces and capitals do not matter when ZOrbit looks the file up. If
+The name is the file's name without its extension, never a path: a name with `\`, `/`, `:` or `..` in it is listed as a problem. Spaces and capitals do not matter when ZOrbit looks the file up. If
 two folders hold a file with the same name (capitals and spaces in the name are ignored), the first folder searched wins, in the browser's list and on the ring alike. Subfolders are searched too, except folders whose name starts with `_`. ZOrbit searches these folders, in order:
 
 - **ZBrush 2026 and newer:** `ZStartup\Alphas`, `ZStartup\Materials` and `ZStartup\Textures` in your user folder (shown
@@ -124,8 +124,8 @@ two folders hold a file with the same name (capitals and spaces in the name are 
 - **ZBrush 2022 to 2025:** `ZStartup\Alphas`, `ZStartup\Materials` and `ZStartup\Textures`, then the installation's
   `ZData\...` folders, then its `ZAlphas`, `ZMaterials` and `ZTextures` folders.
 
-Alphas can be `.psd`, `.bmp`, `.jpg`, `.png` or `.tif` files. Materials are `.zmt` files. Textures can be `.psd`, `.jpg`,
-`.png`, `.bmp`, `.tif` or `.exr` files.
+Alphas can be `.psd`, `.bmp`, `.jpg`, `.jpeg`, `.png`, `.tif` or `.tiff` files. Materials are `.zmt` files. Textures can be
+`.psd`, `.jpg`, `.jpeg`, `.png`, `.bmp`, `.tif`, `.tiff` or `.exr` files.
 
 If ZBrush already has the item loaded, it is simply selected. ZOrbit looks for a button with its name (`Alpha:<name>`,
 `Material:<name>` or `Texture:<name>`). If there is none, ZOrbit loads the file with **Alpha > Import**, **Material > Load**
@@ -224,7 +224,7 @@ The ring does not reshuffle under your hand:
 - A newcomer has to be among the best brushes after two picks in a row before it takes a slot. It takes the slot of the lowest-scoring brush that has dropped out of the best.
 - An empty slot fills straight away.
 
-An auto slot that nothing has filled yet is drawn as a faint **+**, and picking it does nothing. The slot shows the brush it holds, with that brush's thumbnail and name, so it takes no `label` or `icon` of its own. Each menu learns on its own, keyed by the menu's id: renaming the id in Studio resets what its auto slots learned. In Studio, the **Right now** field in the inspector shows which brush an auto slot holds at the moment. The scores are kept in `usage.json` (see [Files and logs](files.md#files-and-logs)).
+An auto slot that nothing has filled yet is drawn as a faint **+**. Picking it sends nothing and says **This slot is empty** near the cursor. The slot shows the brush it holds, with that brush's thumbnail and name, so it takes no `label` or `icon` of its own. Each menu learns on its own, keyed by the menu's id: renaming the id in Studio resets what its auto slots learned. In Studio, the **Right now** field in the inspector shows which brush an auto slot holds at the moment. The scores are kept in `usage.json` (see [Files and logs](files.md#files-and-logs)).
 
 ### Tag
 
@@ -238,7 +238,7 @@ The name is the tag's key, not its label. The key is made once, from the label, 
 
 The slot opens a fan of every installed item with that tag. The brushes come first, most used first (the same count that fills auto slots, so their order can shift after you pick). Then come the alphas, materials and textures with that tag, by name. A fan holds up to 12 slots, or the number you set with **Tag fan slots** (4 to 24, see [Tag fans](tags.md#tag-fans)). If the tag has more items, the last slot is **More...**, which opens the [browser](browser.md) on the tab of the first item in the fan, on that tag. Picking a brush from the fan works like any brush pick and counts towards auto slots. Picking an alpha, material or texture works as it does from the browser. If there is no room for a fan, the tag's items open as a normal ring. The slot is a disc in the tag's colour with a tag symbol and a submenu badge. Without a `label`, it is named after the tag.
 
-A tag that has no installed items is a faint tag symbol, and picking it does nothing. So is a key that is not in `tags.json`, which is also listed as a problem ("tag 'x' does not exist; the slot stays empty").
+A tag that has no installed items is a faint tag symbol. Picking it sends nothing and says **This slot is empty** near the cursor. So is a key that is not in `tags.json`, which is also listed as a problem ("tag 'x' does not exist; the slot stays empty").
 
 The `favourite` key is the built-in Favourites tag (see [Tags](tags.md)). A `{"tag": "favourite"}` slot opens a fan of
 your starred items, in the same order as any tag, with the same slot cap and **More...** slot. It is drawn with a

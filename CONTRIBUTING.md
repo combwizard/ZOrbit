@@ -62,6 +62,10 @@ python zorbit\main.py             # run the app by hand (it keeps running until 
 pytest                            # run the tests
 ```
 
+The tests that run JavaScript need `node` on the `PATH`, and pytest skips them without it. If
+`tests\test_studio_looks.py` fails and names `tools/make_look_cases.py`, run that and commit the two fixtures it
+rewrites.
+
 Source layout:
 
 | Folder | Contents |
@@ -137,7 +141,7 @@ only brushes included with ZBrush appear.
 ### Taking the pictures for the docs
 
 `python tools\docs_shots.py` takes the Studio and browser screenshots from the mock UI. `python tools\ring_shots.py`
-draws the ring pictures and GIFs (`ring.png`, `fan.png`, `tag-colours.png`, `animations.png`, `open-animation.gif`,
-`fan-out.gif`) with the real ring renderer. Both work on a throw-away copy of the starter menus, so your own menus
+draws the ring pictures and GIFs (`ring.png`, `fan.png`, `looks.png` and the rest of the `SHOTS` table in the script)
+with the real ring renderer. Both work on a throw-away copy of the starter menus, so your own menus
 and tags never appear in a picture. Name pictures after the script to retake only those, and add `--out DIR` to look
 at them before they replace the ones in `docs\images`.
