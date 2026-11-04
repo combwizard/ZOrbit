@@ -4,7 +4,11 @@ All notable changes to this project are listed here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.18.1] - 2026-11-04
+
+ZOrbit 0.18.1 fixes **Install update**. Studio refused every release's setup file, so it only offered the download
+page, and wrongly said your copy was not installed with Setup. If you are on 0.18.0 or older, install this version
+by hand once, and later updates work from Studio.
 
 ### Fixed
 
@@ -926,6 +930,7 @@ First public release.
   only brushes included with ZBrush.
 - Documentation: README, user guide, third-party notices and contributing guide.
 
+[0.18.1]: https://github.com/combwizard/zorbit/releases/tag/v0.18.1
 [0.18.0]: https://github.com/combwizard/zorbit/releases/tag/v0.18.0
 [0.17.1]: https://github.com/combwizard/zorbit/releases/tag/v0.17.1
 [0.17.0]: https://github.com/combwizard/zorbit/releases/tag/v0.17.0
