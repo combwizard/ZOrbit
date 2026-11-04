@@ -100,6 +100,13 @@ def test_an_asset_that_was_not_loaded_is_named(bridge_log):
     assert radiald._plugin_result(4, now, p) == ["Nope could not be found in ZBrush"]
 
 
+def test_a_brush_that_was_not_loaded_is_named_with_edit_mode_off(bridge_log):
+    now = time.time()
+    p = bridge_log(f"{stamp(now)} #4 'Nope' via listener: brush Nope: NOT loaded in ZBrush and no file known "
+                   f"(Edit mode is off)")
+    assert radiald._plugin_result(4, now, p) == ["Nope could not be found in ZBrush"]
+
+
 def test_a_missing_button_is_named_with_its_path(bridge_log):
     now = time.time()
     p = bridge_log(f"{stamp(now)} #5 'Hide' via listener, after stroke: press Tool:Subtool:Nothing: no such interface item")
