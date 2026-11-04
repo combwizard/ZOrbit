@@ -55,6 +55,12 @@ def test_default_menus_load_without_a_tag_store():
     assert config.load(paths.DEFAULT_MENUS).errors == []
 
 
+def test_the_starter_menus_no_longer_have_the_wrong_polyframe_path():
+    with open(paths.DEFAULT_MENUS, encoding="utf-8-sig") as f:
+        text = f.read()
+    assert "Transform:PolyF" not in text and '"Transform:Pf"' in text
+
+
 def test_default_menus_submenu_targets_exist():
     cfg = config.load(paths.DEFAULT_MENUS)
     targets = [it.data["menu"] for m in cfg.menus.values() for it in m.items if it.kind == "menu"]
@@ -1001,6 +1007,47 @@ def test_set_value_must_be_a_number(load_menus, value):
     cfg = load_menus({"main": one_item_menu({"set": "Draw:Draw Size", "value": value}, {"brush": "A"})})
     assert problems(cfg, "menu main item 1: 'set' value must be a number")
     assert len(cfg.menus["main"].items) == 1
+
+
+# --- paths that were wrong ----------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("path", ["Transform:PolyF", "transform:polyf", "TRANSFORM:POLYF"])
+def test_an_old_polyframe_path_loads_as_the_real_one(load_menus, path):
+    cfg = load_menus({"main": one_item_menu({"toggle": path})})
+    assert cfg.errors == []
+    assert cfg.menus["main"].items[0].data == {"toggle": "Transform:Pf"}
+
+
+def test_an_old_polyframe_path_inside_steps_loads_as_the_real_one(load_menus):
+    steps = [{"press": "Tool:Masking:Clear"}, {"toggle": "Transform:PolyF"}]
+    cfg = load_menus({"main": one_item_menu({"steps": steps})})
+    assert cfg.errors == []
+    assert cfg.menus["main"].items[0].data == {"steps": [{"press": "Tool:Masking:Clear"}, {"toggle": "Transform:Pf"}]}
+
+
+@pytest.mark.parametrize("action, fixed", [
+    ({"press": "Transform:PolyF"}, {"press": "Transform:Pf"}),
+    ({"set": "Transform:PolyF", "value": 1}, {"set": "Transform:Pf", "value": 1})])
+def test_an_old_polyframe_path_in_press_or_set_loads_as_the_real_one(load_menus, action, fixed):
+    assert load_menus({"main": one_item_menu(action)}).menus["main"].items[0].data == fixed
+
+
+def test_another_path_is_loaded_unchanged(load_menus):
+    cfg = load_menus({"main": one_item_menu({"toggle": "Transform:Solo"}, {"press": "Tool:Masking:Clear"})})
+    assert [it.data for it in cfg.menus["main"].items] == [{"toggle": "Transform:Solo"}, {"press": "Tool:Masking:Clear"}]
+
+
+def test_an_old_polyframe_path_keeps_its_default_label(load_menus):
+    assert load_menus({"main": one_item_menu({"toggle": "Transform:PolyF"})}).menus["main"].items[0].label == "PolyF"
+
+
+def test_loading_an_old_path_does_not_change_radial_json(radial_file):
+    raw = {"menus": {"main": one_item_menu({"steps": [{"toggle": "Transform:PolyF"}]})}}
+    path = radial_file(raw)
+    config.load(path)
+    with open(path, encoding="utf-8") as f:
+        assert json.load(f) == raw
 
 
 # --- steps --------------------------------------------------------------------------------------

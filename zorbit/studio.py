@@ -1039,7 +1039,7 @@ class Api(webapi.LibraryApi, webapi.TagApi):
                     note = (m.group(2) or "").strip()
                     add(_title_path(m.group(1)), f"your hotkeys ({note})" if note else "your hotkeys")
         for p in ("Tool:Masking:Clear", "Tool:Masking:Inverse", "Tool:Masking:ViewMask", "Transform:Activate Symmetry",
-                  "Transform:PolyF", "Transform:Solo", "Tool:Geometry:Divide", "Tool:Geometry:Lower Res",
+                  "Transform:Pf", "Transform:Solo", "Tool:Geometry:Divide", "Tool:Geometry:Lower Res",
                   "Tool:Geometry:Higher Res", "Draw:Draw Size", "Draw:Z Intensity", "Stroke:LazyMouse",
                   "Stroke:SubDivide Size", "Brush:Auto Masking:BackfaceMask", "Tool:Polygroups:Auto Groups"):
             add(p, "common")

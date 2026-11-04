@@ -69,6 +69,7 @@ KNOWN_STARTERS = frozenset((
     "6b607e6938831e0173f3f9aaf90b62209e7379627d4a904b826d388317657d71",
     "8bf59cff465ff2f863bab477cb141f1500d09fe427797a2bdc25be126d3a4c81",
     "982715e38e52fb0c9ddc5ee5f5a86cb0a84c89aed0fbd79b3e17a62b2fa23969",       # keep_slots on every starter menu
+    "22913313352bc4899efdec9df624caf9b8a267ce98f2d38de2daf65ecd62777c",       # PolyFrame is Transform:Pf
 ))
 
 PC_SECTIONS = ("bridge", "browser", "profile")      # the radial.json sections that belong to this PC's keyboard and ZBrush
