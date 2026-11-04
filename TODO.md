@@ -16,7 +16,7 @@ The issues themselves, where people can comment and add a thumbs-up:
 Worked out on 3 Nov 2026. A new issue goes on the board straight away and joins this order the next time it is
 worked out.
 
-1. **Checks that need a person or real hardware.** The test VM (`tools/vm`) can do the rest:
+1. **Checks that need a person or real hardware.** The test VM can do the rest:
    - [#103](https://github.com/combwizard/ZOrbit/issues/103) on the current window code. The VM has one screen, so
      the part on monitors of different sizes needs real ones.
    - [#23](https://github.com/combwizard/ZOrbit/issues/23) whenever a standard (non-admin) account is to hand.

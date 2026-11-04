@@ -116,12 +116,6 @@ At release time, add a short plain summary of two to four sentences under the `#
 
 A bigger release can also get a post on the [blog](https://zorbit.lol/docs/blog/): a Markdown file in `docs\blog\posts\` with a `date`, `authors` (from `docs\blog\.authors.yml`) and `slug` at the top, and `<!-- more -->` after the opening paragraphs, which are what the blog's front page shows. Give it the slug `zorbit-` and the version with dashes for dots (`zorbit-0-13-0`), and the release notes link to it. Push the post before the tag so the link works when the release appears.
 
-### Testing on a clean Windows
-
-`tools\vm\new-test-vm.ps1` makes a Hyper-V VM with a fresh Windows, and `tools\vm\TestVM.psm1` drives it from your PC.
-Use it after a change to the installer, Setup or anything that runs the first time. See
-[Build from source](docs/building.md#test-on-a-clean-windows).
-
 ### Working on Studio's interface in a browser
 
 Run `python tools\make_mock.py`, then open `zorbit\studio_ui\index.html?mock` in a browser. This
