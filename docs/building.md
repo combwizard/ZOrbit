@@ -29,9 +29,11 @@ python zorbit\main.py --selftest      # check the libraries, modules and bundled
 dist\ZOrbit\ZOrbit.exe --selftest     # the same checks on the built app
 ```
 
-The tests import the Windows modules, so they run on Windows only. `--selftest` imports pywebview, pythonnet, truststore and every app module, and looks for the Studio interface files, the icons, the default menus, the ZScript bridge and the WebView2 loader DLL. It prints one line per check and exits with 1 if any fails. Run it on the built exe to catch a file that PyInstaller left out.
+The tests import the Windows modules, so they run on Windows only. The ones that run the JavaScript in `tests\js` also need `node` on the `PATH`, and pytest skips them without it. `--selftest` imports pywebview, pythonnet, truststore and the app's modules, and looks for the Studio interface files, the icons, the default menus, the ZScript bridge and the WebView2 loader DLL. It prints one line per check and exits with 1 if any fails. Run it on the built exe to catch a file that PyInstaller left out.
 
 `tests\test_upgrade.py` runs the profile migration over data that real past releases wrote. The data is in `tests\fixtures\upgrade\<tag>\`: one folder each for v0.7.0, v0.7.1, v0.9.0 and v0.12.0, and a `downgrade` folder for 0.12.0 run again after the move. `python tools\make_upgrade_fixtures.py` makes them. It runs each release's own code from `git archive`, with a fresh `APPDATA` and `LOCALAPPDATA`. CI does not run the generator.
+
+`tests\test_studio_looks.py` compares `tests\fixtures\look_cases.json` and `look_options.json` with what `python tools\make_look_cases.py` writes. When it fails and names that command, run it and commit the two files.
 
 `tests\test_starters.py` checks that `profiles.KNOWN_STARTERS` lists the hash of every `default_menus.json` in the git history. It needs the full history, which CI gets with `fetch-depth: 0`. When `default_menus.json` changes, add its new hash to `KNOWN_STARTERS`.
 

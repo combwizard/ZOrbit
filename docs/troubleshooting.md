@@ -21,6 +21,10 @@ Windows marked the unzipped files as downloaded, and ZOrbit could not remove the
 - **The orange version at the top is gone, but there is a newer release.** You chose **Don't remind me again** for it. **Settings > Studio** still offers it, and a newer release shows at the top again.
 - **Studio never shows a newer version.** `studio.log` has a line with `update check failed` that says why. `SSLCertVerificationError` means GitHub's certificate was not trusted, and Windows' reason follows it. On a company network, the network's own certificate may be missing from Windows, and a PC clock that is far off has the same effect. ZOrbit 0.17.0 and older checked the certificate without Windows' help and failed like this on a freshly installed Windows, with `CERTIFICATE_VERIFY_FAILED` in the line. Download the new installer from the release page once, and later updates work from Studio. A line `truststore unavailable` only shows when you run from a checkout without the packages in `requirements.txt`.
 
+### Setup says Plugin folder missing
+
+ZBrush 2026 and newer load the plugin from the `bridge` folder of the ZOrbit install. **Plugin folder missing** means that folder is gone, so **Fix** cannot help. Reinstall ZOrbit, then restart ZBrush.
+
 ### A newer ZOrbit takes over from an older one
 
 A newer ZOrbit started while an older one was running, such as a portable copy. The new one asks the old one to quit, waits for it, and starts in its place. `radiald.log` shows `taking over from ZOrbit <version> (pid <n>)`, then `ZOrbit <version> has quit`. This is normal, and nothing needs doing. A browser window of the old version stays open until you close it. On Studio's **Status** screen, **Restart app** does the same job when the app running is older than Studio. See [Profiles](profiles.md#older-versions).
@@ -65,9 +69,7 @@ When the app knows why a pick went nowhere, it shows a short message near the cu
 
 - **No plugin listener in ZBrush (bridge mode is Message). Check Zplugin > ZOrbit > Status.** The bridge mode is `message` and the app found no live listener in that ZBrush. Start ZBrush, or load the plugin.
 - **The plugin did not answer (bridge mode is Message). Check Zplugin > ZOrbit > Status.** The listener was there, but did not pick the request up within half a second, and in `message` mode the app never presses the bridge key instead.
-- **The plugin did not answer, and no bridge key is set. Choose one in Studio.** The same, in `auto` mode: the listener did not pick the request up and there is no bridge key to fall back on. Set one under **Settings > ZBrush bridge**.
 - **ZBrush was not the front window, nothing sent**. The pick needed the bridge key, and the key is only pressed while ZBrush is in front. Do not click another program right after you pick.
-- **No bridge key is set. Choose one in Studio under Settings > ZBrush bridge.** The pick needed the bridge key and none is set.
 - **This slot is empty**. You picked an auto slot nothing has filled yet, or a tag slot whose tag has no items.
 - **That menu has nothing usable in it**. You picked a submenu whose items are all empty or unusable.
 - **A name followed by "could not be found in ZBrush"** or **"is not a ZBrush button"**, or **ZBrush could not carry out that pick. See bridge.log.** The plugin picked the request up and reported a problem: the brush, alpha, material or texture is not installed, the `press`, `set` or `toggle` path does not exist, or ZBrush raised an error. `bridge.log` has the details (see [The pick is logged as selected, but nothing changes](#the-pick-is-logged-as-selected-but-nothing-changes)).
@@ -78,7 +80,7 @@ On Studio's **Status** screen, the **Bridge listener** card should say **Connect
 
 ### ZBrush 2022 to 2025: the ring opens, but picks do nothing
 
-Picks there only arrive through the bridge key. Hover **Zplugin > ZOrbit > Apply** in that ZBrush: its hotkey should match the bridge key in Studio (F9 unless you changed it). The plugin binds F9 itself when **Apply** has no hotkey, but only once it is up to date, so update it if **Setup** step 1 (or **Settings > Older ZBrush** in Full mode) says **Update available**. For any other key, check that it is bound to **Apply** and that you clicked **Preferences > Hotkeys > Store**; a binding that was not stored is gone after a restart. If the palette is missing, install the plugin again from **Studio > Setup** step 1 and restart that ZBrush. `zscript_bridge.log` shows what the last pick did.
+Picks there only arrive through the bridge key. Hover **Zplugin > ZOrbit > Apply** in that ZBrush: its hotkey should match the bridge key in Studio (F9 unless you changed it). The plugin binds F9 itself when **Apply** has no hotkey, but only once it is up to date, so update it if **Setup** step 1 (or **Settings > Older ZBrush** in Full mode) says **Plugin update available**. For any other key, check that it is bound to **Apply** and that you clicked **Preferences > Hotkeys > Store**; a binding that was not stored is gone after a restart. If the palette is missing, install the plugin again from **Studio > Setup** step 1 and restart that ZBrush. `zscript_bridge.log` shows what the last pick did.
 
 Messages Studio can give when you install the plugin:
 
@@ -132,6 +134,8 @@ Click the search box once. If you have to do that every time, send `popout.log` 
 ### A pick in the browser does nothing
 
 After a pick, read the toast. A toast that says **Sent X to ZBrush** (X is the item's name) means the app took the pick, and `bridge.log` says what ZBrush did with it. **ZOrbit is not running. It starts and stops with ZBrush.** (followed by "Start ZBrush, or press Start app on Studio's Status screen.") means the browser found no app window: start ZBrush, and the app starts with it, or press **Start app** on Studio's **Status** screen. **ZOrbit did not answer. Try again in a moment.** means the app's window exists but did not answer within half a second. `popout.log` has a line `pick ... app window ..., result ...` for each pick.
+
+**ZOrbit did not take that brush. Is it up to date?** (or that alpha, material or texture) means the app answered and refused the pick. An app older than the browser can do that, so quit it from the tray and start it again, or update it. **Could not reach ZOrbit:** and a reason means the call failed inside the browser window, before the pick got to the app. Close the browser and open it again.
 
 In `radiald.log`, look for `pick from browser`. If it says the pick was dropped because ZBrush did not get the focus back in 2 s, you are in ZBrush 2022 to 2025, which can only take a pick through the bridge key while ZBrush is the front window: do not click another program right after you pick. Check that the app is running on the Status screen if the toast says it is not.
 
@@ -200,6 +204,10 @@ ZOrbit changed how it keeps the profiles folder, and wrote a number to `profiles
 Install the version the message names, or a newer one, and start ZOrbit again. The files are not changed in the meantime.
 
 If a newer ZOrbit changes the files while an older one is already running, that app stops saving usage and switching profiles. Its tray tooltip says your files were changed by a newer ZOrbit.
+
+### The app exits with "cannot create the first profile"
+
+If `radiald.log` ends with `fatal: cannot create the first profile in ...`, the app could not write to its profiles folder and stopped. The line names the folder and gives the Windows error. Check that the folder can be written to, then start the app again.
 
 ### Checking a file from a source checkout
 

@@ -23,11 +23,11 @@ In Full mode the groups on the Look screen fold. **Slots** starts open, and a cl
 | `animation` (**Open animation**) | `smooth` | see [Opening](#opening) | The open animation. |
 | `labels` (**Labels**: **Icon and name**, **Icon only**) | `name` | `name`, `none` | Show names under the slots, or icons only. A name sits on a soft pill (dark in the Dark theme, light in the Light theme), so it stays readable when a neighbouring slot is close. |
 | `label_color` (**Label colour**) | `text` | a theme colour or `#rrggbb` | The colour of the names under the slots. The pill behind them follows the theme. |
-| `glow_color` (**Glow colour**) | `""` | a theme colour, `#rrggbb` or `""` | The colour of the soft light around a slot and of its rim when the pointer is on it. `""` is **Automatic**: the slot's tag colour when it has one, else the accent (the highlight for a submenu slot). |
+| `glow_color` (**Glow colour**) | `""` | a theme colour, `#rrggbb` or `""` | The colour of the soft light around a slot and of its rim when the pointer is on it. `""` is **Automatic**: the slot's tag colour when it has one, else the accent (the highlight for a submenu slot). A slot with a tag colour keeps that colour even when you set one here; only `glow_color` in its own slot style changes it. |
 | `glow_opacity` (**Glow strength**) | 0.55 | 0 to 1 | How strong that light is. Studio shows it as a percentage. |
 | `slot_shape` (**Slot shape**) | `circle` | `circle`, `rounded`, `squircle`, `hexagon`, `octagon`, `diamond` | The shape of every slot. See [Slot shapes](#slot-shapes). |
 | `slot_corner` (**Corner roundness**) | 0.28 | 0 to 0.5 | How round the corners of a `rounded` slot are, as a share of its side. It changes nothing for the other shapes. Studio shows it as a percentage. |
-| `border_width` (**Rim width**) | 2 | 0 to 6 | The width of the outline of each slot, in pixels. 0 draws no rim. The tag-coloured rim of a tinted slot is one pixel wider. |
+| `border_width` (**Rim width**) | 2 | 0 to 6 | The width of the outline of each slot, in pixels. 0 draws no rim until the pointer is on the slot, which then gets a 2 pixel rim. The tag-coloured rim of a tinted slot is one pixel wider. |
 | `icon_scale` (**Icon size**) | 1 | 0.5 to 1 | How much of the slot the icon fills. Studio shows it as a percentage. |
 | `flick` (**Flick to pick**) | `true` | `true`, `false` | Moving out past a slot picks it without releasing or clicking. |
 | `hover_submenus` (**Open submenus on hover**) | `true` | `true`, `false` | Reaching a submenu slot opens the submenu, centred on that slot. |
@@ -62,7 +62,7 @@ A look is a named group of look settings: the shape of the slots, the hub, the g
 | **Crystal** (`crystal`) | Hexagons with a bright glow in the highlight colour and a highlight ring in the middle. |
 | **Circuit** (`circuit`) | Octagons with a thin rim, labels in the highlight colour, a glow in the lines colour and a ring in the middle. |
 | **Diamonds** (`diamonds`) | Diamond slots with small icons and a disc in the middle. |
-| **Minimal** (`minimal`) | No rim, a faint glow and a tiny dot with no glow. |
+| **Minimal** (`minimal`) | No rim until the pointer is on a slot, a faint glow and a tiny dot with no glow. |
 
 The built-in looks change the style only. They never set the size of the ring, the five [colours](#colours) or the tag colours, and they use theme colours, so they follow the [theme](#theme) and any colours you set.
 
@@ -84,7 +84,7 @@ Each level is laid over the one before it, and a later layer wins. From the bott
 
 A key that a layer leaves out is taken from the layer below. The five `colors` are merged one colour at a time, so a look that sets only `accent` keeps the other four. The ring's behaviour settings (`tap_ms`, `timeout_s`, `flick`, `hover_submenus`, `hint`, `tag_limit` and `animation`) are not part of a look; `animation` can still be set for one menu on its own, as it always could.
 
-Your own looks are saved under `looks` in `radial.json`, each with a name of 1 to 32 letters, digits, spaces, `-` or `_`. A name cannot be one of the built-in looks, and two looks cannot differ only in their capitals. A look holds look keys and cannot name another look.
+Your own looks are saved under `looks` in `radial.json`, each with a name of 1 to 32 letters, digits, spaces, `-` or `_`. It cannot start or end with a space or `-`. A name cannot be one of the built-in looks, and two looks cannot differ only in their capitals. A look holds look keys and cannot name another look.
 
 ```json
 "looks": {
@@ -282,7 +282,7 @@ The hotkey that opens the [browser window](browser.md) and, pressed over it, han
 
 ## Opening
 
-The open animation is set on the **Look** screen, in the **Opening** group (see [The Look screen](studio.md#the-look-screen)). Pick a tile and it plays on the preview; **Play** plays it again. You can also set `ring.animation` in `radial.json`. Closing is always instant, so a pick never waits for an animation.
+The open animation is set on the **Look** screen, in the **Opening** group (see [The Look screen](studio.md#the-look-screen)). Pick a tile and it plays on the preview; **Play** (**Replay** once it has played) plays it again. You can also set `ring.animation` in `radial.json`. Closing is always instant, so a pick never waits for an animation.
 
 ![The Opening group on the Look screen: the Play button and a tile for each of the twelve open animations, with Smooth chosen](images/look-opening.png)
 
