@@ -404,17 +404,20 @@ function hkNorm(s) {
   const mods = parts.map(p => (p === 'control' ? 'ctrl' : p)).sort();
   return [...mods, key].join('+');
 }
-/* Who else uses a hotkey: a menu id, BROWSER for browser.hotkey, or null. exceptId is the menu (or BROWSER) being edited. */
+/* Who else uses a hotkey: a menu id, BROWSER for browser.hotkey, PROFILE for profile.next_hotkey, or null. exceptId is the menu (or BROWSER, PROFILE) being edited. */
 const BROWSER = ':browser';                     // not a valid menu id (':' is rejected), so it never collides with one
+const PROFILE = ':profile';                     // the same, for profile.next_hotkey
 function hotkeyOwner(str, exceptId) {
   const n = hkNorm(str);
   if (!n) return null;
   for (const [id, m] of Object.entries(S.cfg.menus)) if (id !== exceptId && hkNorm(m.hotkey) === n) return id;
   const b = S.cfg.browser;
   if (exceptId !== BROWSER && b && typeof b === 'object' && hkNorm(b.hotkey) === n) return BROWSER;
+  const p = S.cfg.profile;
+  if (exceptId !== PROFILE && p && typeof p === 'object' && hkNorm(p.next_hotkey) === n) return PROFILE;
   return null;
 }
-const ownerName = id => (id === BROWSER ? 'the browser' : '“' + (menuOf(id).title || id) + '”');
+const ownerName = id => (id === BROWSER ? 'the browser' : id === PROFILE ? 'the next-profile hotkey' : '“' + (menuOf(id).title || id) + '”');
 function hkChips(str, cls = '') {
   const w = h('span', { class: 'hk ' + cls });
   String(str).split(/\+(?=.)/).forEach(p => w.append(h('kbd', null, p)));
@@ -1204,7 +1207,7 @@ function undoToast(msg, o = {}) {
   } } }));
 }
 /* What the Settings screen draws from the config: when this is the same before and after an undo, Settings is left alone (and keeps focus). */
-const settingsSig = () => JSON.stringify([S.cfg.ring, S.cfg.bridge, S.cfg.browser, S.menuId]);
+const settingsSig = () => JSON.stringify([S.cfg.ring, S.cfg.bridge, S.cfg.browser, S.cfg.profile, S.menuId]);
 function applySnap(e) {
   const sigBefore = R.settings ? settingsSig() : '', lookBefore = R.look ? lookSig() : '';
   S.cfg = JSON.parse(e.cfg);
@@ -2602,6 +2605,7 @@ function buildMenuProps() {
   // The file order decides: of two menus with one hotkey, the first opens (and any menu beats the browser).
   const clash = owner => {
     if (owner === BROWSER) return 'Also used by the browser, which will not open with it.';
+    if (owner === PROFILE) return 'Also used by the next-profile hotkey, which will not step profiles with it.';
     const ids = Object.keys(S.cfg.menus);
     return ids.indexOf(owner) < ids.indexOf(id) ? `Also used by ${ownerName(owner)}, which comes first and wins; this menu will not open with it.` : `Also used by ${ownerName(owner)}, which will not open with it.`;
   };
@@ -4251,13 +4255,28 @@ function buildSettingsScreen(root) {
     /* --- browser (browser.hotkey; the object is dropped again when it ends up empty) */
     const browserObj = () => { if (!S.cfg.browser || typeof S.cfg.browser !== 'object') S.cfg.browser = {}; return S.cfg.browser; };
     const bOwner = hotkey => (hotkey ? hotkeyOwner(hotkey, BROWSER) : null);
-    const bsay = owner => (owner ? `Also used by ${ownerName(owner)}. That menu wins, so this hotkey will not open the browser.` : '');
+    const bsay = owner => (owner === PROFILE ? 'Also used by the next-profile hotkey. The browser keeps this key, so that hotkey will not step profiles.'
+      : owner ? `Also used by ${ownerName(owner)}. That menu wins, so this hotkey will not open the browser.` : '');
     const bhk = hotkeyField({ what: 'Browser hotkey', value: (S.cfg.browser && typeof S.cfg.browser === 'object' && S.cfg.browser.hotkey) || '', placeholder: 'No hotkey', onChange: str => {
       const b = browserObj();
       if (str) b.hotkey = str; else delete b.hotkey;
       if (!Object.keys(b).length) delete S.cfg.browser;
       const owner = bOwner(str);
       bhk.say(bsay(owner), 'warn');
+      commit();
+    } });
+
+    /* --- next profile (profile.next_hotkey; the object is dropped again when it ends up empty; Full only, see the card below) */
+    const profileObj = () => { if (!S.cfg.profile || typeof S.cfg.profile !== 'object') S.cfg.profile = {}; return S.cfg.profile; };
+    const pOwner = hotkey => (hotkey ? hotkeyOwner(hotkey, PROFILE) : null);
+    const psay = owner => (owner === BROWSER ? 'Also used by the browser. The browser wins, so this hotkey will not step profiles.'
+      : owner ? `Also used by ${ownerName(owner)}. That menu wins, so this hotkey will not step profiles.` : '');
+    const phk = hotkeyField({ what: 'Next profile hotkey', value: (S.cfg.profile && typeof S.cfg.profile === 'object' && S.cfg.profile.next_hotkey) || '', placeholder: 'No hotkey', onChange: str => {
+      const p = profileObj();
+      if (str) p.next_hotkey = str; else delete p.next_hotkey;
+      if (!Object.keys(p).length) delete S.cfg.profile;
+      const owner = pOwner(str);
+      phk.say(psay(owner), 'warn');
       commit();
     } });
 
@@ -4271,8 +4290,11 @@ function buildSettingsScreen(root) {
         sliderRow({ label: 'Tag fan slots', hint: 'How many slots a tag fan holds. A tag with more items than that ends in a More slot that opens the browser on the tag.', key: 'tag_limit', unit: ' ' }),   // a blank unit keeps the number box in line with the sliders around it
         sliderRow({ label: 'Auto-close', hint: 'An open ring closes by itself after this long.', key: 'timeout_s', unit: 's' })] : []),
       h('div', { class: 'srow' }, h('div', { class: 'slabel' }, h('span', null, 'Browser hotkey'), h('small', null, 'Shows the browser; pressed over it, it gives ZBrush the keyboard back. The browser also opens from a Browser slot, the Browser button at the top and the tray menu.')),
-        h('div', { class: 'sctl' }, bhk))));
+        h('div', { class: 'sctl' }, bhk)),
+      ...(full ? [h('div', { class: 'srow' }, h('div', { class: 'slabel' }, h('span', null, 'Next profile hotkey'), h('small', null, 'Steps to the next profile while ZBrush is in front. Each profile has its own; a new profile copies it from the one in use.')),
+        h('div', { class: 'sctl' }, phk))] : [])));
     { const o0 = bOwner(S.cfg.browser && S.cfg.browser.hotkey); if (o0) bhk.say(bsay(o0), 'warn'); }
+    { const o1 = pOwner(S.cfg.profile && S.cfg.profile.next_hotkey); if (o1) phk.say(psay(o1), 'warn'); }
 
     /* --- studio (preferences of this window, saved immediately, not part of the menus file) */
     const updNote = h('div', { class: 'fhint upd-status', role: 'status' });
@@ -5141,6 +5163,12 @@ function describeProblem(raw) {
   if ((m = /^browser\.hotkey (.+) already used by menu (.+)$/s.exec(raw))) return out(`The browser hotkey ${unq(m[1])} is also used by ${titleOf(m[2])}; that menu wins, so the browser will not open with it`, browserCard);
   if ((m = /^browser\.(\w+): unknown setting(.*)$/s.exec(raw))) return out(`The browser setting “${m[1]}” is not known.` + didYouMean(m[2]), browserCard);
   if (raw.startsWith('browser: ')) return out('The browser settings are not valid: ' + raw.slice('browser: '.length), browserCard);
+  const profileCard = { kind: 'settings', card: 'set-behaviour', fk: 'hk:Next profile hotkey' };   // the recorder is the last row of the card, so it is focused too
+  if ((m = /^profile\.next_hotkey (.+) not understood$/s.exec(raw))) return out(`The next-profile hotkey ${unq(m[1])} is not understood`, profileCard);
+  if ((m = /^profile\.next_hotkey (.+) already used by menu (.+)$/s.exec(raw))) return out(`The next-profile hotkey ${unq(m[1])} is also used by ${titleOf(m[2])}; that menu wins, so the next-profile hotkey will not step profiles`, profileCard);
+  if ((m = /^profile\.next_hotkey (.+) already used by browser\.hotkey$/s.exec(raw))) return out(`The next-profile hotkey ${unq(m[1])} is also used by the browser; the browser wins, so the next-profile hotkey will not step profiles`, profileCard);
+  if ((m = /^profile\.(\w+): unknown setting(.*)$/s.exec(raw))) return out(`The profile setting “${m[1]}” is not known.` + didYouMean(m[2]), profileCard);
+  if (raw.startsWith('profile: ')) return out('The profile settings are not valid: ' + raw.slice('profile: '.length), profileCard);
   if ((m = /^tags\.json could not be read: (.*); tag slots stay empty until it is fixed$/s.exec(raw))) return out(`The tags file could not be read (${m[1]}). Tag slots stay empty until it is fixed`, null);
   if (raw.startsWith('config could not be read: ')) return out('The menus could not be checked: ' + raw.slice('config could not be read: '.length), null);
   if (raw.startsWith('menus: must be a non-empty object')) return out('There are no menus yet; add one', { kind: 'screen', screen: 'menus' });
@@ -5275,7 +5303,7 @@ const newProblems = (before, after) => { const had = new Set(before.map(String))
    problems and carries on, but the screens would throw on them. */
 function normaliseMenus(cfg) {
   if (!cfg.menus || typeof cfg.menus !== 'object' || Array.isArray(cfg.menus)) cfg.menus = {};   // an array would lose menus on save
-  for (const sec of ['ring', 'bridge', 'browser']) {        // a hand-edited "ring": "big": the loader uses the defaults, and so does Studio
+  for (const sec of ['ring', 'bridge', 'browser', 'profile']) {        // a hand-edited "ring": "big": the loader uses the defaults, and so does Studio
     const v = cfg[sec];
     if (v !== undefined && (!v || typeof v !== 'object' || Array.isArray(v))) delete cfg[sec];
   }
@@ -5896,7 +5924,9 @@ function describeChanges() {
   if (bridgeLines.length) groups.push({ area: 'ZBrush bridge', lines: bridgeLines });
   const bwb = before.browser || {}, bwa = after.browser || {};
   if ((bwb.hotkey || '') !== (bwa.hotkey || '')) groups.push({ area: 'Browser', lines: ['Hotkey: ' + (bwb.hotkey || 'none') + ' → ' + (bwa.hotkey || 'none')] });
-  const known = new Set(['menus', 'ring', 'looks', 'bridge', 'browser']);
+  const pfb = before.profile || {}, pfa = after.profile || {};
+  if ((pfb.next_hotkey || '') !== (pfa.next_hotkey || '')) groups.push({ area: 'Profile', lines: ['Next profile hotkey: ' + (pfb.next_hotkey || 'none') + ' → ' + (pfa.next_hotkey || 'none')] });
+  const known = new Set(['menus', 'ring', 'looks', 'bridge', 'browser', 'profile']);
   const other = [...new Set([...Object.keys(before), ...Object.keys(after)])].filter(k => !known.has(k) && JSON.stringify(before[k]) !== JSON.stringify(after[k]));
   if (other.length) groups.push({ area: 'Other', lines: other.map(k => 'Changed ' + k) });
   return groups;

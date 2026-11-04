@@ -164,6 +164,190 @@ def test_the_main_thread_lets_go_of_a_key_through_the_hook_thread(app):
     assert app._browser_vk is None
 
 
+# --- the next-profile hotkey --------------------------------------------------------------------------------------
+P = ord("P")
+ALT_P = (P, False, True, False)
+
+
+@pytest.fixture
+def pkey(app, monkeypatch):
+    """The app with Alt+P as its next-profile hotkey, and Alt held down."""
+    app._hook_state = radiald.HookState(app._hook_state.slots, None, ALT_P)
+    monkeypatch.setattr(W, "modifier_down", lambda vk: vk == W.VK_MENU)
+    return app
+
+
+def test_the_message_numbers_are_all_different():
+    names = [n for n in dir(radiald) if n.startswith(("WM_APP_", "WM_HOOK_"))]
+    values = [getattr(radiald, n) for n in names]
+    assert len(set(values)) == len(values) and "WM_APP_PROFILE" in names and "WM_HOOK_RELEASE_PROFILE" in names
+
+
+def test_hook_state_carries_the_profile_key():
+    state = radiald.HookState.build([], None, config.Hotkey(P, alt=True))
+    assert state.profile == ALT_P
+    assert radiald.HookState.build([], None).profile is None
+    assert radiald.HookState.build([], None, None) == radiald.HookState((), None, None)
+
+
+def test_load_config_hands_the_hook_the_profile_key(tmp_path, monkeypatch):
+    path = tmp_path / "radial.json"
+    raw = {"menus": {"a": {"title": "A", "hotkey": "Q", "items": [{"brush": "Standard"}]}},
+           "profile": {"next_hotkey": "Alt+P"}}
+    path.write_text(json.dumps(raw), encoding="utf-8")
+    monkeypatch.setenv("ZORBIT_TAGS_FILE", str(tmp_path / "tags.json"))
+    a = radiald.App(str(path))
+    monkeypatch.setattr(a, "_prefetch", lambda: None)
+    monkeypatch.setattr(a, "_schedule_prewarm", lambda: None)
+    a.load_config(force=True)
+    assert a._hook_state.profile == ALT_P
+    del raw["profile"]
+    path.write_text(json.dumps(raw), encoding="utf-8")
+    a.load_config(force=True)
+    assert a._hook_state.profile is None
+
+
+def test_no_profile_key_means_no_key_is_taken(app):
+    assert app._hook_state.profile is None
+    assert app._on_key(W.WM_KEYDOWN, key(P)) is False
+    assert app.posted == []
+
+
+def test_the_profile_key_is_swallowed_and_posts_once(pkey):
+    assert pkey._on_key(W.WM_KEYDOWN, key(P)) is True
+    assert pkey.posted == [radiald.WM_APP_MASK, radiald.WM_APP_PROFILE]     # the Alt mask, then the switch
+    assert pkey._profile_vk == P
+    assert pkey.held_vk is None and pkey._browser_vk is None
+
+
+def test_the_profile_key_without_alt_does_not_post_a_mask(app, monkeypatch):
+    app._hook_state = radiald.HookState((), None, (P, True, False, False))
+    monkeypatch.setattr(W, "modifier_down", lambda vk: vk == W.VK_CONTROL)
+    assert app._on_key(W.WM_KEYDOWN, key(P)) is True
+    assert app.posted == [radiald.WM_APP_PROFILE]
+
+
+@pytest.mark.parametrize("mods", [set(), {W.VK_MENU, W.VK_SHIFT}, {W.VK_CONTROL, W.VK_MENU}])
+def test_the_profile_key_needs_exactly_its_modifiers(pkey, monkeypatch, mods):
+    monkeypatch.setattr(W, "modifier_down", lambda vk: vk in mods)
+    assert pkey._on_key(W.WM_KEYDOWN, key(P)) is False
+    assert pkey.posted == [] and pkey._profile_vk is None
+
+
+def test_the_profile_key_is_ignored_when_zbrush_is_not_in_front(pkey, monkeypatch):
+    monkeypatch.setattr(pkey, "target_in_front", lambda on_hook=False: False)
+    assert pkey._on_key(W.WM_KEYDOWN, key(P)) is False
+    assert pkey.posted == [] and pkey._profile_vk is None
+
+
+def test_the_profile_key_is_ignored_in_a_dialog_or_text_box(pkey, monkeypatch):
+    monkeypatch.setattr(W, "class_name", lambda hwnd: radiald.DIALOG_CLASS)
+    assert pkey._on_key(W.WM_KEYDOWN, key(P)) is False
+    monkeypatch.setattr(W, "class_name", lambda hwnd: "Edit" if hwnd == 7 else "Plain")
+    monkeypatch.setattr(W, "focus_window", lambda hwnd: 7)
+    assert pkey._on_key(W.WM_KEYDOWN, key(P)) is False
+    assert pkey.posted == [] and pkey._profile_vk is None
+
+
+def test_the_popout_being_in_front_does_not_count_for_the_profile_key(pkey, monkeypatch):
+    monkeypatch.setattr(pkey, "target_in_front", lambda on_hook=False: False)
+    monkeypatch.setattr(pkey, "_popout_in_front", lambda: True)
+    assert pkey._on_key(W.WM_KEYDOWN, key(P)) is False
+    assert pkey.posted == []
+
+
+def test_holding_the_profile_key_switches_once(pkey):
+    assert pkey._on_key(W.WM_KEYDOWN, key(P)) is True
+    pkey.posted.clear()
+    for _ in range(5):                                          # auto-repeat
+        assert pkey._on_key(W.WM_KEYDOWN, key(P)) is True
+    assert pkey.posted == []
+    assert pkey._on_key(W.WM_KEYUP, key(P)) is True              # the key-up is ours too
+    assert pkey._profile_vk is None
+    assert pkey._on_key(W.WM_KEYDOWN, key(P)) is True            # and a new press switches again
+    assert pkey.posted == [radiald.WM_APP_MASK, radiald.WM_APP_PROFILE]
+
+
+def test_the_repeats_stay_ours_when_alt_is_let_go_first(pkey, monkeypatch):
+    pkey._on_key(W.WM_KEYDOWN, key(P))
+    pkey.posted.clear()
+    monkeypatch.setattr(W, "modifier_down", lambda vk: False)
+    assert pkey._on_key(W.WM_KEYDOWN, key(P)) is True
+    assert pkey._on_key(W.WM_SYSKEYUP, key(P)) is True
+    assert pkey.posted == [] and pkey._profile_vk is None
+
+
+@pytest.mark.parametrize("after", [None, ALT_P, (P, False, False, False), (ord("O"), False, True, False)],
+                         ids=["no key", "same key", "key without Alt", "another key"])
+def test_a_config_swap_while_the_key_is_held_cannot_leave_it_stuck(pkey, after):
+    pkey._on_key(W.WM_KEYDOWN, key(P))                           # the switch: load_config then swaps the snapshot
+    pkey.posted.clear()
+    pkey._hook_state = radiald.HookState(pkey._hook_state.slots, None, after)
+    assert pkey._on_key(W.WM_KEYDOWN, key(P)) is True            # the repeats still belong to the press that switched
+    assert pkey.posted == []
+    assert pkey._on_key(W.WM_KEYUP, key(P)) is True
+    assert pkey._profile_vk is None
+    pkey.posted.clear()
+    assert pkey._on_key(W.WM_KEYDOWN, key(P)) is (after == ALT_P)       # afterwards the new snapshot rules
+    assert pkey.posted == ([radiald.WM_APP_MASK, radiald.WM_APP_PROFILE] if after == ALT_P else [])
+
+
+def test_a_swap_to_a_menu_on_the_same_key_does_not_open_it_from_the_repeats(pkey):
+    pkey._on_key(W.WM_KEYDOWN, key(P))
+    pkey.posted.clear()
+    pkey._hook_state = radiald.HookState(((P, False, True, False, True, 0),), None, None)
+    assert pkey._on_key(W.WM_KEYDOWN, key(P)) is True
+    assert pkey.posted == [] and pkey.held_vk is None
+    pkey._on_key(W.WM_KEYUP, key(P))
+    assert pkey._on_key(W.WM_KEYDOWN, key(P)) is True             # a new press is the menu's
+    assert pkey.posted == [radiald.WM_APP_OPEN, radiald.WM_APP_MASK] and pkey.held_vk == P
+
+
+def test_the_profile_key_does_not_disturb_a_ring_held_on_another_key(pkey):
+    pkey._hook_state = radiald.HookState(((Q, False, True, False, False, 0),), None, ALT_P)
+    pkey._on_key(W.WM_KEYDOWN, key(Q))
+    assert pkey.held_vk == Q
+    pkey.posted.clear()
+    pkey._on_key(W.WM_KEYDOWN, key(P))
+    assert pkey.held_vk == Q and pkey._profile_vk == P
+    pkey._on_key(W.WM_KEYUP, key(P))
+    assert pkey.held_vk == Q and pkey._profile_vk is None
+    assert pkey.posted == [radiald.WM_APP_MASK, radiald.WM_APP_PROFILE]
+
+
+def test_the_menu_key_wins_the_hook_even_if_a_stale_snapshot_has_both(pkey):
+    pkey._hook_state = radiald.HookState(((P, False, True, False, True, 0),), None, ALT_P)
+    pkey._on_key(W.WM_KEYDOWN, key(P))
+    assert radiald.WM_APP_OPEN in pkey.posted and radiald.WM_APP_PROFILE not in pkey.posted
+
+
+def test_the_main_thread_lets_go_of_the_profile_key_through_the_hook_thread(app):
+    app._profile_vk = P
+    app._on_hook_command(radiald.WM_HOOK_RELEASE_PROFILE, ord("S"), 0)      # not the key that was stuck
+    assert app._profile_vk == P
+    app._on_hook_command(radiald.WM_HOOK_RELEASE_PROFILE, P, 0)
+    assert app._profile_vk is None
+
+
+def test_a_profile_key_the_hook_never_saw_go_up_is_let_go_after_a_while(app, monkeypatch):
+    clock = [1000.0]
+    monkeypatch.setattr(radiald.time, "monotonic", lambda: clock[0])
+    monkeypatch.setattr(radiald, "log", lambda text: None)
+    sent = []
+    monkeypatch.setattr(app, "_hook_post", lambda msg, wparam=0: sent.append((msg, wparam)))
+    app._profile_vk = P
+    app._check_stuck_keys()
+    clock[0] += radiald.STUCK_KEY_S - 1
+    app._check_stuck_keys()
+    assert sent == []
+    clock[0] += 1
+    app._check_stuck_keys()
+    assert sent == [(radiald.WM_HOOK_RELEASE_PROFILE, P)]
+    app._profile_vk = None                                       # it came up after all: the timer starts over
+    app._check_stuck_keys()
+    assert "profile" not in app._stuck
+
+
 # --- the hook thread, with no real hook installed ----------------------------------------------------------------
 @pytest.fixture
 def fake_hook(monkeypatch):

@@ -416,6 +416,49 @@ def test_a_profile_switch_closes_the_ring_so_it_can_happen(three):
     assert closed == ["command"]
 
 
+def hotkey_message(a):
+    """What the control window does when the hook posts the next-profile hotkey."""
+    return a._ctrl_proc(1, radiald.WM_APP_PROFILE, 0, 0)
+
+
+def test_the_profile_hotkey_does_what_profile_next_does(three):
+    hotkey_message(three)
+    assert three.made == ["Gamma"] and three.toasts == ["Profile: Gamma"]
+    three.profile = "Gamma"
+    hotkey_message(three)
+    assert three.made == ["Gamma", "Alpha"]               # round the end of the list
+
+
+def test_the_profile_hotkey_shares_the_code_of_the_command(three, monkeypatch):
+    named = []
+    monkeypatch.setattr(three, "_command_profile", named.append)
+    hotkey_message(three)
+    assert named == ["next"]
+
+
+def test_the_profile_hotkey_closes_an_open_ring(three):
+    closed = []
+    three.ring = type("R", (), {"cancel": lambda self, why: closed.append(why)})()
+    hotkey_message(three)
+    assert closed == ["command"] and three.made == ["Gamma"]
+
+
+def test_the_profile_hotkey_says_why_not_on_a_pinned_menus_file_or_newer_files(three):
+    three._pinned = True
+    hotkey_message(three)
+    three._pinned, three._frozen = False, True
+    hotkey_message(three)
+    assert three.made == [] and three.toasts == [radiald.MSG_COMMAND_PINNED, radiald.MSG_COMMAND_FROZEN]
+
+
+def test_a_refused_profile_hotkey_does_not_touch_the_ring(three):
+    closed = []
+    three.ring = type("R", (), {"cancel": lambda self, why: closed.append(why)})()
+    three._pinned = True
+    hotkey_message(three)
+    assert closed == [] and three.made == []
+
+
 def test_each_command_gets_a_line_in_the_log(app, monkeypatch):
     lines = []
     monkeypatch.setattr(radiald, "log", lines.append)

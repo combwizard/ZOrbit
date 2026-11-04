@@ -72,7 +72,7 @@ When the app knows why a pick went nowhere, it shows a short message near the cu
 - **ZBrush was not the front window, nothing sent**. The pick needed the bridge key, and the key is only pressed while ZBrush is in front. Do not click another program right after you pick. A [command from another program](hotkeys.md#commands-from-other-programs) gets it too, when ZBrush is not in front and no listener can take the pick.
 - **A dialog or text box has the focus, nothing sent**. A command from another program was refused, because a native Windows dialog is in front or a Windows text box has the focus. A hotkey would be ignored there too.
 - **There is no menu called**, **There is no tag called** or **There is no profile called**, followed by a name. A command from another program named something that does not exist. A menu's name here is its id in `radial.json`, and a tag's is its key.
-- **This ZOrbit runs on one menus file, so it has no profiles**, or **Your files were changed by a newer ZOrbit, so the profile stays**. A `--profile` command was refused.
+- **This ZOrbit runs on one menus file, so it has no profiles**, or **Your files were changed by a newer ZOrbit, so the profile stays**. A `--profile` command or the next-profile hotkey was refused.
 - **ZOrbit has no menus loaded**. A command from another program arrived before ZOrbit had read a menus file.
 - **This slot is empty**. You picked an auto slot nothing has filled yet, or a tag slot whose tag has no items.
 - **That menu has nothing usable in it**. You picked a submenu whose items are all empty or unusable.

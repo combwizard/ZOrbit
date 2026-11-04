@@ -1138,6 +1138,22 @@ def test_set_aside_leaves_a_file_it_cannot_move(migrated, monkeypatch):
     assert aside_folders(cfg_dir) == [os.path.basename(folder)]
 
 
+def test_create_takes_the_profile_hotkey_from_this_pc_and_not_from_another(active_profile):
+    cfg_dir, folder = active_profile
+    mine = dict(ACTIVE_RAW, profile={"next_hotkey": "Alt+P"})
+    put(folder / "radial.json", json.dumps(mine))
+    assert profiles.create("Fresh", "starter") == "Fresh"
+    assert read(cfg_dir / "profiles" / "Fresh" / "radial.json")["profile"] == {"next_hotkey": "Alt+P"}
+    other = {"profile": {"next_hotkey": "Alt+Z"}, "menus": {"m": {"title": "M", "hotkey": "E", "items": []}}}
+    profiles.create("Shared", "file", {"config": other})
+    assert read(cfg_dir / "profiles" / "Shared" / "radial.json")["profile"] == {"next_hotkey": "Alt+P"}
+
+
+def test_the_profile_hotkey_does_not_change_whether_the_menus_are_the_starter(active_profile):
+    shipped = json.loads(default_bytes())
+    assert profiles.canonical_hash(dict(shipped, profile={"next_hotkey": "Alt+P"})) == profiles.canonical_hash(shipped)
+
+
 # --- create from strays --------------------------------------------------------------------------
 
 

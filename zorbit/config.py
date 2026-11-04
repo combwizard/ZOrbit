@@ -35,6 +35,7 @@ Schema (all keys optional except menus):
                       "lines": "#f86b33"}},
   "looks": {"My look": {"slot_shape": "hexagon", "hub": 14}},    # named looks: any of the look keys of "ring"
   "browser": {"hotkey": "Alt+B"},         # opens the browser popout (tabs per kind, tags, search, folders)
+  "profile": {"next_hotkey": "Alt+P"},    # optional, no default: steps to the next profile (needs ZBrush in front)
   "menus": {
     "<id>": {
       "title": "Brushes",
@@ -111,6 +112,7 @@ _NAMED_VK = {
 MENU_KEYS = ("title", "hotkey", "swallow", "animation", "fan", "look", "icon", "keep_slots", "items")
 BRIDGE_KEYS = ("mode", "key")
 BROWSER_KEYS = ("hotkey",)
+PROFILE_KEYS = ("next_hotkey",)
 ITEM_KEYS = ACTION_KEYS + ("label", "icon", "style", "value", "kind")
 DEFAULT_BRIDGE_KEY = "F9"          # used when radial.json has no usable bridge.key
 VK_F10 = 0x79                       # Windows' menu-bar key: never usable as the bridge key
@@ -160,6 +162,7 @@ class Config:
     bridge_mode: str = "auto"
     bridge_key: Hotkey = field(default_factory=lambda: parse_hotkey(DEFAULT_BRIDGE_KEY))
     browser_key: Hotkey | None = None
+    profile_key: Hotkey | None = None
     ring: dict = field(default_factory=lambda: L.LookSet().global_look())    # the resolved global look
     looks: L.LookSet = field(default_factory=L.LookSet)
     menus: dict = field(default_factory=dict)
@@ -556,6 +559,27 @@ def load(path: str, tags=None, theme: str = "dark") -> Config:
                           f"{used_keys[(hk.vk, hk.ctrl, hk.alt, hk.shift)]}")
         else:
             cfg.browser_key = hk
+    profile = raw.get("profile")
+    if profile is None:
+        profile = {}
+    elif not isinstance(profile, dict):
+        errors.append('profile: must be an object like {"next_hotkey": "Alt+P"}')
+        profile = {}
+    for k in profile:
+        if k not in PROFILE_KEYS:
+            errors.append(f"profile.{k}: unknown setting" + _did_you_mean(k, PROFILE_KEYS))
+    if profile.get("next_hotkey"):
+        hk = parse_hotkey(profile["next_hotkey"])
+        if hk is None:
+            errors.append(f"profile.next_hotkey {profile['next_hotkey']!r} not understood")
+        elif (hk.vk, hk.ctrl, hk.alt, hk.shift) in used_keys:
+            errors.append(f"profile.next_hotkey {profile['next_hotkey']!r} already used by menu "
+                          f"{used_keys[(hk.vk, hk.ctrl, hk.alt, hk.shift)]}")
+        elif cfg.browser_key and (hk.vk, hk.ctrl, hk.alt, hk.shift) == (
+                cfg.browser_key.vk, cfg.browser_key.ctrl, cfg.browser_key.alt, cfg.browser_key.shift):
+            errors.append(f"profile.next_hotkey {profile['next_hotkey']!r} already used by browser.hotkey")
+        else:
+            cfg.profile_key = hk
     if not any(m.hotkey for m in cfg.menus.values()):
         errors.append("no menu has a hotkey, so nothing can open the ring")
     return cfg

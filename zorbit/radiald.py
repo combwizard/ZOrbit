@@ -84,9 +84,11 @@ WM_APP_BROWSER = W.WM_APP + 14        # hook -> control window: the browser hotk
 WM_APP_BROWSER_PICK = W.WM_APP + 15   # control window -> itself: a brush was picked in the popout
 WM_APP_TYPING = W.WM_APP + 16         # hook -> control window: a key was typed while a tapped ring waited for a click
 WM_APP_COMMAND = W.WM_APP + 17        # control window -> itself: run the next command from another program
+WM_APP_PROFILE = W.WM_APP + 18        # hook -> control window: the next-profile hotkey
 WM_HOOK_REHOOK = W.WM_APP + 20        # main thread -> hook thread: install the hook again
 WM_HOOK_RELEASE_HELD = W.WM_APP + 21  # main thread -> hook thread: let go of the held hotkey (wparam = its vk)
 WM_HOOK_RELEASE_BROWSER = W.WM_APP + 22   # ... and of the browser hotkey
+WM_HOOK_RELEASE_PROFILE = W.WM_APP + 23   # ... and of the next-profile hotkey
 HOOK_START_S = 5                      # how long run() waits for the hook thread to install the hook
 HOOK_STOP_S = 2                       # ... and to end it
 ACK_WAIT_S = 0.5                      # a listener pick not picked up in this long falls back to the bridge key
@@ -232,17 +234,20 @@ class HookState:
 
     slots: one (vk, ctrl, alt, shift, swallow, slot) tuple per menu with a hotkey; slot is the index
     WM_APP_OPEN carries (App.slots[slot] is the menu).
-    browser: (vk, ctrl, alt, shift) of the browser hotkey, or None."""
+    browser: (vk, ctrl, alt, shift) of the browser hotkey, or None.
+    profile: the same for the next-profile hotkey, or None."""
     slots: tuple = ()
     browser: tuple | None = None
+    profile: tuple | None = None
 
     @staticmethod
-    def build(menus, browser_key):
-        """menus: the menus with a hotkey, in App.slots order. browser_key: a config.Hotkey or None."""
+    def build(menus, browser_key, profile_key=None):
+        """menus: the menus with a hotkey, in App.slots order. browser_key, profile_key: a config.Hotkey or None."""
         slots = tuple((m.hotkey.vk, m.hotkey.ctrl, m.hotkey.alt, m.hotkey.shift, bool(m.swallow), i)
                       for i, m in enumerate(menus))
         bk = None if browser_key is None else (browser_key.vk, browser_key.ctrl, browser_key.alt, browser_key.shift)
-        return HookState(slots, bk)
+        pk = None if profile_key is None else (profile_key.vk, profile_key.ctrl, profile_key.alt, profile_key.shift)
+        return HookState(slots, bk, pk)
 
 
 class HookThread(threading.Thread):
@@ -361,8 +366,9 @@ class App:
         # Threads. The keyboard hook runs on its own thread (HookThread). Rules that keep the two safe:
         #  * The hook thread reads the config only through self._hook_state, one immutable HookState that
         #    load_config replaces whole.
-        #  * held_vk, held_swallow and _browser_vk are written by the hook thread only (the main thread asks it to
-        #    let go with WM_HOOK_RELEASE_*). The main thread reads them as hints: an attribute read is atomic, and
+        #  * held_vk, held_swallow, _browser_vk and _profile_vk are written by the hook thread only (the main thread
+        #    asks it to let go with WM_HOOK_RELEASE_*). The main thread reads them as hints: an attribute read is
+        #    atomic, and
         #    a value that is a moment stale only delays what the next timer tick would do anyway.
         #  * self.ring is read once into a local by the hook; a cancel posted to a ring that has just closed is
         #    harmless because _ctrl_proc looks at self.ring again.
@@ -387,7 +393,7 @@ class App:
         self._elevated = {}             # pid of a running ZBrush -> True when it looks elevated (checked every 3 s)
         self._token_check = None        # whether process_elevated() can be trusted here (tested on our own process)
         self._listener_skipped = set()  # pids whose mismatch with listener.json was logged
-        self._stuck = {}                # "held" / "browser" -> when the tick first saw that key held with no ring
+        self._stuck = {}                # "held" / "browser" / "profile" -> when the tick first saw it held with no ring
         self._legacy_scan = (0.0, False)    # (when, whether a ZBrush 2022-2025 is installed)
         self._target_misses = 0
         self.usage = usage.Usage(None if cfg_path is not None else profiles.usage_file(self.profile))
@@ -396,6 +402,7 @@ class App:
         self.tags = tags.TagStore(tags_path() if cfg_path is not None else profiles.tags_file(self.profile))
         self.expander = None            # expand.Expander of the current config, tags and usage
         self._browser_vk = None         # the browser hotkey while it is down (its repeats and key-up are ours); hook thread writes
+        self._profile_vk = None         # the same for the next-profile hotkey; hook thread writes
         self._popout_proc = None        # subprocess.Popen of the popout we last started
         self._popout_spawning = False   # a thread is starting it right now
         self._popout_pending = None     # (tag, toggle, kind) to SHOW once a popout started hidden has its window
@@ -451,13 +458,14 @@ class App:
         self._theme_sig = sig
         self.cfg = cfg
         self.expander = expand.Expander(cfg, self.usage, self.tags)
-        self._set_slots([m for m in cfg.menus.values() if m.hotkey], cfg.browser_key)
+        self._set_slots([m for m in cfg.menus.values() if m.hotkey], cfg.browser_key, cfg.profile_key)
         for err in cfg.errors:
             log(f"config: {err}")
         log(f"config loaded: {len(cfg.menus)} menus, theme={eff}, hotkeys: "
             + ", ".join(f"{m.hotkey.text}->{m.id}" for m in self.slots)
             + f"; bridge mode={cfg.bridge_mode} key={cfg.bridge_key.text}"
-            + f"; browser hotkey={cfg.browser_key.text if cfg.browser_key else None}")
+            + f"; browser hotkey={cfg.browser_key.text if cfg.browser_key else None}"
+            + f"; next profile hotkey={cfg.profile_key.text if cfg.profile_key else None}")
         self._prefetch()
         self._prune_icons()
         self._schedule_prewarm()
@@ -529,10 +537,10 @@ class App:
         except Exception:
             log("profile switch failed:\n" + traceback.format_exc())
 
-    def _set_slots(self, menus, browser_key):
+    def _set_slots(self, menus, browser_key, profile_key=None):
         """Sets the menus that have hotkeys and hands the hook thread the matching snapshot in one assignment."""
         self.slots = menus
-        self._hook_state = HookState.build(menus, browser_key)
+        self._hook_state = HookState.build(menus, browser_key, profile_key)
 
     def _menus_problem(self, announce=False, clear=False):
         """Puts a menus file that cannot be read in the tray tooltip while it lasts (clear=True takes it out), and
@@ -730,6 +738,10 @@ class App:
             if up:
                 self._browser_vk = None
             return True                    # the browser key's repeats and key-up: never a ring's key-up
+        if self._profile_vk is not None and vk == self._profile_vk:
+            if up:
+                self._profile_vk = None
+            return True                    # the same for the next-profile key, whatever HookState says by now
         if down and vk == W.VK_ESCAPE and ring is not None:
             W.PostMessageW(self.ctrl, WM_APP_CANCEL, 0, 0)
             return True
@@ -754,19 +766,28 @@ class App:
                     W.PostMessageW(self.ctrl, WM_APP_MASK, 0, 0)
                 W.PostMessageW(self.ctrl, WM_APP_BROWSER, 0, 0)
                 return True
+        if state.profile is not None and state.profile == (vk, ctrl, alt, shift):
+            if self.target_in_front(on_hook=True) and not self._is_text_target(W.GetForegroundWindow()):
+                self._profile_vk = vk
+                if alt:
+                    W.PostMessageW(self.ctrl, WM_APP_MASK, 0, 0)
+                W.PostMessageW(self.ctrl, WM_APP_PROFILE, 0, 0)
+                return True
         if ring is not None and ring.mode == "click":
             W.PostMessageW(self.ctrl, WM_APP_TYPING, 0, 0)     # typing closes a ring that was tapped open
         return False
 
     def _on_hook_command(self, msg, wparam, lparam):
-        """A thread message to the hook thread. This is how the main thread changes held_vk and _browser_vk, so
-        that only the hook thread ever writes them. A key is let go only if it is still the one that was seen
-        stuck: it may have come up, or another one gone down, since."""
+        """A thread message to the hook thread. This is how the main thread changes held_vk, _browser_vk and
+        _profile_vk, so that only the hook thread ever writes them. A key is let go only if it is still the one that
+        was seen stuck: it may have come up, or another one gone down, since."""
         if msg == WM_HOOK_RELEASE_HELD and self.held_vk == wparam:
             self.held_vk = None
             W.PostMessageW(self.ctrl, WM_APP_KEYUP, wparam, 0)
         elif msg == WM_HOOK_RELEASE_BROWSER and self._browser_vk == wparam:
             self._browser_vk = None
+        elif msg == WM_HOOK_RELEASE_PROFILE and self._profile_vk == wparam:
+            self._profile_vk = None
 
     @staticmethod
     def _is_text_target(fg) -> bool:
@@ -782,10 +803,10 @@ class App:
         return self.held_vk is not None and W.key_down(self.held_vk)
 
     def _check_stuck_keys(self):
-        """The hook is what clears held_vk and _browser_vk. If it missed a key-up (Windows dropped it, or another
-        program ate the key) the hotkey would stay dead, so this tick covers for it. A key the hook swallows never
-        shows in GetAsyncKeyState, so those can only be let go after STUCK_KEY_S with no ring open. This only reads
-        the two keys; letting go is a message to the hook thread, which owns them."""
+        """The hook is what clears held_vk, _browser_vk and _profile_vk. If it missed a key-up (Windows dropped it,
+        or another program ate the key) the hotkey would stay dead, so this tick covers for it. A key the hook
+        swallows never shows in GetAsyncKeyState, so those can only be let go after STUCK_KEY_S with no ring open.
+        This only reads the keys; letting go is a message to the hook thread, which owns them."""
         vk = self.held_vk
         if vk is not None and not self.held_swallow and not W.key_down(vk):
             self._stuck["up"] = self._stuck.get("up", 0) + 1     # twice in a row: the key state may lag the hook
@@ -796,7 +817,8 @@ class App:
             self._stuck.pop("up", None)
         now = time.monotonic()
         for name, on in (("held", self.held_vk is not None and self.ring is None),
-                         ("browser", self._browser_vk is not None)):
+                         ("browser", self._browser_vk is not None),
+                         ("profile", self._profile_vk is not None)):
             if not on:
                 self._stuck.pop(name, None)
             elif now - self._stuck.setdefault(name, now) >= STUCK_KEY_S:
@@ -804,8 +826,10 @@ class App:
                 log(f"{name} hotkey still down after {STUCK_KEY_S} s and the hook never saw it go up; released")
                 if name == "held":
                     self._hook_post(WM_HOOK_RELEASE_HELD, self.held_vk or 0)
-                else:
+                elif name == "browser":
                     self._hook_post(WM_HOOK_RELEASE_BROWSER, self._browser_vk or 0)
+                else:
+                    self._hook_post(WM_HOOK_RELEASE_PROFILE, self._profile_vk or 0)
 
     def start_hook(self):
         """Starts the hook thread and waits for it to install the hook. Raises if it cannot."""
@@ -852,6 +876,9 @@ class App:
                 return 0
             if msg == WM_APP_COMMAND:
                 self._run_command()
+                return 0
+            if msg == WM_APP_PROFILE:
+                self._hotkey_profile()
                 return 0
             if msg == W.WM_COPYDATA:
                 return self._on_copydata(wparam, lparam)
@@ -1314,6 +1341,15 @@ class App:
         name = os.path.splitext(os.path.basename(str(path)))[0]
         return C.Item(label=name, kind=item.kind, data={item.kind: name})
 
+    def _hotkey_profile(self):
+        """The next-profile hotkey: what ZOrbit.exe --profile next does, with the same refusals."""
+        why = self._command_refusal({"op": "profile", "name": "next"})[0]
+        if why:
+            log(f"profile hotkey refused: {why}")
+            self._toast(why)
+            return
+        log("profile hotkey: next")
+        self._command_profile("next")
     def _command_profile(self, name):
         names = profiles.names()
         if name == "next" and names:
@@ -1767,7 +1803,8 @@ def check(cfg_path) -> int:
         print(f"profile: {profiles.active()}")
     print(f"{cfg_path}: {len(cfg.menus)} menus, bridge mode={cfg.bridge_mode} "
           f"key={cfg.bridge_key.text}, "
-          f"browser hotkey={cfg.browser_key.text if cfg.browser_key else None}")
+          f"browser hotkey={cfg.browser_key.text if cfg.browser_key else None}, "
+          f"next profile hotkey={cfg.profile_key.text if cfg.profile_key else None}")
     for m in cfg.menus.values():
         print(f"  [{m.id}] '{m.title}' hotkey={m.hotkey.text if m.hotkey else '-'} swallow={m.swallow}")
         for it in m.items:
