@@ -16,12 +16,9 @@ The issues themselves, where people can comment and add a thumbs-up:
 Worked out on 3 Nov 2026. A new issue goes on the board straight away and joins this order the next time it is
 worked out.
 
-1. **One sitting at ZBrush 2022 and 2026**, because it unblocks the most:
-   - For [#24](https://github.com/combwizard/ZOrbit/issues/24): does `ZBrush.exe <script>` reuse the open ZBrush?
-   - For [#30](https://github.com/combwizard/ZOrbit/issues/30): whether `{"press": "Macro:..."}` already runs a
-     macro. (The capture and loader buttons exist in 2022 and 2026: `Document:Export`, `Tool:Load Tool`,
-     `File:Open`, `Preferences:Config:Load Ui`.)
-   - [#103](https://github.com/combwizard/ZOrbit/issues/103) on the current window code.
+1. **Checks that need a person or real hardware.** The test VM (`tools/vm`) can do the rest:
+   - [#103](https://github.com/combwizard/ZOrbit/issues/103) on the current window code. The VM has one screen, so
+     the part on monitors of different sizes needs real ones.
    - [#23](https://github.com/combwizard/ZOrbit/issues/23) whenever a standard (non-admin) account is to hand.
 2. **Medium:** [#108](https://github.com/combwizard/ZOrbit/issues/108) first (small), then
    [#109](https://github.com/combwizard/ZOrbit/issues/109) (pick hide, dim or a message first);
@@ -30,7 +27,7 @@ worked out.
    [#106](https://github.com/combwizard/ZOrbit/issues/106) (timer inside the browser);
    [#31](https://github.com/combwizard/ZOrbit/issues/31) then
    [#30](https://github.com/combwizard/ZOrbit/issues/30) (one "set the file, then press" action);
-   [#24](https://github.com/combwizard/ZOrbit/issues/24) if the check in step 1 works out;
+   [#24](https://github.com/combwizard/ZOrbit/issues/24) (its check worked out);
    [#104](https://github.com/combwizard/ZOrbit/issues/104) (the #103 checks of 3 Nov failed on monitors of
    different sizes and found no snap layouts flyout; #103's checks are its test list).
 3. **Ring look, back to back:** [#37](https://github.com/combwizard/ZOrbit/issues/37) (band helper), then
