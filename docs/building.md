@@ -100,6 +100,30 @@ Good to know:
 - Run a first-run test straight after a restore. Windows adds root certificates when something asks for them, so a browser or `Invoke-WebRequest` in the VM can hide a problem with an HTTPS request.
 - ZBrush 2022.0.7 and 2026.2.1 run in the VM without a graphics card passed through. ZBrush 2027.0.1 did not start, with error `0xc0000142` from its own DLLs, on Windows build 26300. We have not tried it on another Windows build.
 
+### A VM with a graphics card
+
+The test VM has no graphics card, so there is no Vulkan in it and no OpenGL from a real driver. `tools\vm\new-gpu-vm.ps1` makes a second VM with a share of your PC's card, for anything that needs one. It needs an NVIDIA card that Hyper-V can partition, and the test VM with its `vanilla` checkpoint.
+
+```powershell
+pwsh tools\vm\new-gpu-vm.ps1
+Import-Module .\tools\vm\TestVM.psm1
+Use-TestVM -Gpu                  # the module now drives this VM
+Restore-TestVM gpu               # about 40 seconds: it boots
+```
+
+The script copies `vanilla` to a new VM called **ZOrbit GPU**, in the folder next to the test VM, copies your NVIDIA driver into it, adds the card and takes a checkpoint called `gpu`. It took 6 minutes and 32 GB of disk here. The VM takes 12 GB of memory and 8 processors, and `-MemoryGB`, `-Cpus`, `-Name` and `-From` (the checkpoint to copy) change these. The ZBrush licences still worked on the copy without signing in again. The module finds this VM through `%LOCALAPPDATA%\ZOrbit-test-vm\gpu-vm.json`, which holds its name, folder and driver version.
+
+From there you drive it with the same commands as the test VM. Good to know:
+
+- Each new PowerShell starts on the plain test VM. Run `Use-TestVM -Gpu` after every `Import-Module`, and `Use-TestVM` with no switch to go back.
+- Hyper-V cannot keep memory in a checkpoint of this VM, or restore one while the VM runs. So `Restore-TestVM` turns the VM off and boots it, and programs that were open when you took the checkpoint are not open after a restore.
+- The VM has to hold the same driver as your PC. After a driver update `Restore-TestVM` stops and says so. Run `new-gpu-vm.ps1` again, which keeps the VM and takes about 3 minutes.
+- Vulkan and OpenGL only work on the VM's desktop. `vulkaninfo` through `Invoke-TestVM` finds no card, so use `Start-TestVMApp` for anything that draws.
+- ZBrush 2026.2.1 loads the card's driver here. ZBrush 2022.0.7 starts but does not. We have not tried ZBrush 2027 on this VM.
+- Screenshots are still 16-bit.
+- `Stop-VM 'ZOrbit GPU' -TurnOff` frees its memory.
+- Windows on a PC and GeForce cards are outside what Microsoft supports for GPU partitioning, so this is for tests only.
+
 ## Test the plugin install under Program Files
 
 ZBrush 2022 to 2025 load plugins only from their own `ZStartup\ZPlugs64` folder, which is usually under Program Files. There Studio's **Install**, **Update** and **Remove** cannot copy the files as you, so ZOrbit runs a helper as administrator instead. `tools\test_uac_install.py` tests that path without a real ZBrush:

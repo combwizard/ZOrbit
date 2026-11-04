@@ -120,7 +120,8 @@ A bigger release can also get a post on the [blog](https://zorbit.lol/docs/blog/
 
 `tools\vm\new-test-vm.ps1` makes a Hyper-V VM with a fresh Windows, and `tools\vm\TestVM.psm1` drives it from your PC.
 Use it after a change to the installer, Setup or anything that runs the first time. See
-[Build from source](docs/building.md#test-on-a-clean-windows).
+[Build from source](docs/building.md#test-on-a-clean-windows). `tools\vm\new-gpu-vm.ps1` makes a copy with a share of
+your graphics card, for [what needs real graphics](docs/building.md#a-vm-with-a-graphics-card).
 
 ### Working on Studio's interface in a browser
 

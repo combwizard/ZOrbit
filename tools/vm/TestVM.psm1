@@ -13,6 +13,10 @@
   writes the settings file this module reads (%LOCALAPPDATA%\ZOrbit-test-vm\vm.json: name, folder, user, password).
   Keys, mouse and screenshots use the VM's console. If Virtual Machine Connection is open in an enhanced session,
   the console shows the lock screen and input goes nowhere useful; run Connect-TestVMConsole to take it back.
+
+  Use-TestVM -Gpu points every command here at the VM with a graphics card (new-gpu-vm.ps1) instead, for this
+  PowerShell or until you run Use-TestVM with no switch. That VM has the test VM's login, and its checkpoints hold no
+  memory, so a restore turns it off first and boots it.
   docs\building.md ("Test on a clean Windows") has the whole routine.
 #>
 #requires -Version 7
@@ -20,10 +24,33 @@
 $ErrorActionPreference = 'Stop'
 $script:Ns = 'root\virtualization\v2'
 $script:ConfigPath = Join-Path $env:LOCALAPPDATA 'ZOrbit-test-vm\vm.json'
+$script:GpuConfigPath = Join-Path $env:LOCALAPPDATA 'ZOrbit-test-vm\gpu-vm.json'
+$script:UseGpu = $false
 
 function Get-TestVMConfig {
+    <# The settings of the VM in use: name, folder and login, plus the driver version it holds if it is the GPU VM. #>
     if (-not (Test-Path $script:ConfigPath)) { throw "No test VM settings at $script:ConfigPath. Run tools\vm\new-test-vm.ps1 first." }
-    Get-Content $script:ConfigPath -Raw | ConvertFrom-Json
+    $c = Get-Content $script:ConfigPath -Raw | ConvertFrom-Json
+    if ($script:UseGpu) {
+        $g = Get-Content $script:GpuConfigPath -Raw | ConvertFrom-Json
+        $c.Name = $g.Name; $c.Folder = $g.Folder
+        $c | Add-Member DriverVersion $g.DriverVersion
+    }
+    $c
+}
+
+function Use-TestVM {
+    <# Picks the VM the other commands drive: -Gpu for the one with a graphics card, no switch for the plain test VM. #>
+    param([switch]$Gpu)
+    if ($Gpu -and -not (Test-Path $script:GpuConfigPath)) { throw "No GPU VM settings at $script:GpuConfigPath. Run tools\vm\new-gpu-vm.ps1 first." }
+    $script:UseGpu = [bool]$Gpu
+}
+
+function Get-HostGpuDriver {
+    <# The host's NVIDIA card: its name, driver version and the driver's folder in the driver store. #>
+    $card = Get-CimInstance Win32_VideoController | Where-Object Name -match 'NVIDIA' | Select-Object -First 1
+    if (-not $card) { throw 'The GPU VM supports NVIDIA cards, and this PC has none.' }
+    [pscustomobject]@{ Name = $card.Name; Version = $card.DriverVersion; Folder = Split-Path (($card.InstalledDisplayDrivers -split ',')[0]) }
 }
 
 function Get-TestVMCredential {
@@ -41,17 +68,31 @@ function Get-VMSystem {
 # ---------- checkpoints and power ----------
 
 function Restore-TestVM {
-    <# Puts the VM back to a checkpoint and makes sure it is running, then waits until PowerShell Direct answers. #>
+    <#
+      Puts the VM back to a checkpoint and makes sure it is running, then waits until PowerShell Direct answers.
+      Hyper-V cannot restore a VM with a GPU partition while it runs, so that one is turned off first, and it boots.
+    #>
     param([Parameter(Mandatory)][string]$Checkpoint, [int]$TimeoutSec = 300)
-    $name = (Get-TestVMConfig).Name
+    $config = Get-TestVMConfig
+    $name = $config.Name
     $snap = Get-VMSnapshot -VMName $name -Name $Checkpoint
+    if ($config.DriverVersion) {
+        $driver = (Get-HostGpuDriver).Version
+        if ($driver -ne $config.DriverVersion) {
+            throw "The host's graphics driver is now $driver and the VM has $($config.DriverVersion). Run tools\vm\new-gpu-vm.ps1 again."
+        }
+        if ((Get-VM $name).State -ne 'Off') { Stop-VM -Name $name -TurnOff -Force }
+    }
     Restore-VMSnapshot -VMSnapshot $snap -Confirm:$false
     if ((Get-VM $name).State -ne 'Running') { Start-VM $name }
     Wait-TestVM -TimeoutSec $TimeoutSec
 }
 
 function New-TestVMCheckpoint {
-    <# Takes a standard checkpoint (memory included when running, so a restore comes back at the desktop). #>
+    <#
+      Takes a checkpoint. On the test VM it is a standard one (memory included when running, so a restore comes back
+      at the desktop). On the GPU VM it is a production one, with no memory, so a restore boots.
+    #>
     param([Parameter(Mandatory)][string]$Name)
     $vm = (Get-TestVMConfig).Name
     Get-VMSnapshot -VMName $vm -Name $Name -ErrorAction SilentlyContinue | Remove-VMSnapshot -Confirm:$false
@@ -292,6 +333,6 @@ function Invoke-TestVMClick {
     Set-TestVMMouseButton -Button $Button
 }
 
-Export-ModuleMember -Function Get-TestVMConfig, Get-TestVMCredential, Connect-TestVMConsole, Restore-TestVM, New-TestVMCheckpoint, Wait-TestVM,
+Export-ModuleMember -Function Get-TestVMConfig, Use-TestVM, Get-HostGpuDriver, Get-TestVMCredential, Connect-TestVMConsole, Restore-TestVM, New-TestVMCheckpoint, Wait-TestVM,
     Invoke-TestVM, Copy-ToTestVM, Copy-FromTestVM, Start-TestVMApp, Save-TestVMScreen, Send-TestVMKeys, Send-TestVMKeyDown,
     Send-TestVMKeyUp, Send-TestVMText, Move-TestVMMouse, Set-TestVMMouseButton, Invoke-TestVMClick
