@@ -1181,7 +1181,8 @@ class App:
         ins = self._popout_zb[1] if self._popout_zb else None
         legacy = ins is not None and not ins["python"]
         in_front = self.target_in_front()
-        if not (in_front or (not legacy and self._listener(self._browser_zb_pid()) is not None)
+        by_message = not legacy and self.cfg.bridge_mode in ("auto", "message")      # key mode needs the focus
+        if not (in_front or (by_message and self._listener(self._browser_zb_pid()) is not None)
                 or time.time() >= self._browser_pick_deadline):
             return
         W.KillTimer(self.ctrl, TIMER_BROWSER_PICK)
@@ -1271,9 +1272,13 @@ class App:
         return W.window_pid(fg) if fg else 0
 
     def _browser_zb_pid(self):
-        """Process id of the ZBrush the browser was opened from (0 when unknown or gone)."""
+        """Process id of the ZBrush a browser pick is for: the one the browser was opened from. When that is unknown
+        (a browser opened from Studio has none on record) or gone, the only ZBrush running. 0 when it cannot tell."""
         zb = self._popout_zb[0] if self._popout_zb else 0
-        return W.window_pid(zb) if zb and W.IsWindow(W.w.HWND(zb)) else 0
+        if zb and W.IsWindow(W.w.HWND(zb)):
+            return W.window_pid(zb)
+        pids = W.pids_named(self.target_exe)
+        return pids[0] if len(pids) == 1 else 0
 
     def _drop_request(self, seq):
         """A pick nobody will carry out must not wait for the Apply button or the bridge key press that comes
