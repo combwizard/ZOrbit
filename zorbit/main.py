@@ -7,6 +7,9 @@
                                      the browser (the app starts it; --managed: quits with the app unless its
                                      window is up, --show: open at once, --tag: filtered to a tag, --kind: on
                                      the brush, alpha, material or texture tab)
+  ZOrbit.exe --open <menu>       pass a command to the app that is running, and quit: exit code 0 taken, 1 refused,
+             --pick <kind>:<name>      2 no app. Also --press <path>, --set <path> <value>, --toggle <path>,
+                                       --browser [--kind K] [--tag T] and --profile <name>|next (see commands.py)
   ZOrbit.exe --check             validate the menus file and print it
   ZOrbit.exe --selftest          check that this build has its libraries, modules and bundled files; exit code 1
                                      if anything is missing (CI runs it on the built exe)
@@ -23,6 +26,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+import commands  # noqa: E402
 import paths  # noqa: E402
 
 
@@ -49,6 +53,8 @@ def main() -> int:
     if args and args[0] == "--zscript-list":
         import zscript_bridge             # for the uninstaller: reads only, writes nothing but that file
         return zscript_bridge.list_main(args)
+    if args and args[0] in commands.OPTIONS:
+        return commands.main(args)        # a button press: one quick process, nothing heavy, no second app
     unblock_bundle()
     if "--selftest" in args:
         import selftest                   # imports the app on purpose; the other paths load only what they use

@@ -27,6 +27,7 @@ Started through main.py (ZOrbit.exe), normally by the ZBrush bridge when ZBrush 
 the last ZBrush process has gone. Only one instance runs at a time.
 """
 import argparse
+import collections
 import contextlib
 import ctypes
 import json
@@ -43,6 +44,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 
 import activity             # noqa: E402
+import commands             # noqa: E402
 import config as C          # noqa: E402
 import expand               # noqa: E402
 import fsutil               # noqa: E402
@@ -81,6 +83,7 @@ WM_APP_MASK = W.WM_APP + 13           # hook -> control window: inject the Alt m
 WM_APP_BROWSER = W.WM_APP + 14        # hook -> control window: the browser hotkey
 WM_APP_BROWSER_PICK = W.WM_APP + 15   # control window -> itself: a brush was picked in the popout
 WM_APP_TYPING = W.WM_APP + 16         # hook -> control window: a key was typed while a tapped ring waited for a click
+WM_APP_COMMAND = W.WM_APP + 17        # control window -> itself: run the next command from another program
 WM_HOOK_REHOOK = W.WM_APP + 20        # main thread -> hook thread: install the hook again
 WM_HOOK_RELEASE_HELD = W.WM_APP + 21  # main thread -> hook thread: let go of the held hotkey (wparam = its vk)
 WM_HOOK_RELEASE_BROWSER = W.WM_APP + 22   # ... and of the browser hotkey
@@ -91,10 +94,12 @@ RESULT_TRIES = 30                     # ticks (100 ms) to wait for the plugin to
 ACK_HOLD_MAX_S = 30                   # ... but not while the left button is down, for this long at most
 LEGACY_SCAN_S = 60                    # how long the scan for ZBrush 2022-2025 installations is kept
 TIMER_WATCH, TIMER_ACK, TIMER_REHOOK, TIMER_CONFIG, TIMER_BROWSER_PICK, TIMER_PREWARM, TIMER_POPOUT_SHOW, \
-    TIMER_ZS_RESULT = range(1, 9)
+    TIMER_ZS_RESULT, TIMER_COMMAND = range(1, 10)
+COMMAND_WAIT_S = 2                    # how long a command's pick waits for the one before it to be taken
 ZS_RESULT_S = 15                      # how long to look for the ZScript plugin's line about a pick (a stroke delays it)
 COPYDATA_PICK, COPYDATA_SHOW, COPYDATA_QUIT = 1, 10, 12   # WM_COPYDATA ids: popout -> app, app -> popout
 COPYDATA_THEME = 13                                       # Studio -> popout: look at the theme now (no payload)
+COPYDATA_COMMAND = commands.COPYDATA                      # another program -> app: ZOrbit.exe --pick and the rest
 POPOUT_CLASS = "ZOrbitPopoutCtl"      # the popout's message-only control window
 POPOUT_START_S = 15                   # a popout asked to show gets this long to appear before we ask again
 THUMB_PX = 128                        # thumbnail cache size, shared with the Studio
@@ -131,6 +136,10 @@ MSG_NOT_FRONT = "ZBrush was not the front window, nothing sent"
 MSG_EMPTY_SLOT = "This slot is empty"
 MSG_EMPTY_MENU = "That menu has nothing usable in it"
 MSG_PICK_FAILED = "ZBrush could not carry out that pick. See bridge.log."
+MSG_COMMAND_TEXT = "A dialog or text box has the focus, nothing sent"
+MSG_COMMAND_PINNED = "This ZOrbit runs on one menus file, so it has no profiles"
+MSG_COMMAND_FROZEN = "Your files were changed by a newer ZOrbit, so the profile stays"
+MSG_COMMAND_NO_MENUS = "ZOrbit has no menus loaded"
 TIP_FROZEN = f"ZOrbit {paths.VERSION}: your files were changed by a newer ZOrbit"
 
 # A line of bridge.log: "2026-10-31 12:00:00 #7 'Clay' via listener: brush Clay: ...; press Tool:X: ..."
@@ -346,6 +355,8 @@ class App:
         self._theme = "dark"            # the theme the config was last loaded under
         self._theme_sig = ("dark", "")  # theme.signature() of that load: the name, and for zbrush the scheme's digest
         self.slots = []                 # menus with hotkeys, indexed for WM_APP_OPEN
+        self._commands = collections.deque()    # (what to do, whether it is a pick) for commands from other programs
+        self._command_wait = None       # when the pick at the head of that queue has to stop waiting
         self.ring = None
         # Threads. The keyboard hook runs on its own thread (HookThread). Rules that keep the two safe:
         #  * The hook thread reads the config only through self._hook_state, one immutable HookState that
@@ -839,6 +850,9 @@ class App:
             if msg == WM_APP_BROWSER_PICK:
                 self._browser_pick_queued()
                 return 0
+            if msg == WM_APP_COMMAND:
+                self._run_command()
+                return 0
             if msg == W.WM_COPYDATA:
                 return self._on_copydata(wparam, lparam)
             if msg == W.WM_TIMER:
@@ -861,6 +875,9 @@ class App:
                     self._popout_show_tick()
                 elif wparam == TIMER_ZS_RESULT:
                     self._zs_result_tick()
+                elif wparam == TIMER_COMMAND:
+                    W.KillTimer(self.ctrl, TIMER_COMMAND)
+                    self._run_command()
                 return 0
         except Exception:
             log("control error:\n" + traceback.format_exc())
@@ -1142,11 +1159,11 @@ class App:
         self._spawn_popout(False)
 
     def _on_copydata(self, wparam, lparam) -> int:
-        """WM_COPYDATA from the popout: 1 = accepted, 0 = refused. Only a kind and a name are taken from the
-        payload; the file is looked up by send() as for any other pick."""
+        """WM_COPYDATA from the popout, or a command from another program: 1 = accepted, 0 = refused. Only a kind and
+        a name are taken from the popout's payload; the file is looked up by send() as for any other pick."""
         try:
             cds = W.COPYDATASTRUCT.from_address(lparam)
-            if cds.dwData != COPYDATA_PICK or not cds.lpData or not 0 < cds.cbData <= 4096:
+            if cds.dwData not in (COPYDATA_PICK, COPYDATA_COMMAND) or not cds.lpData or not 0 < cds.cbData <= 4096:
                 log(f"copydata refused: dwData={cds.dwData} cbData={cds.cbData}")
                 return 0
             raw = ctypes.string_at(cds.lpData, cds.cbData)     # copied here: the sender's buffer dies on return
@@ -1154,16 +1171,162 @@ class App:
         except (ValueError, OSError) as e:                     # includes UnicodeDecodeError, JSONDecodeError
             log(f"copydata refused: unreadable payload ({e!r})")
             return 0
+        if cds.dwData == COPYDATA_COMMAND:
+            return self._take_command(msg)
         name = msg.get("name") if isinstance(msg, dict) else None
         if (not isinstance(msg, dict) or msg.get("v") != 1 or msg.get("op") != "pick"
-                or msg.get("kind") not in C.ASSET_KINDS or not isinstance(name, str) or not name or len(name) > 120
-                or any(c in name for c in "\\/:") or ".." in name or any(ord(c) < 32 for c in name)):
+                or msg.get("kind") not in C.ASSET_KINDS or not commands.good_name(name)):
             log(f"copydata refused: not a valid pick ({str(msg)[:80]!r})")
             return 0
         kind = msg["kind"]
         self._browser_pick = C.Item(label=name, kind=kind, data={kind: name})
         W.PostMessageW(self.ctrl, WM_APP_BROWSER_PICK, 0, 0)
         return 1
+
+    # --- commands from other programs ------------------------------------------------------------
+    def _take_command(self, msg) -> int:
+        """A command from commands.py: 1 = taken, 0 = refused, which becomes its exit code. This only checks: the sender
+        is waiting in SendMessage, so a ring or a hand-off runs on the next message (_run_command)."""
+        why = commands.check(msg)
+        if why:
+            log(f"command refused: {commands.describe(msg)}: {why}")
+            return 0
+        why, pid = self._command_refusal(msg)
+        if why:
+            log(f"command refused: {commands.describe(msg)}: {why}")
+            self._commands.append((lambda: self._toast(why), False))
+            W.PostMessageW(self.ctrl, WM_APP_COMMAND, 0, 0)
+            return 0
+        log(f"command: {commands.describe(msg)}")
+        self._commands.append((lambda: self._do_command(msg, pid), msg["op"] in ("pick", "press", "set", "toggle")))
+        W.PostMessageW(self.ctrl, WM_APP_COMMAND, 0, 0)
+        return 1
+
+    def _command_refusal(self, msg):
+        """(why this command cannot run now, or None; the process id of the ZBrush a pick goes to)."""
+        op = msg["op"]
+        if op == "browser":
+            tag = msg.get("tag")
+            return (f"There is no tag called {tag}" if tag and not self.tags.has(tag) else None), None
+        if op == "profile":
+            name = msg["name"]
+            if self._pinned:
+                return MSG_COMMAND_PINNED, None
+            if self._frozen:
+                return MSG_COMMAND_FROZEN, None
+            return (None if name == "next" or profiles.canonical(name) else f"There is no profile called {name}"), None
+        if self.cfg is None:
+            return MSG_COMMAND_NO_MENUS, None
+        if op == "open":
+            if msg["menu"] not in self.cfg.menus:
+                return f"There is no menu called {msg['menu']}", None
+            if not self.target_in_front():         # like a hotkey: a ring only opens over ZBrush
+                return MSG_NOT_FRONT, None
+        return self._command_zbrush()
+
+    def _command_zbrush(self):
+        """(why not, or None; the process id of the ZBrush a command's pick goes to). ZOrbit never takes the focus. With
+        ZBrush in front a command goes where a ring pick would. Behind another window it can only be the listener of
+        the one ZBrush running, since the bridge key needs ZBrush in front."""
+        fg = W.GetForegroundWindow()
+        if self.target_in_front():
+            return (MSG_COMMAND_TEXT, None) if self._is_text_target(fg) else (None, W.window_pid(fg))
+        if self.cfg.bridge_mode in ("auto", "message"):
+            pids = W.pids_named(self.target_exe)
+            if len(pids) == 1 and self._listener(pids[0]) is not None:
+                return None, pids[0]
+        return MSG_NOT_FRONT, None
+
+    def _run_command(self):
+        """Runs what is queued, in order. A pick waits while the last pick's request has not been taken: there is one
+        request file, so a second pick would replace the first (a Stream Deck multi-action sends them close together).
+        After COMMAND_WAIT_S it goes anyway, as a ring pick would, since the first may be waiting for a long stroke."""
+        while self._commands:
+            run, is_pick = self._commands[0]
+            if is_pick and os.path.exists(REQUEST_FILE):
+                now = time.monotonic()
+                if self._command_wait is None:
+                    self._command_wait = now + COMMAND_WAIT_S
+                if now < self._command_wait:
+                    W.SetTimer(self.ctrl, TIMER_COMMAND, 30, None)
+                    return
+            self._command_wait = None
+            self._commands.popleft()
+            run()
+
+    def _do_command(self, msg, pid):
+        op = msg["op"]
+        if op == "profile":
+            self._command_profile(msg["name"])
+            return
+        again = op == "open" and self.ring is not None and self.ring.menu.id == msg["menu"]
+        if self.ring is not None:
+            self.ring.cancel("command")
+        if op == "browser":
+            self.open_browser(msg.get("tag"), kind=msg.get("kind"))
+        elif op == "open":
+            if not again:                          # opening it again closes it, like pressing its hotkey again
+                self._command_open(msg["menu"])
+        else:
+            self._command_pick(msg, pid)
+
+    def _command_open(self, menu_id):
+        self._check_profile()
+        self.load_config()
+        menu = self.cfg.menus.get(menu_id)
+        if menu is None:                           # the menus file changed since the check
+            log(f"command: there is no menu {menu_id!r} any more")
+            self._toast(f"There is no menu called {menu_id}")
+            return
+        self.open_menu(menu, W.cursor_pos(), held=False)      # no key is held: it opens as a tapped hotkey does
+
+    def _command_pick(self, msg, pid):
+        op = msg["op"]
+        if op == "pick":
+            kind, name = msg["kind"], msg["name"]
+            item = C.Item(label=name, kind=kind, data={kind: name})
+        else:
+            data = {op: msg["path"]}
+            if op == "set":
+                data["value"] = msg["value"]
+            item = C.Item(label=msg["path"].split(":")[-1], kind=op, data=data)
+        self.send(item, source="command", pid=pid)
+        try:
+            known = self._known_item(item)
+            if known is not None:
+                self._record_pick(known)
+        except Exception:
+            log("usage error:\n" + traceback.format_exc())
+
+    @staticmethod
+    def _known_item(item):
+        """The item to count in Recent and the auto slots. A ring or browser pick comes from a known item, but a command
+        is typed, so a mistyped name must not go in, and another spelling must not replace the file's. None for an
+        asset with no file; anything else is the item itself, which _record_pick leaves alone unless it is an asset."""
+        if item.kind not in C.ASSET_KINDS:
+            return item
+        path = assets.find(item.kind, item.data[item.kind]) if assets is not None else None
+        if path is None:
+            return None
+        name = os.path.splitext(os.path.basename(str(path)))[0]
+        return C.Item(label=name, kind=item.kind, data={item.kind: name})
+
+    def _command_profile(self, name):
+        names = profiles.names()
+        if name == "next" and names:
+            name = names[(names.index(self.profile) + 1) % len(names)] if self.profile in names else names[0]
+        else:
+            name = profiles.canonical(name) or name
+        if self.ring is not None:                  # a profile never switches under an open ring
+            self.ring.cancel("command")
+        try:
+            profiles.set_active(name)
+        except (profiles.ProfileError, OSError) as e:
+            log(f"command: profile not switched: {e}")
+            self._toast(str(e))
+            return
+        self._check_profile()
+        self._toast(f"Profile: {name}")
 
     def _browser_pick_queued(self):
         """The popout hands the focus back to ZBrush before it sends the pick, but activation finishes on its own
@@ -1292,9 +1455,10 @@ class App:
                 log(f"pick #{seq}: could not remove {os.path.basename(p)}: {e!r}")
         log(f"pick #{seq} not delivered; request removed")
 
-    def send(self, item, install=None, source="ring"):
+    def send(self, item, install=None, source="ring", pid=None):
         """install: the ZBrush installation to hand off to, when it is not the one in front right now (a pick
-        from the browser arrives after the focus has moved). source: "ring" or "browser", for activity.json."""
+        from the browser arrives after the focus has moved). source: "ring", "browser" or "command", for
+        activity.json. pid: the ZBrush a command's pick is for."""
         ins = install if install is not None else self.target_install()
         legacy = ins if ins is not None and not ins["python"] else None
         try:
@@ -1317,7 +1481,7 @@ class App:
                 self._drop_request(seq)
             W.nudge_mouse()
             return
-        zb_pid = self._browser_zb_pid() if source == "browser" else self._front_pid()
+        zb_pid = pid or (self._browser_zb_pid() if source == "browser" else self._front_pid())
         listener = self._listener(zb_pid) if mode in ("auto", "message") else None
         if listener is not None:
             ok = W.PostMessageW(listener, WM_APP_PICK, seq, 0)
