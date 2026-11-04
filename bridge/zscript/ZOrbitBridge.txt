@@ -17,6 +17,7 @@
 // (left out where PowerShell is restricted: install.txt says why, and the command lines above are used instead).
 // request.txt: ZORBIT 1 / id / label / then per action its kind and arguments:
 //   brush|alpha|material|texture <name> <file or ->   press <path>   set <path> <value>   toggle <path>
+//   file <button path> <file>   (tells ZBrush the next file name, then presses the button: Document:Export saves it)
 // Both are written by the app with 8.3 paths where needed, since ZScript strings stop at 255 characters.
 // String literals here use forward slashes: a backslash starts an escape such as \n.
 
@@ -34,7 +35,7 @@
 [VarDef, rmN, 0]
 [VarDef, rmLen, 0]
 [VarDef, rmC, 0]              // scratch for RM_Chop only
-[VarDef, rmK, 0]               // first character of the action kind (b a m p s t), 120 for texture
+[VarDef, rmK, 0]               // first character of the action kind (b a m p s t f), 120 for texture
 [VarDef, rmReq, ""]
 [VarDef, rmId, ""]
 [VarDef, rmLabel, ""]
@@ -178,6 +179,21 @@
 	]
 ]
 
+// Tells ZBrush the next file name (rmB), then presses the button (rmA) that uses it: Document:Export writes the
+// document there, File:Open reads it, with no dialog. The button is looked up first, so a name is never left
+// waiting for the next button that asks for a file. No literal path in an IPress: it goes through rmA.
+[RoutineDef, RM_File,
+	[If, [IExists, #rmA],
+		[If, [StrLength, #rmB] < 3,
+			[VarSet, rmRes, [StrMerge, "file ", #rmA, ": no file given"]],
+			[FileNameSetNext, #rmB]
+			[IPress, #rmA]
+			[VarSet, rmRes, [StrMerge, "file ", #rmA, ": ok, file ", #rmB]]
+		],
+		[VarSet, rmRes, [StrMerge, "file ", #rmA, ": no such interface item"]]
+	]
+]
+
 [RoutineDef, RM_Set,
 	[If, [IExists, #rmA],
 		[ISet, #rmA, [Val, #rmB]]
@@ -266,7 +282,7 @@
 					[RoutineCall, RM_ReadLine]
 					[VarSet, rmA, #rmLine]
 					[VarSet, rmB, ""]
-					[If, (rmK == 98) || (rmK == 115) || (rmK == 97) || (rmK == 109) || (rmK == 120),
+					[If, (rmK == 98) || (rmK == 115) || (rmK == 97) || (rmK == 109) || (rmK == 120) || (rmK == 102),
 						[RoutineCall, RM_ReadLine]
 						[VarSet, rmB, #rmLine]
 					]
@@ -276,6 +292,7 @@
 					[If, rmK == 109, [RoutineCall, RM_Material]]
 					[If, rmK == 120, [RoutineCall, RM_Texture]]
 					[If, rmK == 112, [RoutineCall, RM_Press]]
+					[If, rmK == 102, [RoutineCall, RM_File]]
 					[If, rmK == 115, [RoutineCall, RM_Set]]
 					[If, rmK == 116, [RoutineCall, RM_Toggle]]
 					[If, rmCount == 0,

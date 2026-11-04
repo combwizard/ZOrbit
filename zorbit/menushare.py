@@ -18,6 +18,7 @@ MENU_FORMAT = 1              # the "zorbit_menu" number of a menu file
 _VALID_ID = re.compile(r"[A-Za-z0-9_-]+")
 _SYNTHETIC = ("tag:", "more:")        # menu ids the app makes up: never in a file
 _PC_KEYS = ("hotkey", "swallow")      # belong to one PC's keyboard: never in a menu file, never imported
+# A Capture item's folder is cleared the same way, in items and steps: see _forget_folder.
 
 
 def menu_slug(s) -> str:
@@ -57,10 +58,22 @@ def collect(cfg, menu_id) -> list:
     return order
 
 
+def _forget_folder(action):
+    """A capture folder usually holds the user's Windows name, so it stays on this PC: "" is the default folder."""
+    if "capture" in action:
+        action["capture"] = ""
+
+
 def _clean(menu) -> dict:
     out = copy.deepcopy(menu) if isinstance(menu, dict) else {}
     for k in _PC_KEYS:
         out.pop(k, None)
+    for it in out.get("items") if isinstance(out.get("items"), list) else ():
+        if isinstance(it, dict):
+            _forget_folder(it)
+            for s in it.get("steps") if isinstance(it.get("steps"), list) else ():
+                if isinstance(s, dict):
+                    _forget_folder(s)
     return out
 
 

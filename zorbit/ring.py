@@ -458,6 +458,17 @@ def _glyph_grid(draw, cx, cy, size, fill):
             draw.rounded_rectangle((x0, y0, x0 + q, y0 + q), radius=q * 0.25, fill=fill)
 
 
+def _glyph_camera(draw, cx, cy, size, fill):
+    """A camera (outline: a body with a bump on top, a lens ring), size across: the glyph of a Capture slot."""
+    w, h = size * 0.5, size * 0.34
+    y0 = cy - h + size * 0.04
+    draw.rounded_rectangle((cx - w, y0, cx + w, y0 + 2 * h), radius=size * 0.1, outline=fill,
+                           width=max(1, int(size * 0.09)))
+    draw.rectangle((cx - w * 0.45, y0 - size * 0.09, cx - w * 0.05, y0 + size * 0.02), fill=fill)
+    lens = size * 0.2
+    draw.ellipse((cx - lens, y0 + h - lens, cx + lens, y0 + h + lens), outline=fill, width=max(1, int(size * 0.08)))
+
+
 def _glyph_fan(draw, ox, oy, radius, fill):
     """A folding fan: three blades with small gaps, a quarter circle from (ox, oy) opening up and right."""
     box = (ox - radius, oy - radius, ox + radius, oy + radius)
@@ -1271,6 +1282,8 @@ class Ring:
                 gd = ImageDraw.Draw(im)
                 if it.kind == "browser":           # the browser: a 2x2 grid
                     _glyph_grid(gd, c, c, ins * 0.46, _rgba(it.color or text, 0.95))
+                elif it.kind == "capture":         # Capture: a camera
+                    _glyph_camera(gd, c, c, ins * 0.5, _rgba(it.color or text, 0.95))
                 elif more:                         # a More slot: three dots
                     _glyph_more(gd, c, c, ins * 0.5, _rgba(text, 0.9))
                 else:

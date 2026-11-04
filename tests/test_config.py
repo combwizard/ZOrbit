@@ -765,7 +765,8 @@ def test_browser_item_value_must_be_a_string(load_menus):
 @pytest.mark.parametrize("item", [
     {"brush": "Standard"}, {"alpha": "Alpha 58"}, {"material": "SkinShade4"}, {"texture": "Txtr01"},
     {"press": "Tool:Masking:Clear"}, {"set": "Draw:Draw Size", "value": 64}, {"toggle": "Transform:PolyF"},
-    {"steps": [{"press": "Tool:Masking:Clear"}]}, {"auto": "brush"}, {"tag": "blocking"}, {"browser": ""}])
+    {"steps": [{"press": "Tool:Masking:Clear"}]}, {"auto": "brush"}, {"tag": "blocking"}, {"browser": ""},
+    {"capture": "C:/Users/you/Pictures/ZBrush"}])
 def test_each_action_type_loads(load_menus, item):
     cfg = load_menus({"main": one_item_menu(item)})
     assert cfg.errors == []
@@ -1006,7 +1007,8 @@ def test_a_tag_slot_keeps_its_style_icon_and_glow_when_it_opens_a_fan(load_menus
 @pytest.mark.parametrize("item, label", [
     ({"brush": "ClayBuildup"}, "ClayBuildup"), ({"press": "Tool:Masking:Clear"}, "Clear"),
     ({"toggle": "Transform:PolyF"}, "PolyF"), ({"set": "Draw:Draw Size", "value": 1}, "Draw Size"),
-    ({"steps": [{"brush": "A"}]}, "Steps"), ({"auto": "brush"}, "Auto"), ({"browser": ""}, "Browser")])
+    ({"steps": [{"brush": "A"}]}, "Steps"), ({"auto": "brush"}, "Auto"), ({"browser": ""}, "Browser"),
+    ({"capture": "C:/Users/you/Pictures/ZBrush"}, "Capture")])
 def test_default_labels(load_menus, item, label):
     assert load_menus({"main": one_item_menu(item)}).menus["main"].items[0].label == label
 
@@ -1083,12 +1085,67 @@ def test_loading_an_old_path_does_not_change_radial_json(radial_file):
         assert json.load(f) == raw
 
 
+# --- capture ------------------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("folder", ["C:/Users/you/Pictures/ZBrush", "C:\\Users\\you\\Pictures", "D:/Art/v1.2",
+                                    "C:/Users/you/Pictures/ZBrush/"])
+def test_a_capture_folder_is_a_full_path(load_menus, folder):
+    cfg = load_menus({"main": one_item_menu({"capture": folder})})
+    assert cfg.errors == [] and cfg.menus["main"].items[0].data == {"capture": folder}
+
+
+@pytest.mark.parametrize("folder", ["Pictures", "./shots", "\\Users\\you", "C:shots", "/shots"])
+def test_a_capture_folder_must_be_a_full_path(load_menus, folder):
+    cfg = load_menus({"main": one_item_menu({"capture": folder}, {"brush": "A"})})
+    assert problems(cfg, "menu main item 1: capture folder") and problems(cfg, "full path")
+    assert [it.kind for it in cfg.menus["main"].items] == ["brush"]
+
+
+@pytest.mark.parametrize("folder", ["//server/share/shots", "\\\\server\\share"])
+def test_a_capture_folder_cannot_be_a_network_path(load_menus, folder):
+    cfg = load_menus({"main": one_item_menu({"capture": folder}, {"brush": "A"})})
+    assert problems(cfg, "capture folder") and problems(cfg, "network")
+
+
+@pytest.mark.parametrize("folder", ["C:/Users/you/Pictures/shot.png", "C:\\Users\\you\\a.PSD", "D:/x/y.bmp"])
+def test_a_capture_folder_that_names_a_picture_file_is_refused(load_menus, folder):
+    cfg = load_menus({"main": one_item_menu({"capture": folder}, {"brush": "A"})})
+    assert problems(cfg, "capture folder") and problems(cfg, "not a file")
+
+
+def test_a_capture_folder_that_is_a_file_there_is_refused(load_menus, tmp_path):
+    f = tmp_path / "notes"
+    f.write_bytes(b"x")
+    assert problems(load_menus({"main": one_item_menu({"capture": str(f)}, {"brush": "A"})}), "not a file")
+
+
+@pytest.mark.parametrize("folder", [5, None, ["C:/x"]])
+def test_a_capture_folder_must_be_a_string(load_menus, folder):
+    cfg = load_menus({"main": one_item_menu({"capture": folder}, {"brush": "A"})})
+    assert problems(cfg, "'capture' must be a folder path")
+
+
+@pytest.mark.parametrize("folder", ["", "  "])
+def test_an_empty_capture_folder_means_the_default_folder(load_menus, folder):
+    cfg = load_menus({"main": one_item_menu({"capture": folder})})
+    assert cfg.errors == [] and cfg.menus["main"].items[0].label == "Capture"
+    cfg = load_menus({"main": one_item_menu({"steps": [{"capture": folder}]})})
+    assert cfg.errors == []
+
+
+def test_a_capture_is_not_an_asset():
+    assert "capture" in config.ACTION_KEYS and "capture" not in config.ASSET_KINDS
+    assert config.asset_of({"capture": "C:/Users/you/Pictures"}) is None
+
+
 # --- steps --------------------------------------------------------------------------------------
 
 
 def test_steps_of_plain_actions_are_accepted(load_menus):
     steps = [{"press": "Tool:Masking:Clear"}, {"brush": "Standard"}, {"alpha": "A"}, {"material": "M"},
-             {"texture": "T"}, {"set": "Draw:Draw Size", "value": 8}, {"toggle": "Transform:PolyF"}]
+             {"texture": "T"}, {"set": "Draw:Draw Size", "value": 8}, {"toggle": "Transform:PolyF"},
+             {"capture": "C:/Users/you/Pictures/ZBrush"}]
     assert load_menus({"main": one_item_menu({"steps": steps})}).errors == []
 
 

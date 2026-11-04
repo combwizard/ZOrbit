@@ -62,6 +62,8 @@ Schema (all keys optional except menus):
   {"press": "Tool:Masking:Clear"}                press any ZBrush button by item path
   {"set": "Draw:Draw Size", "value": 64}         set a slider or value
   {"toggle": "Transform:Activate Symmetry"}      flip a switch
+  {"capture": "D:/Pictures/ZBrush"}              save the document as a time-stamped PNG in that folder ("" = ZBrush in Windows'
+                                                 Pictures folder; capture.py)
   {"steps": [<action>, ...]}                     run several actions in order
   {"menu": "<id>"}                               open another ring in place
   {"auto": "brush"}                              a slot the app fills with a brush you pick often (usage.py)
@@ -81,8 +83,8 @@ from dataclasses import dataclass, field
 import looks as L
 import theme as T
 
-ACTION_KEYS = ("brush", "alpha", "material", "texture", "press", "set", "toggle", "steps", "menu", "auto", "tag",
-               "browser", "empty")
+ACTION_KEYS = ("brush", "alpha", "material", "texture", "press", "set", "toggle", "capture", "steps", "menu", "auto",
+               "tag", "browser", "empty")
 ASSET_KINDS = ("brush", "alpha", "material", "texture")     # the kinds of the browser and of tags
 AUTO_KINDS = ("brush",)
 ANIMATIONS = L.ANIMATIONS
@@ -307,6 +309,21 @@ def _icon_problem(icon: str) -> str:
     return ""
 
 
+def _capture_problem(folder: str) -> str:
+    """What is wrong with the folder of a capture item, or "". It is a full path on this PC, made when it is missing,
+    so a relative path (looked up from wherever the app runs), a network share and a picture file are refused."""
+    text = folder.strip()
+    if not text:
+        return ""                                       # the default folder (capture.default_folder)
+    if _network_path(text):
+        return "must be a folder on this PC, not a network path"
+    if not (os.path.splitdrive(text)[0] and os.path.isabs(text)):
+        return f"'{folder}' must be a full path, such as C:\\Pictures\\ZBrush"
+    if os.path.splitext(text.rstrip("\\/"))[1].lower() in ICON_EXTS or os.path.isfile(text):
+        return f"'{folder}' must be a folder, not a file"
+    return ""
+
+
 def _check_action(a, errors, where, allow_nested=True) -> bool:
     if not isinstance(a, dict):
         errors.append(f"{where}: not an object")
@@ -325,7 +342,7 @@ def _check_action(a, errors, where, allow_nested=True) -> bool:
     if k == "steps":
         if not allow_nested or not isinstance(a["steps"], list) or not a["steps"]:
             errors.append(f"{where}: 'steps' must be a non-empty list of brush/alpha/material/texture/press/set/"
-                          f"toggle actions")
+                          f"toggle/capture actions")
             return False
         for i, s in enumerate(a["steps"]):
             if not _check_action(s, errors, f"{where} step {i + 1}", allow_nested=False):
@@ -348,8 +365,14 @@ def _check_action(a, errors, where, allow_nested=True) -> bool:
         if "kind" in a and a["kind"] not in ASSET_KINDS:
             errors.append(f"{where}: browser 'kind' must be one of {', '.join(ASSET_KINDS)}")
             return False
-    elif not isinstance(a[k], str) or not a[k].strip():
+    elif k == "capture" and not isinstance(a[k], str):
+        errors.append(f"{where}: 'capture' must be a folder path, or \"\" for the default folder")
+        return False
+    elif k != "capture" and (not isinstance(a[k], str) or not a[k].strip()):
         errors.append(f"{where}: '{k}' must be a non-empty string")
+        return False
+    elif k == "capture" and _capture_problem(a[k]):
+        errors.append(f"{where}: capture folder {_capture_problem(a[k])}")
         return False
     elif k in ASSET_KINDS and _bad_asset_name(a[k]):
         errors.append(f"{where}: {k} name '{a[k]}' must not contain \\ / : or ..")
@@ -377,6 +400,8 @@ def _default_label(a: dict, menus_raw: dict, tags=None) -> str:
     for k in ("press", "set", "toggle"):
         if k in a:
             return a[k].split(":")[-1]
+    if "capture" in a:
+        return "Capture"
     return "?"
 
 

@@ -143,3 +143,41 @@ def test_only_the_last_4_kb_are_read_and_the_newest_line_wins(bridge_log):
     assert radiald._plugin_result(9, now, p) == []
     p = bridge_log(raw=old + filler)                       # the failing line is beyond the tail
     assert radiald._plugin_result(9, now, p) is None
+
+
+def test_a_file_button_that_is_missing_is_named_with_its_path(bridge_log):
+    now = time.time()
+    p = bridge_log(f"{stamp(now)} #8 'Capture' via listener: file Document:Export: no such interface item")
+    assert radiald._plugin_result(8, now, p) == ["Document:Export is not a ZBrush button"]
+
+
+def test_a_file_button_that_worked_has_no_problems(bridge_log):
+    now = time.time()
+    p = bridge_log(f"{stamp(now)} #8 'Capture' via listener: file Document:Export: ok, file C:/Users/you/a.png")
+    assert radiald._plugin_result(8, now, p) == []
+
+
+def test_a_picture_saved_into_a_folder_named_failed_has_no_problems(bridge_log):
+    now = time.time()
+    p = bridge_log(f"{stamp(now)} #8 'Capture' via listener: file Document:Export: ok, file D:/FAILED/x.png")
+    assert radiald._plugin_result(8, now, p) == []
+
+
+def test_a_real_failure_still_gives_the_general_message_beside_a_saved_picture(bridge_log):
+    now = time.time()
+    p = bridge_log(f"{stamp(now)} #8 'Capture' via listener: file Document:Export: ok, file D:/FAILED/x.png; "
+                   f"press Tool:X: FAILED KeyError: 'X'")
+    assert radiald._plugin_result(8, now, p) == [radiald.MSG_PICK_FAILED]
+
+
+def test_a_failed_file_action_still_gives_the_general_message(bridge_log):
+    now = time.time()
+    p = bridge_log(f"{stamp(now)} #8 'Capture' via listener: file Document:Export: FAILED OSError: disk full")
+    assert radiald._plugin_result(8, now, p) == [radiald.MSG_PICK_FAILED]
+
+
+def test_a_missing_file_button_still_reports_beside_a_saved_picture(bridge_log):
+    now = time.time()
+    p = bridge_log(f"{stamp(now)} #8 'Capture' via listener: file Document:Export: ok, file D:/FAILED/x.png; "
+                   f"file Document:Export: no such interface item")
+    assert radiald._plugin_result(8, now, p) == ["Document:Export is not a ZBrush button"]

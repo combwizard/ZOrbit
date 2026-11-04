@@ -13,7 +13,8 @@ What it does:
       Status     shows listener, app and last-request state.
   * Picks come as request.json actions: {"brush"|"alpha"|"material"|"texture": name, "file": path} selects that
     asset (loading it from the file first when ZBrush does not have it), {"press": path}, {"set": path,
-    "value": v} and {"toggle": path} drive the interface directly.
+    "value": v} and {"toggle": path} drive the interface directly. {"filepress": button, "file": path} tells
+    ZBrush the next file name and then presses the button, which saves or opens that file with no dialog.
   * A hidden message-only window on ZBrush's main thread. The app posts WM_APP+1 to it after a pick, so no
     keystroke is needed. Its handle is published in listener.json only after a timer message has proved
     that ZBrush dispatches window messages to Python; if that never happens the app uses the bridge key.
@@ -166,7 +167,22 @@ def _do_asset(kind: str, a: dict) -> str:
     return f"{kind} {name}: NOT loaded in ZBrush and no file known"
 
 
+def _do_file(a: dict) -> str:
+    """Sets the next file name, then presses the button that uses it (Document:Export writes it, File:Open reads it)."""
+    button, f = a["filepress"], a.get("file")
+    if not zbc.exists(button):                            # before the name is set: it would wait for another button
+        return f"file {button}: no such interface item"
+    if not f:
+        return f"file {button}: no file given"
+    f = str(f).replace("\\", "/")
+    zbc.set_next_filename(f)
+    zbc.press(button)
+    return f"file {button}: ok, file {f}"
+
+
 def _do_action(a: dict) -> str:
+    if "filepress" in a:
+        return _do_file(a)
     for kind in ASSETS:
         if kind in a:
             res = _do_asset(kind, a)

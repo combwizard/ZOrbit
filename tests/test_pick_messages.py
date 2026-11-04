@@ -66,9 +66,15 @@ def test_no_listener_in_message_mode_has_its_own_message(app, monkeypatch):
 def test_the_messages_are_different_and_fit_the_toast_on_one_line():
     msgs = [radiald.MSG_NO_CONNECTION, radiald.MSG_NO_ANSWER, radiald.MSG_NOT_FRONT, radiald.MSG_EMPTY_SLOT,
             radiald.MSG_EMPTY_MENU, radiald.MSG_PICK_FAILED, radiald.MSG_COMMAND_TEXT,
-            radiald.MSG_COMMAND_PINNED, radiald.MSG_COMMAND_FROZEN, radiald.MSG_COMMAND_NO_MENUS]
+            radiald.MSG_COMMAND_PINNED, radiald.MSG_COMMAND_FROZEN, radiald.MSG_COMMAND_NO_MENUS,
+            radiald.MSG_CAPTURE_FOLDER, radiald.MSG_CAPTURE_NAME]
     assert len(set(msgs)) == len(msgs)
     probe = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
     for m in msgs:
         font = ring._font_for(m, toast.FONT_PX, bold=False)
         assert probe.textlength(m, font=font) <= toast.MAX_W - 2 * toast.PAD_X, m
+
+
+def test_a_capture_that_could_not_be_made_has_its_own_messages():
+    assert "capture folder" in radiald.MSG_CAPTURE_FOLDER
+    assert "2022" in radiald.MSG_CAPTURE_NAME

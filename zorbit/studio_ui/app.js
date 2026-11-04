@@ -87,6 +87,7 @@ const ICONS = {
   k_press: '<path d="M7 4.500l10.500 7.200-4.800 1.100 2.600 5.200-2.100 1-2.600-5.200L7 16.500z"/>',
   k_set: '<path d="M4 12h6M16 12h4"/><circle cx="13" cy="12" r="3"/>',
   k_toggle: '<rect x="3" y="7.500" width="18" height="9" rx="4.500"/><circle cx="16.500" cy="12" r="2.300" fill="currentColor" stroke="none"/>',
+  k_capture: '<path d="M4 8.500a1.500 1.500 0 0 1 1.500-1.500h2.300l1.500-2.300h5.400l1.500 2.300h2.300A1.500 1.500 0 0 1 20 8.500v8a1.500 1.500 0 0 1-1.500 1.500h-13A1.500 1.500 0 0 1 4 16.500z"/><circle cx="12" cy="12.500" r="3.200"/>',
   k_steps: '<path d="M12 4l8 4-8 4-8-4z"/><path d="M4 12l8 4 8-4M4 16l8 4 8-4"/>',
   k_menu: '<circle cx="12" cy="12" r="8.500"/><path d="M10 8.500l5 3.500-5 3.500z" fill="currentColor"/>',
   k_auto: '<path d="M19.500 12a7.500 7.500 0 0 1-13 5.100M4.500 12a7.500 7.500 0 0 1 13-5.100"/><path d="M17.500 3.500v3.400h-3.400M6.500 20.500v-3.400h3.400"/>',
@@ -119,7 +120,7 @@ function setRoving(rows, cur) { const stop = rows.includes(cur) ? cur : rows[0];
 function noTab(btn) { btn.tabIndex = -1; return btn; }
 
 /* ================================================================== state */
-const ACTIONS = ['brush', 'alpha', 'material', 'texture', 'press', 'set', 'toggle', 'steps', 'menu', 'auto', 'tag', 'browser', 'empty'];
+const ACTIONS = ['brush', 'alpha', 'material', 'texture', 'press', 'set', 'toggle', 'capture', 'steps', 'menu', 'auto', 'tag', 'browser', 'empty'];
 const KIND = {
   brush: { label: 'Brush', icon: 'k_brush', hint: 'Select a brush' },
   alpha: { label: 'Alpha', icon: 'k_alpha', hint: 'Select an alpha' },
@@ -128,6 +129,7 @@ const KIND = {
   press: { label: 'Press', icon: 'k_press', hint: 'Press any ZBrush button' },
   set: { label: 'Set', icon: 'k_set', hint: 'Set a slider or value' },
   toggle: { label: 'Toggle', icon: 'k_toggle', hint: 'Flip a switch' },
+  capture: { label: 'Capture', icon: 'k_capture', hint: 'Save the picture as a PNG' },
   steps: { label: 'Steps', icon: 'k_steps', hint: 'Run several actions in order' },
   menu: { label: 'Submenu', icon: 'k_menu', hint: 'Open another ring' },
   auto: { label: 'Auto', icon: 'k_auto', hint: 'A slot filled with a brush you pick often' },
@@ -248,10 +250,12 @@ const fullOnlyChanges = (cfg, where) => MODE.fullOnlyChanges(cfg, where, modeCtx
 const needsFull = cfg => MODE.needsFull(cfg, modeCtx());
 /* Would going to this problem target land on something Simple hides? */
 const targetNeedsFull = t => MODE.targetNeedsFull(t, modeCtx());
+/* A capture item's folder as the list shows it: the folder, or Pictures\ZBrush when it is empty (the default folder). */
+const captureFolder = it => String(it.capture ?? '').trim() || 'Pictures\\ZBrush';
 /* One line saying what an item targets; the item rows and the read-only line in Simple share it. */
 function itemSub(it) {
   const k = kindOf(it);
-  return k === 'empty' ? 'nothing here' : k === 'auto' ? 'filled from your picks' : k === 'tag' ? (it.tag ? 'all items tagged ' + tagName(it.tag) : '(not set)') : k === 'browser' ? 'opens the ' + K(it.kind).one + ' browser' + (it.browser ? ' for ' + tagName(it.browser) : '') : k === 'steps' ? plural((it.steps || []).length, 'step') : (k === 'set' ? `${targetOf(it)} = ${it.value}` : targetOf(it) || '(not set)');
+  return k === 'empty' ? 'nothing here' : k === 'auto' ? 'filled from your picks' : k === 'tag' ? (it.tag ? 'all items tagged ' + tagName(it.tag) : '(not set)') : k === 'browser' ? 'opens the ' + K(it.kind).one + ' browser' + (it.browser ? ' for ' + tagName(it.browser) : '') : k === 'steps' ? plural((it.steps || []).length, 'step') : k === 'capture' ? captureFolder(it) : (k === 'set' ? `${targetOf(it)} = ${it.value}` : targetOf(it) || '(not set)');
 }
 
 function defaultLabel(it) {
@@ -262,6 +266,7 @@ function defaultLabel(it) {
   if (k === 'auto') return 'Auto';
   if (k === 'empty') return 'Empty slot';
   if (k === 'tag') return tagName(it.tag);
+  if (k === 'capture') return 'Capture';
   if (k === 'browser') return it.browser && S.tagMap.has(it.browser) ? tagName(it.browser) : 'Browser';   // as _default_label in config.py
   return String(it[k] || '').split(':').pop();
 }
@@ -283,6 +288,7 @@ function actionValid(a, nested) {
   if (k === 'empty') return a.empty === true;                                      // always usable: the slot only holds its place
   if (k === 'browser') return typeof a.browser === 'string' && (a.kind === undefined || isLib(a.kind));          // '' = every item; kind: which tab it opens on
   if (typeof a[k] !== 'string') return false;                                       // null or a number from a hand edit: unusable, never a crash
+  if (k === 'capture') return true;                                                // a folder, and "" is the default folder: empty is usable
   if (isLib(k) && (/[\\/:]/.test(a[k]) || a[k].includes('..'))) return false;      // an asset is a plain name, never a path (config.py _bad_asset_name)
   return a[k].trim() !== '';
 }
@@ -326,8 +332,8 @@ function makeItem(kind, target, extra = {}) {
 }
 /* A target lives in one of these namespaces: each library kind's names, ZBrush item paths (press, set, toggle), menu ids and tags.
    Switching kind keeps a target only inside its own namespace, so a brush name never lands in a path field. */
-const nsOf = k => (isLib(k) ? k : k === 'menu' ? 'menu' : k === 'tag' || k === 'browser' ? 'tag' : 'path');
-const TARGET_NOUN = { brush: 'brush', alpha: 'alpha', material: 'material', texture: 'texture', press: 'button path', set: 'value path', toggle: 'switch path', menu: 'submenu', tag: 'tag', browser: 'tag filter' };
+const nsOf = k => (isLib(k) ? k : k === 'menu' ? 'menu' : k === 'tag' || k === 'browser' ? 'tag' : k === 'capture' ? 'folder' : 'path');
+const TARGET_NOUN = { brush: 'brush', alpha: 'alpha', material: 'material', texture: 'texture', press: 'button path', set: 'value path', toggle: 'switch path', capture: 'folder', menu: 'submenu', tag: 'tag', browser: 'tag filter' };
 /* Brush names are compared ignoring case and spaces (the guide says neither matters). */
 const nameKey = s => String(s === undefined || s === null ? '' : s).toLowerCase().replace(/\s+/g, '');
 /* An asset's key in tags.json: its kind, a colon and its name in lower case without spaces (tags.item_key in Python). */
@@ -2311,7 +2317,7 @@ function buildItemInspector() {
   } else if (k === 'tag' || k === 'browser') {
     box.append(tagTargetField(it, k, updateHead));
   } else if (k !== 'steps') {
-    const placeholders = { ...Object.fromEntries(LIB_KINDS.map(lk => [lk, 'Search ' + K(lk).many + ', e.g. ' + K(lk).eg])), press: 'Item path, e.g. Tool:Masking:Clear', set: 'Item path, e.g. Draw:Draw Size', toggle: 'Item path, e.g. Transform:Activate Symmetry', menu: 'Pick a menu' };
+    const placeholders = { ...Object.fromEntries(LIB_KINDS.map(lk => [lk, 'Search ' + K(lk).many + ', e.g. ' + K(lk).eg])), press: 'Item path, e.g. Tool:Masking:Clear', set: 'Item path, e.g. Draw:Draw Size', toggle: 'Item path, e.g. Transform:Activate Symmetry', capture: 'The ZBrush folder in your Pictures folder', menu: 'Pick a menu' };
     let touched = false;                                   // "required" hints wait until the field has been edited or left once
     let inp, openBtn = null;
     if (isLib(k)) ensureLib(k);                            // its load repaints this inspector (loadLibrary)
@@ -2328,17 +2334,25 @@ function buildItemInspector() {
       inp.addEventListener('blur', () => { touched = true; updateHint(); });
       openBtn = iconBtn('chevR', 'Open this submenu', () => openSubmenu(it.menu, S.itemIdx));
     } else {
-      inp = textInput(targetOf(it), v => { touched = true; it[k] = v.trim(); commit(); updateHint(); updateHead(); }, { mono: !isLib(k), placeholder: placeholders[k], focus: 'target', label: 'Target' });
+      inp = textInput(targetOf(it), v => { touched = true; it[k] = v.trim(); commit(); updateHint(); updateHead(); }, { mono: !isLib(k), placeholder: placeholders[k], focus: 'target', label: k === 'capture' ? 'Folder' : 'Target' });
       inp.addEventListener('change', () => { it[k] = inp.value.trim(); inp.value = it[k]; commit(); updateHint(); });
       inp.addEventListener('blur', () => { touched = true; updateHint(); });
-      combo(inp, q => matchOpts(isLib(k) ? libOpts(k) : pathOpts(), q), { thumb: isLib(k) ? k : null, mono: !isLib(k) });
+      if (k === 'capture') {
+        // A folder has no suggestions from ZBrush's paths. Browse... fills the field by firing the same input event typing does.
+        openBtn = h('button', { class: 'btn small', type: 'button', onclick: async () => {
+          let picked = null;
+          try { picked = await call('choose_folder'); } catch (e) { toast('Could not open the folder dialog: ' + e.message, { tone: 'warn' }); return; }
+          if (typeof picked !== 'string' || !picked.trim()) return;                 // cancelled: nothing changes
+          inp.value = picked.trim(); inp.dispatchEvent(new Event('input'));
+        } }, icon('folder', 13), 'Browse...');
+      } else combo(inp, q => matchOpts(isLib(k) ? libOpts(k) : pathOpts(), q), { thumb: isLib(k) ? k : null, mono: !isLib(k) });
     }
-    const tlabel = isLib(k) ? KIND[k].label : { press: 'Button path', set: 'Slider or value path', toggle: 'Switch path', menu: 'Submenu' }[k];
+    const tlabel = isLib(k) ? KIND[k].label : { press: 'Button path', set: 'Slider or value path', toggle: 'Switch path', capture: 'Folder', menu: 'Submenu' }[k];
     const wrap = h('div', { class: 'target-row' }, isLib(k) ? h('span', { class: 'tthumb' }) : null, inp, openBtn);
     box.append(field(tlabel, wrap, hintEl));
     function updateHint() {
       const v = targetOf(it).trim(); hintEl.className = 'fhint'; hintEl.replaceChildren();
-      if (!v && touched) { hintEl.classList.add('bad'); hintEl.append('A target is required. '); }
+      if (!v && touched && k !== 'capture') { hintEl.classList.add('bad'); hintEl.append('A target is required. '); }     // an empty folder is the default one
       if (isLib(k)) {
         const tt = $('.tthumb', wrap); if (tt) tt.replaceChildren(thumb(v || null, { size: 30, kind: k }));
         const L = lib(k), W = K(k);
@@ -2359,6 +2373,8 @@ function buildItemInspector() {
             it.menu = nid; S.menuId = keep; S.itemIdx = mi; commit({ inspector: true }); toast('Created an empty submenu. Open it to add items.', { action: { text: 'Open', fn: () => { if (S.menuId === keep) openSubmenu(nid, mi); else selectMenu(nid); } } });
           } }, 'Create a new submenu'));
         }
+      } else if (k === 'capture') {
+        hintEl.append(v ? 'Each capture is a PNG in this folder, named by the time. The folder is made if it is missing.' : 'Empty: captures go to the ZBrush folder in your Pictures folder.');
       } else {
         const s = S.suggestions.find(x => x.path.replace(/\s/g, '').toLowerCase() === v.replace(/\s/g, '').toLowerCase());
         if (s) hintEl.append('Known item: ' + s.source);
@@ -2384,7 +2400,7 @@ function buildItemInspector() {
       paintVal();
     }
   } else {
-    box.append(field('Steps', buildSteps(it), 'Steps can select brushes, alphas, materials and textures, press buttons, set values and flip switches (no submenus).'));
+    box.append(field('Steps', buildSteps(it), 'Steps can select brushes, alphas, materials and textures, press buttons, set values, flip switches and save captures (no submenus).'));
   }
 
   const iconInp = textInput(it.icon || '', v => { if (v.trim()) it.icon = v.trim(); else delete it.icon; commit(); updateIcon(); }, { placeholder: 'Optional: brush name or path to a .png / .zbp', label: 'Icon override', mono: !!it.icon && isPath(it.icon) });
@@ -2454,7 +2470,7 @@ function autoNow(m, i) {
   return el;
 }
 
-const STEP_KINDS = ['brush', 'alpha', 'material', 'texture', 'press', 'set', 'toggle'];
+const STEP_KINDS = ['brush', 'alpha', 'material', 'texture', 'press', 'set', 'toggle', 'capture'];
 function buildSteps(it) {
   const host = h('div', { class: 'steps' });
   const render = f => {                                          // f: { j, k } the control to focus afterwards (step j; k = type, up, down or rm)
@@ -2471,11 +2487,11 @@ function buildSteps(it) {
         if (lost.length) undoToast(`Step ${j + 1} is now ${KIND[nk].label}. Dropped ${joinList(lost)}.`, { ms: 6500 });
       } },
         STEP_KINDS.map(x => h('option', { value: x, selected: x === sk }, KIND[x].label)));
-      const tin = textInput(targetOf(st), v => { st[sk] = v; commit(); }, { mono: !isLib(sk), placeholder: isLib(sk) ? KIND[sk].label + ' name' : 'Item path', label: 'Step ' + (j + 1) + ' target' });
+      const tin = textInput(targetOf(st), v => { st[sk] = v; commit(); }, { mono: !isLib(sk), placeholder: isLib(sk) ? KIND[sk].label + ' name' : sk === 'capture' ? 'The ZBrush folder in your Pictures folder' : 'Item path', label: 'Step ' + (j + 1) + ' target' });
       tin.addEventListener('change', () => { st[sk] = tin.value.trim(); tin.value = st[sk]; commit(); });
       tin.classList.add('stgt');
       if (isLib(sk)) ensureLib(sk);
-      combo(tin, q => matchOpts(isLib(sk) ? libOpts(sk) : pathOpts(), q), { thumb: isLib(sk) ? sk : null, mono: !isLib(sk) });
+      if (sk !== 'capture') combo(tin, q => matchOpts(isLib(sk) ? libOpts(sk) : pathOpts(), q), { thumb: isLib(sk) ? sk : null, mono: !isLib(sk) });   // a folder has no ZBrush path suggestions
       const vhint = h('div', { class: 'fhint bad svhint', hidden: true });
       const row = h('div', { class: 'step' }, h('span', { class: 'snum mono' }, String(j + 1)), sel, tin,
         sk === 'set' ? (() => {
@@ -5076,6 +5092,7 @@ function describeProblem(raw) {
     if (t.startsWith(": 'auto' must be one of ")) return 'has an auto slot that is not supported (only brushes can be auto)';
     if (t.startsWith(": 'browser' must be a string")) return 'has a browser filter that is not a tag';
     if (t.startsWith(": browser 'kind' must be one of ")) return 'opens a browser tab that does not exist';
+    if (t.startsWith(': capture folder ')) return 'has a capture folder that cannot be used: ' + t.slice(': capture folder '.length);
     if ((r = /^: '(\w+)' must be a non-empty string$/.exec(t))) return 'needs a ' + (own(TARGET_NOUN, r[1]) ? TARGET_NOUN[r[1]] : 'target');
     if ((r = /^: (\w+) name (.+) must not contain /s.exec(t))) return `has the ${r[1]} name ${r[2]}, which looks like a path. Use only the name, without \\ / : or ..`;
     if ((r = /^: submenu (.+) does not exist$/s.exec(t))) return `opens the submenu ${unq(r[1])}, which does not exist`;
@@ -5853,7 +5870,7 @@ function describeChanges() {
   const after = S.cfg || {};
   const groups = [];
   const q = s => '\u201c' + s + '\u201d';
-  const itemName = it => it.empty === true ? 'Empty slot' : it.label || it.brush || it.alpha || it.material || it.texture || it.press || it.toggle || it.set || (it.menu ? 'Submenu ' + it.menu : it.steps ? 'Steps' : it.tag ? 'Tag ' + it.tag : 'browser' in it ? 'Browser' + (it.browser ? ' ' + it.browser : '') : 'item');
+  const itemName = it => it.empty === true ? 'Empty slot' : it.label || it.brush || it.alpha || it.material || it.texture || it.press || it.toggle || it.set || ('capture' in it ? 'Capture' : '') || (it.menu ? 'Submenu ' + it.menu : it.steps ? 'Steps' : it.tag ? 'Tag ' + it.tag : 'browser' in it ? 'Browser' + (it.browser ? ' ' + it.browser : '') : 'item');
   const bm = before.menus || {}, am = after.menus || {};
   for (const id of Object.keys(am)) {
     const a = am[id] || {}, b = own(bm, id) ? bm[id] : undefined;

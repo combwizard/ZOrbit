@@ -77,6 +77,8 @@ When the app knows why a pick went nowhere, it shows a short message near the cu
 - **This slot is empty**. You picked an auto slot nothing has filled yet, or a tag slot whose tag has no items.
 - **That menu has nothing usable in it**. You picked a submenu whose items are all empty or unusable.
 - **A name followed by "could not be found in ZBrush"** or **"is not a ZBrush button"**, or **ZBrush could not carry out that pick. See bridge.log.** The plugin picked the request up and reported a problem: the brush, alpha, material or texture is not installed, the `press`, `set` or `toggle` path does not exist, or ZBrush raised an error. `bridge.log` has the details (see [The pick is logged as selected, but nothing changes](#the-pick-is-logged-as-selected-but-nothing-changes)). In ZBrush 2022 to 2025 they are in `zscript_bridge.log` and `radiald.log`. A pick there only searches [that ZBrush's own folders](menus.md#brush), so an item the browser lists can still be missing.
+- **The capture folder cannot be used, nothing sent. See radiald.log.** A [Capture](menus.md#capture) item's folder is not a full path to a folder on this PC, or ZOrbit cannot make the folder or write a file into it. The picture's full path, folder and file name, is also refused when it is longer than 259 characters, or in ZBrush 2022 to 2025 when it is longer than 255 bytes in the ANSI code page. `radiald.log` gives the reason.
+- **ZBrush 2022-2025 cannot save to that capture folder's name, nothing sent**. In ZBrush 2022 to 2025 the folder's name has characters outside plain ASCII, and Windows has no short name for the folder, so the plugin cannot be given its path. Choose another folder.
 
 If you see no message and nothing happens, work through the steps below.
 

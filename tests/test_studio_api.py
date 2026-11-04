@@ -214,6 +214,14 @@ def test_add_zbrush_folder_still_refuses_what_is_not_zbrush(api, tmp_path, monke
     assert res["ok"] is False and "No ZBrush.exe" in res["message"]
 
 
+def test_choose_folder_returns_the_picked_path_or_none(api, tmp_path, monkeypatch):
+    _fake_webview(monkeypatch)
+    api._window = types.SimpleNamespace(create_file_dialog=lambda *a, **k: [str(tmp_path)])
+    assert api.choose_folder() == str(tmp_path)
+    api._window = types.SimpleNamespace(create_file_dialog=lambda *a, **k: None)
+    assert api.choose_folder() is None
+
+
 def test_known_legacy_falls_back_to_the_folder_itself(api, tmp_path, monkeypatch):
     monkeypatch.setattr(api, "_scanned_installs", lambda: [])
     old = _zbrush(tmp_path, "ZBrush 2024")

@@ -299,3 +299,37 @@ def test_the_app_output_log_moves_aside_when_it_grows(bridge, monkeypatch, tmp_p
     assert errlog.stat().st_size == 0 and started == [str(errlog)]
     bridge._spawn([str(tmp_path / "ZOrbit.exe")], "app_stderr.log")     # small again: kept as it is
     assert (Path(bridge.DATA_DIR) / "app_stderr.log.old").stat().st_size == 200_001
+
+
+# --- the file action: set the next file name, then press ---------------------------------------
+def test_a_file_action_sets_the_file_and_then_presses_the_button(bridge):
+    bridge.stub.items.add("Document:Export")
+    send(bridge, [{"filepress": "Document:Export", "file": "C:/Users/you/Pictures/ZBrush_2026-11-04_12-00-05.png"}])
+    assert bridge.stub.calls == [("set_next_filename", "C:/Users/you/Pictures/ZBrush_2026-11-04_12-00-05.png"),
+                                 ("press", "Document:Export")]
+    assert "file Document:Export: ok, file C:/Users/you/Pictures/ZBrush_2026-11-04_12-00-05.png" in log_text(bridge)
+
+
+def test_a_file_action_with_a_missing_button_sets_no_file_and_presses_nothing(bridge):
+    send(bridge, [{"filepress": "Document:Export", "file": "C:/Users/you/a.png"}])
+    assert bridge.stub.calls == []
+    assert "file Document:Export: no such interface item" in log_text(bridge)
+
+
+def test_a_file_action_with_a_backslash_path_goes_to_zbrush_with_forward_slashes(bridge):
+    bridge.stub.items.add("Document:Export")
+    send(bridge, [{"filepress": "Document:Export", "file": "C:\\Users\\you\\a.png"}])
+    assert bridge.stub.calls[0] == ("set_next_filename", "C:/Users/you/a.png")
+
+
+def test_a_file_action_without_a_file_is_not_pressed(bridge):
+    bridge.stub.items.add("Document:Export")
+    send(bridge, [{"filepress": "Document:Export"}])
+    assert bridge.stub.calls == []
+    assert "file Document:Export: no file given" in log_text(bridge)
+
+
+def test_a_file_action_runs_in_order_with_the_actions_around_it(bridge):
+    bridge.stub.items.update({"Tool:Masking:Clear", "Document:Export"})
+    send(bridge, [{"press": "Tool:Masking:Clear"}, {"filepress": "Document:Export", "file": "C:/Users/you/a.png"}])
+    assert bridge.stub.presses() == ["Tool:Masking:Clear", "Document:Export"]
