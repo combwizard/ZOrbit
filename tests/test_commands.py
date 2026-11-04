@@ -423,3 +423,14 @@ def test_each_command_gets_a_line_in_the_log(app, monkeypatch):
     command(app, "--open", "nope")
     assert any(l.startswith("command: ") and "Clay" in l for l in lines)
     assert any(l.startswith("command refused: ") and "nope" in l for l in lines)
+
+
+def test_a_command_that_fails_does_not_strand_the_ones_behind_it(app, monkeypatch):
+    lines = []
+    monkeypatch.setattr(radiald, "log", lines.append)
+    monkeypatch.setattr(app, "open_browser", lambda *a_, **k: 1 / 0)
+    app._take_command(commands.parse(["--browser"]))
+    app._take_command(commands.parse(["--pick", "brush:Clay"]))
+    app._run_command()
+    assert not app._commands and len(app.picks) == 1
+    assert any(l.startswith("command failed:") and "ZeroDivisionError" in l for l in lines)

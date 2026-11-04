@@ -1252,7 +1252,10 @@ class App:
                     return
             self._command_wait = None
             self._commands.popleft()
-            run()
+            try:
+                run()
+            except Exception:                      # the rest must not sit here until some later command runs them
+                log("command failed:\n" + traceback.format_exc())
 
     def _do_command(self, msg, pid):
         op = msg["op"]
