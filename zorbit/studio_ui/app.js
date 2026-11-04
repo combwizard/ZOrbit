@@ -3444,7 +3444,36 @@ function makeBrowser({ compact, st, host = STUDIO_HOST, kindUi = compact ? 'comp
   /* The popout keeps the first match highlighted: after a filter changes by hand it moves there again. */
   function rehighlight() { if (host.firstMatch) highlightFirst(); }
   /* Picks a folder; the two usage folders read get_usage afresh. */
-  function setCat(cat) { st.cat = cat; if (usageCat(cat)) loadUsage(st.kind); }
+  function setCat(cat) { st.cat = cat; mark(); if (usageCat(cat)) loadUsage(st.kind); }
+  /* The mouse's Back and Forward buttons walk the tabs and folders this browser has been on, like the pages of a web browser.
+     Kept on st, because the Library screen makes a new browser each time it opens. */
+  const nav = st.nav || (st.nav = { list: [{ kind: st.kind, cat: st.cat }], at: 0 });
+  let replaying = false;
+  function mark() {
+    if (replaying) return;
+    const cur = nav.list[nav.at];
+    if (cur.kind === st.kind && cur.cat === st.cat) return;
+    nav.list.splice(nav.at + 1);
+    nav.list.push({ kind: st.kind, cat: st.cat });
+    if (nav.list.length > 50) nav.list.shift();
+    nav.at = nav.list.length - 1;
+  }
+  mark();                                                      // a link may have set the folder while no browser was open
+  /* One step back (-1) or forward (1). False when there is nowhere to go, so the caller can use the button for something else. */
+  function navStep(d) {
+    const to = nav.list[nav.at + d];
+    if (!to) return false;
+    nav.at += d; replaying = true;
+    try {
+      if (to.kind !== st.kind) setKind(to.kind);
+      st.cat = to.cat;
+      if (to.cat.includes('/')) st.open.add(to.cat.split('/')[0]);
+      if (usageCat(to.cat)) loadUsage(st.kind);
+      renderAll(); rehighlight();
+      scroll.scrollTop = 0;
+    } finally { replaying = false; }
+    return true;
+  }
   function toggleTag(key) {
     if (key === '@untagged') { st.untagged = !st.untagged; if (st.untagged) st.tags.clear(); }
     else { st.untagged = false; if (st.tags.has(key)) st.tags.delete(key); else st.tags.add(key); }
@@ -3684,13 +3713,13 @@ function makeBrowser({ compact, st, host = STUDIO_HOST, kindUi = compact ? 'comp
         e = emptyState('search', `No ${W().many} match "${st.q}"`, st.cat !== 'All' ? `Only "${where}" was searched.` : 'Check the spelling.');
         e.append(h('div', { class: 'btn-row' },
           h('button', { class: 'btn small', type: 'button', onclick: () => { clearQuery(); renderAll(); rehighlight(); } }, 'Clear search'),
-          st.cat !== 'All' ? h('button', { class: 'btn small primary', type: 'button', onclick: () => { st.cat = 'All'; renderAll(); rehighlight(); } }, 'Search all folders') : null));
+          st.cat !== 'All' ? h('button', { class: 'btn small primary', type: 'button', onclick: () => { setCat('All'); renderAll(); rehighlight(); } }, 'Search all folders') : null));
       } else if (st.cat === '@fav') {
-        e = emptyState('star', 'No favourites yet', `Hover ${aOrAn(W().one)} and press its star, or press Ctrl+D.`, { text: `Show all ${W().many}`, fn: () => { st.cat = 'All'; renderAll(); } });
+        e = emptyState('star', 'No favourites yet', `Hover ${aOrAn(W().one)} and press its star, or press Ctrl+D.`, { text: `Show all ${W().many}`, fn: () => { setCat('All'); renderAll(); } });
       } else if (st.cat === '@recent') {
-        e = emptyState('clock', 'Nothing picked yet', 'Items you pick in ZBrush show up here, newest first.', { text: `Show all ${W().many}`, fn: () => { st.cat = 'All'; renderAll(); } });
+        e = emptyState('clock', 'Nothing picked yet', 'Items you pick in ZBrush show up here, newest first.', { text: `Show all ${W().many}`, fn: () => { setCat('All'); renderAll(); } });
       } else {
-        e = emptyState('search', 'Nothing in this category', st.cat === '@used' ? `${W().tab} you put into a menu show up here.` : '', { text: `Show all ${W().many}`, fn: () => { st.cat = 'All'; renderAll(); } });
+        e = emptyState('search', 'Nothing in this category', st.cat === '@used' ? `${W().tab} you put into a menu show up here.` : '', { text: `Show all ${W().many}`, fn: () => { setCat('All'); renderAll(); } });
       }
       grid.append(h('div', { class: 'grid-empty' }, e));
       return;
@@ -3838,7 +3867,7 @@ function makeBrowser({ compact, st, host = STUDIO_HOST, kindUi = compact ? 'comp
     if (kind === st.kind || !isLib(kind)) return;
     st.kind = kind;
     sel.clear(); anchor = null; autoHl = false;
-    st.cat = 'All'; st.open = new Set();
+    st.cat = 'All'; st.open = new Set(); mark();
     if (tabs) tabs.paint();
     paintStrings();
     if (rescan) { rescan.dataset.kind = kind; paintRescanBtn(rescan); }
@@ -3856,7 +3885,7 @@ function makeBrowser({ compact, st, host = STUDIO_HOST, kindUi = compact ? 'comp
   loadUsage(st.kind);                                          // the Recent count, and the order when a link opened Favourites or Recent
   const api = {
     el: root, scroller: () => scroll,
-    kind: () => st.kind, setKind,
+    kind: () => st.kind, setKind, navStep,
     refresh() { renderAll(true); paintTarget(); },                  // after a library load: the scroll position stays
     hasSel: () => sel.size > 0,
     focusSearch(select = true) { search.focus(); if (select) search.select(); },
@@ -6033,11 +6062,42 @@ const SCREEN_SCROLLER = { menus: '.ilist', look: '.look-scroll', library: '.b-sc
 const scrollerOf = name => { const root = $('#screen-' + name); return root ? $(SCREEN_SCROLLER[name] || '.settings-scroll', root) : null; };
 let lastScreenChain = Promise.resolve();   // writes run one after another, so two quick switches cannot land out of order
 const saveLastScreen = name => { lastScreenChain = lastScreenChain.then(() => call('set_pref', 'last_screen', name)).catch(() => {}); };
+/* The screens visited, for the mouse's Back and Forward buttons. A new visit drops whatever was ahead, like a web browser. */
+const screenNav = { list: [], at: -1, replay: false };
+function noteScreen(name) {
+  if (screenNav.replay) return;
+  screenNav.list.splice(screenNav.at + 1);
+  screenNav.list.push(name);
+  if (screenNav.list.length > 50) screenNav.list.shift();
+  screenNav.at = screenNav.list.length - 1;
+}
+/* Back (-1) or forward (1): first through the folders and tabs of the Library browser, then through the screens. */
+function navStudio(d) {
+  if (!S.ready || S.fatal || document.querySelector('.tour-card')) return;
+  const b = S.screen === 'library' ? browsers.get(S.lib) : null;
+  if (b && b.navStep(d)) return;
+  const to = screenNav.list[screenNav.at + d];
+  if (!to) return;
+  screenNav.at += d; screenNav.replay = true;
+  try { showScreen(to); } finally { screenNav.replay = false; }
+}
+/* Wires the mouse's Back and Forward buttons (buttons 3 and 4) to `step`. The web view would otherwise try to go back a page itself. */
+function installMouseNav(step) {
+  const isNav = e => { if (e.button === 3 || e.button === 4) { e.preventDefault(); return true; } return false; };
+  window.addEventListener('mousedown', isNav, true);
+  window.addEventListener('auxclick', isNav, true);
+  window.addEventListener('mouseup', e => {
+    if (!isNav(e)) return;
+    if ($('#overlay-root').firstElementChild || $('.popover')) return;       // a dialog or a menu has the pointer
+    step(e.button === 3 ? -1 : 1);
+  }, true);
+}
 function showScreen(name, { fresh = false } = {}) {
   name = Object.keys(SCREENS).find(k => k === name) || 'menus';     // the name from the list, never the one passed in (a link or studio.json)
   if (openPopover) openPopover();
   if (comboClose) comboClose();
   if (S.shown && name === S.screen) return;
+  noteScreen(name);
   if (S.shown) { const old = scrollerOf(S.screen); if (old) S.scroll[S.screen] = old.scrollTop; }
   for (const k of Object.keys(R)) delete R[k];
   clearInterval(statusTimer);
@@ -6605,6 +6665,7 @@ function init() {
     }
     else if (e.altKey && !e.ctrlKey && !e.shiftKey && screenKey(e) !== null) { e.preventDefault(); showScreen(SCREEN_ORDER[screenKey(e)]); }
   });
+  installMouseNav(navStudio);
   window.addEventListener('focus', debounce(() => { if (S.ready && !S.fatal) { loadTags(); reloadUsage(); } }, 300));      // tags.json may have changed (the popout, a hand edit), and picks add to Recent
   window.addEventListener('focus', debounce(checkProfile, 300));                                                                   // the app's profile may have changed (the tray), or this one may be gone
   window.addEventListener('focus', debounce(() => { if (S.ready && !S.fatal && S.screen !== 'setup') refreshSetupBadge(); }, 600));   // the Setup screen polls for itself
@@ -6762,6 +6823,7 @@ async function bootPopout() {
 }
 
 function initPopout() {
+  installMouseNav(d => { if (popBrowser) popBrowser.navStep(d); });
   window.addEventListener('keydown', e => {
     if (!popBrowser || e.isComposing) return;
     if ($('#overlay-root').firstElementChild || $('.popover')) return;       // a dialog or a popover has the keys
