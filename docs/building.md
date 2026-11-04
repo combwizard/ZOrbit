@@ -29,7 +29,7 @@ python zorbit\main.py --selftest      # check the libraries, modules and bundled
 dist\ZOrbit\ZOrbit.exe --selftest     # the same checks on the built app
 ```
 
-The tests import the Windows modules, so they run on Windows only. `--selftest` imports pywebview, pythonnet and every app module, and looks for the Studio interface files, the icons, the default menus, the ZScript bridge and the WebView2 loader DLL. It prints one line per check and exits with 1 if any fails. Run it on the built exe to catch a file that PyInstaller left out.
+The tests import the Windows modules, so they run on Windows only. `--selftest` imports pywebview, pythonnet, truststore and every app module, and looks for the Studio interface files, the icons, the default menus, the ZScript bridge and the WebView2 loader DLL. It prints one line per check and exits with 1 if any fails. Run it on the built exe to catch a file that PyInstaller left out.
 
 `tests\test_upgrade.py` runs the profile migration over data that real past releases wrote. The data is in `tests\fixtures\upgrade\<tag>\`: one folder each for v0.7.0, v0.7.1, v0.9.0 and v0.12.0, and a `downgrade` folder for 0.12.0 run again after the move. `python tools\make_upgrade_fixtures.py` makes them. It runs each release's own code from `git archive`, with a fresh `APPDATA` and `LOCALAPPDATA`. CI does not run the generator.
 

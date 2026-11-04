@@ -172,6 +172,29 @@ def _installed_here() -> bool:
     return isinstance(app, str) and os.path.normcase(os.path.abspath(app)) == os.path.normcase(here)
 
 
+_TLS = []                       # [context or None] once built
+
+
+def _tls_context():
+    """The SSL context for Studio's requests to GitHub. truststore lets Windows check the certificate, as Edge does,
+    so a root certificate Windows has not fetched yet (common on a fresh Windows) is fetched instead of failing.
+    Python's own check only trusts the roots already in the store. None (Python's default) if truststore is missing."""
+    if not _TLS:
+        try:
+            import ssl
+            import truststore
+            _TLS.append(truststore.SSLContext(ssl.PROTOCOL_TLS_CLIENT))
+        except Exception as e:
+            _startup(f"truststore unavailable, using Python's certificate check: {e!r}")
+            _TLS.append(None)
+    return _TLS[0]
+
+
+def _urlopen(req, timeout):
+    import urllib.request
+    return urllib.request.urlopen(req, timeout=timeout, context=_tls_context())
+
+
 def _download_problem(e) -> str:
     """What to tell the user about a failed update download."""
     import urllib.error
@@ -1745,7 +1768,7 @@ class Api(webapi.LibraryApi, webapi.TagApi):
             import urllib.request
             req = urllib.request.Request(RELEASES_API, headers={
                 "Accept": "application/vnd.github+json", "User-Agent": f"ZOrbitStudio/{VERSION}"})
-            with urllib.request.urlopen(req, timeout=8) as r:
+            with _urlopen(req, timeout=8) as r:
                 data = json.load(r)
         except Exception as e:
             _startup(f"update check failed: {e!r}")
@@ -1819,7 +1842,7 @@ class Api(webapi.LibraryApi, webapi.TagApi):
         h, done = hashlib.sha256(), 0
         req = urllib.request.Request(setup["url"], headers={"User-Agent": f"ZOrbitStudio/{VERSION}"})
         try:
-            with urllib.request.urlopen(req, timeout=30) as r, open(part, "wb") as f:
+            with _urlopen(req, timeout=30) as r, open(part, "wb") as f:
                 while True:
                     chunk = r.read(256 * 1024)
                     if not chunk:

@@ -4,6 +4,12 @@ All notable changes to this project are listed here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+
+- Studio's update check and **Install update** failed on a freshly installed Windows with `CERTIFICATE_VERIFY_FAILED` in `studio.log`, because Python only trusted the root certificates Windows already had. Windows now checks GitHub's certificate (through the `truststore` package), and fetches a missing root as Edge does.
+
 ## [0.17.0] - 2026-11-03
 
 ZOrbit 0.17.0 adds empty slots. With **Keep slots in place** on, deleting an item leaves its slot empty and a new
