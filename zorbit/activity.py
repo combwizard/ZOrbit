@@ -7,7 +7,7 @@
  "ring": {"at": 1761800123.4, "menu": "brushes"},        # the last root ring opened (submenus do not count)
  "pick": {"at": 1761800125.0, "seq": 3, "menu": "brushes", "kind": "brush", "label": "ClayBuildup",
           "route": "listener", "sent": true, "reason": null,      # route: listener | key | zscript | none
-          "source": "ring", "ack": null}}                         # source: ring | browser; ack: picked_up | timeout
+          "source": "ring", "ack": null}}                         # source: ring | browser | command; ack: picked_up | timeout
 
 The file is disposable: it is written without fsync (a flick can pick 100 ms after the ring opened, so nothing
 here may wait), and a half-written or hand-edited file reads as None.

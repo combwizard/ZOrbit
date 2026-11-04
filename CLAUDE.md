@@ -44,6 +44,7 @@ Where each part is documented:
 | `menushare.py` (**Export menu**, **Import menu**) | `menus.md`, `files.md` |
 | `theme.py`, `zbrush_colors.py` (the theme, **Match ZBrush**) | `appearance.md`, `studio.md` |
 | `report.py` (**Copy report** on Status) | `studio.md`, `troubleshooting.md`, `files.md`, and the bug form |
+| `commands.py`, the `_command` methods in `radiald.py` (commands from other programs) | `hotkeys.md`, `troubleshooting.md`, plus `browser.md` and `profiles.md` for their options |
 | `main.py` (command-line options) | `building.md`, `browser.md` |
 | `win32.py` (Windows calls) | None of its own; the page for the feature that uses it |
 | `bridge/`, `zscript_bridge.py` (bridge modes, bridge key, the Zplugin palette) | `bridge.md` |

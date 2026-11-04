@@ -20,6 +20,46 @@ Q          Alt+G          Ctrl+Shift+1          F9          `
 
 By default a menu **swallows** its hotkey: ZBrush never sees it, so it does not also run its own shortcut for that key. Set `"swallow": false` (or switch it off in the menu settings in Studio) if you want the key to keep working in ZBrush too. The starter **Brushes** menu has it off, because **Q** is ZBrush's Draw-mode key: ZBrush goes back to Draw mode as the ring opens, and **Q** still types in ZBrush's own text fields.
 
+## Commands from other programs
+
+A Stream Deck, the software that comes with a tablet or mouse, AutoHotkey or a script can drive ZOrbit by running `ZOrbit.exe` with one of these options. It finds the ZOrbit app that is running, passes it the command and quits. It never starts a second app, and it shows no window.
+
+| Command | What it does |
+|---|---|
+| `ZOrbit.exe --open "<menu>"` | Opens that menu at the cursor. `<menu>` is its id in `radial.json`, with capitals as written there. The menu needs no hotkey. |
+| `ZOrbit.exe --pick "brush:<name>"` | Selects a brush. `alpha:`, `material:` and `texture:` work the same way. |
+| `ZOrbit.exe --press "<item path>"` | Presses a ZBrush button, such as `"Tool:Masking:Clear"`. |
+| `ZOrbit.exe --set "<item path>" <value>` | Sets a slider to a number, such as `--set "Draw:Draw Size" 64`. |
+| `ZOrbit.exe --toggle "<item path>"` | Flips a switch, such as `"Transform:Activate Symmetry"`. |
+| `ZOrbit.exe --browser [--kind <kind>] [--tag <tag>]` | Opens the [browser](browser.md), on a tab or filtered to a tag. `<tag>` is the tag's key. |
+| `ZOrbit.exe --profile "<name>"` or `--profile next` | Switches [profile](profiles.md), or steps to the next one in the list. A profile called `next` can only be reached from Studio or the tray. |
+
+Put a name with a space in it in quotes, or it arrives as two arguments and the command is refused.
+
+`--pick`, `--press`, `--set` and `--toggle` do what a slot with that action does: they take the same way to ZBrush, a pick waits for the pen in ZBrush 2026 and newer, and a failure shows the same message near the cursor. A brush, alpha, material or texture counts in **Recent** (a brush in the auto slots too) when ZOrbit can find its file, so a mistyped name does not end up there. Picks sent close together, such as a Stream Deck multi-action, go one at a time: each waits up to 2 seconds for the one before it to be taken, then goes anyway. The item paths are the ones in [Finding a button's path](menus.md#finding-a-buttons-path). A menu opened with `--open` has no held key behind it, so it opens as a tapped hotkey does: move to a slot and click, or press **Esc**. Running the same `--open` again closes it.
+
+**ZBrush in front.** A command never moves the focus. `--open` needs ZBrush to be the front window, like a hotkey. A pick also goes through while another window is in front if one ZBrush is running and its listener is working, which takes ZBrush 2026 or newer and the bridge mode `auto` or `message`. Otherwise it is refused, because the bridge key is only pressed while ZBrush is in front. So in ZBrush 2022 to 2025, keep ZBrush in front. A device such as a Stream Deck usually leaves it there. `--browser` and `--profile` work whichever window is in front.
+
+**Exit codes.**
+
+| Code | Meaning |
+|---|---|
+| 0 | ZOrbit took the command. |
+| 1 | The command was refused: the arguments are wrong, the menu, tag or profile does not exist, or ZBrush is not in front when it has to be. |
+| 2 | No ZOrbit answered within 2 seconds: it is not running, it is busy, or it runs as administrator and the program sending the command does not. A busy ZOrbit can still carry the command out later, so do not repeat `--profile next` on this code. |
+
+ZOrbit cannot tell whether a brush or a button exists until ZBrush tries it, since a brush can be loaded without a file. So an unknown brush or button path still gives 0, and the message near the cursor says what went wrong. A name or path that cannot be right, such as a brush name with a `\` in it, gives 1.
+
+**In a Stream Deck,** add a **System > Open** action. Set its **App / File** to the full command, with the full path of the program:
+
+```
+"C:\Users\you\AppData\Local\Programs\ZOrbit\ZOrbit.exe" --pick brush:ClayBuildup
+```
+
+Elgato does not document options in that field. If the button does not run the command, put the same line in a `.bat` file and choose that file instead.
+
+That is where Setup puts ZOrbit by default. From a source checkout, use `python zorbit\main.py` in place of `ZOrbit.exe`. If a button seems to do nothing, see [A command from another program does nothing](troubleshooting.md#a-command-from-another-program-does-nothing).
+
 ## Pick modes
 
 There are two ways to pick, and the same hotkey does both.

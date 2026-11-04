@@ -48,6 +48,7 @@ The **[roadmap board](https://github.com/users/combwizard/projects/2)** shows wh
 - **Safe with your stroke.** In ZBrush 2026 and newer, a pick that arrives mid-stroke waits until you lift the pen. ZBrush 2022 to 2025 cannot wait and apply it at once.
 - **High-DPI and multi-monitor aware.** The ring stays on screen, even at the screen edge.
 - **Profiles.** Keep a whole set of menus, settings, tags and usage per kind of work, and switch between them from Studio's top bar or the tray icon without a restart.
+- **Commands from other programs.** A Stream Deck, tablet software or a script can open a menu, pick a brush or switch profile by running `ZOrbit.exe` with an option.
 - **Plain JSON menus** in `%APPDATA%\ZOrbit\profiles\<profile>\radial.json`, so you can back them up, share them and keep them in version control.
 
 <p align="center">

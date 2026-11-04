@@ -15,6 +15,7 @@ While Studio is open you can drag an item from the browser onto a menu in Studio
 - Choose **Browser** in the tray menu (the ZOrbit icon in the notification area).
 - Press **Browser** in Studio's top bar (on every screen), or in the Library toolbar.
 - Start it from the Start menu (**ZOrbit Browser**).
+- From another program, `ZOrbit.exe --browser` asks the running app to open it. See [Commands from other programs](hotkeys.md#commands-from-other-programs).
 - Start it from the command line with `ZOrbit.exe --popout --show` (from a source checkout, `python zorbit\main.py --popout --show`). Add `--kind brush`, `--kind alpha`, `--kind material` or `--kind texture` to open it on that tab, and `--tag KEY` to filter it to one tag. Without `--show` it starts hidden and waits to be called.
 
 A browser that was hidden (it starts hidden, and **X** hides one that the app started) starts afresh when you open it: the search is empty, only the tag you asked for is on (none, for the hotkey), the folder is **All** (**Favourites** when you asked for it), the list is at the top and the first match is highlighted. The tab you were last on stays, unless you asked for another, and so do the thumbnail size, Keep on top, the folders column and the window's place. A browser that is already open just comes to the front, with its search and filters as they were, except that a tag or tab you asked for (from a **Browser** slot, say) is applied.

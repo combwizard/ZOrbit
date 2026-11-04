@@ -16,6 +16,8 @@ If you have unsaved edits in Studio, switching asks what to do: **Keep editing**
 
 If the profile is switched from the tray while Studio is open, Studio follows when it has no unsaved edits, and says "The app switched to X". With unsaved edits it shows a warning with a **Reload** button, and the profile button shows that the profile you are editing is not the one the app uses. **Save** always writes the profile Studio loaded.
 
+A Stream Deck or a script can switch too, with `ZOrbit.exe --profile <name>` or `ZOrbit.exe --profile next`. See [Commands from other programs](hotkeys.md#commands-from-other-programs).
+
 ## Making a profile
 
 Click the profile button and choose **New profile...**. Type a name, then pick where the new profile's menus, settings and tags come from:
