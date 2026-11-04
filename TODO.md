@@ -22,6 +22,7 @@ worked out.
    - [#23](https://github.com/combwizard/ZOrbit/issues/23) whenever a standard (non-admin) account is to hand.
 2. **Medium:** [#108](https://github.com/combwizard/ZOrbit/issues/108) first (small), then
    [#109](https://github.com/combwizard/ZOrbit/issues/109) (pick hide, dim or a message first);
+   [#116](https://github.com/combwizard/ZOrbit/issues/116) (Copy report on Status);
    [#99](https://github.com/combwizard/ZOrbit/issues/99) then
    [#94](https://github.com/combwizard/ZOrbit/issues/94) (`--profile next` is the hotkey's plumbing);
    [#106](https://github.com/combwizard/ZOrbit/issues/106) (timer inside the browser);
@@ -41,7 +42,6 @@ worked out.
 Parked for now: [#29](https://github.com/combwizard/ZOrbit/issues/29) (Keep, Remove and Hide need more
 detailing).
 
-Not placed yet: [#116](https://github.com/combwizard/ZOrbit/issues/116) (Copy report on Status).
-
-[#94](https://github.com/combwizard/ZOrbit/issues/94) and [#39](https://github.com/combwizard/ZOrbit/issues/39)
-both edit `studio_ui/app.js`, so merge them one at a time.
+[#116](https://github.com/combwizard/ZOrbit/issues/116), [#94](https://github.com/combwizard/ZOrbit/issues/94)
+and [#39](https://github.com/combwizard/ZOrbit/issues/39) all edit `studio_ui/app.js`, so merge them one at a
+time.
