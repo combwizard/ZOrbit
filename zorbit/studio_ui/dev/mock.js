@@ -70,14 +70,10 @@
   var clone = function (o) { return JSON.parse(JSON.stringify(o)); };
   var straysFound = q.has('strays'), appRestarted = false;
   var mockUpd = { state: 'idle', version: '', done: 0, total: 0, message: '', file: '' };
-  // The release an older install (0.16.0) is offered in ?update: the real 0.17.0 notes, so the docs picture of the dialog is true.
-  var UPD_NOTES = { version: '0.17.0', date: '2026-11-03', url: 'https://github.com/combwizard/zorbit/releases/tag/v0.17.0', blog: 'https://zorbit.lol/docs/blog/zorbit-0-17-0/',
-    summary: ['ZOrbit 0.17.0 adds empty slots. With **Keep slots in place** on, deleting an item leaves its slot empty and a new item fills the first gap, so the rest of the ring stays where your hand expects it. Studio also asks less of you: Setup has three steps, Settings is shorter, the open animation is set on **Look**, and Look’s groups fold in Full mode.'],
-    items: ['**Empty slots** (#110): with **Keep slots in place** on, deleting an item leaves its slot empty.',
-      'A **Match** switch for tag filters: **Any** or **All**.',
-      '**Tag fan slots** sets how many slots a tag fan holds.',
-      '**Setup** has three steps, and a finished step folds to one line.',
-      'The open animation is set on the **Look** screen.'] };
+  // The release an older install (0.17.0) is offered in ?update: the real 0.17.1 notes, so the docs picture of the dialog is true.
+  var UPD_NOTES = { version: '0.17.1', date: '2026-11-04', url: 'https://github.com/combwizard/zorbit/releases/tag/v0.17.1', blog: '',
+    summary: ['ZOrbit 0.17.1 fixes the update check on a freshly installed Windows. Studio could not reach GitHub there until something else on the PC, such as a browser, had made Windows fetch the certificate it needed, so a new install did not show that an update was out. If Studio does not offer you this version, install it once by hand.'],
+    items: ['Studio’s update check and **Install update** failed on a freshly installed Windows. Windows now checks GitHub’s certificate, and fetches a missing root as Edge does.'] };
   var libSeq = {}, ticks = 0, thumbCalls = 0, alreadyDone = false, appStarted = false, setupCalls = 0, modernAdded = false, keptDone = false;
   var saved = clone(M.get_config.config);
   var TAG_DEFAULTS = { radius: 145, slot: 72, dead_zone: 38, labels: 'name', slot_corner: 0.28, border_width: 2, icon_scale: 1, hub_style: 'dot', hub_color: 'accent', hub_glow: 1,
@@ -679,7 +675,7 @@
   var api = {
     get_config: function (profile) {
       return sleep(40).then(function () {
-        if (q.has('toonew')) return Object.assign({ config: null, too_new: true, error: 'These files were made by ZOrbit 9.9.9, which is newer than this one (0.17.0). Install ZOrbit 9.9.9 or newer.', path: 'C:\\Users\\you\\AppData\\Roaming\\ZOrbit\\radial.json', backup_exists: false, problems: [], mtime_ns: null }, profInfo());
+        if (q.has('toonew')) return Object.assign({ config: null, too_new: true, error: 'These files were made by ZOrbit 9.9.9, which is newer than this one (0.17.1). Install ZOrbit 9.9.9 or newer.', path: 'C:\\Users\\you\\AppData\\Roaming\\ZOrbit\\radial.json', backup_exists: false, problems: [], mtime_ns: null }, profInfo());
         if (typeof profile === 'string' && profile) {              // like the backend: asking for a profile makes it the one the editor holds
           var want = profFind(profile);
           if (want === null) return Object.assign({ config: null, error: 'There is no profile called ' + profile + '.', path: '', backup_exists: false, problems: [], mtime_ns: null }, profInfo());
@@ -748,7 +744,7 @@
         var name = 'Imported', k = 2;
         while (profFind(name) !== null) name = 'Imported ' + k++;
         pickedFile = true;
-        return { ok: true, path: 'C:\\Users\\you\\Downloads\\ZOrbit settings.json', name: name, menus: 3, has_tags: true, tags: 4, problems: [], version: '0.17.0' };
+        return { ok: true, path: 'C:\\Users\\you\\Downloads\\ZOrbit settings.json', name: name, menus: 3, has_tags: true, tags: 4, problems: [], version: '0.17.1' };
       });
     },
     create_profile: function (name, source) {
@@ -806,7 +802,7 @@
         if (q.has('importfail')) return { ok: false, message: "That file is not valid JSON: Expecting ',' delimiter: line 12 column 5 (mock)." };
         var tagsOnly = q.has('importtags'), noTags = q.has('importnotags') && !tagsOnly, n = Object.keys(saved.menus || {}).length;
         return { ok: true, path: 'C:\\Users\\you\\Documents\\ZOrbit settings 2026-10-30.json', kind: tagsOnly ? 'tags' : noTags ? 'config' : 'bundle', has_config: !tagsOnly, menus: tagsOnly ? 0 : n,
-          current_menus: n, has_tags: !noTags, tags: noTags ? 0 : 4, new_tags: noTags ? 0 : 2, current_tags: tagState().tags.length, items: noTags ? 0 : 17, problems: tagsOnly || !q.has('problems') ? [] : validate(saved), version: '0.17.0' };
+          current_menus: n, has_tags: !noTags, tags: noTags ? 0 : 4, new_tags: noTags ? 0 : 2, current_tags: tagState().tags.length, items: noTags ? 0 : 17, problems: tagsOnly || !q.has('problems') ? [] : validate(saved), version: '0.17.1' };
       });
     },
     apply_import: function (tag_mode) {
@@ -842,7 +838,7 @@
         if (q.has('importcancel')) return { ok: false, cancelled: true };
         if (q.has('importfail')) return { ok: false, message: 'Sculpt menu.json is not a ZOrbit menu file.' };
         var plan = menuImportPlan(cfg);
-        return { ok: true, path: 'C:\\Users\\you\\Documents\\Sculpt menu.json', version: '0.17.0', root: plan.root, title: plan.menus[plan.root].title,
+        return { ok: true, path: 'C:\\Users\\you\\Documents\\Sculpt menu.json', version: '0.17.1', root: plan.root, title: plan.menus[plan.root].title,
           menus: Object.keys(plan.menus).map(function (id) { return { id: id, title: plan.menus[id].title, items: plan.menus[id].items.length }; }), renames: plan.renames,
           tags: 2, new_tags: 1, tagged_items: 3, missing: { brush: ['OrbCracks', 'TrimSmooth'] }, problems: [] };
       });
@@ -1084,7 +1080,7 @@
         var s = clone(M.get_status), down = q.get('status') === 'down';
         s.zbrush_running = zbRunning();
         s.app_running = appRunning() || (q.has('appolder') && zbRunning());
-        s.app_version = q.has('appolder') ? (appRestarted ? '0.17.0' : '0.16.0') : null;
+        s.app_version = q.has('appolder') ? (appRestarted ? '0.17.1' : '0.17.0') : null;
         s.app_older = q.has('appolder') && !appRestarted && s.app_running;
         s.listener = down ? null : { verified: true, alive: true };
         if (down) s.last_pick = null;
@@ -1164,24 +1160,24 @@
     win_close: function () { return Promise.resolve(); },
     win_toggle_maximize: function () { return Promise.resolve(false); },
     win_is_maximized: function () { return Promise.resolve(false); },
-    get_app_info: function () { return Promise.resolve({ version: '0.17.0' }); },
-    check_update: function () { var p = JSON.parse(localStorage.getItem('rm_prefs') || '{}'); if (p.check_updates === false) return Promise.resolve({ newer: false, current: '0.17.0', latest: null, url: 'https://github.com/combwizard/zorbit/releases' }); return sleep(300).then(function () { if (q.has('unreach')) return { newer: false, current: '0.17.0', latest: null, url: 'https://github.com/combwizard/zorbit/releases' }; return q.has('update') ? { newer: true, current: '0.16.0', latest: '0.17.0', url: 'https://github.com/combwizard/zorbit/releases', can_install: !q.has('portable'), skipped: p.skipped_version === '0.17.0', notes: UPD_NOTES } : { newer: false, current: '0.17.0', latest: '0.17.0', url: 'https://github.com/combwizard/zorbit/releases' }; }); },
+    get_app_info: function () { return Promise.resolve({ version: '0.17.1' }); },
+    check_update: function () { var p = JSON.parse(localStorage.getItem('rm_prefs') || '{}'); if (p.check_updates === false) return Promise.resolve({ newer: false, current: '0.17.1', latest: null, url: 'https://github.com/combwizard/zorbit/releases' }); return sleep(300).then(function () { if (q.has('unreach')) return { newer: false, current: '0.17.1', latest: null, url: 'https://github.com/combwizard/zorbit/releases' }; return q.has('update') ? { newer: true, current: '0.17.0', latest: '0.17.1', url: 'https://github.com/combwizard/zorbit/releases', can_install: !q.has('portable'), skipped: p.skipped_version === '0.17.1', notes: UPD_NOTES } : { newer: false, current: '0.17.1', latest: '0.17.1', url: 'https://github.com/combwizard/zorbit/releases' }; }); },
     // The update download: about two seconds of progress; ?updatefail ends it with the hash message.
     get_update_progress: function () { return Promise.resolve(Object.assign({}, mockUpd)); },
     download_update: function () {
-      if (mockUpd.state === 'ready') return Promise.resolve({ ok: true, version: '0.17.0', message: '' });
-      mockUpd = { state: 'downloading', version: '0.17.0', done: 0, total: 31457280, message: '', file: '' };
+      if (mockUpd.state === 'ready') return Promise.resolve({ ok: true, version: '0.17.1', message: '' });
+      mockUpd = { state: 'downloading', version: '0.17.1', done: 0, total: 31457280, message: '', file: '' };
       var step = function (n) { return sleep(100).then(function () { mockUpd.done = Math.round(mockUpd.total * n / 20); return n < 20 ? step(n + 1) : null; }); };
       return step(1).then(function () {
-        if (q.has('updatefail')) { mockUpd = { state: 'failed', version: '0.17.0', done: 0, total: 0, message: 'The downloaded file does not match the SHA-256 of the release, so it was deleted.', file: '' }; return { ok: false, version: '0.17.0', message: mockUpd.message }; }
-        mockUpd.state = 'ready'; return { ok: true, version: '0.17.0', message: '' };
+        if (q.has('updatefail')) { mockUpd = { state: 'failed', version: '0.17.1', done: 0, total: 0, message: 'The downloaded file does not match the SHA-256 of the release, so it was deleted.', file: '' }; return { ok: false, version: '0.17.1', message: mockUpd.message }; }
+        mockUpd.state = 'ready'; return { ok: true, version: '0.17.1', message: '' };
       });
     },
     install_update: function () { console.log('[mock] install_update: Setup would start and Studio close'); return Promise.resolve({ ok: true, message: '' }); },
     get_whats_new: function (all) {
       return sleep(60).then(function () {
-        if (!q.has('whatsnew') && all !== true) return { current: '0.17.0', url: 'https://github.com/combwizard/zorbit/releases', sections: [] };
-        return { current: '0.17.0', url: 'https://github.com/combwizard/zorbit/releases', sections: [
+        if (!q.has('whatsnew') && all !== true) return { current: '0.17.1', url: 'https://github.com/combwizard/zorbit/releases', sections: [] };
+        return { current: '0.17.1', url: 'https://github.com/combwizard/zorbit/releases', sections: [
           { version: '0.13.0', date: '2026-11-01', url: 'https://github.com/combwizard/zorbit/releases/tag/v0.13.0',
             summary: ['Profiles keep a whole set of menus, settings and tags for each kind of work (#19). The `radial.json` file of your first profile stays where it was, and **nothing you made is lost** on the way in.'], items: [] },
           { version: '0.12.0', date: '2026-10-12', url: 'https://github.com/combwizard/zorbit/releases/tag/v0.12.0', summary: [],
