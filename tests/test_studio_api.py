@@ -595,3 +595,74 @@ def test_theme_changed_accepts_zbrush(api, zb, monkeypatch):
     api._hwnd_cache = 77
     assert api.theme_changed("zbrush") is True
     assert calls == [(77, theme.preset("zbrush")["window"])]
+
+
+# --- Copy report ---------------------------------------------------------------------------------
+@pytest.fixture
+def report_api(api, tmp_path, monkeypatch):
+    home = "C:/Users/brush"
+    monkeypatch.setenv("USERPROFILE", home.replace("/", os.sep))
+    monkeypatch.setenv("USERNAME", "brush")
+    monkeypatch.setenv("LOCALAPPDATA", (home + "/AppData/Local").replace("/", os.sep))
+    (tmp_path / "radiald.log").write_text(
+        "2026-11-04 10:00:00 old line\n2026-11-04 10:00:01 ZOrbit starting (pid 7, python 3.14)\n"
+        "2026-11-04 10:00:02 brush Clay: selected\n"
+        "2026-11-04 10:00:03 config at C:/Users/brush/AppData/Local/ZOrbit/x\n", encoding="utf-8")
+    monkeypatch.setattr(api, "_all_installs", lambda: [
+        {"name": "ZBrush 2023", "year": 2023, "path": "C:/ZB2023", "python": False},
+        {"name": "ZBrush 2026", "year": 2026, "path": "C:/ZB2026", "python": True}])
+    monkeypatch.setattr(studio.W, "pids_named", lambda name: [11])
+    monkeypatch.setattr(studio.W, "process_image", lambda pid: "C:/ZB2023/ZBrush.exe")
+    monkeypatch.setattr(studio.W, "process_elevated", lambda pid: False)
+    monkeypatch.setattr(studio.installs, "install_of", lambda image: {"name": "ZBrush 2023", "year": 2023,
+                                                                      "path": "C:/ZB2023", "python": False})
+    monkeypatch.setattr(api, "_running_version", lambda: "0.18.1")
+    return api
+
+
+def test_the_report_holds_the_facts_and_hides_the_folders(report_api):
+    res = report_api.get_report([["ZBrush", "Running"], ["Last pick", "Nothing picked yet"]])
+    text = res["text"]
+    assert res["ok"] and f"ZOrbit: {paths.VERSION} (source)" in text and "Windows: Windows " in text
+    assert "Bridge mode: auto" in text and "Bridge key: F9" in text and "App running: 0.18.1" in text
+    assert "ZBrush 2023 (2022 to 2025): C:/ZB2023: running as pid 11, administrator: no" in text
+    assert "ZBrush 2026 (2026 and newer): C:/ZB2026: not running" in text
+    assert "ZBrush: Running\nLast pick: Nothing picked yet" in text
+    assert "--- Problems in the menus file ---\nnone" in text
+    assert "%LOCALAPPDATA%/ZOrbit/x" in text and "C:/Users" not in text
+    assert "brush Clay: selected" in text
+    for name in ("--- radiald.log ---", "--- bridge.log ---", "--- zscript_bridge.log ---", "--- popout.log ---",
+                 "--- studio.log ---"):
+        assert name in text
+
+
+def test_a_part_that_cannot_be_read_leaves_the_rest_of_the_report(report_api, monkeypatch):
+    def boom():
+        raise OSError("no scan today")
+    monkeypatch.setattr(report_api, "_report_zbrush", boom)
+    monkeypatch.setattr(report_api, "_report_menus", boom)
+    text = report_api.get_report()["text"]
+    assert "--- ZBrush ---\nnone found" in text and "Bridge mode: unknown" in text
+    assert "could not be read: OSError('no scan today')" in text and "--- radiald.log ---" in text
+
+
+@pytest.mark.parametrize("cards", [None, "x", [["only title"]], [[1, 2]], {"a": "b"}])
+def test_bad_cards_are_left_out(report_api, cards):
+    assert "--- Status cards ---\n(not shown yet)" in report_api.get_report(cards)["text"]
+
+
+def test_a_zbrush_running_as_administrator_says_so(report_api, monkeypatch):
+    monkeypatch.setattr(studio.W, "process_image", lambda pid: "")
+    assert "A ZBrush outside the list: pid 11, administrator: yes" in report_api.get_report()["text"]
+
+
+def test_the_bug_link_names_the_zbrush_that_runs_and_opens(report_api):
+    url = report_api.get_bug_url()
+    assert f"zorbit={paths.VERSION}" in url and "zbrush=2023" in url and "windows=Windows" in url
+    assert "brush" not in url.replace("zbrush", "")
+    assert url.startswith("https://github.com/combwizard/zorbit/")
+
+
+def test_the_bug_link_falls_back_to_the_newest_zbrush_known(report_api, monkeypatch):
+    monkeypatch.setattr(studio.W, "pids_named", lambda name: [])
+    assert "zbrush=2026" in report_api.get_bug_url()

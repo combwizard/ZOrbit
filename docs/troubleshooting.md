@@ -209,12 +209,16 @@ If a newer ZOrbit changes the files while an older one is already running, that 
 
 If `radiald.log` ends with `fatal: cannot create the first profile in ...`, the app could not write to its profiles folder and stopped. The line names the folder and gives the Windows error. Check that the folder can be written to, then start the app again.
 
-### Checking a file from a source checkout
+### Checking a file without starting the app
 
-`python zorbit\main.py --check` prints every menu and lists problems without starting anything.
+`ZOrbit.exe --check > check.txt` writes every menu and any problems to `check.txt` without starting anything. The exe has no console window, so send its output to a file. From a source checkout, `python zorbit\main.py --check` prints the same.
 
 ## Logs
 
 `%LOCALAPPDATA%\ZOrbit` holds `radiald.log` (the app), `bridge.log` (ZBrush side), `zscript_bridge.log` (ZBrush 2022 to 2025: the last pick), `studio.log` (how Studio started), `popout.log` (the browser) and `app_stderr.log` (crashes at startup). Studio's **Status** screen shows the tail of the app log and has buttons that open the logs folder and the config folder. [Files, backups and logs](files.md#files-and-logs) lists every file ZOrbit keeps.
 
-Read a log before you post it. Besides brush names and menu ids, the logs hold your Windows user name and folder paths: the plugin logs where it loaded from and the command it used to start the app, the app logs the command line of the browser, and `studio.log` and `popout.log` log the working directory. Black out or remove those parts first.
+For a bug report, press **Copy report** on the **Status** screen and paste the result into the form. **Report a bug** next to it opens the form with the versions filled in. The report holds the ZOrbit and Windows versions, how ZOrbit was installed, your ZBrush installs and which of them runs (and whether as administrator), the bridge mode and key, the **Status** cards, the profile in use, any problems in the menus file, and the end of each log that fits your setup, from the current session where the log marks one.
+
+Before it copies, `%LOCALAPPDATA%` and your home folder are written back as `%LOCALAPPDATA%` and `%USERPROFILE%`, and your Windows user name, including the short form Windows can give it, becomes `<user>` where it comes right after a `\` or `/` in a path, or as a word on a line that runs an `.exe`. Brush names and menu ids stay, so a user called `brush` still has `brush Clay: selected` in the log. A folder name with your name joined to other text, such as `D:\Sam_art`, stays too, and so does your name anywhere else, so look the report over before you post it.
+
+Read a log you copy by hand before you post it. Besides brush names and menu ids, the logs hold your Windows user name and folder paths: the plugin logs where it loaded from and the command it used to start the app, the app logs the command line of the browser, and `studio.log` and `popout.log` log the working directory. Black out or remove those parts first.

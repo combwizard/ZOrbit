@@ -6,11 +6,16 @@ All notable changes to this project are listed here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **Copy report** on Studio's **Status** screen copies what a bug report needs in one block: the versions, your ZBrush installs, the **Status** cards and the ends of the logs, with your Windows user name and folders hidden. **Report a bug** next to it opens the bug form with the versions filled in.
+
 ### Fixed
 
 - Picks from a browser opened from Studio use the listener when one ZBrush is running. They used to press the bridge key, which is slower and needs ZBrush in front.
 - In ZBrush 2022 to 2025, a pick that cannot load an item or find a button says so near the cursor, as it already did in ZBrush 2026 and newer. Before, only the log said so.
 - In ZBrush 2026 and newer, a brush that cannot be loaded says so near the cursor when no tool is in Edit mode too. Before, only the log said so.
+- The docs said `--check` was for a source checkout. The exe has it too.
 
 ## [0.18.1] - 2026-11-04
 
