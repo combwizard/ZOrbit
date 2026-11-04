@@ -48,6 +48,8 @@
     }
     const p = cfg && cfg.profile;
     if (isObj(p) && p.next_hotkey) add('Next profile hotkey');
+    const w = cfg && cfg.browser;
+    if (isObj(w) && typeof w.quit_after_minutes === 'number' && w.quit_after_minutes !== 0) add('Quit hidden browser after');
     return names;
   }
 

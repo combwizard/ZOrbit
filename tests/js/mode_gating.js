@@ -47,6 +47,14 @@ test('a next-profile hotkey is a Full setting: the note names it, and it needs F
   assert.deepStrictEqual(M.fullOnlyChanges(cfg, 'look', ctxFor(cfg)), []);
   assert(needs(cfg));
   delete cfg.profile;
+
+  cfg.browser = { quit_after_minutes: 30 };
+  assert.deepStrictEqual(M.fullOnlyChanges(cfg, 'settings', ctxFor(cfg)), ['Quit hidden browser after']);
+  assert.deepStrictEqual(M.fullOnlyChanges(cfg, 'look', ctxFor(cfg)), []);
+  assert(needs(cfg));
+  cfg.browser = { quit_after_minutes: 0 };
+  assert(!needs(cfg));
+  delete cfg.browser;
   assert(!needs(cfg));
 });
 

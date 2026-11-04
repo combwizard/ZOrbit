@@ -547,6 +547,39 @@ def test_browser_section_that_is_not_an_object_is_reported(load_menus):
     assert problems(cfg, "browser: must be an object")
 
 
+def test_browser_quit_after_minutes_is_off_when_absent(load_menus):
+    for browser in ({}, {"hotkey": "Alt+B"}):
+        cfg = load_menus(GOOD_MENUS, browser=browser)
+        assert cfg.browser_quit_minutes == 0 and cfg.errors == []
+
+
+@pytest.mark.parametrize("minutes", [0, 1, 30, 1440])
+def test_browser_quit_after_minutes_is_read(load_menus, minutes):
+    cfg = load_menus(GOOD_MENUS, browser={"hotkey": "Alt+B", "quit_after_minutes": minutes})
+    assert cfg.browser_quit_minutes == minutes and cfg.errors == []
+
+
+@pytest.mark.parametrize("bad", [-1, 1441, 1.5, 30.0, True, False, "30", None, [30], {}])
+def test_browser_quit_after_minutes_that_is_not_1_to_1440_or_0_is_reported_and_off(load_menus, bad):
+    cfg = load_menus(GOOD_MENUS, browser={"quit_after_minutes": bad})
+    assert cfg.browser_quit_minutes == 0
+    assert problems(cfg, "browser.quit_after_minutes")
+
+
+def test_browser_quit_after_minutes_is_not_an_unknown_setting_and_a_typo_is(load_menus):
+    assert not problems(load_menus(GOOD_MENUS, browser={"quit_after_minutes": 5}), "unknown setting")
+    cfg = load_menus(GOOD_MENUS, browser={"quit_after_minute": 5})
+    assert problems(cfg, "browser.quit_after_minute: unknown setting")
+    assert cfg.browser_quit_minutes == 0
+
+
+def test_idle_quit_minutes_is_the_one_check_the_app_and_the_browser_share():
+    assert [config.idle_quit_minutes({"quit_after_minutes": v}) for v in (0, 7, 1440, 1441, True, "9")] \
+        == [0, 7, 1440, 0, 0, 0]
+    assert config.idle_quit_minutes({}) == 0 and config.idle_quit_minutes(None) == 0
+    assert config.idle_quit_minutes("not an object") == 0
+
+
 def test_profile_hotkey_is_read(load_menus):
     cfg = load_menus(GOOD_MENUS, profile={"next_hotkey": "Alt+P"})
     assert (cfg.profile_key.vk, cfg.profile_key.alt) == (0x50, True)

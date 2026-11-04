@@ -3983,13 +3983,13 @@ function putRing(k, v) {
 }
 /* get/put/clear/isSet let a row drive more than its own key (see sizeRow); the defaults are the plain one-key behaviour. */
 function sliderRow({ label, hint, key, step = 1, unit = '', scale = 1, onLive, limits = null, get = () => ringNum(key), put = v => putRing(key, v),
-  clear = () => { delete ensureRing()[key]; tidyRing(); commit(); }, isSet = () => key in ring() && ring()[key] !== S.defaults[key] }) {   // scale: shown = stored * scale (0-1 opacity as 0-100 %); limits: [min, max] when ring_ranges has none for the key
+  clear = () => { delete ensureRing()[key]; tidyRing(); commit(); }, isSet = () => key in ring() && ring()[key] !== S.defaults[key], numMax = null, dflt = S.defaults[key] }) {   // scale: shown = stored * scale (0-1 opacity as 0-100 %); limits: [min, max] when ring_ranges has none for the key; numMax: the number box's top when it goes past the slider's; dflt: the reset button's default
   const [lo, hi] = limits || ranges()[key] || [0, 100];
-  const min = lo * scale, max = hi * scale;
+  const min = lo * scale, max = hi * scale, nmax = numMax === null ? max : numMax * scale;
   const disp = v => Number((v * scale).toFixed(6)), store = d => Number((d / scale).toFixed(6));
   const range = h('input', { type: 'range', min, max, step, value: disp(get()), 'aria-label': label, dataset: { fk: key + '/range' } });
-  const num = h('input', { class: 'inp mono num', type: 'number', min, max, step, value: disp(get()), 'aria-label': label + ' value', dataset: { fk: key + '/num' } });
-  const reset = iconBtn('undo', 'Reset to default (' + disp(S.defaults[key]) + (scale !== 1 ? unit : '') + ')', () => { clear(); sync(get()); onLive && onLive(); }, 'reset');
+  const num = h('input', { class: 'inp mono num', type: 'number', min, max: nmax, step, value: disp(get()), 'aria-label': label + ' value', dataset: { fk: key + '/num' } });
+  const reset = iconBtn('undo', 'Reset to default (' + disp(dflt) + (scale !== 1 ? unit : '') + ')', () => { clear(); sync(get()); onLive && onLive(); }, 'reset');
   reset.dataset.fk = key + '/reset';
   const note = h('span', { class: 'num-hint', role: 'status' });
   let noteT = 0;
@@ -3999,8 +3999,8 @@ function sliderRow({ label, hint, key, step = 1, unit = '', scale = 1, onLive, l
   num.addEventListener('change', () => {
     const raw = num.value.trim(), n = Number(raw);
     if (raw === '' || !Number.isFinite(n)) { sync(get()); say(''); return; }     // nothing usable typed: keep what was there
-    const snapped = Number((min + Math.round((n - min) / step) * step).toFixed(6)), v = store(clamp(snapped, min, max));
-    say(n < min || n > max ? 'Kept within ' + min + ' to ' + max : '');
+    const snapped = Number((min + Math.round((n - min) / step) * step).toFixed(6)), v = store(clamp(snapped, min, nmax));
+    say(n < min || n > nmax ? 'Kept within ' + min + ' to ' + nmax : '');
     if (v !== get()) { put(v); onLive && onLive(); }
     sync(v);
   });
@@ -4267,6 +4267,10 @@ function buildSettingsScreen(root) {
       commit();
     } });
 
+    /* --- quit hidden browser after (browser.quit_after_minutes; 0 is off and drops the key; Full only, see the card below) */
+    const qGet = () => { const q = S.cfg.browser && typeof S.cfg.browser === 'object' ? S.cfg.browser.quit_after_minutes : undefined; return Number.isInteger(q) && q >= 1 && q <= 1440 ? q : 0; };
+    const qSet = v => { const b = browserObj(); if (v) b.quit_after_minutes = v; else delete b.quit_after_minutes; if (!Object.keys(b).length) delete S.cfg.browser; commit(); };
+
     /* --- next profile (profile.next_hotkey; the object is dropped again when it ends up empty; Full only, see the card below) */
     const profileObj = () => { if (!S.cfg.profile || typeof S.cfg.profile !== 'object') S.cfg.profile = {}; return S.cfg.profile; };
     const pOwner = hotkey => (hotkey ? hotkeyOwner(hotkey, PROFILE) : null);
@@ -4293,7 +4297,9 @@ function buildSettingsScreen(root) {
         sliderRow({ label: 'Auto-close', hint: 'An open ring closes by itself after this long.', key: 'timeout_s', unit: 's' })] : []),
       h('div', { class: 'srow' }, h('div', { class: 'slabel' }, h('span', null, 'Browser hotkey'), h('small', null, 'Shows the browser; pressed over it, it gives ZBrush the keyboard back. The browser also opens from a Browser slot, the Browser button at the top and the tray menu.')),
         h('div', { class: 'sctl' }, bhk)),
-      ...(full ? [h('div', { class: 'srow' }, h('div', { class: 'slabel' }, h('span', null, 'Next profile hotkey'), h('small', null, 'Steps to the next profile while ZBrush is in front. Each profile has its own; a new profile copies it from the one in use.')),
+      ...(full ? [sliderRow({ label: 'Quit hidden browser after', hint: 'Gives its memory back after this long unused. The next press starts it again, a moment slower. 0 keeps it ready.', key: 'quit_after_minutes', unit: 'min',
+          limits: [0, 240], numMax: 1440, dflt: 0, get: qGet, put: qSet, clear: () => qSet(0), isSet: () => qGet() !== 0 }),
+        h('div', { class: 'srow' }, h('div', { class: 'slabel' }, h('span', null, 'Next profile hotkey'), h('small', null, 'Steps to the next profile while ZBrush is in front. Each profile has its own; a new profile copies it from the one in use.')),
         h('div', { class: 'sctl' }, phk))] : [])));
     { const o0 = bOwner(S.cfg.browser && S.cfg.browser.hotkey); if (o0) bhk.say(bsay(o0), 'warn'); }
     { const o1 = pOwner(S.cfg.profile && S.cfg.profile.next_hotkey); if (o1) phk.say(psay(o1), 'warn'); }
@@ -5164,6 +5170,7 @@ function describeProblem(raw) {
   if ((m = /^browser\.hotkey (.+) not understood$/s.exec(raw))) return out(`The browser hotkey ${unq(m[1])} is not understood`, browserCard);
   if ((m = /^browser\.hotkey (.+) already used by menu (.+)$/s.exec(raw))) return out(`The browser hotkey ${unq(m[1])} is also used by ${titleOf(m[2])}; that menu wins, so the browser will not open with it`, browserCard);
   if ((m = /^browser\.(\w+): unknown setting(.*)$/s.exec(raw))) return out(`The browser setting “${m[1]}” is not known.` + didYouMean(m[2]), browserCard);
+  if ((m = /^browser\.quit_after_minutes (.+) must be a whole number of minutes from 1 to 1440, or 0 for never; using 0$/s.exec(raw))) return out(`Quit hidden browser after is ${unq(m[1])}, which is not a whole number of minutes from 1 to 1440. It is set to 0, so the browser is kept ready`, { ...browserCard, fk: 'quit_after_minutes/num' });   // the number box of the row
   if (raw.startsWith('browser: ')) return out('The browser settings are not valid: ' + raw.slice('browser: '.length), browserCard);
   const profileCard = { kind: 'settings', card: 'set-behaviour', fk: 'hk:Next profile hotkey' };   // the recorder is the last row of the card, so it is focused too
   if ((m = /^profile\.next_hotkey (.+) not understood$/s.exec(raw))) return out(`The next-profile hotkey ${unq(m[1])} is not understood`, profileCard);
@@ -5925,7 +5932,11 @@ function describeChanges() {
   if ((bb.key || '') !== (ab.key || '')) bridgeLines.push('Bridge key: ' + (bb.key || 'F9 (default)') + ' \u2192 ' + (ab.key || 'F9 (default)'));
   if (bridgeLines.length) groups.push({ area: 'ZBrush bridge', lines: bridgeLines });
   const bwb = before.browser || {}, bwa = after.browser || {};
-  if ((bwb.hotkey || '') !== (bwa.hotkey || '')) groups.push({ area: 'Browser', lines: ['Hotkey: ' + (bwb.hotkey || 'none') + ' → ' + (bwa.hotkey || 'none')] });
+  const quitOf = w => (Number.isInteger(w.quit_after_minutes) && w.quit_after_minutes > 0 ? w.quit_after_minutes + ' min' : 'off');
+  const bwLines = [];
+  if ((bwb.hotkey || '') !== (bwa.hotkey || '')) bwLines.push('Hotkey: ' + (bwb.hotkey || 'none') + ' → ' + (bwa.hotkey || 'none'));
+  if (quitOf(bwb) !== quitOf(bwa)) bwLines.push('Quit hidden browser after: ' + quitOf(bwb) + ' → ' + quitOf(bwa));
+  if (bwLines.length) groups.push({ area: 'Browser', lines: bwLines });
   const pfb = before.profile || {}, pfa = after.profile || {};
   if ((pfb.next_hotkey || '') !== (pfa.next_hotkey || '')) groups.push({ area: 'Profile', lines: ['Next profile hotkey: ' + (pfb.next_hotkey || 'none') + ' → ' + (pfa.next_hotkey || 'none')] });
   const known = new Set(['menus', 'ring', 'looks', 'bridge', 'browser', 'profile']);
