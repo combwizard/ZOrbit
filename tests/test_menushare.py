@@ -710,3 +710,66 @@ def test_malformed_items_do_not_break_the_clean_up():
     menus = menushare.build({"menus": {"a": {"items": [3, None, {"steps": "x"}, {"steps": [{"tool": "T"}]},
                                                        {"tool": "T"}]}}}, "a", None, "1")["menus"]
     assert menus["a"]["items"] == [3, None, {"steps": "x"}, {"empty": True}, {"empty": True}]
+
+
+# --- an icon that is a file path stays on the PC ------------------------------------------------------------
+def _icon_cfg():
+    return {"menus": {
+        "a": {"title": "A", "hotkey": "Q", "icon": "C:\\Users\\you\\Art\\menu.png", "look": "mine", "items": [
+            {"brush": "Move", "icon": "C:\\Users\\you\\Art\\clay.png"},
+            {"brush": "ClayBuildup", "icon": "C:/Users/you/Art/clay.zbp"},
+            {"brush": "Standard", "icon": "Standard"},
+            {"steps": [{"alpha": "Alpha01", "icon": "C:/Users/you/Art/a.png"}, {"press": "Tool:Masking:Clear"}],
+             "label": "Two"},
+            {"menu": "b", "icon": "C:\\Users\\you\\Art\\sub.png"}]},
+        "b": {"title": "B", "items": [{"brush": "Move"}]}},
+        "looks": {"mine": {"hub_style": "icon", "hub": 14, "icon": "C:\\Users\\you\\Art\\look.png"}}}
+
+
+def test_build_removes_an_icon_path_from_items_steps_menus_and_looks():
+    cfg = _icon_cfg()
+    before = json.dumps(cfg, sort_keys=True)
+    bundle = menushare.build(cfg, "a", None, "1")
+    menus = bundle["menus"]
+    items = menus["a"]["items"]
+    assert "icon" not in menus["a"] and menus["a"]["look"] == "mine"
+    assert items[0] == {"brush": "Move"} and items[1] == {"brush": "ClayBuildup"}
+    assert items[2] == {"brush": "Standard", "icon": "Standard"}           # a brush name stays
+    assert items[3] == {"steps": [{"alpha": "Alpha01"}, {"press": "Tool:Masking:Clear"}], "label": "Two"}
+    assert items[4] == {"menu": "b"}
+    assert bundle["looks"] == {"mine": {"hub_style": "icon", "hub": 14}}
+    text = json.dumps(bundle)
+    assert "Users" not in text and "C:" not in text
+    assert json.dumps(cfg, sort_keys=True) == before                        # the caller's data is untouched
+
+
+def test_a_bundle_without_icon_paths_loads_with_no_problems_and_no_picture_in_the_hub(tmp_path):
+    bundle = menushare.build(_icon_cfg(), "a", None, "1")
+    menus, root, _ = menushare.plan_import(bundle["menus"], "a", {"menus": {}})
+    menus[root]["hotkey"] = "Q"
+    looks_out, _, _ = menushare.plan_looks(bundle["looks"], {})
+    p = tmp_path / "radial.json"
+    p.write_text(json.dumps({"menus": menus, "looks": looks_out}), encoding="utf-8")
+    cfg = config.load(str(p))
+    assert cfg.errors == []
+    assert cfg.menus[root].icon == "" and cfg.menus[root].look["hub_style"] == "icon"
+    assert cfg.menus[root].items[0].icon == "" and cfg.menus[root].items[0].kind == "brush"
+
+
+def test_plan_import_clears_an_icon_path_in_a_file_that_still_holds_one():
+    bundle = {"a": {"title": "A", "icon": "C:\\Users\\you\\Art\\m.png",
+                    "items": [{"brush": "Move", "icon": "D:/Users/you/x.png"}]}}
+    before = copy.deepcopy(bundle)
+    menus, root, _ = menushare.plan_import(bundle, "a", {"menus": {}})
+    assert "icon" not in menus[root] and menus[root]["items"] == [{"brush": "Move"}]
+    assert bundle == before
+
+
+def test_plan_looks_clears_an_icon_path_and_joins_the_look_without_it():
+    bundle_looks = {"Bold": {"hub": 10, "icon": "C:\\Users\\you\\Art\\b.png"}}
+    before = copy.deepcopy(bundle_looks)
+    out, _, joined = menushare.plan_looks(bundle_looks, {"Bold": {"hub": 10}})
+    assert out == {} and joined == ["Bold"]
+    out, _, _ = menushare.plan_looks(bundle_looks, {})
+    assert out == {"Bold": {"hub": 10}}
+    assert bundle_looks == before

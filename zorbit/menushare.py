@@ -65,6 +65,13 @@ def _forget_folder(action):
         action["capture"] = ""
 
 
+def _forget_icon(d):
+    """An icon that is a file path (it has a backslash or a slash) holds folders of this PC, often the Windows name, so
+    it stays here: the slot or hub falls back to its default picture. A brush name stays. d is changed in place."""
+    if isinstance(d, dict) and isinstance(d.get("icon"), str) and any(c in d["icon"] for c in "\\/"):
+        d.pop("icon")
+
+
 def _is_file_action(a) -> bool:
     return isinstance(a, dict) and any(k in a for k in _FILE_KEYS)
 
@@ -81,21 +88,24 @@ def left_out(menus) -> int:
 
 
 def _clean(menu) -> dict:
-    """The menu as a file holds it: no hotkey, no capture folder, and no Tool or Project path. Their paths are of this
-    PC (they usually hold the Windows user name) and an empty one is not valid, so the item becomes an empty slot that
-    keeps its place; in steps the action is removed, and steps left with nothing become an empty slot."""
+    """The menu as a file holds it: no hotkey, no capture folder, no icon path, and no Tool or Project path. Their paths
+    are of this PC (they usually hold the Windows user name) and an empty one is not valid, so the item becomes an empty
+    slot that keeps its place; in steps the action is removed, and steps left with nothing become an empty slot."""
     out = copy.deepcopy(menu) if isinstance(menu, dict) else {}
     for k in _PC_KEYS:
         out.pop(k, None)
+    _forget_icon(out)
     for it in out.get("items") if isinstance(out.get("items"), list) else ():
         if not isinstance(it, dict):
             continue
         _forget_folder(it)
+        _forget_icon(it)
         steps = it.get("steps")
         if isinstance(steps, list):
             for s in steps:
                 if isinstance(s, dict):
                     _forget_folder(s)
+                    _forget_icon(s)
             kept = [s for s in steps if not _is_file_action(s)]
             if kept:
                 it["steps"] = kept
@@ -156,6 +166,7 @@ def looks_used(cfg, menus) -> dict:
         for name in _look_names(m):
             if name not in out and isinstance(have.get(name), dict):
                 out[name] = copy.deepcopy(have[name])
+                _forget_icon(out[name])
     return out
 
 
@@ -186,6 +197,8 @@ def plan_looks(bundle_looks, cfg_looks):
     for old, look in (bundle_looks.items() if isinstance(bundle_looks, dict) else ()):
         if not isinstance(look, dict):
             continue
+        look = copy.deepcopy(look)
+        _forget_icon(look)                  # before the comparison, so a look that differs only by its icon joins
         name = old if not L.valid_name(old) else _usable_look_name(old)
         mine = taken.get(name.casefold())
         if mine is not None and name.casefold() not in L.BUILTIN:
