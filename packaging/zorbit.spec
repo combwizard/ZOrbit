@@ -82,7 +82,7 @@ for pkg in ("webview", "clr_loader", "pythonnet"):
         hiddenimports += collect_submodules(pkg)
     except Exception as exc:                       # package not installed: let the build fail loudly below
         print(f"WARNING: could not collect {pkg}: {exc}")
-hiddenimports += ["clr", "webview.platforms.winforms",
+hiddenimports += ["clr", "truststore", "webview.platforms.winforms",
                   "webview.platforms.edgechromium"]
 hiddenimports = [h for h in hiddenimports if not h.startswith(("webview.platforms.gtk", "webview.platforms.qt",
                                                                  "webview.platforms.cocoa", "webview.platforms.android",

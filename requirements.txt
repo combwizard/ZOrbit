@@ -2,3 +2,4 @@
 pillow>=10.0
 pywebview>=6.0,<7
 pythonnet>=3.0,<4
+truststore>=0.10,<1

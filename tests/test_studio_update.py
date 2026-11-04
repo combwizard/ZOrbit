@@ -49,7 +49,7 @@ def _serve(monkeypatch, release, payload=SETUP, calls=None):
     """urlopen answers the releases API with release and the setup URL with payload (an exception is raised)."""
     import urllib.request
 
-    def fake(req, timeout=None):
+    def fake(req, timeout=None, context=None):
         url = req.full_url if hasattr(req, "full_url") else req
         if calls is not None:
             calls.append(url)
@@ -59,6 +59,41 @@ def _serve(monkeypatch, release, payload=SETUP, calls=None):
             raise payload
         return _Resp(payload)
     monkeypatch.setattr(urllib.request, "urlopen", fake)
+
+
+# --- certificates ---------------------------------------------------------------------------------------
+
+def test_github_requests_let_windows_check_the_certificate(api, monkeypatch):
+    """A fresh Windows has few root certificates until something asks for one; Python's own check fails there,
+    Windows' (through truststore) fetches the root. Both the check and the download use it."""
+    import urllib.request
+    import truststore
+    monkeypatch.setattr(studio, "_TLS", [])
+    seen = []
+
+    def fake(req, timeout=None, context=None):
+        seen.append(context)
+        url = req.full_url
+        return _Resp(json.dumps(_release()).encode() if url == studio.RELEASES_API else SETUP)
+    monkeypatch.setattr(urllib.request, "urlopen", fake)
+    api.check_update()
+    assert api.download_update()["ok"]
+    assert len(seen) == 2 and all(isinstance(c, truststore.SSLContext) for c in seen)
+    assert seen[0] is seen[1]                                                   # built once
+
+
+def test_without_truststore_python_checks_the_certificate(api, monkeypatch, tmp_path):
+    import builtins
+    real_import = builtins.__import__
+
+    def no_truststore(name, *a, **kw):
+        if name == "truststore":
+            raise ImportError("No module named 'truststore'")
+        return real_import(name, *a, **kw)
+    monkeypatch.setattr(builtins, "__import__", no_truststore)
+    monkeypatch.setattr(studio, "_TLS", [])
+    assert studio._tls_context() is None
+    assert "truststore unavailable" in (tmp_path / "studio.log").read_text(encoding="utf-8")
 
 
 # --- which file is trusted ------------------------------------------------------------------------------

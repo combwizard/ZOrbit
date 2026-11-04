@@ -13,7 +13,7 @@ import os
 
 import paths
 
-LIBRARIES = ("webview", "clr")
+LIBRARIES = ("webview", "clr", "truststore")
 MODULES = ("radiald", "ring", "popout", "studio", "webapi", "assets", "brushes", "zbp", "config", "tags", "usage",
            "expand", "installs", "onboarding", "zscript_bridge", "winframe", "webview2", "profiles",
            "changelog", "theme", "zbrush_colors")
