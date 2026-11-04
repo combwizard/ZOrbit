@@ -36,8 +36,6 @@ ZOrbit uses three keys that ZBrush may also want:
 3. Drag brushes from the **Library** onto the ring, or use **Add item** to add a brush, alpha, material, texture, press, toggle or submenu. Studio starts in **Simple** mode, which shows the everyday controls. Press **Full** in the top bar for buttons, sliders, switches and the rest (see [Simple and Full mode](studio.md#simple-and-full-mode)).
 4. Click **Save** (Ctrl+S). The next time you open the ring in ZBrush it uses your changes. There is no need to restart anything.
 
-<p align="center">
-  <img src="images/studio.png" alt="ZOrbit Studio on the Menus screen: the menu list, the ring preview of the Brushes menu, its item list and the Menu settings panel">
-</p>
+![ZOrbit Studio on the Menus screen: the menu list, the ring preview of the Brushes menu, its item list and the Menu settings panel](images/studio.png)
 
 Next: [ZOrbit Studio](studio.md) covers the editor, [Menus and items](menus.md) every item type, and [Appearance](appearance.md) every setting.
