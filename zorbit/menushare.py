@@ -18,7 +18,8 @@ MENU_FORMAT = 1              # the "zorbit_menu" number of a menu file
 _VALID_ID = re.compile(r"[A-Za-z0-9_-]+")
 _SYNTHETIC = ("tag:", "more:")        # menu ids the app makes up: never in a file
 _PC_KEYS = ("hotkey", "swallow")      # belong to one PC's keyboard: never in a menu file, never imported
-# A Capture item's folder is cleared the same way, in items and steps: see _forget_folder.
+# A Capture item's folder is cleared the same way, and Tool and Project items are left out: see _clean.
+_FILE_KEYS = tuple(C.FILE_EXTS)       # ("tool", "project"): a path of this PC that no other PC has, and an empty path is no item
 
 
 def menu_slug(s) -> str:
@@ -64,16 +65,47 @@ def _forget_folder(action):
         action["capture"] = ""
 
 
+def _is_file_action(a) -> bool:
+    return isinstance(a, dict) and any(k in a for k in _FILE_KEYS)
+
+
+def left_out(menus) -> int:
+    """How many Tool and Project actions the raw menus (a dict of them) hold, steps included: the ones a menu file
+    cannot carry, since _clean leaves them out. Studio can say so ("2 tool or project items were left out")."""
+    n = 0
+    for m in menus.values() if isinstance(menus, dict) else ():
+        for it in _items(m):
+            steps = it.get("steps") if isinstance(it.get("steps"), list) else ()
+            n += _is_file_action(it) + sum(_is_file_action(s) for s in steps)
+    return n
+
+
 def _clean(menu) -> dict:
+    """The menu as a file holds it: no hotkey, no capture folder, and no Tool or Project path. Their paths are of this
+    PC (they usually hold the Windows user name) and an empty one is not valid, so the item becomes an empty slot that
+    keeps its place; in steps the action is removed, and steps left with nothing become an empty slot."""
     out = copy.deepcopy(menu) if isinstance(menu, dict) else {}
     for k in _PC_KEYS:
         out.pop(k, None)
     for it in out.get("items") if isinstance(out.get("items"), list) else ():
-        if isinstance(it, dict):
-            _forget_folder(it)
-            for s in it.get("steps") if isinstance(it.get("steps"), list) else ():
+        if not isinstance(it, dict):
+            continue
+        _forget_folder(it)
+        steps = it.get("steps")
+        if isinstance(steps, list):
+            for s in steps:
                 if isinstance(s, dict):
                     _forget_folder(s)
+            kept = [s for s in steps if not _is_file_action(s)]
+            if kept:
+                it["steps"] = kept
+            elif steps:
+                it.pop("steps")
+                it["empty"] = True
+        elif _is_file_action(it):
+            for k in _FILE_KEYS:
+                it.pop(k, None)
+            it["empty"] = True
     return out
 
 

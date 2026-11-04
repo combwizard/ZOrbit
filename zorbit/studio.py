@@ -1357,6 +1357,18 @@ class Api(webapi.LibraryApi, webapi.TagApi):
             return None
         return str(picked[0] if isinstance(picked, (list, tuple)) else picked)
 
+    def choose_file(self, kind):
+        """File picker for a Tool or a Project item: the chosen path as text, or None when cancelled or the kind is not one
+        of those two."""
+        import webview
+        if kind not in ("tool", "project"):                  # a tuple, so an odd value from the page never raises here
+            return None
+        filters = {"tool": ("ZBrush tool (*.ztl)",), "project": ("ZBrush project (*.zpr)",)}
+        picked = self._window.create_file_dialog(webview.FileDialog.OPEN, file_types=filters[kind])
+        if not picked:
+            return None
+        return str(picked[0] if isinstance(picked, (list, tuple)) else picked)
+
     def add_zbrush_folder(self):
         """Folder picker for a ZBrush that was not found automatically; remembered in studio.json."""
         import webview
@@ -1619,6 +1631,10 @@ class Api(webapi.LibraryApi, webapi.TagApi):
         store = tags.TagStore(self._tags_path()).load()
         bundle = menushare.build(cfg, menu_id, None if store.error else store, VERSION)
         note = f" The tags are not in it: {store.error}." if store.error else ""
+        # build() has cleaned the menus already, so count what was there before: the raw menus of the same ids
+        left = menushare.left_out({mid: menus[mid] for mid in menushare.collect(cfg, menu_id)})
+        if left:
+            note += f" {_plural(left, 'Tool or Project item')} left out of the file, because their paths belong to this PC."
         subs = len(bundle["menus"]) - 1
         what = f'"{title}"' + (f" and its {_plural(subs, 'submenu')}" if subs else "")
         try:

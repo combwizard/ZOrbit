@@ -52,7 +52,7 @@ Where each part is documented:
 | `installs.py`, `onboarding.py`, `activity.py`, `packaging/` (install, Setup screen) | `install.md`, `getting-started.md` |
 | `webview2.py` (the WebView2 runtime check and its message) | `install.md` (requirements), `troubleshooting.md` |
 | `toast.py`, the `MSG_` texts in `radiald.py` (the message near the cursor) | `troubleshooting.md`, `bridge.md` |
-| `capture.py` (Capture items: the folder, the file name) | `menus.md`, `troubleshooting.md` |
+| `capture.py`, `fileitem.py` (Capture, Tool and Project items: the folder, the file name, the file) | `menus.md`, `troubleshooting.md` |
 | `tray.py` (the notification-area icon and its menu) | `studio.md`, `getting-started.md` |
 | `winframe.py` (window frame, placement and drag regions of Studio and the browser) | `studio.md`, `browser.md` |
 | `zbp.py` (brush pictures read from `.zbp` files) | `browser.md`, `troubleshooting.md` (slots that show letters) |

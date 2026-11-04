@@ -222,6 +222,24 @@ def test_choose_folder_returns_the_picked_path_or_none(api, tmp_path, monkeypatc
     assert api.choose_folder() is None
 
 
+def test_choose_file_returns_the_picked_path_for_tool_and_project_only(api, tmp_path, monkeypatch):
+    _fake_webview(monkeypatch)
+    opened = []
+
+    def dialog(*a, **k):
+        opened.append((a, k))
+        return [str(tmp_path / "Hero.ztl")]
+    api._window = types.SimpleNamespace(create_file_dialog=dialog)
+    assert api.choose_file("tool") == str(tmp_path / "Hero.ztl")
+    assert opened[-1] == ((2,), {"file_types": ("ZBrush tool (*.ztl)",)})     # FileDialog.OPEN, the tool filter
+    assert api.choose_file("project") == str(tmp_path / "Hero.ztl")
+    assert opened[-1][1]["file_types"] == ("ZBrush project (*.zpr)",)
+    assert api.choose_file("capture") is None and api.choose_file(["tool"]) is None and api.choose_file("") is None
+    assert len(opened) == 2                                                  # a kind it refuses never opens a dialog
+    api._window = types.SimpleNamespace(create_file_dialog=lambda *a, **k: None)
+    assert api.choose_file("tool") is None
+
+
 def test_known_legacy_falls_back_to_the_folder_itself(api, tmp_path, monkeypatch):
     monkeypatch.setattr(api, "_scanned_installs", lambda: [])
     old = _zbrush(tmp_path, "ZBrush 2024")

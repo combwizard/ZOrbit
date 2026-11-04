@@ -48,6 +48,7 @@ import capture              # noqa: E402
 import commands             # noqa: E402
 import config as C          # noqa: E402
 import expand               # noqa: E402
+import fileitem             # noqa: E402
 import fsutil               # noqa: E402
 import installs             # noqa: E402
 import paths                # noqa: E402
@@ -147,6 +148,14 @@ MSG_COMMAND_FROZEN = "Your files were changed by a newer ZOrbit, so the profile 
 MSG_COMMAND_NO_MENUS = "ZOrbit has no menus loaded"
 MSG_CAPTURE_FOLDER = "The capture folder cannot be used, nothing sent. See radiald.log."
 MSG_CAPTURE_NAME = "ZBrush 2022-2025 cannot save to that capture folder's name, nothing sent"
+MSG_FILE_MISSING = "That file is not there, nothing sent. See radiald.log."
+MSG_FOLDER_MISSING = "That folder is not there, nothing sent. See radiald.log."
+MSG_NO_PROJECT = "No project in that folder, nothing sent"
+MSG_FILE_NAME = "ZBrush 2022-2025 cannot read that file's name, nothing sent"
+MSG_FILE_LONG = "That path is too long for ZBrush 2022-2025, nothing sent. See radiald.log."
+# fileitem.FileItemError.kind -> the message near the cursor
+_FILE_MESSAGES = {"file": MSG_FILE_MISSING, "folder": MSG_FOLDER_MISSING, "empty": MSG_NO_PROJECT,
+                  "name": MSG_FILE_NAME, "long": MSG_FILE_LONG}
 TIP_FROZEN = f"ZOrbit {paths.VERSION}: your files were changed by a newer ZOrbit"
 
 # A line of bridge.log: "2026-10-31 12:00:00 #7 'Clay' via listener: brush Clay: ...; press Tool:X: ..."
@@ -183,7 +192,7 @@ def _problems(result):
     """The messages for what went wrong in a plugin's result, its "; "-separated steps (empty when all went well)."""
     problems = []
     for part in result.split("; "):
-        if part.startswith("file ") and ": ok, file " in part:      # a picture saved, even into a folder named FAILED
+        if part.startswith("file ") and ": ok, file " in part:      # a file saved or opened, even in a folder named FAILED
             continue
         if "FAILED" in part:
             problems.append(MSG_PICK_FAILED)
@@ -1444,6 +1453,10 @@ class App:
             if "capture" in a:
                 # ZBrush 2022-2025 get a name their plugin can read; a CaptureError stops the whole pick
                 a = {"filepress": capture.BUTTON, "file": capture.target(a["capture"], legacy is not None)}
+            elif "tool" in a or "project" in a:
+                # the file is looked for now, not when the menus loaded; a FileItemError stops the whole pick
+                button, path = fileitem.resolve(a, legacy is not None)
+                a = {"filepress": button, "file": path}
             got = C.asset_of(a)
             if got and assets is not None:
                 p = assets.find_or_rescan(got[0], got[1], legacy["path"] if legacy else None)
@@ -1540,10 +1553,13 @@ class App:
         legacy = ins if ins is not None and not ins["python"] else None
         try:
             seq = self._write_request(item, legacy)
-        except capture.CaptureError as e:
+        except (capture.CaptureError, fileitem.FileItemError) as e:
             log(f"pick #{self._seq} '{item.label}': {e.reason}; nothing sent")
             self.activity.note_pick(self._seq, item, "none", False, source, self._activity_menu, e.reason)
-            self._toast(MSG_CAPTURE_NAME if e.kind == "name" else MSG_CAPTURE_FOLDER)
+            if isinstance(e, fileitem.FileItemError):
+                self._toast(_FILE_MESSAGES[e.kind])
+            else:
+                self._toast(MSG_CAPTURE_NAME if e.kind == "name" else MSG_CAPTURE_FOLDER)
             return
         except OSError as e:
             reason = "could not write the request file"
@@ -1865,6 +1881,8 @@ def check(cfg_path) -> int:
                 extra = f"  (opens on {it.data.get('kind', 'brush')})"
             elif it.kind == "capture":
                 extra = f"  (saves into {it.data['capture'].strip() or capture.default_folder()})"
+            elif it.kind in C.FILE_EXTS:
+                extra = f"  ({fileitem.describe(it.data)})"
             print(f"      {it.kind:7s} {it.label}{extra}")
     said = any(e.startswith("tags.json could not be read") for e in cfg.errors)     # config.load says it once
     problems = ([store.error] if store.error and not said else []) + cfg.errors
