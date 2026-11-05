@@ -440,8 +440,8 @@ class Popout:
     def on_hwnd(self, hwnd):
         """From custom_frame, on the worker thread, before the frame is changed."""
         self.hwnd = int(hwnd)
-        # maximise stops at the taskbar; tracks the normal rectangle; sees Windows ending the session
-        winframe.limit_maximise_to_work_area(hwnd, on_query_end=self.on_query_end, on_end=self.on_end_session)
+        # draws without Windows' frame, resizes by its own border; sees Windows ending the session
+        winframe.install_frame(hwnd, on_query_end=self.on_query_end, on_end=self.on_end_session)
 
     def on_query_end(self):
         """WM_QUERYENDSESSION (UI thread): the window must not veto it, as on_closing does for the close button."""
@@ -483,6 +483,8 @@ class Popout:
             _log(f"frame set on {self.hwnd}")
             if not self._loaded.wait(60):
                 _log("the page did not load within 60 s")
+            if winframe.frame_problem(self.hwnd):
+                _log(f"the window's resize border could not be set up: {winframe.frame_problem(self.hwnd)}")
             with self._lock:
                 self.ready = True
                 pend, self._pending = self._pending, None
@@ -738,6 +740,7 @@ class Popout:
                                              W.SWP_NOMOVE | W.SWP_NOSIZE | W.SWP_NOACTIVATE)  # TopMost: ours wins
                 if maxed and not user32.IsZoomed(self.hwnd):
                     user32.ShowWindow(self.hwnd, SW_MAXIMIZE)
+                self._on_screen(zb)                    # a maximised window could not be moved while it was hidden
             # Windows lets only the process that got the last input take the foreground; a no-op key from us
             # (0xE8 is an unassigned virtual key, so nothing acts on it) counts as that input.
             W.send_keys([(0xE8, False), (0xE8, True)])
@@ -978,7 +981,7 @@ def _run(opts, mutex) -> int:
     user32.SetProcessDPIAware()                          # as pywebview does: sizes below are logical pixels
     api = PopoutApi(pop)
     window = webview.create_window(TITLE, url=UI_PAGE, js_api=api, width=START_SIZE[0], height=START_SIZE[1],
-                                   min_size=MIN_SIZE, hidden=True, on_top=pop.on_top,
+                                   min_size=MIN_SIZE, hidden=True, on_top=pop.on_top, frameless=True, easy_drag=False,
                                    background_color=theme.preset(theme.current())["window"]["background"],
                                    text_select=False)
     pop.window = window
