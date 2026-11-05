@@ -106,19 +106,25 @@ def _settings() -> dict:
     an absolute local path is left out (a network path would stall the walk), and a repeat is dropped."""
     import paths                          # at call time: the tests point CONFIG_DIR elsewhere
     path = os.path.join(paths.CONFIG_DIR, "studio.json")
+    hit = _settings_cache.get(path)
     try:
         with open(path, "rb") as f:
             raw = f.read()
-    except OSError:
+    except FileNotFoundError:
         _settings_cache.pop(path, None)
         return {k: [] for k in LIBRARY_KINDS}
-    hit = _settings_cache.get(path)
+    except OSError:                       # held for a moment (Studio rewriting it, a scanner): the last good read holds,
+        if hit:                           # or the app would drop every added folder until the next tick
+            return {k: list(v) for k, v in hit[1].items()}
+        return {k: [] for k in LIBRARY_KINDS}
     if hit and hit[0] == raw:
         return {k: list(v) for k, v in hit[1].items()}
     res: dict = {k: [] for k in LIBRARY_KINDS}
     try:
         data = json.loads(raw.decode("utf-8-sig"))
     except ValueError:                    # includes UnicodeDecodeError
+        if hit:                           # a hand edit gone wrong: the last good read holds, and is not replaced in the cache
+            return {k: list(v) for k, v in hit[1].items()}
         data = None
     lib = data.get("library_folders") if isinstance(data, dict) else None
     if isinstance(lib, dict):

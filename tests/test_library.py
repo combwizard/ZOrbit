@@ -232,6 +232,21 @@ def test_callers_waiting_for_a_walk_share_the_next_one(two_folders, monkeypatch)
     monkeypatch.setattr(assets, "exts", lambda k: (".zbp",))
     walk = BlockedWalk(monkeypatch)
     assets.library("alpha")
+
+    class CountingLock:                                 # the build lock, counting who has asked for it
+        def __init__(self, lock):
+            self.lock, self.asked, self.three = lock, 0, threading.Event()
+
+        def __enter__(self):
+            self.asked += 1
+            if self.asked >= 3:
+                self.three.set()
+            return self.lock.__enter__()
+
+        def __exit__(self, *a):
+            return self.lock.__exit__(*a)
+    lock = CountingLock(assets._build_locks["alpha"])
+    monkeypatch.setitem(assets._build_locks, "alpha", lock)
     out = {}
     first = threading.Thread(target=lambda: out.setdefault("first", assets.library("alpha")))
     first.start()
@@ -239,7 +254,7 @@ def test_callers_waiting_for_a_walk_share_the_next_one(two_folders, monkeypatch)
     waiting = [threading.Thread(target=lambda n=n: out.setdefault(n, assets.library("alpha"))) for n in ("b", "c")]
     for w in waiting:
         w.start()
-    threading.Event().wait(0.2)                         # both have asked and wait for the walk on show to end
+    assert lock.three.wait(5)                           # both have asked and wait for the walk on show to end
     walk.go.set()
     for w in [first] + waiting:
         w.join(5)

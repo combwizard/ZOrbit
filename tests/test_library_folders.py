@@ -35,6 +35,28 @@ def test_odd_files_give_empty_lists(studio, text):
     assert all(brushes.user_folders(k) == [] for k in brushes.LIBRARY_KINDS)
 
 
+def test_the_last_good_read_holds_while_the_file_is_bad_or_held(studio, monkeypatch):
+    """Studio rewrites studio.json and a scanner may hold it: a read that fails must not drop every added folder
+    (the app would drop them from the index). Only a file that is gone empties the lists."""
+    studio({"library_folders": {"alpha": ["D:\\Good"]}})
+    assert brushes.user_folders("alpha") == [brushes.Path("D:\\Good")]
+    studio("{half a fi")                                  # a hand edit gone wrong
+    assert brushes.user_folders("alpha") == [brushes.Path("D:\\Good")]
+    real_open = open
+
+    def held(p, *a, **k):
+        if str(p) == str(studio.file):
+            raise PermissionError(13, "held")
+        return real_open(p, *a, **k)
+    with monkeypatch.context() as m:
+        m.setattr("builtins.open", held)
+        assert brushes.user_folders("alpha") == [brushes.Path("D:\\Good")]
+    studio({"library_folders": {"alpha": ["D:\\Other"]}})   # a good rewrite replaces it
+    assert brushes.user_folders("alpha") == [brushes.Path("D:\\Other")]
+    studio.file.unlink()
+    assert brushes.user_folders("alpha") == []
+
+
 def test_bad_entries_are_skipped_and_good_ones_kept(studio):
     studio({"library_folders": {"alpha": [5, None, "", "  ", ["x"], "rel\\dir", "\\\\srv\\x", "//srv/x",
                                           " \\\\srv\\y", "D:\\Good"]}})
