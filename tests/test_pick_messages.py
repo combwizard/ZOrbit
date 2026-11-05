@@ -68,7 +68,8 @@ def test_the_messages_are_different_and_fit_the_toast_on_one_line():
             radiald.MSG_EMPTY_MENU, radiald.MSG_PICK_FAILED, radiald.MSG_COMMAND_TEXT,
             radiald.MSG_COMMAND_PINNED, radiald.MSG_COMMAND_FROZEN, radiald.MSG_COMMAND_NO_MENUS,
             radiald.MSG_CAPTURE_FOLDER, radiald.MSG_CAPTURE_NAME, radiald.MSG_FILE_MISSING,
-            radiald.MSG_FOLDER_MISSING, radiald.MSG_NO_PROJECT, radiald.MSG_FILE_NAME, radiald.MSG_FILE_LONG]
+            radiald.MSG_FOLDER_MISSING, radiald.MSG_NO_PROJECT, radiald.MSG_FILE_NAME, radiald.MSG_FILE_LONG,
+            radiald.MSG_BRIDGE_NO_RESPONSE]
     assert len(set(msgs)) == len(msgs)
     probe = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
     for m in msgs:

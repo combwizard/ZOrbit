@@ -84,6 +84,7 @@ When the app knows why a pick went nowhere, it shows a short message near the cu
 - **No project in that folder, nothing sent**. A [Project](menus.md#project) item names a folder with no `.zpr` file directly in it. Its subfolders do not count.
 - **ZBrush 2022-2025 cannot read that file's name, nothing sent**. In ZBrush 2022 to 2025 the file's path has characters outside plain ASCII, and Windows has no short name for it, so the plugin cannot be given the path. Move the file to a place with a plain name.
 - **That path is too long for ZBrush 2022-2025, nothing sent. See radiald.log.** In ZBrush 2022 to 2025 a path can be at most 255 bytes in the ANSI code page. Move the file to a place with a shorter path.
+- **ZBrush did not take the pick. Check Zplugin > ZOrbit > Apply.** In ZBrush 2022 to 2025 the bridge key did not reach **Apply**, the fallback script did not either, and the app dropped the pick so it cannot land later. The app waits for as long as ZBrush is busy and not responding, up to five minutes, so this appears only once ZBrush is answering again and still has not taken the pick. Usually the pick was made in the first seconds after ZBrush started, before the plugin had loaded, or the plugin is not installed. See [ZBrush 2022 to 2025: the ring opens, but picks do nothing](#zbrush-2022-to-2025-the-ring-opens-but-picks-do-nothing).
 
 If you see no message and nothing happens, work through the steps below.
 
@@ -91,7 +92,7 @@ On Studio's **Status** screen, the **Bridge listener** card should say **Connect
 
 ### ZBrush 2022 to 2025: the ring opens, but picks do nothing
 
-Picks there only arrive through the bridge key. Hover **Zplugin > ZOrbit > Apply** in that ZBrush: its hotkey should match the bridge key in Studio (F9 unless you changed it). The plugin binds F9 itself when **Apply** has no hotkey, but only once it is up to date, so update it if **Setup** step 1 (or **Settings > Older ZBrush** in Full mode) says **Plugin update available**. For any other key, check that it is bound to **Apply** and that you clicked **Preferences > Hotkeys > Store**; a binding that was not stored is gone after a restart. If the palette is missing, install the plugin again from **Studio > Setup** step 1 and restart that ZBrush. `zscript_bridge.log` shows what the last pick did.
+Picks there only arrive through the bridge key. A pick that lands a few seconds late, or a `radiald.log` line saying the bridge key did not reach **Apply**, means that key is not bound to **Apply**. Hover **Zplugin > ZOrbit > Apply** in that ZBrush: its hotkey should match the bridge key in Studio (F9 unless you changed it). The plugin binds F9 itself when **Apply** has no hotkey, but only once it is up to date, so update it if **Setup** step 1 (or **Settings > Older ZBrush** in Full mode) says **Plugin update available**. For any other key, check that it is bound to **Apply** and that you clicked **Preferences > Hotkeys > Store**; a binding that was not stored is gone after a restart. If the palette is missing, install the plugin again from **Studio > Setup** step 1 and restart that ZBrush. `zscript_bridge.log` shows what the last pick did.
 
 Messages Studio can give when you install the plugin:
 
