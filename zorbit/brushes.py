@@ -1,7 +1,9 @@
 """Locate ZBrush brushes (.zbp) and produce cached icon thumbnails."""
 from __future__ import annotations
 
+import hashlib
 import io
+import json
 import time
 import os
 import re
@@ -77,6 +79,101 @@ def zbrush_dirs() -> dict:
         if found:
             res["install"] = Path(found[-1]["path"])
     return res
+
+
+LIBRARY_KINDS = ("brush", "alpha", "material", "texture")
+ADDED = "added:"            # label prefix of a folder the user added; the rest is its normcased, normalised path
+_FIXED_NAMES = {"my brushes", "zbrush", "lightbox", "my alphas", "my materials", "my textures"}
+_settings_cache: dict[str, tuple] = {}     # {studio.json path: (its bytes, the parsed folder lists)}
+
+
+def added_label(path) -> str:
+    """The label of a folder the user added. It is made from the path, so the same folder gets the same label
+    whatever the case or the slashes, and a list of saved picks can name it."""
+    return ADDED + os.path.normcase(os.path.normpath(str(path)))
+
+
+def is_added(label) -> bool:
+    return isinstance(label, str) and label.startswith(ADDED)
+
+
+def _settings() -> dict:
+    """{kind: [path, ...]} for every kind, from "library_folders" in studio.json. The file is read each time and
+    parsed only when its bytes changed. A missing, unreadable or odd file gives empty lists; an entry that is not
+    an absolute local path is left out (a network path would stall the walk), and a repeat is dropped."""
+    import paths                          # at call time: the tests point CONFIG_DIR elsewhere
+    path = os.path.join(paths.CONFIG_DIR, "studio.json")
+    try:
+        with open(path, "rb") as f:
+            raw = f.read()
+    except OSError:
+        _settings_cache.pop(path, None)
+        return {k: [] for k in LIBRARY_KINDS}
+    hit = _settings_cache.get(path)
+    if hit and hit[0] == raw:
+        return {k: list(v) for k, v in hit[1].items()}
+    res: dict = {k: [] for k in LIBRARY_KINDS}
+    try:
+        data = json.loads(raw.decode("utf-8-sig"))
+    except ValueError:                    # includes UnicodeDecodeError
+        data = None
+    lib = data.get("library_folders") if isinstance(data, dict) else None
+    if isinstance(lib, dict):
+        for kind in LIBRARY_KINDS:
+            seen: set = set()
+            entries = lib.get(kind)
+            for p in entries if isinstance(entries, list) else []:
+                if not isinstance(p, str) or not p.strip() or p.strip().startswith(("\\\\", "//")):
+                    continue
+                if not os.path.isabs(p):
+                    continue
+                p = os.path.normpath(p)
+                key = os.path.normcase(p)
+                if key not in seen:
+                    seen.add(key)
+                    res[kind].append(p)
+    _settings_cache[path] = (raw, res)
+    return {k: list(v) for k, v in res.items()}
+
+
+def user_folders(kind) -> list:
+    """The folders the user added for a kind (brush, alpha, material or texture), in the order they chose."""
+    return [Path(p) for p in _settings().get(kind, [])]
+
+
+def user_folders_signature() -> tuple:
+    """All the lists as one value the app can compare to see that the user changed them."""
+    s = _settings()
+    return tuple((k, tuple(s[k])) for k in LIBRARY_KINDS)
+
+
+def _safe(s) -> str:
+    """A folder name as a label that is also a plain name: no slash, colon or "..", never empty."""
+    s = re.sub(r"[\\/:]+", " ", str(s))
+    while ".." in s:
+        s = s.replace("..", ".")
+    return re.sub(r" +", " ", s).strip() or "folder"
+
+
+def display_names(folders) -> list:
+    """What each folder is called in the browser: its own name, or Drive X for a drive root. A name that is
+    taken (by one of ZBrush's own libraries or by an earlier folder, case ignored) gets (2), (3) and so on."""
+    taken = set(_FIXED_NAMES)
+    out = []
+    for f in folders:
+        f = str(f)
+        name = Path(f).name
+        if not name:
+            letter = os.path.splitdrive(f)[0].rstrip(":\\/")
+            name = f"Drive {letter.upper()}" if letter else "folder"
+        name = _safe(name)
+        cand, n = name, 1
+        while cand.lower() in taken:
+            n += 1
+            cand = f"{name} ({n})"
+        taken.add(cand.lower())
+        out.append(cand)
+    return out
 
 
 class Walk(NamedTuple):
@@ -259,6 +356,13 @@ def _cache_dir() -> Path:
     return Path(base) / "ZOrbit" / "thumbs"
 
 
+def _cache_tag(p) -> str:
+    """Eight hex characters from the file's full path (case ignored), for the cache file name. A name, a time and
+    a size do not tell apart two packs in different folders that both hold a 10.png and were copied or unzipped
+    with their timestamps kept; the path does."""
+    return hashlib.blake2b(os.path.normcase(str(p)).encode("utf-8", "surrogatepass"), digest_size=4).hexdigest()
+
+
 def thumbnail(name_or_path, size: int = 96):
     try:
         from PIL import Image
@@ -270,7 +374,7 @@ def thumbnail(name_or_path, size: int = 96):
             return None
         mtime = p.stat().st_mtime_ns
         cdir = _cache_dir()
-        cfile = cdir / f"{p.stem}_{mtime}_{size}.png"
+        cfile = cdir / f"{p.stem}_{_cache_tag(p)}_{mtime}_{size}.png"
         try:
             with Image.open(cfile) as im:
                 return im.convert("RGBA")
@@ -308,7 +412,7 @@ def thumbnail_png(name_or_path, size: int = 96) -> bytes | None:
             p = find_brush(str(name_or_path))
         if p is None:
             return None
-        cfile = _cache_dir() / f"{p.stem}_{p.stat().st_mtime_ns}_{size}.png"
+        cfile = _cache_dir() / f"{p.stem}_{_cache_tag(p)}_{p.stat().st_mtime_ns}_{size}.png"
         try:
             data = cfile.read_bytes()
             if data.startswith(_PNG_SIG) and data.endswith(_PNG_END):

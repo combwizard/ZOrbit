@@ -3,7 +3,7 @@
 An asset is identified by its file stem, matched without case or spaces; the first folder that has it wins
 (same rule as brushes, and one walker for all: brushes.walk_sources). Every public function takes a kind first: "brush" is handled by brushes.py, so callers
 need one code path for all four. Thumbnails of the three new kinds are cached beside the brush ones as
-{kind}_{stem}_{mtime_ns}_{size}.png; images that are not square are fitted, centred, on a transparent square.
+{kind}_{stem}_{tag}_{mtime_ns}_{size}.png (tag: a hash of the full path); images that are not square are fitted, centred, on a transparent square.
 
 Decoders: materials (.zmt) hold the same icon block as a .zbp brush (zbp.py); alphas are mostly 16-bit
 greyscale PSDs that Pillow cannot open, so _psd_gray reads the raw uncompressed plane; textures go through
@@ -300,7 +300,7 @@ def _resolve(kind: str, name_or_path) -> Path | None:
 
 
 def _cache_file(kind: str, p: Path, size: int) -> Path:
-    return _brushes._cache_dir() / f"{kind}_{p.stem}_{p.stat().st_mtime_ns}_{size}.png"
+    return _brushes._cache_dir() / f"{kind}_{p.stem}_{_brushes._cache_tag(p)}_{p.stat().st_mtime_ns}_{size}.png"
 
 
 def thumbnail(kind: str, name_or_path, size: int = 96):

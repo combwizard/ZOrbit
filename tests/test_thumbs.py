@@ -136,6 +136,47 @@ def test_a_cut_short_cache_file_is_not_served(tmp_path):
     assert assets._png_ok(again) and again == cfile.read_bytes()
 
 
+def _same_time(*paths):
+    t = 1_700_000_000_000_000_000
+    for p in paths:
+        os.utime(p, ns=(t, t))
+
+
+def test_same_name_same_time_in_two_folders_do_not_share_a_cache_file(tmp_path):
+    p1, p2 = tmp_path / "packA" / "10.png", tmp_path / "packB" / "10.png"
+    for p in (p1, p2):
+        p.parent.mkdir()
+    noise(300, 300, (255, 0, 0)).save(p1)
+    noise(300, 300, (0, 0, 255)).save(p2)
+    _same_time(p1, p2)
+    assert p1.stat().st_mtime_ns == p2.stat().st_mtime_ns
+    assert assets._cache_file("texture", p1, 64) != assets._cache_file("texture", p2, 64)
+    a, b = assets.thumbnail_png("texture", p1, 64), assets.thumbnail_png("texture", p2, 64)
+    assert a and b and a != b
+
+
+def test_same_name_same_time_zbp_brushes_in_two_folders_differ(tmp_path):
+    from test_zbp import planes, rle, zbp_file
+    dim = 16
+    p1, p2 = tmp_path / "packA" / "10.zbp", tmp_path / "packB" / "10.zbp"
+    for p, rgb in ((p1, True), (p2, False)):
+        p.parent.mkdir()
+        p.write_bytes(zbp_file(dim, [rle(planes(dim, rgb=rgb))]))
+    _same_time(p1, p2)
+    a, b = brushes.thumbnail_png(p1, 32), brushes.thumbnail_png(p2, 32)
+    assert a and b and a != b
+
+
+def test_the_cache_tag_is_stable_and_ignores_case(tmp_path):
+    p = tmp_path / "Pack" / "10.png"
+    tag = brushes._cache_tag(p)
+    assert tag == brushes._cache_tag(p) == brushes._cache_tag(str(p))
+    assert len(tag) == 8 and int(tag, 16) >= 0
+    assert tag != brushes._cache_tag(tmp_path / "Other" / "10.png")
+    if os.name == "nt":                                    # normcase folds case on Windows only
+        assert tag == brushes._cache_tag(str(p).upper())
+
+
 def test_the_memory_cache_evicts_the_least_recently_used():
     c = assets.ThumbCache(max_entries=3, max_bytes=10_000)
     for k in "abc":
