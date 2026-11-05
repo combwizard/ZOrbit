@@ -177,9 +177,13 @@ def display_names(folders) -> list:
 
 
 class Walk(NamedTuple):
-    items: list           # [{"label", "rel", "name", "path"}] in list order; a name seen before is left out
+    items: list           # [{"label", "rel", "name", "stem", "path"}] in list order; name is the stem, or for a
+                          # file of an added folder whose stem is taken, the stem with its folder in brackets
     index: dict           # {tags._norm(name): Path}; the first folder that has the name wins
-    sources: list         # [{"label", "path", "exists", "count", "error", "skipped"}], one per folder searched
+    sources: list         # [{"label", "path", "exists", "count", "error", "skipped", "hidden"}], one per folder
+                          # searched; an added folder also has "display" and "base"
+    names: dict = {}      # {tags._norm(name): name}, the same keys as index
+    files: tuple = ()     # per source, parallel to sources: [(rel, stem, path)] in walk order, before deduplication
 
 
 _seen_lock = threading.Lock()
@@ -193,77 +197,140 @@ def _real(p) -> str:
         return os.path.normcase(os.path.abspath(p))
 
 
+def _read_source(label, folder, recursive, exts, display=None) -> tuple:
+    """(report, files) for one folder: every matching file in walk order, a name seen before included, so a
+    later step can merge walks without reading the disk again. files is [(rel, stem, path)]. display is the
+    folder's name in the browser when it is one the user added."""
+    folder = Path(folder)
+    rep = {"label": label, "path": str(folder), "exists": False, "count": 0, "error": None, "skipped": 0,
+           "hidden": 0}
+    if is_added(label):
+        if display is None:
+            display = display_names([folder])[0]
+        rep["display"] = display
+        rep["base"] = _safe(folder.name) if folder.name else display      # a drive root has no name of its own
+    out: list = []
+    try:
+        rep["exists"] = folder.is_dir()
+    except OSError:
+        rep["exists"] = False
+    key = os.path.normcase(str(folder))
+    if not rep["exists"]:
+        with _seen_lock:
+            was = key in _seen_folders
+        try:
+            drive_gone = bool(folder.anchor) and not os.path.exists(folder.anchor)
+        except OSError:
+            drive_gone = True
+        if was:
+            rep["error"] = f"{folder} was there before and cannot be read now"
+        elif drive_gone:
+            rep["error"] = f"The drive of {folder} cannot be reached"
+        return rep, out
+    with _seen_lock:
+        _seen_folders.add(key)
+    top = os.path.normcase(os.path.abspath(folder))
+
+    def onerror(e):
+        if os.path.normcase(os.path.abspath(str(e.filename or ""))) == top:
+            rep["error"] = f"{folder} cannot be read: {e.strerror or e}"
+        else:
+            rep["skipped"] += 1
+
+    visited = {_real(folder)}
+    for root, subs, files in os.walk(folder, onerror=onerror, followlinks=True):
+        if recursive:
+            keep = []
+            for d in sorted(subs, key=lambda n: (n.lower(), n)):
+                if d.startswith("_"):
+                    continue
+                r = _real(os.path.join(root, d))
+                if r not in visited:
+                    visited.add(r)
+                    keep.append(d)
+            subs[:] = keep
+        else:
+            subs[:] = []
+        rel = os.path.relpath(root, folder)
+        rel = "" if rel == "." else rel.replace(os.sep, "/")
+        for fn in sorted(files, key=lambda n: (n.lower(), n)):
+            if not fn.lower().endswith(exts):
+                continue
+            rep["count"] += 1
+            out.append((rel, os.path.splitext(fn)[0], os.path.join(root, fn)))
+    return rep, out
+
+
+def _candidates(stem, rel, rep) -> list:
+    """The names a file of an added folder tries, in order: its stem, then the stem with its first subfolder (or
+    the folder's own name at the top), its whole subfolder path, and last the folder's display name in front of
+    that. Display names are unique in a walk, so the last one is taken only by a file beside one with the same
+    stem."""
+    parts = [_safe(p) for p in rel.split("/")] if rel else [rep["base"]]
+    out = [stem, f"{stem} ({parts[0]})"]
+    if len(parts) > 1:
+        out.append(f"{stem} ({', '.join(parts)})")
+    out.append(f"{stem} ({rep['display']}, {', '.join(parts)})" if rel else f"{stem} ({rep['display']})")
+    return list(dict.fromkeys(out))
+
+
+def assemble(reports, files) -> Walk:
+    """The list and the index from the folders' reports and files, in source order. A name already taken is
+    dropped in ZBrush's own folders, as ZBrush itself does; a file of an added folder tries the names of
+    _candidates() and is hidden (counted in its report's "hidden") only when every one is taken. One folder holds
+    one file per stem (the first by name): ZBrush names a loaded item after the stem, so 10.png beside 10.psd is
+    the same item to it, and packs often ship an alpha in two formats."""
+    items: list = []
+    index: dict = {}
+    names: dict = {}
+    for rep, fl in zip(reports, files):
+        rep["hidden"] = 0
+        user = is_added(rep["label"])
+        in_folder: set = set()
+        for rel, stem, path in fl:
+            here = (rel, _tags._norm(stem))
+            if here in in_folder:
+                if user:
+                    rep["hidden"] += 1
+                continue
+            in_folder.add(here)
+            cands = _candidates(stem, rel, rep) if user else (stem,)
+            for name in cands:
+                k = _tags._norm(name)
+                if k not in index:
+                    break
+            else:
+                if user:
+                    rep["hidden"] += 1
+                continue
+            index[k] = Path(path)
+            names[k] = name
+            items.append({"label": rep["label"], "rel": rel, "name": name, "stem": stem, "path": path})
+    return Walk(items, index, reports, names, tuple(files))
+
+
 def walk_sources(sources, exts: tuple = (".zbp",)) -> Walk:
     """Walks the folders once, in priority order, and returns the list and the lookup index together, so the
     browser's list and the app's find() cannot disagree.
 
-    One rule for both: the files of a folder before its subfolders, each sorted by name without regard to case;
+    The first folder that has a name (case and spaces ignored) wins. In ZBrush's own folders a later file with
+    that name is left out, as ZBrush does; in a folder the user added it is listed under its stem with its folder
+    in brackets, such as "10 (PackA)", because packs often share names like 10 and 11.
+
+    The walk: the files of a folder before its subfolders, each sorted by name without regard to case;
     subfolders that start with "_" are skipped; links and junctions are followed, but a folder is entered once
-    per source (by its real path), so a loop ends; the first folder that has a name (case and spaces ignored)
-    wins. A source that cannot be read is reported in its "error", not raised: one that was there on an earlier
-    walk and is not now, one on a drive that cannot be reached, or one whose top folder cannot be listed."""
-    items: list = []
-    index: dict = {}
+    per source (by its real path), so a loop ends. A source that cannot be read is reported in its "error", not
+    raised: one that was there on an earlier walk and is not now, one on a drive that cannot be reached, or one
+    whose top folder cannot be listed."""
+    sources = list(sources)
+    shown = iter(display_names([folder for label, folder, _ in sources if is_added(label)]))
     reports: list = []
+    files: list = []
     for label, folder, recursive in sources:
-        folder = Path(folder)
-        rep = {"label": label, "path": str(folder), "exists": False, "count": 0, "error": None, "skipped": 0}
+        rep, fl = _read_source(label, folder, recursive, exts, next(shown) if is_added(label) else None)
         reports.append(rep)
-        try:
-            rep["exists"] = folder.is_dir()
-        except OSError:
-            rep["exists"] = False
-        key = os.path.normcase(str(folder))
-        if not rep["exists"]:
-            with _seen_lock:
-                was = key in _seen_folders
-            try:
-                drive_gone = bool(folder.anchor) and not os.path.exists(folder.anchor)
-            except OSError:
-                drive_gone = True
-            if was:
-                rep["error"] = f"{folder} was there before and cannot be read now"
-            elif drive_gone:
-                rep["error"] = f"The drive of {folder} cannot be reached"
-            continue
-        with _seen_lock:
-            _seen_folders.add(key)
-        top = os.path.normcase(os.path.abspath(folder))
-
-        def onerror(e, rep=rep, folder=folder, top=top):
-            if os.path.normcase(os.path.abspath(str(e.filename or ""))) == top:
-                rep["error"] = f"{folder} cannot be read: {e.strerror or e}"
-            else:
-                rep["skipped"] += 1
-
-        visited = {_real(folder)}
-        for root, subs, files in os.walk(folder, onerror=onerror, followlinks=True):
-            if recursive:
-                keep = []
-                for d in sorted(subs, key=lambda n: (n.lower(), n)):
-                    if d.startswith("_"):
-                        continue
-                    r = _real(os.path.join(root, d))
-                    if r not in visited:
-                        visited.add(r)
-                        keep.append(d)
-                subs[:] = keep
-            else:
-                subs[:] = []
-            rel = os.path.relpath(root, folder)
-            rel = "" if rel == "." else rel.replace(os.sep, "/")
-            for fn in sorted(files, key=lambda n: (n.lower(), n)):
-                if not fn.lower().endswith(exts):
-                    continue
-                rep["count"] += 1
-                name = os.path.splitext(fn)[0]
-                nk = _tags._norm(name)
-                if nk in index:
-                    continue
-                path = os.path.join(root, fn)
-                index[nk] = Path(path)
-                items.append({"label": label, "rel": rel, "name": name, "path": path})
-    return Walk(items, index, reports)
+        files.append(fl)
+    return assemble(reports, files)
 
 
 def walk_error(walk: Walk) -> str | None:

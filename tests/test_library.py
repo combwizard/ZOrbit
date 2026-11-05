@@ -171,6 +171,99 @@ def test_get_library_reports_an_unreadable_source(two_folders, monkeypatch):
         assert len(assets.index("alpha")) == 5      # and the lookup keeps what it had
 
 
+# --- names in an added folder ---------------------------------------------------------------------
+
+def own_and_added(tmp_path, *added):
+    """An own source with 10.psd, then each added folder; the sources and the walk."""
+    own = tmp_path / "own"
+    touch(own / "10.psd")
+    s = [("own", own, True)] + [(brushes.added_label(f), f, True) for f in added]
+    return s, brushes.walk_sources(s, (".psd", ".png"))
+
+
+def test_an_added_file_whose_name_is_taken_gets_its_subfolder(tmp_path):
+    added = tmp_path / "Added"
+    touch(added / "PackA" / "10.png")
+    _, w = own_and_added(tmp_path, added)
+    assert [i["name"] for i in w.items] == ["10", "10 (PackA)"]
+    assert w.index[tags._norm("10 (PackA)")] == added / "PackA" / "10.png"
+    assert w.items[1]["stem"] == "10" and w.items[1]["rel"] == "PackA"
+    assert w.names == {tags._norm("10"): "10", tags._norm("10 (PackA)"): "10 (PackA)"}
+
+
+def test_a_top_file_of_an_added_folder_gets_the_folder_name(tmp_path):
+    added = tmp_path / "Added"
+    touch(added / "10.png")
+    _, w = own_and_added(tmp_path, added)
+    assert [i["name"] for i in w.items] == ["10", "10 (Added)"]
+
+
+def test_the_second_subfolder_gets_the_whole_path(tmp_path):
+    added = tmp_path / "Added"
+    touch(added / "PackA" / "a" / "10.png")
+    touch(added / "PackA" / "b" / "10.png")
+    _, w = own_and_added(tmp_path, added)
+    assert [i["name"] for i in w.items] == ["10", "10 (PackA)", "10 (PackA, b)"]
+    assert w.index[tags._norm("10 (PackA)")] == added / "PackA" / "a" / "10.png"
+
+
+def test_two_added_folders_with_one_name_get_the_display_name(tmp_path):
+    one, two = tmp_path / "x" / "Alphas", tmp_path / "y" / "Alphas"
+    touch(one / "10.png")
+    touch(two / "10.png")
+    _, w = own_and_added(tmp_path, one, two)
+    assert [i["name"] for i in w.items] == ["10", "10 (Alphas)", "10 (Alphas (2))"]
+    assert w.index[tags._norm("10 (Alphas (2))")] == two / "10.png"
+
+
+def test_a_file_beside_one_with_its_stem_is_hidden(tmp_path):
+    added = tmp_path / "Added"
+    touch(added / "10.png")
+    touch(added / "10.psd")
+    _, w = own_and_added(tmp_path, added)                # one file per stem in a folder: ZBrush would call both "10"
+    assert [i["name"] for i in w.items] == ["10", "10 (Added)"]
+    assert w.items[1]["path"] == str(added / "10.png")
+    assert w.sources[1]["hidden"] == 1 and w.sources[1]["count"] == 2
+    touch(added / "sub" / "20.png")
+    touch(added / "sub" / "20.psd")
+    w = brushes.walk_sources([(brushes.added_label(added), added, True)], (".png", ".psd"))
+    assert [i["name"] for i in w.items] == ["10", "20"]     # with no other 10, no qualifying, still one each
+    assert w.sources[0]["hidden"] == 2
+
+
+def test_a_qualified_name_is_a_plain_name(tmp_path):
+    import config
+    added = tmp_path / "Added"
+    try:
+        touch(added / "a:b..c" / "10.png")
+    except OSError:                                     # Windows refuses the colon; the ".." is the point
+        touch(added / "a_b..c" / "10.png")
+    _, w = own_and_added(tmp_path, added)
+    names = [i["name"] for i in w.items]
+    assert len(names) == 2 and names[1] != "10"
+    assert not config._bad_asset_name(names[1])
+
+
+def test_own_sources_never_qualify_or_hide(two_folders):
+    w = brushes.walk_sources(srcs(*two_folders))
+    assert all(i["name"] == i["stem"] for i in w.items)
+    assert [s["hidden"] for s in w.sources] == [0, 0]
+    assert "display" not in w.sources[0] and "base" not in w.sources[0]
+
+
+def test_files_and_names_line_up_with_sources_and_index(tmp_path, two_folders):
+    added = tmp_path / "Added"
+    touch(added / "PackA" / "10.png")
+    touch(added / "beta.zbp")
+    s = srcs(*two_folders) + [(brushes.added_label(added), added, True)]
+    w = brushes.walk_sources(s, (".zbp", ".png"))
+    assert len(w.files) == len(w.sources) == 3
+    assert [len(f) for f in w.files] == [rep["count"] for rep in w.sources]
+    assert set(w.names) == set(w.index)
+    assert w.names[tags._norm("beta (Added)")] == "beta (Added)"
+    assert w.sources[2]["display"] == "Added" and w.sources[2]["base"] == "Added"
+
+
 # --- zbrush_dirs ----------------------------------------------------------------------------------
 
 def maxon(tmp_path, monkeypatch):
