@@ -417,6 +417,7 @@ class FakeAssets:
     def __init__(self):
         self.generation = 1
         self.idx = {k: {} for k in ("brush", "alpha", "material", "texture")}
+        self.listed = {}                            # {kind: {key: listed name}}, as assets.names() gives
         self.rescans = []
         self.done = threading.Event()
         self.refuse = False
@@ -424,6 +425,9 @@ class FakeAssets:
 
     def index(self, kind, refresh=False):
         return self.idx[kind]
+
+    def names(self, kind):
+        return self.listed.get(kind, {})
 
     def rescan(self, kind, install=None):
         self.gate.wait(5)
@@ -521,3 +525,84 @@ def test_a_refused_rescan_is_asked_again_at_the_next_build(monkeypatch):
     wait_idle(ex, fake)
     assert len(fake.rescans) == 2
     assert ex.tag_menu("fresh") is not None
+
+
+def test_a_tag_fan_lists_the_qualified_name_of_an_item(monkeypatch):
+    fake = FakeAssets()
+    fake.idx["alpha"]["10(packa)"] = Path("C:/x/PackA/10.png")
+    fake.idx["alpha"]["11"] = Path("C:/x/11.png")
+    fake.listed["alpha"] = {"10(packa)": "10 (PackA)"}            # 11 has no entry: its stem is the name
+    tg = FakeTags()
+    tg.items_with = lambda key, kind=None: ["alpha:10(packa)", "alpha:11"] if kind == "alpha" else []
+    monkeypatch.setattr(expand, "assets", fake)
+    ex = expand.Expander(SimpleNamespace(ring={}), FakeUsage(), tg)
+    menu = ex.tag_menu("fresh")
+    assert [(i.kind, i.label, i.data) for i in menu.items] == [
+        ("alpha", "10 (PackA)", {"alpha": "10 (PackA)"}), ("alpha", "11", {"alpha": "11"})]
+
+
+# --- folders the user added are the last sources -----------------------------------------------------
+
+@pytest.fixture
+def added(tmp_path, monkeypatch):
+    """studio.json in a temp config folder with one added folder per kind."""
+    import json
+    import paths
+    folder = tmp_path / "My Packs"
+    monkeypatch.setattr(paths, "CONFIG_DIR", str(tmp_path / "cfg"))
+    brushes._settings_cache.clear()
+    (tmp_path / "cfg").mkdir()
+    (tmp_path / "cfg" / "studio.json").write_text(json.dumps({"library_folders": {
+        k: [str(folder)] for k in ("brush", "alpha", "material", "texture")}}), encoding="utf-8")
+    return folder
+
+
+def test_an_added_folder_is_the_last_source_of_a_kind(tmp_path, monkeypatch, added):
+    m = maxon(tmp_path, monkeypatch)
+    touch(m / "ZBrush 2026_BBBB" / "userassets_path.txt").write_text(str(tmp_path / "assets"), encoding="utf-8")
+    here = tmp_path / "ZBrush 2026"
+    touch(here / "ZBrush.exe")
+    touch(m / "ZBrush 2026_BBBB" / "installpath.txt").write_text(str(here), encoding="utf-8")
+    for kind in ("alpha", "material", "texture", "brush"):
+        src = assets.sources(kind)
+        assert len(src) > 1 and src[-1] == (brushes.added_label(added), added, True)
+        assert not any(brushes.is_added(label) for label, _, _ in src[:-1])
+    assert brushes.brush_sources()[-1] == (brushes.added_label(added), added, True)
+
+
+def test_with_no_zbrush_an_added_folder_is_the_only_source(tmp_path, monkeypatch, added):
+    maxon(tmp_path, monkeypatch)
+    assert brushes.zbrush_dirs() == {"user_assets": None, "install": None}
+    for kind in ("alpha", "brush"):
+        assert assets.sources(kind) == [(brushes.added_label(added), added, True)]
+    assert brushes.brush_sources() == [(brushes.added_label(added), added, True)]
+
+
+def test_the_older_zbrush_installs_do_not_search_added_folders(tmp_path, added):
+    for kind in ("alpha", "material", "texture", "brush"):
+        assert not any(brushes.is_added(label) for label, _, _ in assets.install_sources(tmp_path / "ZBrush 2022", kind))
+    assert not any(brushes.is_added(label) for label, _, _ in brushes.install_brush_sources(tmp_path / "ZBrush 2022"))
+
+
+def test_source_labels_name_an_added_folder_by_its_display_name(added):
+    for kind in ("alpha", "brush"):
+        labels = assets.source_labels(kind)
+        assert labels[brushes.added_label(added)] == "My Packs"
+        assert labels[brushes.added_label(added)] == brushes.display_names([added])[0]
+    assert assets.source_labels("alpha")["install ZData/Alphas"] == "ZBrush"
+
+
+def test_name_of_and_names_read_the_last_walk(tmp_path):
+    assert assets.name_of("alpha", "10") is None and assets.names("alpha") == {}
+    pack = tmp_path / "Pack"
+    touch(pack / "10.png")
+    touch(tmp_path / "Other" / "10.png")
+    walk = brushes.walk_sources([("first", tmp_path / "first", True),
+                                 (brushes.added_label(tmp_path / "Pack"), pack, True),
+                                 (brushes.added_label(tmp_path / "Other"), tmp_path / "Other", True)], (".png",))
+    assets._walks["alpha"] = walk
+    assert assets.name_of("alpha", "10 (Pack)") is None
+    assert assets.name_of("alpha", "10") == "10"
+    assert assets.name_of("alpha", "10 (Other)") == "10 (Other)"
+    assert assets.name_of("alpha", "10(other)") == "10 (Other)"            # any spelling
+    assert assets.names("alpha") is walk.names

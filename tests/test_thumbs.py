@@ -268,3 +268,90 @@ def test_a_brush_library_has_the_old_key_only_when_it_has_items(folder, monkeypa
     r = api.get_library(False, "brush")
     assert r["brushes"] is r["items"] and len(r["items"]) == 3
     assert "brushes" not in api.get_library(False, "brush", r["signature"])
+
+
+# --- folders the user added ------------------------------------------------------------------------
+
+@pytest.fixture
+def added(tmp_path, monkeypatch):
+    """No ZBrush at all and one added alpha folder, Packs, holding Skin pack/Wrinkles/a.png."""
+    import json
+    import paths
+    packs = tmp_path / "Packs"
+    (packs / "Skin pack" / "Wrinkles").mkdir(parents=True)
+    (packs / "Skin pack" / "Wrinkles" / "a.png").write_bytes(b"x")
+    (tmp_path / "cfg").mkdir()
+    (tmp_path / "cfg" / "studio.json").write_text(json.dumps({"library_folders": {"alpha": [str(packs)]}}),
+                                                  encoding="utf-8")
+    monkeypatch.setattr(paths, "CONFIG_DIR", str(tmp_path / "cfg"))
+    brushes._settings_cache.clear()
+    monkeypatch.setattr(brushes, "zbrush_dirs", lambda: {"user_assets": None, "install": None})
+    monkeypatch.setattr(assets, "_index", {})
+    monkeypatch.setattr(assets, "_walks", {})
+    monkeypatch.setattr(assets, "_walk_t0", {})
+    monkeypatch.setattr(brushes, "_walk", None)
+    monkeypatch.setattr(brushes, "_walk_t0", float("-inf"))
+    monkeypatch.setattr(webapi, "_lib_cache", {})
+    return packs
+
+
+def test_an_added_folder_is_listed_under_its_display_name(added):
+    r = webapi.LibraryApi().get_library(False, "alpha")
+    assert r["error"] is None and r["zbrush_found"] is False and r["user_folders"] == 1
+    (it,) = r["items"]
+    assert it["name"] == "a" and it["source"] == "Packs" and it["category"] == "Packs/Skin pack/Wrinkles"
+    assert "added:" not in repr(r["items"]) and "added:" not in repr(r["categories"])
+    (src,) = r["sources"]
+    assert src["label"] == "Packs" and src["added"] is True and src["hidden"] == 0 and src["count"] == 1
+
+
+def test_the_display_name_comes_from_the_walk_itself(added, monkeypatch):
+    """A name that is taken gets (2): the answer holds the name the walk used, even if the file changes meanwhile."""
+    monkeypatch.setattr(assets, "source_labels", lambda kind: {brushes.added_label(added): "Stale"})
+    r = webapi.LibraryApi().get_library(False, "alpha")
+    assert r["sources"][0]["label"] == "Packs" and r["items"][0]["source"] == "Packs"
+
+
+def test_the_display_name_is_part_of_the_signature(added, tmp_path):
+    api = webapi.LibraryApi()
+    first = api.get_library(False, "alpha")
+    other = tmp_path / "Other"
+    other.mkdir()
+    import json
+    (tmp_path / "cfg" / "studio.json").write_text(json.dumps({"library_folders": {"alpha": [str(other), str(added)]}}),
+                                                  encoding="utf-8")
+    again = api.get_library(True, "alpha")
+    assert again["signature"] != first["signature"] and [s["added"] for s in again["sources"]] == [True, True]
+    assert again["user_folders"] == 2
+
+
+def test_an_unchanged_answer_and_a_failed_one_carry_user_folders(added, monkeypatch):
+    api = webapi.LibraryApi()
+    first = api.get_library(False, "alpha")
+    same = api.get_library(True, "alpha", first["signature"])
+    assert same["unchanged"] is True and same["user_folders"] == 1 and same["sources"][0]["added"] is True
+    monkeypatch.setattr(assets, "library", lambda kind: (_ for _ in ()).throw(RuntimeError("boom")))
+    bad = api.get_library(True, "alpha")
+    assert bad["error"] == "boom" and bad["user_folders"] == 0 and bad["sources"] == []
+    assert api.get_library(False, "nonsense")["user_folders"] == 0
+
+
+def test_a_hidden_file_is_counted_on_its_source(added):
+    (added / "Skin pack" / "Wrinkles" / "a.psd").write_bytes(b"x")     # a.png beside a.psd: one item
+    r = webapi.LibraryApi().get_library(False, "alpha")
+    assert len(r["items"]) == 1 and r["sources"][0]["hidden"] == 1
+
+
+def test_the_thumbnail_prune_limit_grows_with_the_library(added, monkeypatch):
+    seen = []
+    monkeypatch.setattr(brushes, "cache_prune", seen.append)
+    api = webapi.LibraryApi()
+    api.get_library(True, "alpha")
+    assert seen == [8000]
+    big = [{"label": "x", "rel": "", "name": str(i), "stem": str(i), "path": str(i)} for i in range(6000)]
+    fake = brushes.Walk(big, {}, [], {}, ())
+    monkeypatch.setattr(assets, "last_walk", lambda kind: fake if kind == "texture" else None)
+    api.get_library(True, "alpha")
+    assert seen[-1] == 12000
+    api.get_library(False, "alpha")                     # no refresh: no prune
+    assert len(seen) == 2

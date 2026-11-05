@@ -71,6 +71,7 @@ def sources(kind: str) -> list[tuple[str, Path, bool]]:
                     (f"install Lightbox/{f}", Path(ins) / "Lightbox" / f, True)]
     elif ins:
         src += install_sources(ins, kind)       # 2022-2025 write no userassets_path.txt: all in the installation
+    src += [(_brushes.added_label(p), p, True) for p in _brushes.user_folders(kind)]    # the user's own folders come last
     return src
 
 
@@ -87,16 +88,35 @@ def install_sources(ins, kind: str) -> list[tuple[str, Path, bool]]:
 
 
 def source_labels(kind: str) -> dict[str, str]:
-    """Display name for each source label: My <Folder>, ZBrush or Lightbox."""
+    """Display name for each source label: My <Folder>, ZBrush or Lightbox, or the name of a folder the user added."""
     if kind == "brush":
-        return {"user ZStartup/BrushPresets": "My Brushes", "install ZStartup/BrushPresets": "My Brushes",
-                "install ZData/BrushPresets": "ZBrush", "install Lightbox/Brushes": "Lightbox",
-                "install ZBrushes": "Lightbox"}
-    if kind not in FOLDER:
+        out = {"user ZStartup/BrushPresets": "My Brushes", "install ZStartup/BrushPresets": "My Brushes",
+               "install ZData/BrushPresets": "ZBrush", "install Lightbox/Brushes": "Lightbox",
+               "install ZBrushes": "Lightbox"}
+    elif kind in FOLDER:
+        f = FOLDER[kind]
+        out = {f"user ZStartup/{f}": f"My {f}", f"install ZStartup/{f}": f"My {f}", f"install ZData/{f}": "ZBrush",
+               f"install Lightbox/{f}": "Lightbox", f"install {LEGACY[kind]}": "Lightbox"}
+    else:
         return {}
-    f = FOLDER[kind]
-    return {f"user ZStartup/{f}": f"My {f}", f"install ZStartup/{f}": f"My {f}", f"install ZData/{f}": "ZBrush",
-            f"install Lightbox/{f}": "Lightbox", f"install {LEGACY[kind]}": "Lightbox"}
+    fs = _brushes.user_folders(kind)
+    out.update({_brushes.added_label(p): name for p, name in zip(fs, _brushes.display_names(fs))})
+    return out
+
+
+def name_of(kind: str, name) -> str | None:
+    """The name an item is listed under (a file of an added folder may be "10 (PackA)", its stem 10), from a name
+    or key in any spelling; None when there is no walk yet or the name is not in it."""
+    walk = last_walk(kind)
+    if walk is None:
+        return None
+    return walk.names.get(_brushes._tags._norm(str(name)))
+
+
+def names(kind: str) -> dict:
+    """{tags._norm(name): the listed name} of the last walk of this kind, {} before the first one."""
+    walk = last_walk(kind)
+    return walk.names if walk is not None else {}
 
 
 def exts(kind: str) -> tuple:

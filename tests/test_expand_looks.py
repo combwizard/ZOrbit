@@ -275,6 +275,9 @@ class TagFanAssets:
     def index(self, kind):
         return {k.split(":", 1)[1]: p for k, p in self.brushes.items()} if kind == "brush" else {}
 
+    def names(self, kind):
+        return {}
+
 
 class TagFanTags:
     mtime = 1

@@ -2381,7 +2381,7 @@ function buildItemInspector() {
         const L = lib(k), W = K(k);
         if (L.state === 'loading' || L.state === 'idle') hintEl.append('Reading your ' + W.one + ' library...');
         else if (L.state === 'error') { hintEl.classList.add('warn'); hintEl.append(`Your ${W.one} library could not be read: `, linkBtn('see Library', () => { S.lib.kind = k; showScreen('library'); }), '.'); }
-        else if (!L.zbrushFound) { hintEl.classList.add('warn'); hintEl.append('ZBrush was not found: ', linkBtn('see Setup', () => showScreen('setup')), '.'); }
+        else if (!L.zbrushFound && !L.sources.some(s => s.added)) { hintEl.classList.add('warn'); hintEl.append('ZBrush was not found: ', linkBtn('see Setup', () => showScreen('setup')), '.'); }
         else if (v && L.items.length && !L.byName.has(nameKey(v))) { hintEl.classList.add('warn'); hintEl.append(`Not found in your ${W.one} folders. ZBrush can still select it if it is loaded there; a picture needs ${W.files} with this name.`); }
         else if (!v) hintEl.append('Type to search your library.');
       } else if (k === 'menu') {
@@ -3323,7 +3323,7 @@ function libEmptyState(kind) {
   const L = lib(kind), w = K(kind);
   let el;
   if (L.state === 'error') el = emptyState('alert', 'Could not read the ' + w.one + ' library', L.error || 'The backend could not list your ZBrush ' + w.one + ' folders.');
-  else if (!L.zbrushFound) {
+  else if (!L.zbrushFound && !L.sources.some(s => s.added)) {
     // The Setup screen lists the ZBrush installs ZOrbit knows. The browser window has no way to open Studio, so it only says where to look.
     el = emptyState('library', 'No ' + w.many + ' to show', 'ZBrush was not found. ZOrbit Studio reads the ' + w.one + ' folders of a ZBrush that has run at least once. Start ZBrush once, then press Rescan' + (POPOUT ? '. If it is still not found, open Studio from the tray icon and add its folder in Setup.' : '.'),
       POPOUT ? null : { text: 'Find ZBrush in Studio', fn: () => showScreen('setup') });

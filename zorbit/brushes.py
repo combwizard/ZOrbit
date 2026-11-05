@@ -374,6 +374,7 @@ def brush_sources() -> list[tuple[str, Path, bool]]:
         src.append(("user ZStartup/BrushPresets", ua / "ZStartup" / "BrushPresets", True))
     if ins:
         src += install_brush_sources(ins)
+    src += [(added_label(p), p, True) for p in user_folders("brush")]      # the user's own folders come last
     return src
 
 

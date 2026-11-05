@@ -853,16 +853,17 @@ class Api(webapi.LibraryApi, webapi.TagApi):
         to a tag, so every tag setting shows even when no menu has a tagged brush; the submenu slot is plain.
         look: the resolved look the menu is drawn with (None: the ring's own)."""
         store = app.tags.load()
-        index = {k.replace(" ", ""): p for k, p in brushes.brush_index().items()}
+        listed = assets.names("brush")
+        index = {k.replace(" ", ""): (listed.get(k) or p.stem) for k, p in brushes.brush_index().items()}
         names = []
         for ik in store.tagged("brush"):
             if ik.split(":", 1)[1] in index:
-                names.append(index[ik.split(":", 1)[1]].stem)
-        for p in index.values():
+                names.append(index[ik.split(":", 1)[1]])
+        for n in index.values():
             if len(names) >= SAMPLE_SLOTS - 1:
                 break
-            if p.stem not in names:
-                names.append(p.stem)
+            if n not in names:
+                names.append(n)
         names = (names or list(SAMPLE_BRUSHES))[:SAMPLE_SLOTS - 1]
         colors = [t["color"] for t in store.tags()] or [tags.PALETTE[0]]
         items = [C.Item(label=n, kind="brush", data={"brush": n},
