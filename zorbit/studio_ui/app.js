@@ -1725,6 +1725,7 @@ function buildMenusScreen(root) {
     else {
       if (!dock) dock = makeBrowser({ compact: true, st: S.dock });
       body.append(dock.el);
+      dock.relayout();
       dock.scroller().scrollTop = dockScroll;
       R.badges = () => dock.updateBadges();
     }
@@ -3253,6 +3254,7 @@ function addManyToCurrent(kind, names) {
      onKind(kind)    optional: the browser switched to another kind */
 const STUDIO_HOST = {
   dnd: true,
+  addFolder: true,                                                 // the Add a folder button under the folders: only Studio can open the picker and write studio.json
   tools: () => h('button', { class: 'btn small', type: 'button', title: 'Open the browser in its own window', onclick: openBrowserFromButton }, icon('k_browser', 13), 'Browser'),
   primaryIcon: () => 'plus',
   primaryLabel() { const m = curMenu(); return m ? 'Add to ' + (m.title || S.menuId) : 'No menu to add to'; },
@@ -3350,15 +3352,28 @@ function makeBrowser({ compact, st, host = STUDIO_HOST, kindUi = compact ? 'comp
   const fchips = h('span', { class: 'filter-chips', hidden: true });     // the popout's toolbar: the filters that are on (styles.css shows them only while its column is collapsed)
   const grid = h('div', { class: 'bgrid' });
   const libWarn = h('div', { class: 'fhint warn lib-warn', role: 'status', hidden: true, style: 'margin-bottom: 10px' });   // a folder that could not be read while the others were: its items are the ones it had
-  const scroll = h('div', { class: 'b-scroll' }, libWarn, grid);
+  const scroll = h('div', { class: 'b-scroll', tabindex: '-1' }, libWarn, grid);   // tabindex: it can hold the keyboard while the focused card has scrolled away (paintWindow)
   const side = h('div', { class: 'lib-side' });
   const catsBox = h('div', { class: 'cats', role: 'listbox', 'aria-label': 'Folders' });
   const tagSec = h('div', { class: 'tag-sec', role: 'group', 'aria-label': 'Tags' });                     // full: the Tags section under Folders
   const tagRow = h('div', { class: 'tagrow', role: 'group', 'aria-label': 'Filter by tag', hidden: true });   // compact: the same chips, wrapped
-  side.append(catsBox, tagSec);
+  const addFolderBtn = !compact && host.addFolder ? h('button', { class: 'btn small lib-addfolder', type: 'button', onclick: async () => {     // the same list as Settings > Library folders, for the tab on show
+    const kind = st.kind;
+    addFolderBtn.disabled = true;
+    let r = null;
+    try { r = await call('add_library_folder', kind); } catch (e) { toast('Could not add the folder: ' + e.message, { tone: 'warn', ms: 5000 }); }
+    addFolderBtn.disabled = false;
+    if (!r || r.cancelled) return;
+    toast(r.message || (r.ok ? 'Added.' : 'That did not work.'), !r.ok ? { tone: 'warn', ms: 5000 } : r.already ? { ms: 4000 } : { tone: 'ok', ms: 4000 });
+    if (r.ok && !r.already) await loadLibrary(kind, true);
+  } }, icon('folder', 12), 'Add a folder...') : null;
+  side.append(...[catsBox, addFolderBtn, tagSec].filter(Boolean));
   const lazy = makeLazyIO(scroll);
-  let token = 0, curRes = compact ? 128 : resFor(st.size), lastSig = '';
-  let built = '', gridKind = '';         // built: kind + names of the cards on show once all are drawn (renderGrid keeps them when the list is the same); gridKind: the kind they were made for
+  let curRes = compact ? 128 : resFor(st.size), lastSig = '';
+  let built = '', gridKind = '';         // built: kind + names of the list on show (renderGrid keeps its cards when the list is the same); gridKind: the kind they were made for
+  let win = null;                        // the list on show and the part of it that has cards: { list, first, end, cols, rowH, pool } (see paintWindow)
+  let winFrame = 0, winMeasure = false;  // a paintWindow waiting for the next frame, and whether it measures the rows again
+  let focusAway = false;                 // the card with the keyboard (rov) scrolled away, and the scroller holds the keyboard for it
   let rov = null, rovEl = null;          // the card that is the grid's one Tab stop (name, node)
   const sel = new Set();                 // names of the selected items
   let anchor = null;                     // the last plain or Ctrl click: where a Shift-click range starts
@@ -3454,6 +3469,7 @@ function makeBrowser({ compact, st, host = STUDIO_HOST, kindUi = compact ? 'comp
       if (host.onSize) host.onSize(st.size);
       const r = resFor(st.size);
       if (r !== curRes) { curRes = r; $$('.bcard .thumb', grid).forEach(t => rethumb(t, r)); }
+      paintWindowSoon(true);                                   // the rows have another height now
     });
     paint(); grid.style.setProperty('--card', st.size + 'px');
     rescan = rescanBtn(st.kind);
@@ -3629,7 +3645,7 @@ function makeBrowser({ compact, st, host = STUDIO_HOST, kindUi = compact ? 'comp
     const card = h('div', { class: 'bcard' + (on ? ' sel' : ''), tabindex: '-1', role: 'button', 'aria-pressed': on ? 'true' : 'false', dataset: { name: b.name } },   // renderGrid gives one card tabindex 0
       h('div', { class: 'bthumb' }, thumb(b.name, { size: 0, lazy, cls: 'fill', res: curRes, kind: st.kind }),
         h('button', { class: 'badd', type: 'button', tabindex: '-1', title: host.cardTitle(st.kind), 'aria-label': host.cardLabel(b.name, st.kind), onclick: e => { e.stopPropagation(); host.primary(b.name, st.kind); } }, icon(host.primaryIcon(st.kind), 14))),
-      h('div', { class: 'bname' }, b.name));
+      h('div', { class: 'bname', title: b.name }, b.name));           // the title: a long name is cut off, and in a pack the end of it tells two items apart
     card.addEventListener('click', e => {
       if (e.shiftKey && anchor && L().byName.has(nameKey(anchor))) {      // a range over the items on show, from the last plain click
         const names = filtered().map(x => x.name), a = names.indexOf(anchor), z = names.indexOf(b.name);
@@ -3697,10 +3713,98 @@ function makeBrowser({ compact, st, host = STUDIO_HOST, kindUi = compact ? 'comp
   /* The grid is one Tab stop: the card that has the keyboard (or was clicked) is the one with tabindex 0. */
   grid.addEventListener('focusin', e => {
     const c = e.target.closest && e.target.closest('.bcard[data-name]');
-    if (!c || c.classList.contains('skel') || c === rovEl) return;
+    if (c) focusAway = false;
+    if (!c || c.classList.contains('skel') || (c === rovEl && rov === c.dataset.name)) return;
     if (rovEl) rovEl.tabIndex = -1;
     c.tabIndex = 0; rovEl = c; rov = c.dataset.name;
   });
+  /* The Tab stop among the cards that exist: the card it belongs to, or while that one has no card, the first on show. */
+  function paintTabStop() {
+    if (rovEl && rovEl.isConnected && rovEl.dataset.name === rov) return;
+    if (rovEl) rovEl.tabIndex = -1;
+    rovEl = cardNamed(rov) || grid.querySelector('.bcard[data-name]');
+    if (rovEl) rovEl.tabIndex = 0;
+  }
+  const cardNamed = name => (name ? Array.from(grid.children).find(c => c.dataset.name === name) : null) || null;
+  function measureWindow() {
+    const c = grid.querySelector('.bcard[data-name]'), high = c ? c.getBoundingClientRect().height : 0;   // not offsetHeight: it is rounded, and the padding would jump by the difference at each row
+    if (!high) return;                                         // not laid out (hidden, or taken off the page for a while): what was measured stays
+    const cs = getComputedStyle(grid);
+    win.cols = Math.max(1, cs.gridTemplateColumns.split(' ').filter(Boolean).length);       // the resolved columns
+    win.rowH = high + (parseFloat(cs.rowGap) || 0);
+  }
+  /* Cards win.list[a] up to b, in order, reusing the ones the last list had. */
+  function cardsFor(a, b) {
+    const frag = document.createDocumentFragment();
+    for (let i = a; i < b; i++) {
+      const it = win.list[i], old = win.pool && win.pool.get(it.name), card = old ? reuseCard(old) : makeCard(it);
+      card.tabIndex = -1;
+      frag.append(card);
+    }
+    return frag;
+  }
+  function dropCard(card) {
+    const t = card.querySelector('.thumb');
+    if (t && t._io) t._io.unobserve(t);
+    card.remove();
+  }
+  /* A library can hold thousands of items, so only the cards near the view exist (gridwindow.js); padding on the grid stands for
+     the rest. This brings them up to date with the scroll position. Called for each new list, each scroll and each resize. */
+  function paintWindow(measure = false) {
+    if (!win || (win.rowH && !scroll.clientHeight)) return;    // hidden: the cards and the padding wait as they are, so the scroll position can be put back
+    if (measure || !win.rowH) measureWindow();
+    const r = ZGridWindow.range({ top: scroll.getBoundingClientRect().top - grid.getBoundingClientRect().top, height: scroll.clientHeight,
+      rowH: win.rowH, cols: win.cols, total: win.list.length, margin: 480 });
+    const changed = r.first !== win.first || r.end !== win.end, act = document.activeElement;
+    const held = changed && act && act !== document.body && grid.contains(act) ? act.closest('.bcard') : null, heldAt = held ? win.first + Array.prototype.indexOf.call(grid.children, held) : -1;
+    const hadFocus = !!held && (heldAt < r.first || heldAt >= r.end);
+    if (hadFocus) act.blur();                                   // first: taking away a focused element forces a layout, and part way through the swap the list is shorter, so the scroll position would clamp
+    if (changed) {
+      if (r.first >= win.end || r.end <= win.first) {           // a jump: nothing stays
+        Array.from(grid.children).forEach(dropCard);
+        grid.append(cardsFor(r.first, r.end));
+      } else {
+        for (let i = win.first; i < r.first; i++) dropCard(grid.firstElementChild);
+        for (let i = win.end; i > r.end; i--) dropCard(grid.lastElementChild);
+        if (r.first < win.first) grid.prepend(cardsFor(r.first, win.first));
+        if (r.end > win.end) grid.append(cardsFor(win.end, r.end));
+      }
+      win.first = r.first; win.end = r.end;
+    }
+    grid.style.paddingTop = r.padTop + 'px';                    // before anything that forces a layout: with the new cards and the old padding the list is shorter, and the scroll position would clamp to it
+    grid.style.paddingBottom = r.padBottom + 'px';
+    if (changed) {
+      paintTabStop();
+      if (hadFocus) {                                           // the card with the keyboard scrolled away: the scroller holds the keyboard, so Enter or Ctrl+D cannot land on a card nobody chose
+        focusAway = true;
+        scroll.focus({ preventScroll: true });
+      } else if (focusAway && document.activeElement === scroll && rovEl && rovEl.dataset.name === rov) {   // and it is back
+        rovEl.focus({ preventScroll: true });
+      }
+    }
+    if (!win.rowH && win.end > 0) {                             // the first cards are there to measure: now the real window
+      measureWindow();
+      if (win.rowH) paintWindow();
+    }
+  }
+  function paintWindowSoon(measure = false) {
+    winMeasure = winMeasure || measure;
+    if (!winFrame) winFrame = requestAnimationFrame(() => { const m = winMeasure; winFrame = 0; winMeasure = false; paintWindow(m); });
+  }
+  scroll.addEventListener('scroll', () => paintWindowSoon(), { passive: true });
+  new ResizeObserver(() => paintWindowSoon(true)).observe(scroll);
+  /* Scrolls item i of the list on show into view (only as far as it takes) and gives back its card. */
+  function revealCard(i) {
+    if (!win.rowH) measureWindow();
+    const row = Math.floor(i / win.cols), lastRow = Math.floor((win.list.length - 1) / win.cols);
+    const y = grid.getBoundingClientRect().top - scroll.getBoundingClientRect().top + scroll.scrollTop + row * win.rowH;
+    if (!row) scroll.scrollTop = 0;                            // the first and last rows go right to the edge, past the scroller's padding
+    else if (row === lastRow) scroll.scrollTop = scroll.scrollHeight;
+    else if (y < scroll.scrollTop) scroll.scrollTop = y;
+    else if (y + win.rowH > scroll.scrollTop + scroll.clientHeight) scroll.scrollTop = y + win.rowH - scroll.clientHeight;
+    paintWindow();
+    return cardNamed(win.list[i].name);
+  }
   function paintCount(list) {
     const f = tagFilterOn();
     let t = list.length + ' ' + (list.length === 1 ? W().one : W().many) + (st.cat !== 'All' || st.q || f ? ' of ' + L().items.length : '');
@@ -3733,8 +3837,9 @@ function makeBrowser({ compact, st, host = STUDIO_HOST, kindUi = compact ? 'comp
     const act = document.activeElement, focusName = act && act.classList && act.classList.contains('bcard') && grid.contains(act) ? act.dataset.name : null;
     const pool = new Map(usable && gridKind === st.kind ? cardEls().map(c => [c.dataset.name, c]) : []);   // cards of this kind already built: reused by name, not made again
     $$('.thumb', grid).forEach(t => { if (t._io) t._io.unobserve(t); });   // the old cards are about to go: do not keep them in the observer
-    const my = ++token;
     grid.replaceChildren();
+    grid.style.paddingTop = grid.style.paddingBottom = '';
+    win = null;
     lastSig = ''; built = ''; gridKind = ''; rovEl = null;
     if (loading) {
       setText(count, 'Scanning...');
@@ -3772,25 +3877,17 @@ function makeBrowser({ compact, st, host = STUDIO_HOST, kindUi = compact ? 'comp
     }
     gridKind = st.kind;
     const have = new Set(list.map(b => b.name));
-    const stop = [rov, anchor, sel.values().next().value].find(n => n && have.has(n)) || list[0].name;       // the card that is the one Tab stop of the grid
-    let i = 0;
-    const chunk = () => {
-      if (my !== token) return;
-      const frag = document.createDocumentFragment();
-      let focusEl = null;
-      for (const end = Math.min(i + 160, list.length); i < end; i++) {
-        const name = list[i].name, old = pool.get(name), card = old ? reuseCard(old) : makeCard(list[i]);
-        if (name === stop) { card.tabIndex = 0; rovEl = card; rov = name; } else card.tabIndex = -1;
-        if (name === focusName) focusEl = card;
-        frag.append(card);
-      }
-      grid.append(frag);
-      if (focusEl) focusEl.focus({ preventScroll: true });                                  // the card that had the keyboard is still here: it keeps it
-      if (i >= list.length) built = st.kind + '\n' + sig;
-      if (keepTop !== null && (i >= list.length || scroll.scrollHeight - scroll.clientHeight >= keepTop)) { scroll.scrollTop = keepTop; keepTop = null; }
-      if (i < list.length) requestAnimationFrame(chunk);
-    };
-    chunk();
+    rov = [rov, anchor, sel.values().next().value].find(n => n && have.has(n)) || list[0].name;       // the card that is the one Tab stop of the grid
+    win = { list, first: 0, end: 0, cols: 1, rowH: 0, pool };
+    built = st.kind + '\n' + sig;
+    paintWindow();                                             // the first cards, measured, and the padding for the rest
+    scroll.scrollTop = keepTop === null ? 0 : keepTop;         // a new list starts at the top; a rescan or a refresh must not throw you there
+    paintWindow();
+    win.pool = null;
+    if (focusName && have.has(focusName)) {                    // the card that had the keyboard is still in the list: it keeps it
+      const c = revealCard(list.findIndex(b => b.name === focusName));
+      if (c) c.focus({ preventScroll: true });
+    }
   }
   function renderCats() {
     const tree = catTree(st.kind);
@@ -3857,31 +3954,28 @@ function makeBrowser({ compact, st, host = STUDIO_HOST, kindUi = compact ? 'comp
   /* Moves the highlight one card (dx) or one row (dy). The row length is however many cards sit at the first card's height. */
   function move(dx, dy) {
     onSearch.flush();
-    const cards = $$('.bcard[data-name]', grid);
-    if (!cards.length) return false;
-    const top0 = cards[0].offsetTop;
-    let cols = 0;
-    while (cols < cards.length && cards[cols].offsetTop === top0) cols++;
-    const act = document.activeElement, onCard = !!act && act.classList.contains('bcard') && grid.contains(act);
-    const at = onCard ? cards.indexOf(act) : anchor ? cards.findIndex(c => c.dataset.name === anchor) : -1;     // from the card that has the keyboard, else from the highlight
-    const to = at < 0 ? 0 : clamp(at + dx + dy * cols, 0, cards.length - 1);
-    setSel(cards[to].dataset.name, onCard);
-    cards[to].scrollIntoView({ block: 'nearest' });
+    if (!win || !win.list.length) return false;
+    measureWindow();
+    const list = win.list, act = document.activeElement, away = act === scroll && focusAway, onCard = away || (!!act && act.classList.contains('bcard') && grid.contains(act));
+    const from = away ? rov : onCard ? act.dataset.name : anchor;   // from the card that has the keyboard (or had it, and scrolled away), else from the highlight
+    const at = from ? list.findIndex(b => b.name === from) : -1;
+    const to = at < 0 ? 0 : clamp(at + dx + dy * win.cols, 0, list.length - 1);
+    revealCard(to);                                            // first: the card may not exist yet, and setSel gives it the focus
+    setSel(list[to].name, onCard);
     return true;
   }
   /* Home and End on a card: the first or the last card on show. */
   function moveEdge(last) {
     onSearch.flush();
-    const cards = $$('.bcard[data-name]', grid);
-    if (!cards.length) return false;
-    const c = cards[last ? cards.length - 1 : 0];
-    setSel(c.dataset.name, true);
-    c.scrollIntoView({ block: 'nearest' });
+    if (!win || !win.list.length) return false;
+    const to = last ? win.list.length - 1 : 0;
+    revealCard(to);
+    setSel(win.list[to].name, true);
     return true;
   }
   /* Studio's Library and the dock: the arrow keys on a card move to the next one (the popout's window handler does the same from its search box). */
   scroll.addEventListener('keydown', e => {
-    if (e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey || e.shiftKey || !e.target.classList || !e.target.classList.contains('bcard')) return;
+    if (e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey || e.shiftKey || !e.target.classList || !(e.target.classList.contains('bcard') || e.target === scroll)) return;
     const dx = e.key === 'ArrowLeft' ? -1 : e.key === 'ArrowRight' ? 1 : 0, dy = e.key === 'ArrowUp' ? -1 : e.key === 'ArrowDown' ? 1 : 0;
     if (dx || dy) { e.preventDefault(); move(dx, dy); }
     else if (e.key === 'Home' || e.key === 'End') { e.preventDefault(); moveEdge(e.key === 'End'); }
@@ -3906,6 +4000,7 @@ function makeBrowser({ compact, st, host = STUDIO_HOST, kindUi = compact ? 'comp
     search.placeholder = `Search ${w.many}...`; search.setAttribute('aria-label', `Search ${w.many}`);
     tagBtn.title = tagText; tagBtn.setAttribute('aria-label', tagText);
     strip.setAttribute('aria-label', `Selected ${w.many}`);
+    if (addFolderBtn) addFolderBtn.title = `Add a folder of your own ${w.many}. ZBrush 2026 and newer.`;
     if (dockHint) setText(dockHint, `Click ${aOrAn(w.one)} and press Add, or drag it onto the ring or the list.`);
   }
   /* Switches to another kind: its own folders and selection, the same search text and tag filter. */
@@ -3933,6 +4028,7 @@ function makeBrowser({ compact, st, host = STUDIO_HOST, kindUi = compact ? 'comp
     el: root, scroller: () => scroll,
     kind: () => st.kind, setKind, navStep,
     refresh() { renderAll(true); paintTarget(); },                  // after a library load: the scroll position stays
+    relayout() { paintWindow(true); },                              // just put on the page: measure now, so a scroll position can be put back this frame (the ResizeObserver comes a frame later)
     hasSel: () => sel.size > 0,
     focusSearch(select = true) { search.focus(); if (select) search.select(); },
     typeChar(ch) { search.value += ch; search.dispatchEvent(new Event('input', { bubbles: true })); },
@@ -3971,6 +4067,7 @@ function buildLibraryScreen(root) {
   const browser = makeBrowser({ compact: false, st: S.lib });
   const target = h('aside', { class: 'col lib-target' });
   root.replaceChildren(browser.el, target);
+  browser.relayout();                                 // showScreen puts the scroll position back next
   R.libRefresh = kind => { if (kind === S.lib.kind) browser.refresh(); };
   R.badges = () => browser.updateBadges();
   const list = h('div', { class: 'ilist' });          // kept between repaints, so a tag change does not send it back to the top

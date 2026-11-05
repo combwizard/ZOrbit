@@ -44,7 +44,7 @@ The browser follows the Theme setting (**Dark**, **Light**, **Follow Windows** o
 
 ## Your own folders
 
-If you keep brushes, alphas, materials or textures in folders of your own, such as a pack you bought, add the folder and the browser, the Library and the ring find its files. You add them in Studio, on **Settings > Library folders**. It works in Simple and Full mode and needs ZBrush 2026 or newer.
+If you keep brushes, alphas, materials or textures in folders of your own, such as a pack you bought, add the folder and the browser, the Library and the ring find its files. You add them in Studio, with **Add a folder...** under the folders on the **Library** screen (for the tab you are on), or on **Settings > Library folders**, which lists them all. It works in Simple and Full mode and needs ZBrush 2026 or newer.
 
 ![The Library folders card on Settings: a Brushes folder that was found with its file count, a missing Alphas folder, and an Add a folder button under each of the four kinds](images/settings-library-folders.png)
 

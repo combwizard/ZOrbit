@@ -8,11 +8,12 @@ All notable changes to this project are listed here. The format follows
 
 ### Added
 
-- **Library folders** on Studio's **Settings** screen adds folders of your own brushes, alphas, materials and textures. The browser, the Library and the ring search them after ZBrush's own folders, in the order you added them, and each shows as a folder of its own. A file whose name is already taken is listed with its pack folder in brackets, such as **10 (Crack Alphas Vol 1)**, since packs often reuse the same names. ZBrush 2026 and newer only. **Copy report** lists the folders too.
+- **Library folders** on Studio's **Settings** screen, and **Add a folder...** under the folders on the **Library** screen, add folders of your own brushes, alphas, materials and textures. The browser, the Library and the ring search them after ZBrush's own folders, in the order you added them, and each shows as a folder of its own. A file whose name is already taken is listed with its pack folder in brackets, such as **10 (Crack Alphas Vol 1)**, since packs often reuse the same names. ZBrush 2026 and newer only. **Copy report** lists the folders too.
 
 ### Changed
 
 - A folder that cannot be read (its drive unplugged, the folder renamed) keeps the items it had and no longer empties the list or holds up the other folders. The browser and the Library show the reason in a line above the list.
+- The browser and the Library build only the cards near the view, so a tab of thousands of items opens at once and scrolls smoothly. Hovering a card shows its whole name.
 - The thumbnail cache keeps at least twice as many pictures as the library has items, instead of a fixed 8,000.
 - The Library no longer shows the path of the tags file under **Manage tags...**. The Tags page of the docs says where the file is.
 

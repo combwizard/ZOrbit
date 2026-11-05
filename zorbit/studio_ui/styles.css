@@ -692,7 +692,8 @@ body.dragging .irow:hover { background: transparent; }
 .size-ctl { display: flex; align-items: center; gap: 10px; flex: 0 1 120px; min-width: 56px; color: var(--sub); }
 .size-ctl input[type=range] { min-width: 0; }
 .b-count { margin-left: auto; font-size: 11.5px; color: var(--sub); }
-.b-scroll { flex: 1; min-height: 0; overflow: auto; padding: 16px; }
+.b-scroll { flex: 1; min-height: 0; overflow: auto; padding: 16px; overflow-anchor: none; }   /* the grid builds only the cards near the view: anchoring must not move the scroll as they come and go */
+.b-scroll:focus { outline: none; }   /* it only holds the keyboard for a card that scrolled away */
 .bgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(var(--card, 112px), 1fr)); gap: 10px; align-content: start; }
 .grid-empty { grid-column: 1 / -1; padding-top: 40px; }
 .bcard { position: relative; padding: 7px 7px 6px; background: var(--bg2); border: 1px solid var(--line); border-radius: 10px; cursor: grab; transition: transform .14s var(--ease), border-color .14s, background .14s, box-shadow .14s; }
@@ -735,6 +736,7 @@ body.dragging .irow:hover { background: transparent; }
 .tdot { display: inline-block; flex: none; width: 9px; height: 9px; border-radius: 50%; background: var(--tag, var(--sub)); box-shadow: 0 0 0 1px rgba(0, 0, 0, .4); }
 .target-row .tdot.tt-dot { width: 12px; height: 12px; }
 .tdot.none { background: transparent; box-shadow: none; border: 1.5px dashed var(--sub); }
+.lib-addfolder { align-self: flex-start; margin: 10px 4px 0; }
 .tag-sec { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 1px; }
 .tag-head { display: flex; align-items: center; justify-content: space-between; padding-right: 10px; }
 .tag-head .side-title { padding-bottom: 8px; }
