@@ -45,7 +45,7 @@ In ZBrush 2026 the palette is now **Zplugin > ZOrbit**. If you bound F9 to the o
 These versions load plugins only from their own `ZStartup\ZPlugs64` folder, so Studio puts the plugin there:
 
 1. Open **ZOrbit Studio** and go to the **Setup** screen (Alt+6). Step 1 lists the 2022 to 2025 versions it found. If yours is missing, use **Add a ZBrush folder**. The same list, with the same **Install** button, is in **Settings > Older ZBrush** in [Full mode](studio.md#simple-and-full-mode).
-2. Click **Install**. A ZBrush under Program Files asks for administrator rights once (the prompt runs ZOrbit's own program as administrator).
+2. Click **Install**. If your account cannot write to that ZBrush's folder, Windows asks for administrator rights once (the prompt runs ZOrbit's own program as administrator). On a standard Windows account, that means an administrator's password. This can happen under Program Files, but not always: the ZBrush 2022 install we tested lets every account write to its folder, so it asked nothing.
 3. Restart that ZBrush.
 
 The plugin has no listener window, so every pick in these versions goes through the bridge key, F9. When ZBrush loads the plugin it binds F9 to **Zplugin > ZOrbit > Apply** if that button has no hotkey yet, and keeps a key you stored for it yourself. That is verified in ZBrush 2022, 2023 and 2025; in 2024, check **Zplugin > ZOrbit > Apply** and bind F9 by hand if it is empty. If you change the bridge key in Studio (a bare F-key other than F10), bind the new key by hand in each version: Ctrl+Alt+click **Apply**, press the key, then **Preferences > Hotkeys > Store**. When a new version of ZOrbit has a newer plugin, **Settings** shows a badge and the row says **Plugin update available**.
@@ -92,6 +92,6 @@ It removes:
 - the **ZOrbit Studio** and **ZOrbit Browser** Start menu shortcuts, and the desktop icon if you made one,
 - the plugin folder's entry in your `ZBRUSH_PLUGIN_PATH` user variable,
 - `%APPDATA%\ZOrbit\launch.json`,
-- the plugin from every ZBrush 2022 to 2025 that Studio's **Setup** lists: the ones Windows knows about, the ones ZBrush recorded and the ones you added by hand. A ZBrush under `C:\Program Files` asks for administrator rights once. If a folder could not be cleaned, the uninstaller lists it, and you delete `ZOrbitBridge.zsc` and the `ZOrbitData` folder from that ZBrush's `ZStartup\ZPlugs64` yourself.
+- the plugin from every ZBrush 2022 to 2025 that Studio's **Setup** lists: the ones Windows knows about, the ones ZBrush recorded and the ones you added by hand. A ZBrush folder your account cannot write to asks for administrator rights once. If a folder could not be cleaned, the uninstaller lists it, and you delete `ZOrbitBridge.zsc` and the `ZOrbitData` folder from that ZBrush's `ZStartup\ZPlugs64` yourself.
 
 It leaves your profiles (menus, settings, tags and learned auto slots, in `%APPDATA%\ZOrbit\profiles\`) and your logs. They are not part of the program. They live in `%APPDATA%\ZOrbit` and `%LOCALAPPDATA%\ZOrbit`; delete those folders if you want no trace.

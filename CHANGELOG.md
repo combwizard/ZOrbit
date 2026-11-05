@@ -8,6 +8,7 @@ All notable changes to this project are listed here. The format follows
 
 ### Fixed
 
+- Studio and the docs said a ZBrush under Program Files always asks for administrator rights. It only asks when your account cannot write to that folder, and the ZBrush 2022 install we tested lets every account write there.
 - The path field of a **Project** slot showed only about 9 characters of the path, because it shared its row with the two browse buttons. On **Project**, **Tool** and **Capture** slots the buttons now sit under the field, which has the panel's whole width.
 
 ## [0.19.0] - 2026-11-05

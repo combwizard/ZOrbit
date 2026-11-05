@@ -4183,7 +4183,7 @@ function legacyRows(box, { refresh, extra } = {}) {
       if (rm) rm.onclick = async () => {
         const ok = await modal({ title: `Remove the plugin from ${z.name}?`,
           body: [h('p', null, 'This deletes the ZOrbit plugin files from this ZBrush install:'), h('p', { class: 'modal-path mono' }, z.path),
-            /program files/i.test(z.path) ? h('p', null, 'This folder is under Program Files, so Windows asks you to approve the removal.') : null],
+            /program files/i.test(z.path) ? h('p', null, 'This folder is under Program Files. If your account cannot change it, Windows asks you to approve the removal.') : null],
           actions: [{ text: 'Cancel', value: false, focus: true }, { text: 'Remove', value: true, kind: 'danger' }] });
         if (ok) act('remove_zscript_bridge', z.path, rm, rowBtns, 'Removing...', 4000, 'Removing... approve the prompt if Windows asks')();
       };
@@ -4437,7 +4437,7 @@ function buildSettingsScreen(root) {
           ? ['After installing, restart ZBrush. Apply comes with ', h('b', null, 'F9'), ' as its hotkey, so there is nothing to bind.']
           : ['After installing, restart ZBrush, Ctrl+Alt+click Zplugin > ZOrbit > Apply, press ', h('b', null, zkey), ' and choose Preferences > Hotkeys > Store. (Only F9 works without this step.)'];
         znote.hidden = !zCount;
-        znote.replaceChildren('ZBrush 2022 to 2025 cannot run the plugin that ZBrush 2026 loads, so they get a ZScript plugin with the same Zplugin > ZOrbit palette. It cannot receive messages, so every pick there uses the bridge key, whatever the mode above. ', ...bind, ' A ZBrush under Program Files asks for administrator rights to install.');
+        znote.replaceChildren('ZBrush 2022 to 2025 cannot run the plugin that ZBrush 2026 loads, so they get a ZScript plugin with the same Zplugin > ZOrbit palette. It cannot receive messages, so every pick there uses the bridge key, whatever the mode above. ', ...bind, ' If your account cannot write to a ZBrush folder, installing there asks for administrator rights.');
       };
       let zgen = 0;                                              // a slower earlier listing must not replace a newer one
       const zpaint = async () => {

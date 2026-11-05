@@ -56,7 +56,7 @@ It starts ZBrush twice with a script and closes it after each, with no clicks. T
 
 ## Test the plugin install under Program Files
 
-ZBrush 2022 to 2025 load plugins only from their own `ZStartup\ZPlugs64` folder, which is usually under Program Files. There Studio's **Install**, **Update** and **Remove** cannot copy the files as you, so ZOrbit runs a helper as administrator instead. `tools\test_uac_install.py` tests that path without a real ZBrush:
+ZBrush 2022 to 2025 load plugins only from their own `ZStartup\ZPlugs64` folder, which is usually under Program Files. When your account cannot write there, Studio's **Install**, **Update** and **Remove** cannot copy the files as you, so ZOrbit runs a helper as administrator instead. A real ZBrush may never take that path: the ZBrush 2022 install we tested lets every account write to its folder. `tools\test_uac_install.py` tests the path without a real ZBrush:
 
 ```powershell
 python tools\test_uac_install.py
