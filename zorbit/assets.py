@@ -139,6 +139,11 @@ def index(kind: str, refresh: bool = False) -> dict[str, Path]:
     return _index[kind]
 
 
+def last_walk(kind: str):
+    """The Walk the index of this kind was built from, or None. (Filled in by the walk rewrite.)"""
+    return None
+
+
 def install_index(ins, kind: str) -> dict[str, Path]:
     """Assets of one ZBrush installation only (an older ZBrush may not load a newer version's files)."""
     if kind == "brush":
