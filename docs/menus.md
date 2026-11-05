@@ -247,7 +247,9 @@ The layout lasts for this session of ZBrush. The slot does not change the interf
 
 The folder `ZStartup\UserInterfaceColors` also holds `.cfg` files, but those are colour schemes, and ZBrush loads them with a different button. A **Layout** slot wants a layout file. It has not been tested with a colour file, and ZOrbit does not check which kind of file it was given.
 
-A file that is not there does not stop the menu from loading, since a drive may be unplugged. It is a problem only when you pick the slot. Then nothing is sent, and the message says so (see [Troubleshooting](troubleshooting.md#the-ring-opens-but-picks-do-nothing)). A Layout slot can also be a step in `steps`. As with a Tool slot, it should be the last step. It does not count in **Recent**.
+A file that is not there does not stop the menu from loading, since a drive may be unplugged. It is a problem only when you pick the slot. Then nothing is sent, and the message says so (see [Troubleshooting](troubleshooting.md#the-ring-opens-but-picks-do-nothing)). A Layout slot can also be a step in `steps`, and the steps after it still run. It does not count in **Recent**.
+
+Picks keep working after a layout change, even with a layout such as Minimal that hides the palettes. A second slot for Default gets you back.
 
 In Studio, **Layout** is a Full mode type. Its **Layout file** field has a **Browse...** button that picks the file. In ZBrush 2022 to 2025 the slot needs the plugin to be up to date, as [Capture](#capture) does. A name outside plain ASCII needs a Windows short name, and a path that is too long is refused.
 
