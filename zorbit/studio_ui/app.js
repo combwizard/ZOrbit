@@ -3350,7 +3350,8 @@ function makeBrowser({ compact, st, host = STUDIO_HOST, kindUi = compact ? 'comp
   const count = h('span', { class: 'b-count mono' });
   const fchips = h('span', { class: 'filter-chips', hidden: true });     // the popout's toolbar: the filters that are on (styles.css shows them only while its column is collapsed)
   const grid = h('div', { class: 'bgrid' });
-  const scroll = h('div', { class: 'b-scroll' }, grid);
+  const libWarn = h('div', { class: 'fhint warn lib-warn', role: 'status', hidden: true, style: 'margin-bottom: 10px' });   // a folder that could not be read while the others were: its items are the ones it had
+  const scroll = h('div', { class: 'b-scroll' }, libWarn, grid);
   const side = h('div', { class: 'lib-side' });
   const catsBox = h('div', { class: 'cats', role: 'listbox', 'aria-label': 'Folders' });
   const tagSec = h('div', { class: 'tag-sec', role: 'group', 'aria-label': 'Tags' });                     // full: the Tags section under Folders
@@ -3716,6 +3717,8 @@ function makeBrowser({ compact, st, host = STUDIO_HOST, kindUi = compact ? 'comp
       if (gone.length) { gone.forEach(n => sel.delete(n)); paintSel(); }
     }
     const usable = !loading && L().state !== 'error' && L().items.length > 0;
+    libWarn.hidden = !(usable && L().error);
+    setText(libWarn, usable && L().error ? L().error : '');
     const list = usable ? filtered() : null;
     const sig = list ? list.map(b => b.name).join('\n') : '';
     const dropHidden = () => {
@@ -4345,8 +4348,65 @@ function buildSettingsScreen(root) {
     { const o0 = bOwner(S.cfg.browser && S.cfg.browser.hotkey); if (o0) bhk.say(bsay(o0), 'warn'); }
     { const o1 = pOwner(S.cfg.profile && S.cfg.profile.next_hotkey); if (o1) phk.say(psay(o1), 'warn'); }
 
+    /* --- library folders: the user's own folders of brushes, alphas, materials and textures. Acts straight away; the lists live in studio.json, not in the menus */
+    const lfBox = h('div', { class: 'lf-kinds' }, h('div', { class: 'fhint' }, 'Looking for your folders...'));
+    let lfGen = 0;                                             // a slower earlier answer must not paint over a newer one
+    const lfPaint = folders => {
+      lfBox.replaceChildren(...LIB_KINDS.map(kind => {
+        const w = K(kind), rows = Array.isArray(folders && folders[kind]) ? folders[kind] : [];
+        const list = rows.map(f => {
+          const tags = [];
+          if (f.error) tags.push(h('span', { class: 'tag amber', title: String(f.error) }, 'Cannot be read'));
+          else if (!f.exists) tags.push(h('span', { class: 'tag amber' }, 'Missing'));
+          else if (typeof f.count === 'number') tags.push(h('span', { class: 'tag dim' }, plural(f.count, 'file') + (f.hidden > 0 ? ', ' + f.hidden + ' hidden' : '')));
+          const forget = iconBtn('x', 'Forget this folder', async () => {
+            forget.disabled = true;
+            let r = null;
+            try { r = await call('forget_library_folder', kind, f.path); }
+            catch (e) { toast('Could not forget the folder: ' + e.message, { tone: 'warn' }); }
+            forget.disabled = false;
+            lfAfter(kind, r, 'Forgot that folder.');
+          });
+          return h('div', { class: 'zrow' }, h('div', { class: 'grow' }, h('div', { class: 'zname' }, f.name || f.path, ...tags), h('div', { class: 'zpath mono', title: f.path }, f.path)),
+            h('div', { class: 'btn-row' }, forget));
+        });
+        if (!list.length) list.push(h('div', { class: 'fhint' }, 'None added.'));
+        const add = h('button', { class: 'btn small', type: 'button', onclick: async () => {
+          add.disabled = true;
+          let r = null;
+          try { r = await call('add_library_folder', kind); }
+          catch (e) { toast('Could not add the folder: ' + e.message, { tone: 'warn' }); }
+          add.disabled = false;
+          lfAfter(kind, r, 'Added.');
+        } }, icon('folder', 12), 'Add a folder...');
+        return h('div', { class: 'lf-kind' }, h('div', { class: 'flabel' }, w.tab), h('div', { class: 'zrows' }, ...list), h('div', { class: 'btn-row' }, add));
+      }));
+    };
+    // What add and forget answer: say it, paint the lists they hand back, and when this page holds that kind's library, read it again so the Library screen and the dock follow.
+    const lfAfter = async (kind, r, fallback) => {
+      if (!r || r.cancelled) return;
+      toast(r.message || (r.ok ? fallback : 'That did not work.'), !r.ok ? { tone: 'warn', ms: 5000 } : r.already ? { ms: 4000 } : { tone: 'ok', ms: 4000 });
+      if (r.folders) { ++lfGen; lfPaint(r.folders); }
+      if (r.ok && !r.already) {
+        if (lib(kind).loaded) await loadLibrary(kind, true);
+        lfLook();                                              // the counts fill in once the folder has been read
+      }
+    };
+    const lfLook = async () => {
+      if (R.libfolders && R.libfolders !== lfLook) return R.libfolders();   // this card was rebuilt (undo, reload): paint the live one
+      const gen = ++lfGen;
+      let r;
+      try { r = await call('get_library_folders'); if (gen !== lfGen) return; }
+      catch (e) { if (gen !== lfGen) return; lfBox.replaceChildren(h('div', { class: 'fhint bad' }, 'Could not read your folders: ' + e.message)); return; }
+      if (r && r.ok && r.folders) lfPaint(r.folders);
+      else lfBox.replaceChildren(h('div', { class: 'fhint bad' }, (r && r.message) || 'Could not read your folders.'));
+    };
+    page.append(card('Library folders', 'Your own folders of brushes, alphas, materials and textures, searched after ZBrush’s own. ZBrush 2026 and newer. Acts straight away.', lfBox));
+    R.libfolders = lfLook;
+    lfLook();
+
     /* --- studio (preferences of this window, saved immediately, not part of the menus file) */
-    const updNote = h('div', { class: 'fhint upd-status', role: 'status' });
+    const updNote =h('div', { class: 'fhint upd-status', role: 'status' });
     const updBtn = h('button', { class: 'btn small primary', type: 'button', hidden: true, title: 'Get the new version',
       onclick: () => openUpdate(window.RadialUpdate && window.RadialUpdate.last) }, 'Install update');
     let updTok = 0;
@@ -6231,8 +6291,10 @@ async function loadLibrary(kind = 'brush', refresh = false) {
   const since = refresh && L.loaded && L.state === 'ready' && L.signature ? L.signature : '';      // the list the page holds: the backend answers "unchanged" without it when the folders still give that list
   try { r = await call('get_library', ...(since ? [true, kind, since] : [!!refresh, kind])); } catch (e) { r = { error: String((e && e.message) || e) }; }
   r = r || {};
-  if (refresh && r.error && L.loaded && L.state === 'ready' && L.items.length) {   // a rescan that failed: keep what is on show, report the error
+  const gotList = r.unchanged || (Array.isArray(r.items) ? r.items : Array.isArray(r.brushes) ? r.brushes : []).length > 0;
+  if (refresh && r.error && !gotList && L.loaded && L.state === 'ready' && L.items.length) {   // a rescan that brought no list at all (the call failed): keep what is on show, report the error; one unreadable folder still brings the others' list
     L.error = String(r.error); L.busy = false; paintRescan();
+    if (R.libRefresh) R.libRefresh(kind);                                  // the error shows above the list
     return;
   }
   if (since && r.unchanged && r.signature === since) {                    // the same list: keep it, and take only what may differ beside it
@@ -6240,7 +6302,7 @@ async function loadLibrary(kind = 'brush', refresh = false) {
     L.sources = Array.isArray(r.sources) ? r.sources : [];
     L.zbrushFound = r.zbrush_found !== false;
     L.error = r.error ? String(r.error) : null;
-    L.state = L.error ? 'error' : 'ready';
+    L.state = L.error && !L.items.length ? 'error' : 'ready';        // one folder that cannot be read: the others' items still show, with the error above them
     L.busy = false;
     popScanned[kind] = Date.now();
     Thumbs.forgetMisses(kind);
@@ -6257,7 +6319,7 @@ async function loadLibrary(kind = 'brush', refresh = false) {
   L.sorted = L.items.slice().sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base', numeric: true }));
   L.byName = new Map(L.items.map(b => [nameKey(b.name), b]));
   L._tree = L._tc = null;
-  L.state = L.error ? 'error' : 'ready';
+  L.state = L.error && !L.items.length ? 'error' : 'ready';          // the backend keeps an unreadable folder's items and reads the others: show them, with the error above
   L.loaded = true; L.busy = false;
   if (refresh) Thumbs.forgetMisses(kind);
   if (R.libRefresh) R.libRefresh(kind);

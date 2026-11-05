@@ -37,7 +37,10 @@ LEGACY = {"alpha": "ZAlphas", "material": "ZMaterials", "texture": "ZTextures"} 
 
 _index: dict[str, dict[str, Path]] = {}
 _install_index: dict[tuple, dict[str, Path]] = {}
-_index_lock = threading.Lock()
+_index_lock = threading.Lock()      # held only to swap what a walk made in: find() never waits for a walk
+_walks: dict = {}                   # kind -> the brushes.Walk _index[kind] was built from
+_walk_t0: dict[str, float] = {}     # kind -> time.perf_counter() when that walk began
+_build_locks = {k: threading.Lock() for k in KINDS}     # one walk of a kind at a time
 _write_lock = threading.Lock()
 RESCAN_GAP_S = 5.0                  # a missing asset rebuilds its index at most this often
 generation = 0                      # counts index builds; expand.py drops its cached tag fans when it changes
@@ -111,19 +114,27 @@ def _built(kind: str, ins: str = "", changed: bool = True) -> None:
 
 def library(kind: str):
     """The folders of this kind walked once: a brushes.Walk with the list the browser shows and the lookup index.
-    The index is stored too, so the list and find() come from the same walk. A walk that could not read a source
-    (an unplugged drive) leaves the index that was there alone; see brushes.walk_error."""
+    The index is stored too, so the list and find() come from the same walk. A folder that could not be read (an
+    unplugged drive) keeps the items it had and the others are read afresh; see brushes.merge_walk. The walk runs
+    outside _index_lock, so find() does not wait for it."""
     if kind == "brush":
         before = _brushes.has_index()
         walk, changed = _brushes.library()
         _built(kind, changed=changed or not before)
         return walk
-    with _index_lock:
-        walk = _brushes.walk_sources(sources(kind), exts(kind))
-        before = _index.get(kind)
-        _index[kind], changed = _brushes.keep_index(before, walk)
-        _built(kind, changed=changed or before is None)
-        return walk
+    asked = time.perf_counter()
+    lock = _build_locks.get(kind) or _build_locks.setdefault(kind, threading.Lock())
+    with lock:
+        if kind in _walks and _walk_t0.get(kind, float("-inf")) > asked:     # a walk that began after we asked
+            return _walks[kind]
+        t0 = time.perf_counter()
+        new = _brushes.walk_sources(sources(kind), exts(kind))
+        with _index_lock:
+            before = _index.get(kind)
+            merged = _brushes.merge_walk(_walks.get(kind), new)
+            _walks[kind], _index[kind], _walk_t0[kind] = merged, merged.index, t0
+            _built(kind, changed=before is None or before != merged.index)
+    return merged
 
 
 def index(kind: str, refresh: bool = False) -> dict[str, Path]:
@@ -132,16 +143,23 @@ def index(kind: str, refresh: bool = False) -> dict[str, Path]:
         if refresh or not _brushes.has_index():
             library(kind)
         return _brushes.brush_index()
-    with _index_lock:
-        have = kind in _index
-    if refresh or not have:
+    idx = _index.get(kind)
+    if refresh or idx is None:
         library(kind)
-    return _index[kind]
+        idx = _index[kind]
+    return idx
 
 
 def last_walk(kind: str):
-    """The Walk the index of this kind was built from, or None. (Filled in by the walk rewrite.)"""
-    return None
+    """The Walk the index of this kind was built from, or None before the first build."""
+    if kind == "brush":
+        return _brushes.last_walk()
+    return _walks.get(kind)
+
+
+def has_built(kind: str) -> bool:
+    """Whether the index of this kind was built (by a walk, or by a test that set it)."""
+    return _brushes.has_index() if kind == "brush" else kind in _index
 
 
 def install_index(ins, kind: str) -> dict[str, Path]:
@@ -153,9 +171,13 @@ def install_index(ins, kind: str) -> dict[str, Path]:
             _built(kind, os.path.normcase(str(ins)))
         return idx
     key = (kind, os.path.normcase(str(ins)))
+    idx = _install_index.get(key)
+    if idx is not None:
+        return idx
+    idx = _brushes.walk_sources(install_sources(ins, kind), exts(kind)).index    # outside the lock; a second builder's walk is wasted
     with _index_lock:
         if key not in _install_index:
-            _install_index[key] = _brushes.walk_sources(install_sources(ins, kind), exts(kind)).index
+            _install_index[key] = idx
             _built(kind, key[1])
         return _install_index[key]
 

@@ -23,7 +23,10 @@ except ImportError:  # run as a plain module / script
 _DIR_RE = re.compile(r"^(?:Maxon )?ZBrush (\d{4})_", re.I)
 _index: dict[str, Path] | None = None
 _install_index: dict[str, dict[str, Path]] = {}
-_index_lock = threading.Lock()
+_index_lock = threading.Lock()         # held only to swap what a walk made in: find_brush() never waits for a walk
+_build_lock = threading.Lock()         # one walk of the brush folders at a time
+_walk = None                           # the Walk _index was built from (merged with what an unreadable folder had)
+_walk_t0 = float("-inf")               # time.perf_counter() when that walk began
 _write_lock = threading.Lock()
 
 
@@ -341,12 +344,26 @@ def walk_error(walk: Walk) -> str | None:
     return None
 
 
-def keep_index(old: dict | None, walk: Walk) -> tuple:
-    """(index to keep, changed). A walk that could not read a source does not replace an index that was built:
-    a drive that is away for a minute must not make every brush lose its picture."""
-    if old is not None and (walk_error(walk) or old == walk.index):
-        return old, False
-    return walk.index, True
+def merge_walk(old: Walk | None, new: Walk) -> Walk:
+    """new, with each folder it could not read given back the files it had in old: a drive that is away for a
+    minute must not make its items lose their pictures, and the other folders are still read afresh (a brush
+    just saved to My Brushes is found). Such a folder keeps new's error, so the browser still says so, and is
+    marked "kept". A folder that is not in new (one the user forgot) drops out. old is never changed."""
+    if old is None:
+        return new
+    before = {(r["label"], os.path.normcase(str(r["path"]))): (r, fl) for r, fl in zip(old.sources, old.files)}
+    reports: list = []
+    files: list = []
+    for r, fl in zip(new.sources, new.files):
+        rep = dict(r)
+        was = before.get((r["label"], os.path.normcase(str(r["path"])))) if r["error"] else None
+        if was is not None:
+            rep["count"] = was[0]["count"]
+            rep["kept"] = True
+            fl = was[1]
+        reports.append(rep)
+        files.append(fl)
+    return assemble(reports, files)
 
 
 def brush_sources() -> list[tuple[str, Path, bool]]:
@@ -370,25 +387,36 @@ def install_brush_sources(ins) -> list[tuple[str, Path, bool]]:
 
 
 def library() -> tuple:
-    """Walks the brush folders once and stores the lookup index. (Walk, whether the stored index changed)."""
-    global _index
-    with _index_lock:
-        walk = walk_sources(brush_sources(), (".zbp",))
-        _index, changed = keep_index(_index, walk)
-        return walk, changed
+    """Walks the brush folders once and stores the lookup index. (Walk, whether the stored index changed). The
+    walk is merged with the last one (merge_walk), and it runs outside _index_lock, so a slow folder does not hold
+    up find_brush(). A caller that asked while another walk was waiting to start takes that walk's result."""
+    global _walk, _index, _walk_t0
+    asked = time.perf_counter()
+    with _build_lock:
+        if _walk is not None and _walk_t0 > asked:      # a walk that began after we asked: it already covers us
+            return _walk, False
+        t0 = time.perf_counter()
+        new = walk_sources(brush_sources(), (".zbp",))
+        with _index_lock:
+            merged = merge_walk(_walk, new)
+            changed = _index is None or _index != merged.index
+            _walk, _index, _walk_t0 = merged, merged.index, t0
+    return merged, changed
 
 
 def brush_index(refresh: bool = False) -> dict[str, Path]:
-    global _index
-    with _index_lock:
-        if _index is None or refresh:
-            walk = walk_sources(brush_sources(), (".zbp",))
-            _index, _ = keep_index(_index, walk)
-        return _index
+    if _index is None or refresh:
+        library()
+    return _index
 
 
 def has_index() -> bool:
     return _index is not None
+
+
+def last_walk() -> Walk | None:
+    """The Walk the brush index was built from, or None before the first build."""
+    return _walk
 
 
 def has_install_index(ins) -> bool:
@@ -403,10 +431,12 @@ def forget_install_index(ins) -> None:
 def install_index(ins) -> dict[str, Path]:
     """Brushes of one ZBrush installation only (an older ZBrush may not load a newer version's .zbp)."""
     key = os.path.normcase(str(ins))
+    idx = _install_index.get(key)
+    if idx is not None:
+        return idx
+    idx = walk_sources(install_brush_sources(ins), (".zbp",)).index      # outside the lock; a second builder's walk is wasted
     with _index_lock:
-        if key not in _install_index:
-            _install_index[key] = walk_sources(install_brush_sources(ins), (".zbp",)).index
-        return _install_index[key]
+        return _install_index.setdefault(key, idx)
 
 
 def find_brush(name, install=None) -> Path | None:

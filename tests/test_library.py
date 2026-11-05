@@ -47,6 +47,17 @@ def srcs(*folders):
     return [(f"folder {i}", f, True) for i, f in enumerate(folders)]
 
 
+@pytest.fixture(autouse=True)
+def fresh_library(monkeypatch):
+    """No stored walk or index from another test: the merge and the coalescing look at them."""
+    monkeypatch.setattr(assets, "_index", {})
+    monkeypatch.setattr(assets, "_walks", {})
+    monkeypatch.setattr(assets, "_walk_t0", {})
+    monkeypatch.setattr(brushes, "_index", None)
+    monkeypatch.setattr(brushes, "_walk", None)
+    monkeypatch.setattr(brushes, "_walk_t0", float("-inf"))
+
+
 # --- the walker -----------------------------------------------------------------------------------
 
 def test_order_and_first_folder_wins(two_folders):
@@ -123,34 +134,117 @@ def test_unreachable_drive_is_an_error():
     assert "cannot be reached" in brushes.walk_error(w)
 
 
-def test_an_index_survives_a_walk_that_failed(two_folders):
-    good = brushes.walk_sources(srcs(*two_folders))
-    free = [c for c in "QRSTUVWXYZ" if not os.path.exists(c + ":\\")]
-    if not free:
-        pytest.skip("every drive letter is in use")
-    bad = brushes.walk_sources(srcs(Path(free[0] + ":\\Gone")))
-    keep, changed = brushes.keep_index(good.index, bad)
-    assert keep is good.index and changed is False
-    keep, changed = brushes.keep_index(None, bad)
-    assert keep == {} and changed is True
-    keep, changed = brushes.keep_index(good.index, good)
-    assert changed is False
+def test_only_the_folder_that_cannot_be_read_keeps_its_items(two_folders):
+    a, b = two_folders
+    good = brushes.walk_sources(srcs(a, b))
+    assert brushes.merge_walk(None, good) is good
+    away = b.with_name("second away")
+    b.rename(away)                                      # was there before and cannot be read now
+    touch(a / "saved now.zbp")
+    bad = brushes.walk_sources(srcs(a, b))
+    merged = brushes.merge_walk(good, bad)
+    assert merged.index["savednow"] == a / "saved now.zbp"            # the readable folder is read afresh
+    assert merged.index["onlysecond"] == b / "only second.zbp"         # the unreadable one keeps what it had
+    assert "second" in brushes.walk_error(merged) and "before" in brushes.walk_error(merged)
+    assert merged.sources[1]["kept"] is True and merged.sources[1]["count"] == 2
+    assert "kept" not in merged.sources[0] and "kept" not in good.sources[1]      # the old walk is not changed
+    assert bad.sources[1]["count"] == 0 and "kept" not in bad.sources[1]
+    away.rename(b)
+    back = brushes.merge_walk(merged, brushes.walk_sources(srcs(a, b)))
+    assert brushes.walk_error(back) is None and not any(s.get("kept") for s in back.sources)
+    assert back.index == brushes.walk_sources(srcs(a, b)).index
+    b.rename(away)
+    forgot = brushes.merge_walk(merged, brushes.walk_sources(srcs(a)))  # the user forgot the folder: it drops out
+    assert len(forgot.sources) == 1 and "onlysecond" not in forgot.index
 
 
 def test_library_and_find_come_from_one_walk(two_folders, monkeypatch):
-    monkeypatch.setattr(assets, "sources", lambda kind: srcs(*two_folders))
+    a, b = two_folders
+    monkeypatch.setattr(assets, "sources", lambda kind: srcs(a, b))
     monkeypatch.setattr(assets, "exts", lambda kind: (".zbp",))
-    monkeypatch.setattr(assets, "_index", {})
     w = assets.library("alpha")
-    assert assets.find("alpha", "CLAY buildup") == two_folders[0] / "Clay Buildup.zbp"
+    assert assets.find("alpha", "CLAY buildup") == a / "Clay Buildup.zbp"
     assert assets.find("alpha", "Only  Second").name == "only second.zbp"
     assert {tags._norm(i["name"]) for i in w.items} == set(assets.index("alpha"))
+    assert assets.last_walk("alpha") is w and assets.has_built("alpha") and not assets.has_built("material")
     gen = assets.generation
     assets.library("alpha")
     assert assets.generation == gen                 # nothing changed: no new generation
-    touch(two_folders[0] / "added.zbp")
+    touch(a / "added.zbp")
     assets.library("alpha")
     assert assets.generation == gen + 1
+    away = b.with_name("second away")
+    b.rename(away)
+    w = assets.library("alpha")                     # an error, and nothing else changed: the same index
+    assert brushes.walk_error(w) and assets.generation == gen + 1
+    assert assets.last_walk("alpha") is w and w.sources[1]["kept"] is True
+    touch(a / "another.zbp")
+    assets.library("alpha")                         # an error, and a new file in the other folder
+    assert assets.generation == gen + 2
+    assert assets.find("alpha", "another") == a / "another.zbp" and assets.find("alpha", "only second")
+
+
+class BlockedWalk:
+    """brushes.walk_sources that, after the first call, waits for release() before it walks."""
+
+    def __init__(self, monkeypatch):
+        self.real = brushes.walk_sources
+        self.calls = 0
+        self.started = threading.Event()
+        self.go = threading.Event()
+        monkeypatch.setattr(brushes, "walk_sources", self)
+
+    def __call__(self, *a, **k):
+        self.calls += 1
+        if self.calls > 1:
+            self.started.set()
+            assert self.go.wait(5)
+        return self.real(*a, **k)
+
+
+@pytest.mark.parametrize("kind", ["alpha", "brush"])
+def test_a_slow_walk_does_not_hold_up_a_find(two_folders, monkeypatch, kind):
+    monkeypatch.setattr(assets, "sources", lambda k: srcs(*two_folders))
+    monkeypatch.setattr(assets, "exts", lambda k: (".zbp",))
+    monkeypatch.setattr(brushes, "brush_sources", lambda: srcs(*two_folders))
+    walk = BlockedWalk(monkeypatch)
+    assets.library(kind)
+    t = threading.Thread(target=assets.library, args=(kind,))
+    t.start()
+    try:
+        assert walk.started.wait(5)
+        found = []
+        f = threading.Thread(target=lambda: found.append(assets.find(kind, "Clay Buildup")))
+        f.start()
+        f.join(0.5)
+        assert found == [two_folders[0] / "Clay Buildup.zbp"]          # while the walk is still waiting
+        lock = brushes._index_lock if kind == "brush" else assets._index_lock
+        assert lock.acquire(timeout=0.5)
+        lock.release()
+    finally:
+        walk.go.set()
+        t.join(5)
+    assert not t.is_alive()
+
+
+def test_callers_waiting_for_a_walk_share_the_next_one(two_folders, monkeypatch):
+    monkeypatch.setattr(assets, "sources", lambda k: srcs(*two_folders))
+    monkeypatch.setattr(assets, "exts", lambda k: (".zbp",))
+    walk = BlockedWalk(monkeypatch)
+    assets.library("alpha")
+    out = {}
+    first = threading.Thread(target=lambda: out.setdefault("first", assets.library("alpha")))
+    first.start()
+    assert walk.started.wait(5)
+    waiting = [threading.Thread(target=lambda n=n: out.setdefault(n, assets.library("alpha"))) for n in ("b", "c")]
+    for w in waiting:
+        w.start()
+    threading.Event().wait(0.2)                         # both have asked and wait for the walk on show to end
+    walk.go.set()
+    for w in [first] + waiting:
+        w.join(5)
+    assert walk.calls - 1 <= 2                          # three callers, two walks: the first's and one for both
+    assert out["b"].index == out["c"].index and out["b"] is out["c"]
 
 
 def test_get_library_reports_an_unreadable_source(two_folders, monkeypatch):

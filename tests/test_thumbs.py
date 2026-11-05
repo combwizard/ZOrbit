@@ -227,6 +227,10 @@ def folder(tmp_path, monkeypatch):
     monkeypatch.setattr(assets, "sources", lambda kind: [("folder", d, True)])
     monkeypatch.setattr(assets, "exts", lambda kind: (".zbp",))
     monkeypatch.setattr(assets, "_index", {})
+    monkeypatch.setattr(assets, "_walks", {})            # no walk of another test to merge with
+    monkeypatch.setattr(assets, "_walk_t0", {})
+    monkeypatch.setattr(brushes, "_walk", None)
+    monkeypatch.setattr(brushes, "_walk_t0", float("-inf"))
     monkeypatch.setattr(webapi, "_lib_cache", {})
     return d
 
