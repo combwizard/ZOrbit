@@ -39,6 +39,7 @@ EDGE = [
     os.path.expandvars(r"%ProgramFiles(x86)%\Microsoft\Edge\Application\msedge.exe"),
     os.path.expandvars(r"%ProgramFiles%\Microsoft\Edge\Application\msedge.exe"),
 ]
+PARALLEL = 6                                            # shots taken at the same time, each in its own Edge
 
 # Steps can use these: click(text) clicks the innermost visible element whose text starts with it (the click bubbles
 # to whatever handles it), card(name) is a Settings card by its title, alone at the top of the screen, and
@@ -176,6 +177,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 
 
 class Server(http.server.ThreadingHTTPServer):
+    request_queue_size = 64                             # six Edges asking at once overflow the default backlog of 5
+
     def handle_error(self, request, client_address):
         pass                                            # Edge dropping a connection on exit is not news
 
@@ -195,8 +198,12 @@ def start_edge(profile):
                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     port_file = os.path.join(profile, "DevToolsActivePort")
     for _ in range(100):
-        if os.path.exists(port_file) and open(port_file).read().strip():
-            return proc, int(open(port_file).read().split()[0])
+        try:
+            port = open(port_file).read().split()
+        except OSError:
+            port = None                                 # not there yet, or Edge has it open to write
+        if port:
+            return proc, int(port[0])
         time.sleep(0.1)
     proc.kill()
     sys.exit("Edge did not open its DevTools port")
@@ -258,6 +265,26 @@ async def shoot(page, base, name, spec):
     print(f"{name}.png  {im.size[0]}x{im.size[1]}  {os.path.getsize(path) // 1024} KB")
 
 
+async def take(sem, base, name):
+    """One shot in its own Edge, once a place is free."""
+    async with sem:
+        profile = tempfile.mkdtemp(prefix="zorbit-shots-")
+        proc, port = await asyncio.to_thread(start_edge, profile)       # it polls for the port, so not on the loop
+        try:
+            req = urllib.request.Request(f"http://127.0.0.1:{port}/json/new?about:blank", method="PUT")
+            target = json.load(urllib.request.urlopen(req))
+            async with websockets.connect(target["webSocketDebuggerUrl"], max_size=64 * 1024 * 1024) as ws:
+                page = Page(ws)
+                await page.send("Page.enable")
+                # Still pictures: no open animations or transitions half way.
+                await page.send("Emulation.setEmulatedMedia", features=[{"name": "prefers-reduced-motion", "value": "reduce"}])
+                await shoot(page, base, name, SHOTS[name])
+        finally:
+            proc.kill()
+            proc.wait()
+            shutil.rmtree(profile, ignore_errors=True)
+
+
 async def run(names):
     if not os.path.exists(MOCK):
         record()
@@ -266,22 +293,8 @@ async def run(names):
     try:
         # A fresh Edge for every shot: after a few shots one Edge started drawing pages without their colours
         # (orange buttons came out grey), although the page's styles were right.
-        for name in names:
-            profile = tempfile.mkdtemp(prefix="zorbit-shots-")
-            proc, port = start_edge(profile)
-            try:
-                req = urllib.request.Request(f"http://127.0.0.1:{port}/json/new?about:blank", method="PUT")
-                target = json.load(urllib.request.urlopen(req))
-                async with websockets.connect(target["webSocketDebuggerUrl"], max_size=64 * 1024 * 1024) as ws:
-                    page = Page(ws)
-                    await page.send("Page.enable")
-                    # Still pictures: no open animations or transitions half way.
-                    await page.send("Emulation.setEmulatedMedia", features=[{"name": "prefers-reduced-motion", "value": "reduce"}])
-                    await shoot(page, base, name, SHOTS[name])
-            finally:
-                proc.kill()
-                proc.wait()
-                shutil.rmtree(profile, ignore_errors=True)
+        sem = asyncio.Semaphore(PARALLEL)
+        await asyncio.gather(*(take(sem, base, name) for name in names))
     finally:
         httpd.shutdown()
 
