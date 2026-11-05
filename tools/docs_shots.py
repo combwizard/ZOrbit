@@ -116,6 +116,11 @@ SHOTS = {
     "settings-bridge": dict(q="screen=settings", clip="card('ZBrush bridge')"),
     "settings-older-zbrush": dict(q="screen=settings&zb=both", clip="card('Older ZBrush')"),
     "settings-import-export": dict(q="screen=settings", clip="card('Import and export')"),
+    # settings-library-folders: the Library folders card with a found brush folder and an alpha folder that cannot be found (?libfolders=two),
+    # taken once the lists have been read.
+    "settings-library-folders": dict(q="screen=settings&libfolders=two", steps=["new Promise(r => { const t0 = Date.now(); (function w() {"
+                                       " if (document.querySelector('.lf-kinds .zrow') || Date.now() - t0 > 5000) r(); else setTimeout(w, 100); })(); })"],
+                                     clip="card('Library folders')"),
     "studio-strays": dict(q="strays", steps=["new Promise(r => { const t0 = Date.now(); (function w() {"
                                            " if (document.querySelector('.modal') || Date.now() - t0 > 5000) r(); else setTimeout(w, 100); })(); })"],
                           clip="document.querySelector('.modal')"),

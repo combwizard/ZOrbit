@@ -897,6 +897,8 @@ body.dragging .irow:hover { background: transparent; }
 .zrow { display: flex; align-items: center; gap: 14px; padding: 10px 12px; border-radius: 8px; background: var(--bg1); border: 1px solid var(--line); }
 .zname { display: flex; align-items: center; gap: 8px; font-weight: 600; }
 .zpath { color: var(--sub); font-size: 11px; margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lf-kind + .lf-kind { margin-top: 18px; }                  /* Library folders: the four kinds, each a label, its folders and an Add button */
+.lf-kind .zrows { margin: 8px 0; }
 /* A card (or, flat, a section of the Menu tab) that folds: the head is one button, the summary shows only while it is closed. */
 .fold.card { padding: 0; }
 .fold .card-title { margin: 0; display: block; }
