@@ -17,8 +17,13 @@ All notable changes to this project are listed here. The format follows
 - A **Capture** item saves ZBrush's document as a PNG in a folder, with no dialog (Full mode). Pick the folder with **Browse...** in Studio, or leave it empty for the **ZBrush** folder in your **Pictures** folder (Windows' own, wherever you have moved it).
 - **Tool** and **Project** items load a `.ZTL` tool or open a `.ZPR` project, or the newest project in a folder, with no dialog (Full mode). Pick the file with **Browse...** in Studio. Their paths stay out of an exported menu.
 
+### Changed
+
+- Studio and the browser can be resized from all four edges and corners, the top included. A thin strip around the page, in the theme's background colour, makes room for this. It is not there while the window is maximised.
+
 ### Fixed
 
+- In Studio and the browser, a maximised window moved to another monitor with **Win+Shift+Arrow** now fills that monitor, whatever its size, and stays on it at its normal size when restored. Before, it kept the old monitor's size and went back to the old monitor when restored.
 - **Export menu** no longer carries an icon's file path, which could hold your Windows user name. **Import menu** clears one too.
 - The **PolyFrame** slot in the starter **Tools** menu did nothing, because its path was wrong. It works now, in menus you already have too.
 - Picks from a browser opened from Studio use the listener when one ZBrush is running. They used to press the bridge key, which is slower and needs ZBrush in front.

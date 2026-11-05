@@ -17,8 +17,7 @@ Worked out on 3 Nov 2026. A new issue goes on the board straight away and joins 
 worked out.
 
 1. **Checks that need a person or real hardware.** The test VM can do the rest:
-   - [#103](https://github.com/combwizard/ZOrbit/issues/103) on the current window code. The VM has one screen, so
-     the part on monitors of different sizes needs real ones.
+   - [#103](https://github.com/combwizard/ZOrbit/issues/103): only the black flash is left, on the PC that reported it.
    - [#23](https://github.com/combwizard/ZOrbit/issues/23) whenever a standard (non-admin) account is to hand.
 2. **Medium:** [#108](https://github.com/combwizard/ZOrbit/issues/108) first (small), then
    [#109](https://github.com/combwizard/ZOrbit/issues/109) (pick hide, dim or a message first);
@@ -28,7 +27,8 @@ worked out.
    [#30](https://github.com/combwizard/ZOrbit/issues/30) (one "set the file, then press" action);
    [#24](https://github.com/combwizard/ZOrbit/issues/24) (its check worked out);
    [#104](https://github.com/combwizard/ZOrbit/issues/104) (the #103 checks of 3 Nov failed on monitors of
-   different sizes and found no snap layouts flyout; #103's checks are its test list).
+   different sizes; #103's checks are its test list). The snap layouts flyout went to
+   [#156](https://github.com/combwizard/ZOrbit/issues/156).
 3. **Ring look, back to back:** [#37](https://github.com/combwizard/ZOrbit/issues/37) (band helper), then
    [#35](https://github.com/combwizard/ZOrbit/issues/35) (`Item.colors`), then
    [#36](https://github.com/combwizard/ZOrbit/issues/36). Retake the ring pictures once at the end.

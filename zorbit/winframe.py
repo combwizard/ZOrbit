@@ -1,7 +1,15 @@
 """Window-frame helpers shared by the Studio and the popout browser: finding a pywebview window by title,
-removing its title bar while keeping the resizable frame, restoring a saved placement, maximising to the work
-area instead of over the taskbar, WebView2 drag regions, and getting a window to the foreground. Plain Win32
-through ctypes, so nothing touches .NET off the UI thread."""
+drawing without Windows' title bar, restoring a saved placement, WebView2 drag regions, and getting a window to
+the foreground. Plain Win32 through ctypes, so nothing touches .NET off the UI thread.
+
+How the frame works. The window keeps WS_CAPTION and WS_THICKFRAME, so Windows treats it like any other window:
+maximise stops at the taskbar, Win+arrow and Win+Shift+arrow work on every monitor, and GetWindowPlacement is
+right. Windows' own frame is removed in WM_NCCALCSIZE (the client area is the whole window; see client_rect).
+pywebview is told the window is frameless, so WinForms also thinks the frame is zero wide: it restores a window
+from maximised by turning the client size it kept into a window size, and the two only agree when the frame is
+nothing. WebView2 would cover the whole client area, and its windows belong to another process, so a resize
+border has to be a strip of the form that the control does not cover: the form's Padding (set on the UI thread,
+see _set_layout) leaves it, and WM_NCHITTEST answers the resize codes there (see hit_test)."""
 import ctypes
 import ctypes.wintypes as w
 import time
@@ -36,6 +44,76 @@ class WINDOWPLACEMENT(ctypes.Structure):
 
 class _MONITORINFO(ctypes.Structure):
     _fields_ = [("cbSize", w.DWORD), ("rcMonitor", w.RECT), ("rcWork", w.RECT), ("dwFlags", w.DWORD)]
+
+
+# --- the frame, as arithmetic on rectangles (left, top, right, bottom) --------------------------------------
+
+HTNOWHERE, HTCLIENT = 0, 1
+HTLEFT, HTRIGHT, HTTOP, HTTOPLEFT, HTTOPRIGHT, HTBOTTOM, HTBOTTOMLEFT, HTBOTTOMRIGHT = range(10, 18)
+RESIZE_BORDER = 6               # logical pixels: the strip around the page where the window can be resized
+
+
+def border_px(dpi=96) -> int:
+    """RESIZE_BORDER in physical pixels at this DPI."""
+    return round(RESIZE_BORDER * dpi / 96)
+
+
+def client_rect(window, maximised, work, margin):
+    """The client rectangle for a window rectangle (WM_NCCALCSIZE). A normal window has no frame to give up: all of
+    it is client area. A maximised one is placed by Windows a few pixels past the work area on every side (the
+    invisible border of a sizing frame), so its client area is cut back to the work area, plus margin: the strip
+    of the form that is not the page (see hit_test) then lies off the screen. work: the work area of the monitor the
+    window is on."""
+    if not maximised:
+        return tuple(window)
+    left, top, right, bottom = window
+    wl, wt, wr, wb = work
+    return (max(left, wl - margin), max(top, wt - margin), min(right, wr + margin), min(bottom, wb + margin))
+
+
+def hit_test(x, y, rect, maximised, border):
+    """What WM_NCHITTEST answers for a point (screen coordinates) over a window with this rectangle: a resize code
+    (HTLEFT ... HTBOTTOMRIGHT) in the border strip around the page, HTCLIENT anywhere else in the window, HTNOWHERE
+    outside it. A maximised window cannot be resized, so it is all HTCLIENT. The title area is the page's own (it
+    marks it with app-region: drag), and so is the maximise button: this window cannot answer HTMAXBUTTON for it."""
+    left, top, right, bottom = rect
+    if not (left <= x < right and top <= y < bottom):
+        return HTNOWHERE
+    if maximised:
+        return HTCLIENT
+    dl, dr, dt, db = x - left, right - 1 - x, y - top, bottom - 1 - y
+    if min(dl, dr, dt, db) >= border:
+        return HTCLIENT
+    grip = 2 * border                                       # a corner reaches this far along each edge
+    col = -1 if dl < grip else 1 if dr < grip else 0
+    row = -1 if dt < grip else 1 if db < grip else 0
+    on_x, on_y = min(dl, dr) < border, min(dt, db) < border
+    if (on_x and row) or (on_y and col):
+        return {(-1, -1): HTTOPLEFT, (-1, 1): HTTOPRIGHT, (1, -1): HTBOTTOMLEFT, (1, 1): HTBOTTOMRIGHT}[(row, col)]
+    if on_x:
+        return HTLEFT if col < 0 else HTRIGHT
+    return HTTOP if row < 0 else HTBOTTOM
+
+
+def placement_state(show_cmd, flags) -> bool:
+    """Is the window maximised, from a WINDOWPLACEMENT's showCmd and flags (a minimised window that was maximised
+    comes back maximised: WPF_RESTORETOMAXIMIZED)."""
+    return show_cmd == 3 or (show_cmd == 2 and bool(flags & 2))          # SW_SHOWMAXIMIZED / SW_SHOWMINIMIZED
+
+
+def workspace_origin(toolwindow, work, monitor):
+    """Where the top-left of a WINDOWPLACEMENT rectangle is on the screen. GetWindowPlacement and SetWindowPlacement
+    use workspace coordinates (from the corner of the primary monitor's work area) for a window that is not a tool
+    window, which is not the screen's corner when the taskbar is on the top or left."""
+    return (0, 0) if toolwindow else (work[0] - monitor[0], work[1] - monitor[1])
+
+
+def to_screen(rect, origin):
+    return (rect[0] + origin[0], rect[1] + origin[1], rect[2] + origin[0], rect[3] + origin[1])
+
+
+def to_workspace(rect, origin):
+    return (rect[0] - origin[0], rect[1] - origin[1], rect[2] - origin[0], rect[3] - origin[1])
 
 
 def main_window(title, pid=None, include_hidden=False):
@@ -142,8 +220,8 @@ def on_a_screen(left, top, right, bottom, maximised=False) -> bool:
 def bring_on_screen(hwnd, near=0) -> bool:
     """A window that was left on a monitor that is gone (or half off one) is centred on the work area of the
     window near (a ZBrush window), else of the primary monitor. Moves only; the size is kept, shrunk to fit.
-    A maximised window is put over that work area, and the rectangle it restores to is centred there too.
-    A minimised window is left alone. True when it was moved."""
+    A maximised window comes down to its normal size there and is maximised again, unless it is hidden: then it is
+    left as it is, and the caller asks again once it is shown. A minimised window is left alone. True when it was moved."""
     if user32.IsIconic(hwnd):
         return False
     r = w.RECT()
@@ -154,68 +232,122 @@ def bring_on_screen(hwnd, near=0) -> bool:
         return False
     user32.IsWindow.argtypes = [w.HWND]
     wa = work_area(near) if near and user32.IsWindow(near) else _primary_work_area()
+    if zoomed:
+        if not user32.IsWindowVisible(hwnd):           # SetWindowPlacement would show it: ask again once it is shown
+            return False
+        user32.SetWindowPlacement.argtypes = [w.HWND, ctypes.POINTER(WINDOWPLACEMENT)]
+        wp = WINDOWPLACEMENT()
+        wp.length = ctypes.sizeof(wp)
+        if not user32.GetWindowPlacement(hwnd, ctypes.byref(wp)):
+            return False
+        n = wp.rcNormalPosition
+        nw, nh = min(n.right - n.left, wa.right - wa.left), min(n.bottom - n.top, wa.bottom - wa.top)
+        nx, ny = wa.left + (wa.right - wa.left - nw) // 2, wa.top + (wa.bottom - wa.top - nh) // 2
+        origin = _workspace_origin(hwnd)
+        n.left, n.top, n.right, n.bottom = to_workspace((nx, ny, nx + nw, ny + nh), origin)
+        wp.showCmd = 1                                 # SW_SHOWNORMAL: while maximised it would only change where it restores to
+        if not user32.SetWindowPlacement(hwnd, ctypes.byref(wp)):
+            return False
+        user32.ShowWindow(hwnd, 3)                     # SW_MAXIMIZE, on the screen it is now on
+        return True
     wd, ht = min(r.right - r.left, wa.right - wa.left), min(r.bottom - r.top, wa.bottom - wa.top)
     x, y = wa.left + (wa.right - wa.left - wd) // 2, wa.top + (wa.bottom - wa.top - ht) // 2
-    if zoomed:
-        st = _subclass.get(hwnd, (None, None, None))[2]
-        if st and st["normal"]:                            # a restore must land here too, not on the gone screen
-            nw, nh = st["normal"][2] - st["normal"][0], st["normal"][3] - st["normal"][1]
-            nw, nh = min(nw, wa.right - wa.left), min(nh, wa.bottom - wa.top)
-            nx, ny = wa.left + (wa.right - wa.left - nw) // 2, wa.top + (wa.bottom - wa.top - nh) // 2
-            st["normal"] = (nx, ny, nx + nw, ny + nh)
-        b = user32.GetSystemMetrics(32) + user32.GetSystemMetrics(92)          # SIZEFRAME + PADDEDBORDER
-        x, y, wd, ht = wa.left - b, wa.top - b, wa.right - wa.left + 2 * b, wa.bottom - wa.top + 2 * b
     user32.SetWindowPos(hwnd, None, x, y, wd, ht, 0x0004 | 0x0010)             # NOZORDER NOACTIVATE
     return True
 
 
-class _MINMAXINFO(ctypes.Structure):
-    _fields_ = [("ptReserved", w.POINT), ("ptMaxSize", w.POINT), ("ptMaxPosition", w.POINT),
-                ("ptMinTrackSize", w.POINT), ("ptMaxTrackSize", w.POINT)]
-
-
-class _WINDOWPOS(ctypes.Structure):
-    _fields_ = [("hwnd", w.HWND), ("hwndInsertAfter", w.HWND), ("x", ctypes.c_int), ("y", ctypes.c_int),
-                ("cx", ctypes.c_int), ("cy", ctypes.c_int), ("flags", w.UINT)]
+class _NCCALCSIZE_PARAMS(ctypes.Structure):
+    _fields_ = [("rgrc", w.RECT * 3), ("lppos", ctypes.c_void_p)]
 
 
 _LRESULT = ctypes.c_ssize_t
 _WNDPROC = ctypes.WINFUNCTYPE(_LRESULT, w.HWND, w.UINT, w.WPARAM, w.LPARAM)
 _subclass = {}                     # keeps the callback and the original proc alive for the window's life
+_WM_LAYOUT = 0x8000 + 0x5A         # WM_APP + n, to the window itself: set its Padding and BackColor on the UI thread
 
 
-def _same_monitor(a, b) -> bool:
+def _work_of(rect):
+    """The work area (left, top, right, bottom) of the monitor nearest this rectangle."""
     user32.MonitorFromRect.restype = w.HMONITOR
     user32.MonitorFromRect.argtypes = [ctypes.POINTER(w.RECT), w.DWORD]
-    return user32.MonitorFromRect(ctypes.byref(w.RECT(*a)), 2) == user32.MonitorFromRect(ctypes.byref(w.RECT(*b)), 2)
+    mi = _MONITORINFO()
+    mi.cbSize = ctypes.sizeof(_MONITORINFO)
+    user32.GetMonitorInfoW(user32.MonitorFromRect(ctypes.byref(w.RECT(*rect)), 2), ctypes.byref(mi))   # NEAREST
+    wa = mi.rcWork
+    return wa.left, wa.top, wa.right, wa.bottom
 
 
-def limit_maximise_to_work_area(hwnd, on_query_end=None, on_end=None):
-    """Subclasses the window to answer WM_GETMINMAXINFO. Without a caption Windows maximises over the
-    whole monitor (taskbar included); this makes double-click, Win+Up, snap-to-top and our button all
-    maximise to the work area, with the usual invisible-border overhang. It also tracks the window's normal
-    (restored) rectangle (see normal_rect) and makes a restore land on it. Everything else passes through.
+def _nccalcsize(wparam, lparam, maximised, margin, work_of=_work_of):
+    """WM_NCCALCSIZE in place: the first rectangle is the window's new rectangle on the way in (with wparam, in
+    an NCCALCSIZE_PARAMS; without it the lparam is the rectangle) and its client rectangle on the way out."""
+    rc = _NCCALCSIZE_PARAMS.from_address(lparam).rgrc[0] if wparam else w.RECT.from_address(lparam)
+    if not maximised:
+        return                                     # the client area is the whole window
+    window = (rc.left, rc.top, rc.right, rc.bottom)
+    rc.left, rc.top, rc.right, rc.bottom = client_rect(window, True, work_of(window), margin)
+
+
+class _WINDOWPOS(ctypes.Structure):
+    _fields_ = [("hwnd", w.HWND), ("after", w.HWND), ("x", ctypes.c_int), ("y", ctypes.c_int), ("cx", ctypes.c_int),
+                ("cy", ctypes.c_int), ("flags", w.UINT)]
+
+
+def _hold_at(pos, rect):
+    """Rewrites a WINDOWPOS (WM_WINDOWPOSCHANGING) so the window stays at rect (left, top, right, bottom)."""
+    pos.x, pos.y, pos.cx, pos.cy = rect[0], rect[1], rect[2] - rect[0], rect[3] - rect[1]
+    pos.flags &= ~0x0003                               # not SWP_NOSIZE or SWP_NOMOVE
+
+
+def _post_layout(hwnd, border=-1, color=-1):
+    """Asks the window's own procedure (install_frame's) to set the form's Padding (border, in pixels) and BackColor
+    (a COLORREF) on the UI thread; -1 leaves one as it is. Posted, so it is safe from any thread and cannot wait on
+    a thread that is waiting on this one. Does nothing for a window that install_frame has not been given."""
+    if hwnd in _subclass:
+        user32.PostMessageW.argtypes = [w.HWND, w.UINT, w.WPARAM, w.LPARAM]
+        user32.PostMessageW(hwnd, _WM_LAYOUT, border & 0xFFFFFFFF, color)
+
+
+def _set_layout(hwnd, border, color):
+    """On the UI thread (the window procedure): the form's Padding leaves the strip around the page that the
+    WebView2 control does not cover, and its BackColor is what shows in that strip. Dock.Fill honours Padding."""
+    import System
+    import System.Windows.Forms as WinForms
+    from System.Drawing import Color
+    form = WinForms.Control.FromHandle(System.IntPtr(hwnd))
+    if form is None:
+        raise RuntimeError("no form for the window")
+    if border >= 0:
+        form.Padding = WinForms.Padding(border)
+    if color >= 0:
+        form.BackColor = Color.FromArgb(255, color & 255, (color >> 8) & 255, (color >> 16) & 255)
+
+
+def install_frame(hwnd, on_query_end=None, on_end=None):
+    """Subclasses the window to draw without Windows' frame. WM_NCCALCSIZE makes the client area the whole window
+    (a maximised one is cut back to the work area, see client_rect); WM_NCHITTEST answers the resize codes in the
+    strip around the page (see hit_test); WinForms is kept from undoing where Windows restored the window (see
+    WM_WINDOWPOSCHANGED below). Everything else passes through, so the maximise, restore, snap and Win+Shift+arrow
+    behaviour is Windows' own. A message from _post_layout sets the strip up.
     Windows shutting down, restarting or signing out: on_query_end() is called on WM_QUERYENDSESSION, before the
     window is asked to close, and the answer is always "yes, go ahead"; on_end(ending) on WM_ENDSESSION (ending is
-    false when something else cancelled it). Both run on the UI thread: keep them short."""
+    false when something else cancelled it). Both run on the UI thread: keep them short. Nothing in the procedure
+    may raise into Windows, so each part guards itself and falls back to the window's own procedure."""
     user32.GetWindowLongPtrW.restype = ctypes.c_void_p
     user32.GetWindowLongPtrW.argtypes = [w.HWND, ctypes.c_int]
     user32.SetWindowLongPtrW.restype = ctypes.c_void_p
     user32.SetWindowLongPtrW.argtypes = [w.HWND, ctypes.c_int, ctypes.c_void_p]
     user32.CallWindowProcW.restype = _LRESULT
     user32.CallWindowProcW.argtypes = [ctypes.c_void_p, w.HWND, w.UINT, w.WPARAM, w.LPARAM]
-    GWLP_WNDPROC, WM_GETMINMAXINFO, WM_WINDOWPOSCHANGING, WM_WINDOWPOSCHANGED = -4, 0x0024, 0x0046, 0x0047
-    WM_ENTERSIZEMOVE, WM_EXITSIZEMOVE = 0x0231, 0x0232
+    user32.IsZoomed.argtypes = user32.IsIconic.argtypes = [w.HWND]
+    user32.GetWindowRect.argtypes = [w.HWND, ctypes.POINTER(w.RECT)]
+    GWLP_WNDPROC, WM_NCCALCSIZE, WM_NCHITTEST = -4, 0x0083, 0x0084
     WM_QUERYENDSESSION, WM_ENDSESSION = 0x0011, 0x0016
-    SWP_NOSIZE, SWP_NOMOVE = 0x0001, 0x0002
+    WM_WINDOWPOSCHANGING, WM_WINDOWPOSCHANGED = 0x0046, 0x0047
     if hwnd in _subclass:
         return
     original = user32.GetWindowLongPtrW(hwnd, GWLP_WNDPROC)
-    # WinForms still believes the window has a caption, and on restore asks for a size that is one caption
-    # taller. A second resize to fix that afterwards makes WebView2 flash black, so the restore itself is
-    # given the last normal rectangle instead. In a drag off the top (or after Win+Shift+Arrow moved the
-    # maximised window to another screen) Windows' position is kept and only the size is corrected.
-    st = {"zoomed": bool(user32.IsZoomed(hwnd)), "normal": None, "sizemove": False}
+    st = {"border": 0, "error": None,          # border: the strip's width once the form has it, else nothing is claimed
+          "plain": True, "hold": None}         # plain: neither maximised nor minimised; hold: see WM_WINDOWPOSCHANGED
 
     def proc(h, msg, wp, lp):
         if msg == WM_QUERYENDSESSION or msg == WM_ENDSESSION:
@@ -228,59 +360,98 @@ def limit_maximise_to_work_area(hwnd, on_query_end=None, on_end=None):
                 pass
             r = user32.CallWindowProcW(original, h, msg, wp, lp)     # WinForms raises FormClosing / FormClosed
             return 1 if msg == WM_QUERYENDSESSION else r
-        if msg == WM_ENTERSIZEMOVE or msg == WM_EXITSIZEMOVE:
-            st["sizemove"] = msg == WM_ENTERSIZEMOVE
-        elif msg == WM_WINDOWPOSCHANGING and st["zoomed"] and st["normal"]:
+        if msg == WM_WINDOWPOSCHANGED:
+            # Windows has just restored the window to the right place, which is on another monitor if it was moved
+            # there while maximised. WinForms answers this message by moving it to where it was when it was maximised,
+            # so for as long as WinForms has the message, the window stays where Windows put it.
+            outer = st["hold"]                         # WinForms' own move lands here too, nested: it keeps the hold
             try:
-                pos = _WINDOWPOS.from_address(lp)
-                if not pos.flags & SWP_NOSIZE and not user32.IsZoomed(h) and not user32.IsIconic(h):
-                    left, top, right, bottom = st["normal"]
-                    asked = (pos.x, pos.y, pos.x + pos.cx, pos.y + pos.cy)
-                    if not st["sizemove"] and _same_monitor(asked, st["normal"]):
-                        pos.x, pos.y = left, top
-                        pos.flags &= ~SWP_NOMOVE
-                    pos.cx, pos.cy = right - left, bottom - top
+                plain = not user32.IsZoomed(h) and not user32.IsIconic(h)
+                if plain and not st["plain"]:
+                    rc = w.RECT()
+                    user32.GetWindowRect(h, ctypes.byref(rc))
+                    st["hold"] = (rc.left, rc.top, rc.right, rc.bottom)
+                st["plain"] = plain
             except Exception:
                 pass
-        r = user32.CallWindowProcW(original, h, msg, wp, lp)
-        if msg == WM_WINDOWPOSCHANGED:
-            zoomed, iconic = bool(user32.IsZoomed(h)), bool(user32.IsIconic(h))
-            if not zoomed and not iconic:
+            try:
+                return user32.CallWindowProcW(original, h, msg, wp, lp)
+            finally:
+                st["hold"] = outer
+        try:
+            if msg == WM_WINDOWPOSCHANGING:
+                if st["hold"]:
+                    _hold_at(_WINDOWPOS.from_address(lp), st["hold"])
+            elif msg == WM_NCCALCSIZE:
+                if not user32.IsIconic(h):
+                    _nccalcsize(wp, lp, bool(user32.IsZoomed(h)), st["border"])
+                    return 0
+            elif msg == WM_NCHITTEST:
                 rc = w.RECT()
                 user32.GetWindowRect(h, ctypes.byref(rc))
-                st["normal"] = (rc.left, rc.top, rc.right, rc.bottom)
-            if not iconic:
-                st["zoomed"] = zoomed
-        elif msg == WM_GETMINMAXINFO:
-            try:
-                mi = _MONITORINFO()
-                mi.cbSize = ctypes.sizeof(_MONITORINFO)
-                user32.MonitorFromWindow.restype = w.HMONITOR
-                user32.MonitorFromWindow.argtypes = [w.HWND, w.DWORD]
-                user32.GetMonitorInfoW(user32.MonitorFromWindow(h, 2), ctypes.byref(mi))
-                b = user32.GetSystemMetrics(32) + user32.GetSystemMetrics(92)   # SIZEFRAME + PADDEDBORDER
-                mm = _MINMAXINFO.from_address(lp)
-                wa, mon = mi.rcWork, mi.rcMonitor
-                mm.ptMaxPosition.x = wa.left - mon.left - b
-                mm.ptMaxPosition.y = wa.top - mon.top - b
-                mm.ptMaxSize.x = wa.right - wa.left + 2 * b
-                mm.ptMaxSize.y = wa.bottom - wa.top + 2 * b
-            except Exception:
-                pass
-        return r
+                x, y = ctypes.c_short(lp & 0xFFFF).value, ctypes.c_short((lp >> 16) & 0xFFFF).value
+                code = hit_test(x, y, (rc.left, rc.top, rc.right, rc.bottom),
+                                bool(user32.IsZoomed(h)) or bool(user32.IsIconic(h)), st["border"])
+                if code not in (HTCLIENT, HTNOWHERE):
+                    return code
+            elif msg == _WM_LAYOUT:
+                border, color = wp & 0xFFFFFFFF, lp & 0xFFFFFFFF if lp >= 0 else -1
+                try:
+                    _set_layout(h, -1 if border == 0xFFFFFFFF else border, color)
+                    if border != 0xFFFFFFFF:
+                        st["border"] = border
+                        user32.SetWindowPos(h, None, 0, 0, 0, 0, 0x0001 | 0x0002 | 0x0004 | 0x0010 | 0x0020)
+                except Exception as e:                             # the strip is then missing: say so (frame_problem)
+                    st["error"] = repr(e)
+                return 0
+        except Exception:
+            pass
+        return user32.CallWindowProcW(original, h, msg, wp, lp)
     cb = _WNDPROC(proc)
     _subclass[hwnd] = (cb, original, st)
     user32.SetWindowLongPtrW(hwnd, GWLP_WNDPROC, ctypes.cast(cb, ctypes.c_void_p))
 
 
-def normal_rect(hwnd):
-    """The window's normal (restored) rectangle as tracked by limit_maximise_to_work_area: (left, top, right,
-    bottom, maximised), or None when it is not tracked or has not been placed yet. GetWindowPlacement is no
-    good for this: it reports the size WinForms would restore to, which is one caption taller than the window."""
+def frame_problem(hwnd):
+    """Why the resize strip around the page could not be set up (text for the log), or None when it was, or has not
+    been tried yet."""
     st = _subclass.get(hwnd, (None, None, None))[2]
-    if not st or not st["normal"]:
+    return st["error"] if st else None
+
+
+def _read_placement(hwnd):
+    """(showCmd, flags, rcNormalPosition) from GetWindowPlacement, the rectangle in workspace coordinates; None if
+    Windows does not say."""
+    user32.GetWindowPlacement.argtypes = [w.HWND, ctypes.POINTER(WINDOWPLACEMENT)]
+    wp = WINDOWPLACEMENT()
+    wp.length = ctypes.sizeof(wp)
+    if not user32.GetWindowPlacement(hwnd, ctypes.byref(wp)):
         return None
-    return (*st["normal"], bool(st["zoomed"]))
+    n = wp.rcNormalPosition
+    return wp.showCmd, wp.flags, (n.left, n.top, n.right, n.bottom)
+
+
+def _workspace_origin(hwnd):
+    user32.MonitorFromPoint.restype = w.HMONITOR
+    user32.MonitorFromPoint.argtypes = [w.POINT, w.DWORD]
+    mi = _MONITORINFO()
+    mi.cbSize = ctypes.sizeof(_MONITORINFO)
+    user32.GetMonitorInfoW(user32.MonitorFromPoint(w.POINT(0, 0), 1), ctypes.byref(mi))      # MONITOR_DEFAULTTOPRIMARY
+    toolwindow = bool(user32.GetWindowLongW(hwnd, -20) & 0x00000080)                        # WS_EX_TOOLWINDOW
+    wa, mon = mi.rcWork, mi.rcMonitor
+    return workspace_origin(toolwindow, (wa.left, wa.top), (mon.left, mon.top))
+
+
+def normal_rect(hwnd):
+    """The window's normal (restored) rectangle in screen coordinates, from GetWindowPlacement: (left, top, right,
+    bottom, maximised), or None when Windows does not say or the window has no size yet."""
+    got = _read_placement(hwnd)
+    if not got:
+        return None
+    show_cmd, flags, rc = got
+    if rc[2] <= rc[0] or rc[3] <= rc[1]:
+        return None
+    return (*to_screen(rc, _workspace_origin(hwnd)), placement_state(show_cmd, flags))
 
 
 def placement_record(hwnd):
@@ -302,16 +473,28 @@ def apply_theme(hwnd, window):
                       (34, _theme.colorref(window["border"]))):   # border colour (COLORREF is 0x00bbggrr)
         v = ctypes.c_int(val)
         dwm.DwmSetWindowAttribute(hwnd, attr, ctypes.byref(v), 4)
+    if window.get("background"):                       # the strip around the page (see install_frame) is the form's colour
+        _post_layout(hwnd, color=_theme.colorref(window["background"]))
+
+
+def _system_dpi() -> int:
+    try:
+        return user32.GetDpiForSystem() or 96
+    except Exception:
+        return 96
 
 
 def custom_frame(title, placement=None, pid=None, topmost=False, toolwindow=False, maximizable=True,
                  on_hwnd=None, include_hidden=False, theme=None):
-    """Removes the Windows title bar but keeps the resizable frame (native resize and Aero Snap), and
-    themes the remaining 1 px border and corners. The page draws its own header (see index.html).
+    """Draws the window without Windows' title bar and frame, and keeps what a framed window does (native
+    resize, Aero Snap, maximise to the work area; see the top of this file), and themes the border and corners.
+    The page draws its own header (see index.html). The window must have been created frameless
+    (create_window(frameless=True, easy_drag=False)), so WinForms agrees that the frame is zero wide.
     placement: saved_window()'s result, applied exactly (create_window only gets it to within a pixel).
     pid: only a window of that process counts. topmost: keep the window above others. toolwindow: no taskbar
     button. maximizable=False: no maximise box. on_hwnd(hwnd): called once the window is found, before the
-    frame is changed. include_hidden: also find a window that was created hidden. theme: the "window" part of a
+    frame is changed (it installs the window procedure, install_frame, which is done here if it did not).
+    include_hidden: also find a window that was created hidden. theme: the "window" part of a
     theme preset (dark mode, border colour); the dark preset when not given.
     A hidden window is not maximised here (that would show it): show it with show_placed. Every size change
     of a visible WebView2 window flashes black, so the Studio applies all this while hidden and shows once.
@@ -329,17 +512,22 @@ def custom_frame(title, placement=None, pid=None, topmost=False, toolwindow=Fals
             return
         if on_hwnd:
             on_hwnd(hwnd)
-        GWL_STYLE, WS_CAPTION = -16, 0x00C00000
-        WS_KEEP = 0x00040000 | 0x00080000 | 0x00020000 | 0x00010000      # THICKFRAME SYSMENU MIN MAX boxes
-        if not maximizable:
-            WS_KEEP &= ~0x00010000                                       # no MAXIMIZEBOX
+        install_frame(hwnd)                                              # no-op when on_hwnd did it
+        GWL_STYLE, WS_CAPTION, WS_MAXIMIZEBOX = -16, 0x00C00000, 0x00010000
+        WS_KEEP = 0x00040000 | 0x00080000 | 0x00020000 | WS_MAXIMIZEBOX  # THICKFRAME SYSMENU MIN MAX boxes
         style = user32.GetWindowLongW(hwnd, GWL_STYLE)
-        user32.SetWindowLongW(hwnd, GWL_STYLE, (style & ~WS_CAPTION) | WS_KEEP)
+        if not maximizable:
+            style &= ~WS_MAXIMIZEBOX
+            WS_KEEP &= ~WS_MAXIMIZEBOX
+        # WS_CAPTION and WS_THICKFRAME are what make Windows maximise to the work area and snap the window; the
+        # caption is not drawn, since install_frame answers WM_NCCALCSIZE with no frame at all
+        user32.SetWindowLongW(hwnd, GWL_STYLE, style | WS_CAPTION | WS_KEEP)
         if toolwindow:
             GWL_EXSTYLE, WS_EX_TOOLWINDOW, WS_EX_APPWINDOW = -20, 0x00000080, 0x00040000
             ex = user32.GetWindowLongW(hwnd, GWL_EXSTYLE)
             user32.SetWindowLongW(hwnd, GWL_EXSTYLE, (ex | WS_EX_TOOLWINDOW) & ~WS_EX_APPWINDOW)   # no taskbar button
         apply_theme(hwnd, theme_window)
+        _post_layout(hwnd, border=border_px(_system_dpi()))
         flags = 0x0001 | 0x0002 | 0x0010 | 0x0020                      # NOSIZE NOMOVE NOACTIVATE FRAMECHANGED
         if topmost:
             user32.SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, flags)

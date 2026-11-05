@@ -177,6 +177,10 @@ The `usage.json` an older ZOrbit kept, which holds the brushes that fill the aut
 2. A window that opens blank may only be slow. Studio shows its window once the page has drawn, or after 3 seconds. `studio.log` (in `%LOCALAPPDATA%\ZOrbit`) has one line per step with the time since the process started: "pywebview imported", "page loaded" and "window shown", and says which program started Studio. If "page loaded" never appears, the web view did not start; send the log with your report.
 3. Studio is single-instance. A second start finds the first (the `Local\ZOrbitStudio` mutex), brings its window to the front and exits, and `studio.log` says "already open: bringing it forward". If the first Studio is stuck or its window is out of reach, the second click seems to do nothing. In Task Manager, end the process listed as **ZOrbit Studio**, then open Studio again. If you cannot tell which it is, sign out of Windows and back in.
 
+### The window cannot be resized from its edges
+
+`studio.log` (or `popout.log` for the browser) has a line `the window's resize border could not be set up: <reason>`. The window still moves and maximises, but its edges and corners do not resize it. The reason after the colon says what went wrong. Include the line when you send a report.
+
 ### I cannot find a setting in Studio
 
 Studio may be in Simple mode, which hides some settings and item types. Press **Full** in the top bar. A hidden setting keeps its value, so nothing is lost by switching. If a Full-only setting is not at its default, the top of the Look or Settings page names it and has a **Switch to Full mode** link. [Simple and Full mode](studio.md#simple-and-full-mode) lists what each mode shows.

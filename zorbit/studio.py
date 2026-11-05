@@ -2177,8 +2177,8 @@ class Api(webapi.LibraryApi, webapi.TagApi):
         return True
 
     def win_toggle_maximize(self):
-        """Native maximise/restore. Maximised size is limited to the work area by winframe.custom_frame's
-        WM_GETMINMAXINFO handler, so the taskbar stays visible. Returns the new state."""
+        """Native maximise/restore. The window has a sizing frame and a caption style (see winframe), so Windows
+        maximises it to the work area and the taskbar stays visible. Returns the new state."""
         h = self._hwnd()
         if not h:
             return False
@@ -2327,9 +2327,8 @@ def _on_closing(api):
 
 
 def _remember_window(hwnd):
-    """Saves the window's normal (restored) rectangle and whether it is maximised, for the next launch.
-    Taken from winframe's tracker (limit_maximise_to_work_area): GetWindowPlacement reports the size WinForms
-    would restore to, which is one caption taller than the window really was."""
+    """Saves the window's normal (restored) rectangle and whether it is maximised, for the next launch
+    (winframe.placement_record reads it from GetWindowPlacement)."""
     try:
         rec = winframe.placement_record(hwnd)
         if not rec:
@@ -2404,7 +2403,9 @@ def main():
     else:
         geometry = _default_geometry(scale)
     api = Api()
+    # frameless: WinForms then counts no frame around the page, which is what winframe.custom_frame leaves
     window = webview.create_window(TITLE, url=UI_INDEX, js_api=api, **geometry, hidden=True,
+                                   frameless=True, easy_drag=False,
                                    min_size=min_size, text_select=False,
                                    background_color=theme.preset(_theme_now())["window"]["background"])
     api._window = window
@@ -2425,15 +2426,17 @@ def _frame_and_show(window, placement, api=None):
     api: when given, Windows shutting down or signing out is let through (see _on_closing)."""
     def on_hwnd(hwnd):
         if api is None:
-            winframe.limit_maximise_to_work_area(hwnd)
+            winframe.install_frame(hwnd)
             return
         api._hwnd_cache = hwnd
-        winframe.limit_maximise_to_work_area(hwnd, on_query_end=api._on_query_end,
-                                             on_end=api._on_end_session)
+        winframe.install_frame(hwnd, on_query_end=api._on_query_end, on_end=api._on_end_session)
     hwnd = winframe.custom_frame(TITLE, placement, pid=os.getpid(), include_hidden=True, on_hwnd=on_hwnd,
                                  theme=theme.preset(_theme_now())["window"])
     window.events.loaded.wait(3)
     if hwnd:
+        problem = winframe.frame_problem(hwnd)
+        if problem:
+            _startup(f"the window's resize border could not be set up: {problem}")
         maxed = bool(placement and placement[4])
         winframe.show_placed(hwnd, maxed)
         if maxed:
