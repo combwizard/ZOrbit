@@ -14,7 +14,8 @@ slots opened up. Used by the app and by the Studio's previews, so both show the 
     in the same way when that is too long: "more:more:<id>"). Fan menus and tag menus are never paged.
 
 A tag menu lists the tag's installed items as a fan: brushes first, most used first, then alphas, materials
-and textures by name. With more than ring.tag_limit (12 unless set) the last slot is "More..." and opens the
+and textures by name. On Favourites, a kind with its own order (tags.favourite_order) follows it instead; brushes
+still come first. With more than ring.tag_limit (12 unless set) the last slot is "More..." and opens the
 browser on that tag (on the tab of the first item). Item count and order of a menu never change.
 The tag menus are cached until a pick, a usage.json change, a tags.json change or a rebuilt asset index; the
 app builds a new Expander whenever it reloads radial.json or tags.json.
@@ -27,7 +28,7 @@ import time
 import config as C
 import layout
 import usage as U
-from tags import item_key
+from tags import FAVOURITE, item_key
 
 try:
     import assets
@@ -58,7 +59,7 @@ class Expander:
         self.cfg = cfg
         self.usage = usage
         self.tags = tags
-        self._cache = {}               # tag key -> ((usage.version, tags.mtime, assets.generation, limit), Menu or None)
+        self._cache = {}               # tag key -> ((usage.version, tags.mtime, assets.generation, limit, orders), Menu or None)
         self._rescanning = set()       # kinds whose index a worker thread is building again
         self._asked = {}               # kind -> when a rescan was last asked for (time.monotonic)
 
@@ -136,11 +137,12 @@ class Expander:
         for kind in C.ASSET_KINDS:
             assets.index(kind)                           # a first build moves generation: let it happen before the stamp
         limit = self._tag_limit()
-        stamp = (self.usage.load().version, self.tags.mtime, assets.generation, limit)   # an index rebuilt: new files
+        orders = {k: self.tags.favourite_order(k) for k in C.ASSET_KINDS} if key == FAVOURITE else {}   # your own orders
+        stamp = (self.usage.load().version, self.tags.mtime, assets.generation, limit, orders)   # an index rebuilt: new files
         hit = self._cache.get(key)
         if hit is not None and hit[0] == stamp:
             return hit[1]
-        found = []                                       # (kind, name): brushes by use, then the rest by name
+        found = []                                       # (kind, name): brushes by use, then the rest by name, or your order
         missing = False
         for kind in C.ASSET_KINDS:
             index = assets.index(kind)                   # keyed as item_key() makes them
@@ -149,8 +151,11 @@ class Expander:
                 missing = True
                 self._rescan_later(kind)                 # saved since the scan? the next build sees the new generation
             listed = assets.names(kind)                  # the listed names: "10 (PackA)", not the stem 10
-            stems = [listed.get(k) or index[k].stem for k in tagged if k in index]
-            stems = self.usage.rank(stems) if kind == "brush" else sorted(stems, key=str.lower)
+            if orders.get(kind):                         # it holds exactly the kind's starred items (tags._synced)
+                stems = [listed.get(k) or index[k].stem for k in orders[kind] if k in index]
+            else:
+                stems = [listed.get(k) or index[k].stem for k in tagged if k in index]
+                stems = self.usage.rank(stems) if kind == "brush" else sorted(stems, key=str.lower)
             found += [(kind, n) for n in stems]
         menu = None
         if found:

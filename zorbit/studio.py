@@ -801,6 +801,9 @@ class Api(webapi.LibraryApi, webapi.TagApi):
     def tag_items(self, item_keys, add=None, remove=None):
         return self._tag_refusal() or super().tag_items(item_keys, add, remove)
 
+    def set_favourite_order(self, kind, names=None):
+        return self._tag_refusal() or super().set_favourite_order(kind, names)
+
     # --- ring preview ----------------------------------------------------------------------------
     def preview_ring(self, cfg, menu_id, hover=None, scale=1.0, open_path=None):
         """PNG data URL of the ring exactly as the app draws it. hover: item index or None. open_path: item

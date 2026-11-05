@@ -72,6 +72,7 @@ Schema (all keys optional except menus):
   {"menu": "<id>"}                               open another ring in place
   {"auto": "brush"}                              a slot the app fills with a brush you pick often (usage.py)
   {"tag": "blocking"}                            a submenu of every brush carrying that tag (tags.py), most used first
+                                                 (Favourites can follow your own order, see expand.py)
   {"browser": "", "kind": "alpha"}               open the browser (tabs: brush alpha material texture) on that
                                                  tab (default brush); a tag key filters it ("" = everything)
   {"empty": true}                                a slot that holds nothing: drawn as a faint outline, never picked

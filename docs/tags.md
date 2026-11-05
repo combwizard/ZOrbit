@@ -12,7 +12,7 @@ the items with a tag from one slot (see [Tag](menus.md#tag)). The [browser](brow
 **Favourites** is a built-in tag. It always exists and always comes first. It shows a star instead of a dot, and it
 cannot be deleted, renamed or merged away, but you can change its colour in the tag manager. Starring an item never
 changes its colour cue: the first *other* tag does that. Favourites has its own entry in the folders list rather than
-a chip (see [Favourites and Recent](browser.md#favourites-and-recent)).
+a chip, and it is the one tag you can drag into your own order (see [Favourites and Recent](browser.md#favourites-and-recent)).
 
 Your other tags are named, coloured sets. They work the same way: each one is a ring slot of its own (see
 [Tag](menus.md#tag)). Favourites give you a one-click star; tags give you named sets.
@@ -36,6 +36,8 @@ still counts as untagged.
 ## Tag fans
 
 A [Tag](menus.md#tag) slot opens a fan of the tag's items. A fan holds 12 slots. When the tag has more items than that, the last slot is **More...** and opens the [browser](browser.md) on the tag. To change the 12, turn on [Full mode](studio.md#simple-and-full-mode) and set **Tag fan slots** on **Settings > Behaviour** (`ring.tag_limit`). It takes 4 to 24. With 12 items and a limit of 8, the fan shows seven items and **More...**. A fan of 24 spreads over two staggered rows and reaches a long way from the ring, so the bigger numbers suit a large screen. Save, and the next fan you open uses the new number.
+
+A fan lists brushes first, most used first, then alphas, materials and textures by name. The Favourites fan follows [your own order](browser.md#favourites-and-recent) on any tab where you have set one. Brushes still come first.
 
 ## Managing tags
 
@@ -62,8 +64,9 @@ Tags are in `%APPDATA%\ZOrbit\profiles\<profile>\tags.json`, one file per [profi
            "blocking":  {"label": "Blocking",   "color": "#A8DF23"},
            "detailing": {"label": "Detailing",  "color": "#C77DFF"}},
  "items": {"brush:claybuildup": ["favourite", "blocking"],
-           "brush:dam_standard": ["detailing", "blocking"],
-           "alpha:alpha058": ["blocking"]}}
+           "brush:dam_standard": ["favourite", "detailing", "blocking"],
+           "alpha:alpha058": ["blocking"]},
+ "favourite_order": {"brush": ["dam_standard", "claybuildup"]}}
 ```
 
-The `favourite` tag is built in. A file without it gets it back when ZOrbit reads it, and the next write puts it in the file. An item's key is its kind, `brush:`, `alpha:`, `material:` or `texture:`, plus its name in lower case without spaces (`alpha:alpha058`). The first tag in an item's list, other than `favourite`, is its colour cue. Items that are not installed keep their tags. You can edit the file by hand and the ring follows. If the file cannot be read (a stray comma, say), the app and Studio keep the last good tags, Studio shows the error in the Library, and nothing is changed or written until you fix it. If the file cannot be read when the app or Studio starts, the three starter tags are available in memory, and nothing is written until the file is fixed.
+The `favourite` tag is built in. A file without it gets it back when ZOrbit reads it, and the next write puts it in the file. An item's key is its kind, `brush:`, `alpha:`, `material:` or `texture:`, plus its name in lower case without spaces (`alpha:alpha058`). The first tag in an item's list, other than `favourite`, is its colour cue. Items that are not installed keep their tags. `favourite_order` is there once you have dragged a Favourites card: it holds the [order](browser.md#favourites-and-recent) you set for each tab, as names without the kind. A tab with no list is most used first, and a list only keeps names that carry `favourite`. You can edit the file by hand and the ring follows. If the file cannot be read (a stray comma, say), the app and Studio keep the last good tags, Studio shows the error in the Library, and nothing is changed or written until you fix it. If the file cannot be read when the app or Studio starts, the three starter tags are available in memory, and nothing is written until the file is fixed.

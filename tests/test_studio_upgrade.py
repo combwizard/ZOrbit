@@ -68,6 +68,7 @@ def test_imports_and_tag_writes_refuse_newer_files(newer):
     res = newer.create_tag("Mine")
     assert res["ok"] is False and res["too_new"] is True and "9.9.9" in res["error"]
     assert newer.tag_items(["brush:standard"], add=["favourite"])["ok"] is False
+    assert newer.set_favourite_order("brush", ["standard"])["ok"] is False
     assert not os.path.exists(profiles.tags_file("Default"))
 
 

@@ -92,7 +92,7 @@ Every item does exactly one thing. Besides the action, an item can have a `label
 | `steps` | Runs a list of the actions above, in order. |
 | `menu` | Opens another ring in place of this one. |
 | `auto` | A slot that holds a brush you pick often. ZOrbit fills it. |
-| `tag` | Opens a fan of every installed item that carries a tag, or the Favourites tag: brushes first, most used first, then alphas, materials and textures. |
+| `tag` | Opens a fan of every installed item that carries a tag, or the Favourites tag: brushes first, most used first, then alphas, materials and textures. Favourites can follow your own order instead. |
 | `browser` | Opens the [browser](browser.md) on one of its tabs, optionally on one tag. |
 | `empty` | Holds a slot's place in the ring and does nothing. See [Empty](#empty). |
 
@@ -338,8 +338,10 @@ The slot opens a fan of every installed item with that tag. The brushes come fir
 A tag that has no installed items is a faint tag symbol. Picking it sends nothing and says **This slot is empty** near the cursor. So is a key that is not in `tags.json`, which is also listed as a problem ("tag 'x' does not exist; the slot stays empty").
 
 The `favourite` key is the built-in Favourites tag (see [Tags](tags.md)). A `{"tag": "favourite"}` slot opens a fan of
-your starred items, in the same order as any tag, with the same slot cap and **More...** slot. It is drawn with a
-star instead of the tag symbol. New installs have one in the starter **Tools** menu.
+your starred items, in the same order as any tag, with the same slot cap and **More...** slot. If you have
+[dragged a tab's Favourites into your own order](browser.md#favourites-and-recent), the items of that kind follow it
+instead, and do not shift after you pick. Brushes still come first. It is drawn with a star instead of the tag symbol.
+New installs have one in the starter **Tools** menu.
 
 ### Browser
 

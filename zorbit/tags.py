@@ -3,7 +3,8 @@
 
 {"version": 1,
  "tags":  {"blocking": {"label": "Blocking", "color": "#F86B33"}},
- "items": {"brush:claybuildup": ["blocking"], "brush:dam_standard": ["detailing", "blocking"]}}
+ "items": {"brush:claybuildup": ["blocking"], "brush:dam_standard": ["detailing", "blocking"]},
+ "favourite_order": {"brush": ["dam_standard", "claybuildup"]}}
 
 A tag has a key, a label and a colour. The key is a slug of the label made once when the tag is created and
 never changes on a rename, so the lists in "items" and radial.json's {"tag": key} slots survive renames. The
@@ -15,6 +16,13 @@ not installed right now keep their tags.
 Favourites (key FAVOURITE) is built in: it always exists, always comes first, keeps its name, and cannot be
 deleted or merged away. Its colour can be changed. A file without it gets it back on load, and the next write
 puts it in the file. Starring an item never changes the item's colour cue, so color_of_item() skips it.
+
+"favourite_order" holds the order you dragged a kind's Favourites into in the browser: for each kind, the names as
+item_key() makes them, without the kind. A kind without a list is most used first, and the key is left out of the
+file while no kind has one. A list holds exactly the items of that kind that carry Favourites, installed or not, so
+an item on an unplugged drive keeps its place, a new star goes at the end and an unstarred item leaves it (_synced).
+The last item leaving removes the list. An older ZOrbit does not know the key and writes it back as it is, so its
+stars and unstars are put right on the next load.
 
 A missing file means the three starter tags, held in memory until the first change writes the file. A file
 that cannot be read (a typo from a hand edit) keeps the previous state and sets .error; the changing methods
@@ -46,7 +54,8 @@ LABEL_MAX = 40
 _KEY_RE = re.compile(r"[a-z][a-z0-9_-]{0,31}")
 _COLOR_RE = re.compile(r"#[0-9a-fA-F]{6}")
 _ITEM_RE = re.compile(r"[a-z]+:.+")
-_KNOWN = ("version", "tags", "items")
+_KNOWN = ("version", "tags", "items", "favourite_order")
+ORDER_KINDS = ("brush", "alpha", "material", "texture")   # config.ASSET_KINDS: the kinds with a Favourites order
 
 
 def _norm(s: str) -> str:
@@ -80,10 +89,37 @@ def _with_favourite(tags: dict) -> dict:
     return {FAVOURITE: fav, **{k: t for k, t in tags.items() if k != FAVOURITE}}
 
 
+def _synced(order: dict, items: dict) -> dict:
+    """The Favourites orders put right against the items: in each list the keys that still carry Favourites, in
+    their order, then the starred items it lacks, in file order. A list left empty goes, so that kind is most used
+    first again. A kind without a list gets none. Returns a new dict."""
+    out = {}
+    for kind, keys in order.items():
+        pre = kind + ":"
+        starred = [ik[len(pre):] for ik, lst in items.items() if ik.startswith(pre) and FAVOURITE in lst]
+        have = set(starred)
+        kept = [k for k in keys if k in have]
+        listed = set(kept)
+        kept += [k for k in starred if k not in listed]
+        if kept:
+            out[kind] = kept
+    return out
+
+
+def _merge_order(saved, shown) -> list:
+    """The saved order with the keys on show put in their new order. A saved key that is not on show keeps its
+    index, so it is back where it was when its item is. A key on show that was not saved goes at the end."""
+    on_show, rest = set(shown), iter(shown)
+    out = [next(rest) if k in on_show else k for k in saved]
+    return out + list(rest)
+
+
 def _parse(raw: dict):
-    """(tags, items, extra) from a tags.json-shaped dict. Whatever is malformed is left out: a tag without a
+    """(tags, items, extra, order) from a tags.json-shaped dict. Whatever is malformed is left out: a tag without a
     usable key or name, a colour that is not #RRGGBB (the first palette colour is used), tag keys in an item
-    list that no tag has (Favourites counts as a tag that always exists, see _with_favourite). Shared by load() and the settings import, so both read a file the same way."""
+    list that no tag has (Favourites counts as a tag that always exists, see _with_favourite), and in
+    favourite_order an unknown kind, a value that is not a list, a name that is not a string or comes twice. Shared
+    by load() and the settings import, so both read a file the same way."""
     tags, items = {}, {}
     raw_tags, raw_items = raw.get("tags"), raw.get("items")
     for k, t in (raw_tags.items() if isinstance(raw_tags, dict) else ()):
@@ -100,7 +136,12 @@ def _parse(raw: dict):
         if keys:                                       # unknown tag keys are dropped here
             items.setdefault(_norm(ik), keys)
     extra = {k: v for k, v in raw.items() if k not in _KNOWN}
-    return tags, items, extra
+    order, raw_order = {}, raw.get("favourite_order")
+    for kind, names in (raw_order.items() if isinstance(raw_order, dict) else ()):
+        keys = list(dict.fromkeys(_norm(n) for n in names if isinstance(n, str))) if isinstance(names, list) else []
+        if kind in ORDER_KINDS and any(keys):                # an empty list is no order: _synced would fill it
+            order[kind] = [k for k in keys if k]
+    return tags, items, extra, _synced(order, items)
 
 
 class TagStore:
@@ -113,6 +154,7 @@ class TagStore:
         self._retry_at = 0.0              # when a read that failed with an OSError is tried again (0: not due)
         self._tags = {}                   # key -> {"label", "color"}, in display order
         self._items = {}                  # item key -> [tag key], first = colour cue
+        self._order = {}                  # kind -> [name], the Favourites order of a kind that has one (see _synced)
         self._extra = {}                  # top-level keys we do not know, written back as they were
 
     # --- file ------------------------------------------------------------------------------------
@@ -133,7 +175,7 @@ class TagStore:
             if sig is None:
                 self.error, self.mtime, self._extra = "", 0, {}
                 self._tags = {k: {"label": lb, "color": c} for k, lb, c in STARTERS}
-                self._items = {}
+                self._items, self._order = {}, {}
                 return self
             try:
                 with open(self.path, encoding="utf-8-sig") as f:
@@ -150,7 +192,7 @@ class TagStore:
                 self.mtime = sig[0]
                 self._starters_if_empty()
                 return self
-            self._tags, self._items, self._extra = _parse(raw)
+            self._tags, self._items, self._extra, self._order = _parse(raw)
             self._tags = _with_favourite(self._tags)
             self.error, self.mtime = "", sig[0]
             return self
@@ -169,12 +211,14 @@ class TagStore:
             same = self._stat() == self._sig
             if same and not (self._retry_at and time.monotonic() >= self._retry_at):
                 return False
-            before = (self.error, self.mtime, self._tags, self._items)
+            before = (self.error, self.mtime, self._tags, self._items, self._order)
             self.load()
-            return not same or (self.error, self.mtime, self._tags, self._items) != before
+            return not same or (self.error, self.mtime, self._tags, self._items, self._order) != before
 
     def _write(self) -> None:
         data = {"version": 1, "tags": self._tags, "items": self._items}
+        if self._order:
+            data["favourite_order"] = self._order
         data.update(self._extra)
         os.makedirs(os.path.dirname(self.path), exist_ok=True)
         fsutil.write_atomic(self.path, json.dumps(data, indent=1, ensure_ascii=False) + "\n")
@@ -191,6 +235,7 @@ class TagStore:
                         return {"ok": False, "error": self.error}
                     res = apply()
                     if res.get("ok"):
+                        self._order = _synced(self._order, self._items)   # a star or unstar, however it came
                         self._write()
                     return res
             except OSError as e:
@@ -216,15 +261,28 @@ class TagStore:
     def snapshot(self) -> dict:
         """The tags and items as tags.json holds them, as copies: what an export writes."""
         with self._lock:
-            return {"version": 1,
-                    "tags": {k: dict(t) for k, t in self._tags.items()},
-                    "items": {ik: list(lst) for ik, lst in self._items.items()}}
+            out = {"version": 1,
+                   "tags": {k: dict(t) for k, t in self._tags.items()},
+                   "items": {ik: list(lst) for ik, lst in self._items.items()}}
+            if self._order:
+                out["favourite_order"] = self.favourite_orders()
+            return out
+
+    def favourite_order(self, kind) -> list:
+        """The Favourites order of a kind as names without the kind; empty when the kind is most used first."""
+        with self._lock:
+            return list(self._order.get(kind, ()))
+
+    def favourite_orders(self) -> dict:
+        """{kind: [name]} for the kinds that have a Favourites order, as copies."""
+        with self._lock:
+            return {kind: list(keys) for kind, keys in self._order.items()}
 
     @classmethod
     def from_raw(cls, raw: dict, path=None) -> "TagStore":
         """A store held in memory only, with the tags of a tags.json-shaped dict (nothing is read or written)."""
         st = cls(path)
-        st._tags, st._items, st._extra = _parse(raw)
+        st._tags, st._items, st._extra, st._order = _parse(raw)
         st._tags = _with_favourite(st._tags)
         return st
 
@@ -414,7 +472,7 @@ class TagStore:
     def import_preview(self, raw) -> dict:
         """What importing this tags.json-shaped dict would do, without doing it:
         {"tags": n in the file, "new_tags": n a merge would add, "items": n tagged items in the file}."""
-        in_tags, in_items, _ = _parse(raw)
+        in_tags, in_items, *_ = _parse(raw)
         with self._lock:
             self.reload_if_changed()
             _, added = self._merge_plan(in_tags)
@@ -422,15 +480,16 @@ class TagStore:
 
     def import_tags(self, raw, mode="merge") -> dict:
         """Brings in the tags of a tags.json-shaped dict.
-        'replace': the tags and items of the file take the place of the current ones (the current file is first
-        copied to tags.json.bak, and keys this module does not know stay).
+        'replace': the tags, items and Favourites orders of the file take the place of the current ones (the current
+        file is first copied to tags.json.bak, and keys this module does not know stay).
         'merge': tags that exist here keep their name and colour; a tag with the name of a local tag under
         another key joins that one; the rest are added. Each item keeps its tags here and gains the file's after
-        them. Returns {"ok", "mode", "added", "renamed": {incoming key: local key}, "items"}; items = the number
-        of items whose tags changed."""
+        them. The Favourites orders here stay and the file's are not read; an item that gains a star goes at the end
+        of its kind's order. Returns {"ok", "mode", "added", "renamed": {incoming key: local key}, "items"}; items =
+        the number of items whose tags changed."""
         if mode not in ("merge", "replace"):
             return {"ok": False, "error": "Import tags as 'merge' or 'replace'."}
-        in_tags, in_items, _ = _parse(raw if isinstance(raw, dict) else {})
+        in_tags, in_items, _, in_order = _parse(raw if isinstance(raw, dict) else {})
 
         def apply():
             if not in_tags:
@@ -446,6 +505,7 @@ class TagStore:
                 changed = sum(1 for ik, lst in in_items.items() if self._items.get(ik) != lst)
                 self._tags = _with_favourite({k: dict(t) for k, t in in_tags.items()})
                 self._items = {ik: list(lst) for ik, lst in in_items.items()}
+                self._order = {kind: list(keys) for kind, keys in in_order.items()}
                 return {"ok": True, "mode": mode, "added": len(in_tags), "renamed": {}, "items": changed}
             renamed, added = self._merge_plan(in_tags)
             for k in added:
@@ -476,5 +536,22 @@ class TagStore:
                     self._items[ik] = lst
                 else:
                     self._items.pop(ik, None)
+            return {"ok": True}
+        return self._change(apply)
+
+    def set_favourite_order(self, kind, keys) -> dict:
+        """Gives a kind its own Favourites order. keys: the names on show, without the kind, in their new order; a
+        saved name that is not among them keeps its place (_merge_order). None or an empty list clears the order, so
+        the kind is most used first again."""
+        def apply():
+            if kind not in ORDER_KINDS:
+                return {"ok": False, "error": f"'{kind}' is not one of {', '.join(ORDER_KINDS)}."}
+            if not keys:
+                self._order.pop(kind, None)
+                return {"ok": True}
+            if not isinstance(keys, (list, tuple)) or not all(isinstance(k, str) for k in keys):
+                return {"ok": False, "error": "A Favourites order is a list of item names."}
+            shown = list(dict.fromkeys(_norm(k) for k in keys))
+            self._order[kind] = _merge_order(self._order.get(kind, ()), shown)
             return {"ok": True}
         return self._change(apply)

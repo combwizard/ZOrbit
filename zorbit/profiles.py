@@ -620,7 +620,7 @@ def _same_bytes(a, b) -> bool:
 def _only_starter_tags(raw) -> bool:
     """True for a tags.json that holds the three starter tags as shipped and nothing tagged."""
     import tags                                    # here, not at the top: tags imports this module
-    found, items, _ = tags._parse(raw)
+    found, items, *_ = tags._parse(raw)
     got = [(k, t["label"], t["color"]) for k, t in tags._with_favourite(found).items()]
     return got == [(k, label, color.upper()) for k, label, color in tags.STARTERS] and not items
 

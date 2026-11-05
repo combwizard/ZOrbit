@@ -712,6 +712,12 @@ body.dragging .irow:hover { background: transparent; }
 .badd:hover { filter: brightness(1.12); }
 .bcard.sel, .bcard.sel:hover { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 13%, transparent); box-shadow: 0 0 0 1px var(--accent); }
 .bcard.skel { pointer-events: none; }
+.b-order { flex: none; }                          /* Most used: while the tab has its own Favourites order */
+.compact .b-order { align-self: flex-start; margin: 0 14px 8px; }
+/* Dragging a card to a new place in Favourites: the card stays where it is, dimmed, and the marker shows the gap it will land in. */
+.b-scroll { position: relative; }   /* the marker sits here, not in the grid, and scrolls with the cards */
+.bcard.reordering { opacity: .45; }
+.bdrop { position: absolute; width: 3px; margin-left: -1.5px; border-radius: 3px; background: var(--accent); box-shadow: 0 0 8px color-mix(in srgb, var(--accent) 60%, transparent); pointer-events: none; z-index: 3; }
 .add-strip { flex: none; display: flex; align-items: center; gap: 12px; padding: 10px 16px; background: var(--bg2); border-top: 1px solid var(--line2); box-shadow: 0 -6px 16px var(--shadow-soft); }
 .as-thumb { display: inline-flex; flex: none; }
 .as-thumb .thumb { border-radius: 8px; background-color: var(--well); }

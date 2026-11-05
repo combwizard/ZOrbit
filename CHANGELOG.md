@@ -8,6 +8,7 @@ All notable changes to this project are listed here. The format follows
 
 ### Added
 
+- Favourites can follow your own order. In the browser or Studio's Library, drag a card to a new place in the **Favourites** folder; each tab has its own order, kept per profile, and a **Favourites** slot on the ring follows it. **Most used** goes back to most used first.
 - **Library folders** on Studio's **Settings** screen, and **Add a folder...** under the folders on the **Library** screen, add folders of your own brushes, alphas, materials and textures. The browser, the Library and the ring search them after ZBrush's own folders, in the order you added them, and each shows as a folder of its own. A file whose name is already taken is listed with its pack folder in brackets, such as **10 (Crack Alphas Vol 1)**, since packs often reuse the same names. ZBrush 2026 and newer only. **Copy report** lists the folders too.
 
 ### Changed

@@ -36,6 +36,7 @@ def _files() -> list[tuple[str, str]]:
         ("ui/mode.js", os.path.join(paths.UI_DIR, "mode.js")),
         ("ui/look-screen.js", os.path.join(paths.UI_DIR, "look-screen.js")),
         ("ui/tagfilter.js", os.path.join(paths.UI_DIR, "tagfilter.js")),
+        ("ui/favorder.js", os.path.join(paths.UI_DIR, "favorder.js")),
         ("ui/gridwindow.js", os.path.join(paths.UI_DIR, "gridwindow.js")),
         ("ui/slots.js", os.path.join(paths.UI_DIR, "slots.js")),
         ("ui/styles.css", os.path.join(paths.UI_DIR, "styles.css")),

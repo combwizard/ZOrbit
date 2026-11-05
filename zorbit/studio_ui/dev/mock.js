@@ -22,7 +22,8 @@
    Tags (state in localStorage rm_tags, seeded with the built-in Favourites tag (always first, cannot be renamed, merged or deleted), the two
    starters and a few tagged brushes, three of them starred): ?tags=empty (only Favourites, nothing tagged),
    ?tagsmany (Favourites and 30 tags with long names), ?tagfail (every tag change is refused), ?tagexists (create and rename always clash with
-   the first ordinary tag). The first two keep their state in memory only, so a reload starts clean.
+   the first ordinary tag). The first two keep their state in memory only, so a reload starts clean. A tab's Favourites order is kept with
+   them (st.favourite_order, as tags.json holds it), and set_favourite_order keeps a key that is not on show in its place, as tags.py does.
    Usage (get_usage / forget_recent; state in localStorage rm_usage_<kind>): a made-up Recent list of six items of that kind and scores for 24
    (the order of Favourites); a pick in the popout moves that item to the front of Recent. ?usage=empty (nothing picked yet, no scores).
    Import and export (Settings): ?importfail (the picked file is refused with a message), ?importcancel (the file dialog is closed),
@@ -410,7 +411,19 @@
     tagStore = st;
     return st;
   }
+  /* tags._synced: each order holds exactly the items of its kind that carry Favourites; a list left empty goes. */
+  function orderSync(st) {
+    var out = {};
+    Object.keys(st.favourite_order || {}).forEach(function (kind) {
+      var starred = Object.keys(st.items).filter(function (ik) { return ik.indexOf(kind + ':') === 0 && st.items[ik].indexOf(FAV) >= 0; }).map(function (ik) { return ik.slice(kind.length + 1); });
+      var kept = st.favourite_order[kind].filter(function (k) { return starred.indexOf(k) >= 0; });
+      kept = kept.concat(starred.filter(function (k) { return kept.indexOf(k) < 0; }));
+      if (kept.length) out[kind] = kept;
+    });
+    st.favourite_order = out;
+  }
   function tagSave() {
+    orderSync(tagStore);
     tagMtime += 1000000;
     if (tagsMode === 'saved') { try { localStorage.setItem('rm_tags', JSON.stringify(tagStore)); } catch (e) {} }
   }
@@ -443,7 +456,7 @@
     st.tags.forEach(function (t) { count[t.key] = 0; });
     Object.keys(st.items).forEach(function (ik) { st.items[ik].forEach(function (k) { if (k in count) count[k]++; }); });
     return { ok: true, tags: st.tags.map(function (t) { var o = { key: t.key, label: t.label, color: t.color, count: count[t.key] }; if (t.key === FAV) o.builtin = true; return o; }),
-      items: clone(st.items), palette: TAG_PALETTE.slice(), mtime_ns: tagMtime, path: profFolder(profiles.editing) + '\\tags.json', error: null };
+      items: clone(st.items), favourite_order: clone(st.favourite_order || {}), palette: TAG_PALETTE.slice(), mtime_ns: tagMtime, path: profFolder(profiles.editing) + '\\tags.json', error: null };
   }
   // Runs one change like TagStore._change: refused under ?tagfail; written (and the time bumped) only when it says ok
   function tagChange(apply) {
@@ -1102,6 +1115,17 @@
         var ks = uniq(keys || []);
         for (var i = 0; i < ks.length; i++) if (!findTag(st, ks[i])) return tagUnknown(ks[i]);
         if (ks.length) st.items[ik] = ks; else delete st.items[ik];
+        return { ok: true };
+      });
+    },
+    set_favourite_order: function (kind, names) {
+      return tagChange(function (st) {
+        if (!ASSET_KIND[kind]) return { ok: false, error: "'" + kind + "' is not one of brush, alpha, material, texture." };
+        st.favourite_order = st.favourite_order || {};
+        if (!names || !names.length) { delete st.favourite_order[kind]; return { ok: true }; }
+        var rest = names.slice(), saved = st.favourite_order[kind] || [];      // tags._merge_order
+        var out = saved.map(function (k) { return names.indexOf(k) >= 0 ? rest.shift() : k; });
+        st.favourite_order[kind] = out.concat(rest);
         return { ok: true };
       });
     },
