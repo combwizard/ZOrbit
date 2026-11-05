@@ -6,7 +6,7 @@ const path = require('path');
 
 const root = path.join(__dirname, '..', '..');
 const M = require(path.join(root, 'zorbit', 'studio_ui', 'mode.js'));
-const ACTIONS = ['brush', 'alpha', 'material', 'texture', 'press', 'set', 'toggle', 'capture', 'tool', 'project', 'steps', 'menu', 'auto', 'tag', 'browser', 'empty'];
+const ACTIONS = ['brush', 'alpha', 'material', 'texture', 'press', 'set', 'toggle', 'capture', 'tool', 'project', 'layout', 'steps', 'menu', 'auto', 'tag', 'browser', 'empty'];
 const kindOf = it => ACTIONS.find(k => it && k in it) || 'brush';
 const defaults = { radius: 145, hint: true, hub: 10, tap_ms: 250, tag_limit: 12, colors: { bg: '#101010' } };
 const fresh = () => ({
@@ -31,9 +31,9 @@ test('the hint line is not a Full setting', () => {
   assert(!target({ kind: 'settings', card: 'set-behaviour', key: 'hint' }));
 });
 
-test('Press and Toggle are everyday item types; Set, Capture, Tool, Project, Steps, Auto, Tag and Browser are Full only', () => {
+test('Press and Toggle are everyday item types; Set, Capture, Tool, Project, Layout, Steps, Auto, Tag and Browser are Full only', () => {
   for (const k of ['brush', 'alpha', 'material', 'texture', 'press', 'toggle', 'menu', 'empty']) assert(!M.kindIsFull(k), k);
-  for (const k of ['set', 'capture', 'tool', 'project', 'steps', 'auto', 'tag', 'browser']) assert(M.kindIsFull(k), k);
+  for (const k of ['set', 'capture', 'tool', 'project', 'layout', 'steps', 'auto', 'tag', 'browser']) assert(M.kindIsFull(k), k);
   const cfg = fresh();
   assert(!needs(cfg));
   cfg.menus.other.items.push({ steps: [] });

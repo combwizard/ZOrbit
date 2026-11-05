@@ -1460,7 +1460,7 @@ class App:
             if "capture" in a:
                 # ZBrush 2022-2025 get a name their plugin can read; a CaptureError stops the whole pick
                 a = {"filepress": capture.BUTTON, "file": capture.target(a["capture"], legacy is not None)}
-            elif "tool" in a or "project" in a:
+            elif any(k in a for k in C.FILE_EXTS):
                 # the file is looked for now, not when the menus loaded; a FileItemError stops the whole pick
                 button, path = fileitem.resolve(a, legacy is not None)
                 a = {"filepress": button, "file": path}

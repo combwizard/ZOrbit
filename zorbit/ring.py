@@ -487,6 +487,17 @@ def _glyph_folder(draw, cx, cy, size, fill):
     draw.rectangle((cx - w, y0 - size * 0.12, cx - w * 0.2, y0 + size * 0.02), fill=fill)
 
 
+def _glyph_layout(draw, cx, cy, size, fill):
+    """A window split into panels (outline: a frame, a divider down the left third and a bar across the right part),
+    size across: the glyph of a Layout slot."""
+    w, h = size * 0.5, size * 0.38
+    lw = max(1, int(size * 0.09))
+    draw.rounded_rectangle((cx - w, cy - h, cx + w, cy + h), radius=size * 0.08, outline=fill, width=lw)
+    x = cx - w * 0.3
+    draw.line([(x, cy - h + lw), (x, cy + h - lw)], fill=fill, width=lw)
+    draw.line([(x, cy), (cx + w, cy)], fill=fill, width=lw)
+
+
 def _glyph_fan(draw, ox, oy, radius, fill):
     """A folding fan: three blades with small gaps, a quarter circle from (ox, oy) opening up and right."""
     box = (ox - radius, oy - radius, ox + radius, oy + radius)
@@ -1308,6 +1319,8 @@ class Ring:
                     _glyph_cube(gd, c, c, ins * 0.5, _rgba(it.color or text, 0.95))
                 elif it.kind == "project":         # Project: a folder
                     _glyph_folder(gd, c, c, ins * 0.5, _rgba(it.color or text, 0.95))
+                elif it.kind == "layout":          # Layout: a window split into panels
+                    _glyph_layout(gd, c, c, ins * 0.5, _rgba(it.color or text, 0.95))
                 elif more:                         # a More slot: three dots
                     _glyph_more(gd, c, c, ins * 0.5, _rgba(text, 0.9))
                 else:

@@ -13,30 +13,21 @@ The issues themselves, where people can comment and add a thumbs-up:
 
 ## Order of work
 
-Worked out on 3 Nov 2026. A new issue goes on the board straight away and joins this order the next time it is
+Worked out on 5 Nov 2026. A new issue goes on the board straight away and joins this order the next time it is
 worked out.
 
-1. **Checks that need a person or real hardware.** The test VM can do the rest:
-   - [#103](https://github.com/combwizard/ZOrbit/issues/103): only the black flash is left, on the PC that reported it.
-   - [#23](https://github.com/combwizard/ZOrbit/issues/23) whenever a standard (non-admin) account is to hand.
-2. **Medium:** [#108](https://github.com/combwizard/ZOrbit/issues/108) first (small), then
-   [#109](https://github.com/combwizard/ZOrbit/issues/109) (pick hide, dim or a message first);
-   [#116](https://github.com/combwizard/ZOrbit/issues/116) (Copy report on Status);
-   [#106](https://github.com/combwizard/ZOrbit/issues/106) (timer inside the browser);
-   [#31](https://github.com/combwizard/ZOrbit/issues/31) then
-   [#30](https://github.com/combwizard/ZOrbit/issues/30) (one "set the file, then press" action);
-   [#24](https://github.com/combwizard/ZOrbit/issues/24) (its check worked out);
-   [#104](https://github.com/combwizard/ZOrbit/issues/104) (the #103 checks of 3 Nov failed on monitors of
-   different sizes; #103's checks are its test list). The snap layouts flyout went to
-   [#156](https://github.com/combwizard/ZOrbit/issues/156).
-3. **Ring look, back to back:** [#37](https://github.com/combwizard/ZOrbit/issues/37) (band helper), then
-   [#35](https://github.com/combwizard/ZOrbit/issues/35) (`Item.colors`), then
-   [#36](https://github.com/combwizard/ZOrbit/issues/36). Retake the ring pictures once at the end.
-4. **Design first:** [#98](https://github.com/combwizard/ZOrbit/issues/98),
-   [#39](https://github.com/combwizard/ZOrbit/issues/39) then [#40](https://github.com/combwizard/ZOrbit/issues/40)
-   (settle the favourites data first),
-   [#26](https://github.com/combwizard/ZOrbit/issues/26) last. Keep new IPC code out of `win32.py` and `radiald.py`.
+1. **Before 1.0:** [#170](https://github.com/combwizard/ZOrbit/issues/170).
+2. **Next:** [#39](https://github.com/combwizard/ZOrbit/issues/39), the drag to reorder. Tags may already cover its
+   named lists, so settle that before building them. [#40](https://github.com/combwizard/ZOrbit/issues/40) waits for
+   it, since the strip needs the favourites data settled.
+3. **Ring look, back to back, if wanted:** [#35](https://github.com/combwizard/ZOrbit/issues/35) (`Item.colors`; slots
+   that are not round are the hard part), then [#37](https://github.com/combwizard/ZOrbit/issues/37) (a large fan has
+   two staggered rows, so no one arc runs through its slots) and
+   [#36](https://github.com/combwizard/ZOrbit/issues/36), the least useful. Retake the ring pictures once at the end.
+4. **When someone asks:** [#98](https://github.com/combwizard/ZOrbit/issues/98) (design first) and
+   [#26](https://github.com/combwizard/ZOrbit/issues/26). Keep new IPC code out of `win32.py` and `radiald.py`.
 
 Parked for now: [#29](https://github.com/combwizard/ZOrbit/issues/29) (Keep, Remove and Hide need more
-detailing); the project-name half of [#94](https://github.com/combwizard/ZOrbit/issues/94) (the window title only
-ever says ZBrush, so the plugin would have to report what is open).
+detailing); [#94](https://github.com/combwizard/ZOrbit/issues/94) (the window title only ever says ZBrush, so the
+plugin would have to report what is open); [#156](https://github.com/combwizard/ZOrbit/issues/156) (an untested
+workaround over WebView2, for a small gain).

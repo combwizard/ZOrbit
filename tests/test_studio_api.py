@@ -222,7 +222,7 @@ def test_choose_folder_returns_the_picked_path_or_none(api, tmp_path, monkeypatc
     assert api.choose_folder() is None
 
 
-def test_choose_file_returns_the_picked_path_for_tool_and_project_only(api, tmp_path, monkeypatch):
+def test_choose_file_returns_the_picked_path_for_tool_project_and_layout_only(api, tmp_path, monkeypatch):
     _fake_webview(monkeypatch)
     opened = []
 
@@ -234,8 +234,10 @@ def test_choose_file_returns_the_picked_path_for_tool_and_project_only(api, tmp_
     assert opened[-1] == ((2,), {"file_types": ("ZBrush tool (*.ztl)",)})     # FileDialog.OPEN, the tool filter
     assert api.choose_file("project") == str(tmp_path / "Hero.ztl")
     assert opened[-1][1]["file_types"] == ("ZBrush project (*.zpr)",)
+    assert api.choose_file("layout") == str(tmp_path / "Hero.ztl")
+    assert opened[-1][1]["file_types"] == ("ZBrush UI layout (*.cfg)",)
     assert api.choose_file("capture") is None and api.choose_file(["tool"]) is None and api.choose_file("") is None
-    assert len(opened) == 2                                                  # a kind it refuses never opens a dialog
+    assert len(opened) == 3                                                  # a kind it refuses never opens a dialog
     api._window = types.SimpleNamespace(create_file_dialog=lambda *a, **k: None)
     assert api.choose_file("tool") is None
 

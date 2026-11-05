@@ -80,7 +80,7 @@
   var TAG_DEFAULTS = { radius: 145, slot: 72, dead_zone: 38, labels: 'name', slot_corner: 0.28, border_width: 2, icon_scale: 1, hub_style: 'dot', hub_color: 'accent', hub_glow: 1,
     glow_color: '', glow_opacity: 0.55, label_color: 'text', when_full: 'grow', look: undefined,
     hub: 10, slot_shape: 'circle', tag_colors: 'tint', tag_band: 'medium', tag_band_opacity: 0.45, tag_glow_opacity: 0.4, tag_tint_opacity: 0.3, tag_tint_style: 'gradient', tag_tint_blend: 'multiply' };
-  var KINDS = ['brush', 'alpha', 'material', 'texture', 'press', 'set', 'toggle', 'capture', 'tool', 'project', 'steps', 'menu', 'auto', 'tag', 'browser', 'empty'];
+  var KINDS = ['brush', 'alpha', 'material', 'texture', 'press', 'set', 'toggle', 'capture', 'tool', 'project', 'layout', 'steps', 'menu', 'auto', 'tag', 'browser', 'empty'];
   if (q.has('kinds') && saved.menus && saved.menus.tools) saved.menus.tools.items.push({ tag: 'blocking' }, { browser: '' });
   var mtime = 1700000000000000000, conflictDone = false;
   var FAV = 'favourite';
@@ -143,8 +143,8 @@
     "ring.labels: 'all' unknown; one of name, none", "ring.tag_band: 'huge' unknown; one of none, hairline, narrow, medium, wide", 'ring.raduis: unknown setting (did you mean radius?)',
     'menus: must be a non-empty object of id -> menu',
     'menu odd: not an object', "menu tag:x: ids starting with 'tag:' are reserved for tag submenus", "menu brushes: unknown setting 'hotkye' (did you mean hotkey?)",
-    'menu brushes item 1: not an object', 'menu brushes item 2: needs exactly one of brush, alpha, material, texture, press, set, toggle, capture, tool, project, steps, menu, auto, tag, browser',
-    "menu brushes item 3: 'set' needs a 'value'", "menu brushes item 3: 'set' value must be a number", "menu brushes item 4: 'steps' must be a non-empty list of brush/alpha/material/texture/press/set/toggle/capture/tool/project actions",
+    'menu brushes item 1: not an object', 'menu brushes item 2: needs exactly one of brush, alpha, material, texture, press, set, toggle, capture, tool, project, layout, steps, menu, auto, tag, browser',
+    "menu brushes item 3: 'set' needs a 'value'", "menu brushes item 3: 'set' value must be a number", "menu brushes item 4: 'steps' must be a non-empty list of brush/alpha/material/texture/press/set/toggle/capture/tool/project/layout actions",
     'menu brushes item 4 step 2: not an object', "menu brushes item 4 step 1: 'brush' must be a non-empty string", 'menu brushes item 4 step 2: steps cannot open menus, nest steps, be auto slots, be empty slots or open tags or the browser',
     "menu brushes item 5: 'auto' must be one of brush", "menu brushes item 5: 'browser' must be a string (a tag key, or \"\" for everything)", "menu brushes item 5: browser 'kind' must be one of brush, alpha, material, texture",
     "menu brushes item 6: 'press' must be a non-empty string", "menu brushes item 6: brush name 'C:\\x\\Clay' must not contain \\ / : or ..", "menu brushes item 7: submenu 'nope' does not exist",
@@ -184,11 +184,11 @@
     return { menus: out, root: map[root], renames: ren };
   }
 
-  // What config.py (_file_problem) says is wrong with a Tool or Project path, or "" when nothing is: a full path on this PC.
+  // What config.py (_file_problem) says is wrong with a Tool, Project or Layout path, or "" when nothing is: a full path on this PC.
   function fileProblem(kind, path) {
-    var text = String(path).trim(), ext = kind === 'tool' ? '.ztl' : '.zpr';
+    var text = String(path).trim(), ext = { tool: '.ztl', project: '.zpr', layout: '.cfg' }[kind];
     if (/^\\\\/.test(text)) return 'must be on this PC, not a network path';
-    if (!/^[A-Za-z]:[\\\/]/.test(text)) return "'" + path + "' must be a full path, such as C:\\Models\\Hero" + ext;
+    if (!/^[A-Za-z]:[\\\/]/.test(text)) return "'" + path + "' must be a full path, such as " + { tool: 'C:\\Models\\Hero.ztl', project: 'C:\\Projects\\Hero.zpr', layout: 'C:\\Layouts\\Sculpt.cfg' }[kind];
     // A project is a .zpr file or a folder: anything not ending .zpr is a folder, but the mock cannot see the disk, so an existing non-.zpr file passes here.
     if (kind === 'project') return text.toLowerCase().slice(-4) === '.ztl' ? "'" + path + "' must be a .zpr file or a folder" : '';
     if (text.toLowerCase().slice(-ext.length) === ext) return '';
@@ -211,7 +211,7 @@
         if (kinds.length !== 1) { out.push(where + ': needs exactly one of ' + KINDS.join(', ')); return; }
         var k = kinds[0];
         if (k === 'steps') {
-          if (!Array.isArray(it.steps) || !it.steps.length) { out.push(where + ": 'steps' must be a non-empty list of brush/alpha/material/texture/press/set/toggle/capture/tool/project actions"); return; }
+          if (!Array.isArray(it.steps) || !it.steps.length) { out.push(where + ": 'steps' must be a non-empty list of brush/alpha/material/texture/press/set/toggle/capture/tool/project/layout actions"); return; }
           for (var j = 0; j < it.steps.length; j++) {
             var sk = KINDS.filter(function (x) { return it.steps[j] && x in it.steps[j]; });
             if (sk.some(function (x) { return ['menu', 'steps', 'auto', 'tag', 'browser', 'empty'].indexOf(x) >= 0; })) {
@@ -225,7 +225,7 @@
         else if (k === 'set' && typeof it.value !== 'number') { out.push(where + ": 'set' value must be a number"); return; }
         else if (k === 'capture') { if (typeof it.capture !== 'string') { out.push(where + ": 'capture' must be a folder path, or \"\" for the default folder"); return; } }
         else if (typeof it[k] !== 'string' || !it[k].trim()) { out.push(where + ": '" + k + "' must be a non-empty string"); return; }
-        else if (k === 'tool' || k === 'project') { var why = fileProblem(k, it[k]); if (why) { out.push(where + ': ' + k + ' ' + why); return; } }
+        else if (k === 'tool' || k === 'project' || k === 'layout') { var why = fileProblem(k, it[k]); if (why) { out.push(where + ': ' + k + ' ' + why); return; } }
         var gc = it.style && it.style.glow_color;
         if (gc && !(typeof gc === 'string' && /^(#[0-9a-fA-F]{6}|bg|accent|highlight|text|lines)$/.test(gc))) out.push(where + ': style.glow_color: ' + pyr(gc) + ' is not a #rrggbb colour or a theme colour (bg, accent, highlight, text, lines)');
         if (it.glow !== undefined) out.push(where + ": unknown setting 'glow' (glow is now style.glow_color)");
@@ -1165,7 +1165,7 @@
     },
     choose_file: function (kind) {
       // The file dialog for a Tool or a Project: the chosen file as text (the mock always picks the same one), or null.
-      return Promise.resolve(kind === 'tool' ? 'D:/Models/Hero.ztl' : kind === 'project' ? 'D:/Projects/Hero.zpr' : null);
+      return Promise.resolve(kind === 'tool' ? 'D:/Models/Hero.ztl' : kind === 'project' ? 'D:/Projects/Hero.zpr' : kind === 'layout' ? 'D:/Layouts/Sculpt.cfg' : null);
     },
     add_zbrush_folder: function () {
       // A ZBrush 2026 or later: ok, python: true. It joins the modern installs (Setup lists it, with Fix while it is unregistered, and Forget).

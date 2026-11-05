@@ -1,4 +1,4 @@
-"""The Tool and Project items: which file the pick names (fileitem.py), how the app turns the item into the request
+"""The Tool, Project and Layout items: which file the pick names (fileitem.py), how the app turns the item into the request
 for the bridges (radiald._actions), and what it does when the file or folder is not there."""
 import json
 import os
@@ -33,6 +33,10 @@ def project_item(path, label="Hero"):
     return config.Item(label=label, kind="project", data={"project": str(path)})
 
 
+def layout_item(path, label="Sculpt"):
+    return config.Item(label=label, kind="layout", data={"layout": str(path)})
+
+
 def request(app):
     return json.loads((app.tmpdata / "request.json").read_text(encoding="utf-8"))
 
@@ -48,7 +52,8 @@ def test_a_project_file_is_opened_with_file_open(tmp_path):
     assert fileitem.resolve({"project": str(f)}) == ("File:Open", fwd(f))
 
 
-@pytest.mark.parametrize("name,key", [("Hero.ZTL", "tool"), ("Hero.Ztl", "tool"), ("Hero.ZPR", "project")])
+@pytest.mark.parametrize("name,key", [("Hero.ZTL", "tool"), ("Hero.Ztl", "tool"), ("Hero.ZPR", "project"),
+                                      ("Sculpt.CFG", "layout")])
 def test_the_extension_may_be_in_any_case(tmp_path, name, key):
     f = make(tmp_path / name)
     assert fileitem.resolve({key: str(f)})[1] == fwd(f)
@@ -71,6 +76,38 @@ def test_a_folder_in_place_of_a_tool_file_is_an_error(tmp_path):
     with pytest.raises(fileitem.FileItemError) as e:
         fileitem.resolve({"tool": str(tmp_path / "Hero.ztl")})
     assert e.value.kind == "file"
+
+
+def test_a_layout_is_loaded_with_load_ui(tmp_path):
+    f = make(tmp_path / "Sculpt.cfg")
+    assert fileitem.resolve({"layout": str(f)}) == ("Preferences:Config:Load Ui", fwd(f))
+
+
+def test_a_layout_file_that_is_not_there_is_an_error_that_names_it(tmp_path):
+    with pytest.raises(fileitem.FileItemError) as e:
+        fileitem.resolve({"layout": str(tmp_path / "Gone.cfg")})
+    assert e.value.kind == "file" and "Gone.cfg" in e.value.reason and "layout" in e.value.reason
+
+
+def test_a_folder_in_place_of_a_layout_file_is_an_error(tmp_path):
+    (tmp_path / "Sculpt.cfg").mkdir()
+    with pytest.raises(fileitem.FileItemError) as e:
+        fileitem.resolve({"layout": str(tmp_path / "Sculpt.cfg")})
+    assert e.value.kind == "file"
+
+
+def test_a_layout_never_searches_a_folder(tmp_path):
+    make(tmp_path / "Sculpt.cfg")
+    with pytest.raises(fileitem.FileItemError) as e:
+        fileitem.resolve({"layout": str(tmp_path)})
+    assert e.value.kind == "file"
+
+
+def test_describe_says_what_a_layout_does(tmp_path):
+    f = make(tmp_path / "Sculpt.cfg")
+    assert fileitem.describe({"layout": str(f)}) == f"loads the layout {fwd(f)}"
+    gone = tmp_path / "Gone.cfg"
+    assert fileitem.describe({"layout": str(gone)}) == f"loads the layout {fwd(gone)}, not there"
 
 
 # --- a folder: the newest project in it -------------------------------------------------------------
@@ -203,6 +240,14 @@ def test_a_name_with_a_short_form_is_fine_for_2022_to_2025(tmp_path, monkeypatch
     assert fileitem.resolve({"tool": str(f)}, legacy=True)[1] == fwd(f)      # the app keeps the real name
 
 
+def test_a_name_the_plugin_cannot_read_is_refused_for_a_layout_too(tmp_path, monkeypatch):
+    monkeypatch.setattr(zscript_bridge, "ascii_file", lambda p: p)
+    f = make(tmp_path / "Gr\u00f6\u00dfe.cfg")
+    with pytest.raises(fileitem.FileItemError) as e:
+        fileitem.resolve({"layout": str(f)}, legacy=True)
+    assert e.value.kind == "name" and "layout" in e.value.reason
+
+
 def test_a_plain_name_needs_nothing_for_2022_to_2025(tmp_path):
     f = make(tmp_path / "Hero.zpr")
     assert fileitem.resolve({"project": str(f)}, legacy=True)[1] == fwd(f)
@@ -249,6 +294,37 @@ def test_a_project_folder_sends_the_newest_project(app, tmp_path):
     new.unlink()                                                # picked again later: whatever is newest then
     app.send(project_item(tmp_path))
     assert request(app)["actions"][0]["file"].endswith("Blockout_011.zpr")
+
+
+def test_the_pick_becomes_the_general_file_action_for_a_layout(app, tmp_path):
+    f = make(tmp_path / "Sculpt.cfg")
+    app.send(layout_item(f))
+    assert request(app)["actions"] == [{"filepress": "Preferences:Config:Load Ui", "file": fwd(f)}]
+    assert app.toasts == []
+
+
+def test_a_layout_in_steps_goes_out_in_order(app, tmp_path):
+    f = make(tmp_path / "Sculpt.cfg")
+    steps = config.Item(label="Set up", kind="steps", data={"steps": [
+        {"layout": str(f)}, {"press": "Tool:Masking:Clear"}]})
+    app.send(steps)
+    assert request(app)["actions"] == [{"filepress": "Preferences:Config:Load Ui", "file": fwd(f)},
+                                       {"press": "Tool:Masking:Clear"}]
+
+
+def test_a_layout_that_is_not_there_sends_nothing_and_says_so(app, tmp_path):
+    app.send(layout_item(tmp_path / "Gone.cfg"))
+    assert app.toasts == [radiald.MSG_FILE_MISSING] and not (app.tmpdata / "request.json").exists()
+    [(seq, it, route, sent, source, menu, reason)] = app.notes
+    assert (route, sent) == ("none", False) and "Gone.cfg" in reason
+
+
+def test_the_request_text_for_zbrush_2022_to_2025_names_the_layout_button(app, tmp_path):
+    f = make(tmp_path / "Sculpt.cfg")
+    app._legacy_installed = lambda: True
+    app.send(layout_item(f))
+    lines = (app.tmpdata / "request.txt").read_text(encoding="mbcs").splitlines()
+    assert lines[3:5] == ["file", "Preferences:Config:Load Ui"] and lines[5] == fwd(f)
 
 
 def test_both_in_steps_go_out_in_order(app, tmp_path):
