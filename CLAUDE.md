@@ -16,7 +16,9 @@ The user docs are the Markdown pages in `docs/`. Every push to `main` that touch
 - **Pictures:** the Studio and browser screenshots are made by `python tools/docs_shots.py` (headless Edge on the
   mock UI, recorded from a fresh install; `--record` re-records after a UI or API change, and the `SHOTS` table says
   what each picture shows). When a change alters a screen that has a picture, retake it and look it over before
-  committing. The ring pictures and GIFs (`ring.png`, `fan.png`, `looks.png` and the rest of the `SHOTS` table in
+  committing. The pictures show no version (the script takes the chip at the top out, and the update dialog in the
+  mock stays at the 0.18.0 to 0.18.1 example), so a release retakes nothing; retake only the pictures of screens
+  that changed. The ring pictures and GIFs (`ring.png`, `fan.png`, `looks.png` and the rest of the `SHOTS` table in
   the script, which says what each shows) are made by `python tools/ring_shots.py` from the real renderer in the
   starter menus. When a change alters how the ring looks, run it and look the pictures over before committing.
 - **Build the docs** after editing them: `mkdocs build --strict` (`pip install -r requirements-docs.txt` first). It

@@ -247,6 +247,8 @@ async def shoot(page, base, name, spec):
     for step in spec.get("steps", []):
         await page.js(step)
         await asyncio.sleep(0.5)
+    # No version in a picture: the chip at the top would change every picture at every release.
+    await page.js("(() => { const c = document.getElementById('versionChip'); if (c) c.remove(); return true; })()")
     box = None
     if clip:
         # The clip expression may change the page (card() hides the other cards), so it runs once, and the capture
