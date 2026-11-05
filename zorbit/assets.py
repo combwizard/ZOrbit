@@ -3,7 +3,7 @@
 An asset is identified by its file stem, matched without case or spaces; the first folder that has it wins
 (same rule as brushes, and one walker for all: brushes.walk_sources). Every public function takes a kind first: "brush" is handled by brushes.py, so callers
 need one code path for all four. Thumbnails of the three new kinds are cached beside the brush ones as
-{kind}_{stem}_{mtime_ns}_{size}.png; images that are not square are fitted, centred, on a transparent square.
+{kind}_{stem}_{tag}_{mtime_ns}_{size}.png (tag: a hash of the full path); images that are not square are fitted, centred, on a transparent square.
 
 Decoders: materials (.zmt) hold the same icon block as a .zbp brush (zbp.py); alphas are mostly 16-bit
 greyscale PSDs that Pillow cannot open, so _psd_gray reads the raw uncompressed plane; textures go through
@@ -37,7 +37,10 @@ LEGACY = {"alpha": "ZAlphas", "material": "ZMaterials", "texture": "ZTextures"} 
 
 _index: dict[str, dict[str, Path]] = {}
 _install_index: dict[tuple, dict[str, Path]] = {}
-_index_lock = threading.Lock()
+_index_lock = threading.Lock()      # held only to swap what a walk made in: find() never waits for a walk
+_walks: dict = {}                   # kind -> the brushes.Walk _index[kind] was built from
+_walk_t0: dict[str, float] = {}     # kind -> time.perf_counter() when that walk began
+_build_locks = {k: threading.Lock() for k in KINDS}     # one walk of a kind at a time
 _write_lock = threading.Lock()
 RESCAN_GAP_S = 5.0                  # a missing asset rebuilds its index at most this often
 generation = 0                      # counts index builds; expand.py drops its cached tag fans when it changes
@@ -68,6 +71,7 @@ def sources(kind: str) -> list[tuple[str, Path, bool]]:
                     (f"install Lightbox/{f}", Path(ins) / "Lightbox" / f, True)]
     elif ins:
         src += install_sources(ins, kind)       # 2022-2025 write no userassets_path.txt: all in the installation
+    src += [(_brushes.added_label(p), p, True) for p in _brushes.user_folders(kind)]    # the user's own folders come last
     return src
 
 
@@ -84,16 +88,35 @@ def install_sources(ins, kind: str) -> list[tuple[str, Path, bool]]:
 
 
 def source_labels(kind: str) -> dict[str, str]:
-    """Display name for each source label: My <Folder>, ZBrush or Lightbox."""
+    """Display name for each source label: My <Folder>, ZBrush or Lightbox, or the name of a folder the user added."""
     if kind == "brush":
-        return {"user ZStartup/BrushPresets": "My Brushes", "install ZStartup/BrushPresets": "My Brushes",
-                "install ZData/BrushPresets": "ZBrush", "install Lightbox/Brushes": "Lightbox",
-                "install ZBrushes": "Lightbox"}
-    if kind not in FOLDER:
+        out = {"user ZStartup/BrushPresets": "My Brushes", "install ZStartup/BrushPresets": "My Brushes",
+               "install ZData/BrushPresets": "ZBrush", "install Lightbox/Brushes": "Lightbox",
+               "install ZBrushes": "Lightbox"}
+    elif kind in FOLDER:
+        f = FOLDER[kind]
+        out = {f"user ZStartup/{f}": f"My {f}", f"install ZStartup/{f}": f"My {f}", f"install ZData/{f}": "ZBrush",
+               f"install Lightbox/{f}": "Lightbox", f"install {LEGACY[kind]}": "Lightbox"}
+    else:
         return {}
-    f = FOLDER[kind]
-    return {f"user ZStartup/{f}": f"My {f}", f"install ZStartup/{f}": f"My {f}", f"install ZData/{f}": "ZBrush",
-            f"install Lightbox/{f}": "Lightbox", f"install {LEGACY[kind]}": "Lightbox"}
+    fs = _brushes.user_folders(kind)
+    out.update({_brushes.added_label(p): name for p, name in zip(fs, _brushes.display_names(fs))})
+    return out
+
+
+def name_of(kind: str, name) -> str | None:
+    """The name an item is listed under (a file of an added folder may be "10 (PackA)", its stem 10), from a name
+    or key in any spelling; None when there is no walk yet or the name is not in it."""
+    walk = last_walk(kind)
+    if walk is None:
+        return None
+    return walk.names.get(_brushes._tags._norm(str(name)))
+
+
+def names(kind: str) -> dict:
+    """{tags._norm(name): the listed name} of the last walk of this kind, {} before the first one."""
+    walk = last_walk(kind)
+    return walk.names if walk is not None else {}
 
 
 def exts(kind: str) -> tuple:
@@ -111,19 +134,27 @@ def _built(kind: str, ins: str = "", changed: bool = True) -> None:
 
 def library(kind: str):
     """The folders of this kind walked once: a brushes.Walk with the list the browser shows and the lookup index.
-    The index is stored too, so the list and find() come from the same walk. A walk that could not read a source
-    (an unplugged drive) leaves the index that was there alone; see brushes.walk_error."""
+    The index is stored too, so the list and find() come from the same walk. A folder that could not be read (an
+    unplugged drive) keeps the items it had and the others are read afresh; see brushes.merge_walk. The walk runs
+    outside _index_lock, so find() does not wait for it."""
     if kind == "brush":
         before = _brushes.has_index()
         walk, changed = _brushes.library()
         _built(kind, changed=changed or not before)
         return walk
-    with _index_lock:
-        walk = _brushes.walk_sources(sources(kind), exts(kind))
-        before = _index.get(kind)
-        _index[kind], changed = _brushes.keep_index(before, walk)
-        _built(kind, changed=changed or before is None)
-        return walk
+    asked = time.perf_counter()
+    lock = _build_locks.get(kind) or _build_locks.setdefault(kind, threading.Lock())
+    with lock:
+        if kind in _walks and _walk_t0.get(kind, float("-inf")) > asked:     # a walk that began after we asked
+            return _walks[kind]
+        t0 = time.perf_counter()
+        new = _brushes.walk_sources(sources(kind), exts(kind))
+        with _index_lock:
+            before = _index.get(kind)
+            merged = _brushes.merge_walk(_walks.get(kind), new)
+            _walks[kind], _index[kind], _walk_t0[kind] = merged, merged.index, t0
+            _built(kind, changed=before is None or before != merged.index)
+    return merged
 
 
 def index(kind: str, refresh: bool = False) -> dict[str, Path]:
@@ -132,11 +163,23 @@ def index(kind: str, refresh: bool = False) -> dict[str, Path]:
         if refresh or not _brushes.has_index():
             library(kind)
         return _brushes.brush_index()
-    with _index_lock:
-        have = kind in _index
-    if refresh or not have:
+    idx = _index.get(kind)
+    if refresh or idx is None:
         library(kind)
-    return _index[kind]
+        idx = _index[kind]
+    return idx
+
+
+def last_walk(kind: str):
+    """The Walk the index of this kind was built from, or None before the first build."""
+    if kind == "brush":
+        return _brushes.last_walk()
+    return _walks.get(kind)
+
+
+def has_built(kind: str) -> bool:
+    """Whether the index of this kind was built (by a walk, or by a test that set it)."""
+    return _brushes.has_index() if kind == "brush" else kind in _index
 
 
 def install_index(ins, kind: str) -> dict[str, Path]:
@@ -148,9 +191,13 @@ def install_index(ins, kind: str) -> dict[str, Path]:
             _built(kind, os.path.normcase(str(ins)))
         return idx
     key = (kind, os.path.normcase(str(ins)))
+    idx = _install_index.get(key)
+    if idx is not None:
+        return idx
+    idx = _brushes.walk_sources(install_sources(ins, kind), exts(kind)).index    # outside the lock; a second builder's walk is wasted
     with _index_lock:
         if key not in _install_index:
-            _install_index[key] = _brushes.walk_sources(install_sources(ins, kind), exts(kind)).index
+            _install_index[key] = idx
             _built(kind, key[1])
         return _install_index[key]
 
@@ -300,7 +347,7 @@ def _resolve(kind: str, name_or_path) -> Path | None:
 
 
 def _cache_file(kind: str, p: Path, size: int) -> Path:
-    return _brushes._cache_dir() / f"{kind}_{p.stem}_{p.stat().st_mtime_ns}_{size}.png"
+    return _brushes._cache_dir() / f"{kind}_{p.stem}_{_brushes._cache_tag(p)}_{p.stat().st_mtime_ns}_{size}.png"
 
 
 def thumbnail(kind: str, name_or_path, size: int = 96):

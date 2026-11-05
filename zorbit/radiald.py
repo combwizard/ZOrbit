@@ -61,6 +61,7 @@ import zscript_bridge       # noqa: E402
 
 try:
     import assets           # noqa: E402
+    import brushes          # noqa: E402  (assets imports it too; the library folders are read through it)
 except Exception:           # thumbnails are optional
     assets = None
 
@@ -379,6 +380,11 @@ class App:
         self._bad_mtime = None          # mtime of a radial.json that failed to load
         self._theme = "dark"            # the theme the config was last loaded under
         self._theme_sig = ("dark", "")  # theme.signature() of that load: the name, and for zbrush the scheme's digest
+        self._lib_sig = None            # brushes.user_folders_signature() last seen; None before the first check
+        self._lib_sig_failed = False    # reading it failed (logged once until it works again)
+        self._lib_rebuild = None        # the thread reading the library again, or None
+        self._lib_again = False         # the folders changed (again): the thread makes one more pass
+        self._lib_lock = threading.Lock()   # guards _lib_rebuild and _lib_again, so a change is never lost
         self.slots = []                 # menus with hotkeys, indexed for WM_APP_OPEN
         self._commands = collections.deque()    # (what to do, whether it is a pick) for commands from other programs
         self._command_wait = None       # when the pick at the head of that queue has to stop waiting
@@ -435,6 +441,61 @@ class App:
         self._popout_zb = None          # (ZBrush hwnd, its install) from when the browser was last opened
         self._browser_pick = None       # brush Item picked in the popout, waiting for ZBrush to have focus
         self._browser_pick_deadline = 0.0
+
+    # --- library folders -------------------------------------------------------------------------
+    def _check_library_folders(self) -> None:
+        """Reads the library again when the user changed the folders in Studio ("library_folders" in studio.json,
+        read on each tick with a bytes-compared cache). The walk runs on its own thread; a change while it runs
+        makes it go round once more."""
+        if assets is None:
+            return
+        try:
+            sig = brushes.user_folders_signature()
+        except Exception as e:
+            if not self._lib_sig_failed:
+                log(f"library folders: cannot read them: {e!r}")
+                self._lib_sig_failed = True
+            return
+        self._lib_sig_failed = False
+        if self._lib_sig is None:              # the first look: what the indexes are (or will be) built from
+            self._lib_sig = sig
+            return
+        if sig == self._lib_sig:
+            return
+        self._lib_sig = sig
+        log("library folders changed: reading the library again")
+        with self._lib_lock:
+            self._lib_again = True
+            if self._lib_rebuild is None:
+                t = threading.Thread(target=self._rebuild_libraries, name="library-rebuild", daemon=True)
+                self._lib_rebuild = t
+                t.start()
+
+    def _rebuild_libraries(self) -> None:
+        """Walks every kind already built again, so the ring and the tag fans find what the new folders hold.
+        A kind never built is built from the new folders the first time it is wanted."""
+        done = set()
+        try:
+            while True:
+                with self._lib_lock:            # cleared in the same hold as the last look, so no change slips by
+                    if not self._lib_again:
+                        self._lib_rebuild = None
+                        break
+                    self._lib_again = False
+                for kind in assets.ALL_KINDS:
+                    if not assets.has_built(kind):
+                        continue
+                    try:
+                        assets.library(kind)
+                        done.add(kind)
+                    except Exception as e:
+                        log(f"library: cannot read the {kind} folders again: {e!r}")
+        except Exception:
+            log("library rebuild error:\n" + traceback.format_exc())
+            with self._lib_lock:
+                self._lib_rebuild = None
+            return
+        log(f"library read again: {len(done)} kinds, generation {assets.generation}")
 
     # --- config ----------------------------------------------------------------------------------
     def load_config(self, force=False, balloon=True) -> None:
@@ -914,6 +975,7 @@ class App:
                 elif wparam == TIMER_CONFIG:
                     self._check_stuck_keys()
                     self._check_profile()       # before load_config, so a renamed-away path is never read first
+                    self._check_library_folders()
                     self.load_config()          # a new or changed hotkey must work before any ring opens
                 elif wparam == TIMER_BROWSER_PICK:
                     self._browser_pick_tick()
@@ -1386,7 +1448,9 @@ class App:
         path = assets.find(item.kind, item.data[item.kind]) if assets is not None else None
         if path is None:
             return None
-        name = os.path.splitext(os.path.basename(str(path)))[0]
+        name = assets.name_of(item.kind, item.data[item.kind])      # the listed name: a qualified one such as "10 (PackA)"
+        if name is None:
+            name = os.path.splitext(os.path.basename(str(path)))[0]
         return C.Item(label=name, kind=item.kind, data={item.kind: name})
 
     def _hotkey_profile(self):
@@ -1460,7 +1524,7 @@ class App:
             if "capture" in a:
                 # ZBrush 2022-2025 get a name their plugin can read; a CaptureError stops the whole pick
                 a = {"filepress": capture.BUTTON, "file": capture.target(a["capture"], legacy is not None)}
-            elif "tool" in a or "project" in a:
+            elif any(k in a for k in C.FILE_EXTS):
                 # the file is looked for now, not when the menus loaded; a FileItemError stops the whole pick
                 button, path = fileitem.resolve(a, legacy is not None)
                 a = {"filepress": button, "file": path}

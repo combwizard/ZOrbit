@@ -67,6 +67,7 @@ Schema (all keys optional except menus):
   {"tool": "D:/Models/Hero.ztl"}                 load that tool (Tool:Load Tool); fileitem.py
   {"project": "D:/Projects/Hero.zpr"}            open that project (File:Open); a folder instead of a file means the
                                                  newest .zpr in it, worked out at each pick
+  {"layout": "D:/Layouts/Sculpt.cfg"}            load that ZBrush UI layout (Preferences:Config:Load Ui); fileitem.py
   {"steps": [<action>, ...]}                     run several actions in order
   {"menu": "<id>"}                               open another ring in place
   {"auto": "brush"}                              a slot the app fills with a brush you pick often (usage.py)
@@ -87,9 +88,10 @@ from dataclasses import dataclass, field
 import looks as L
 import theme as T
 
-ACTION_KEYS = ("brush", "alpha", "material", "texture", "press", "set", "toggle", "capture", "tool", "project",
+ACTION_KEYS = ("brush", "alpha", "material", "texture", "press", "set", "toggle", "capture", "tool", "project", "layout",
                "steps", "menu", "auto", "tag", "browser", "empty")
-FILE_EXTS = {"tool": ".ztl", "project": ".zpr"}     # what a Tool and a Project item must end with (a project may be a folder)
+FILE_EXTS = {"tool": ".ztl", "project": ".zpr", "layout": ".cfg"}     # what a Tool, a Project and a Layout item must end with (a project may be a folder)
+_FILE_EXAMPLES = {"tool": "C:\\Models\\Hero.ztl", "project": "C:\\Projects\\Hero.zpr", "layout": "C:\\Layouts\\Sculpt.cfg"}
 ASSET_KINDS = ("brush", "alpha", "material", "texture")     # the kinds of the browser and of tags
 AUTO_KINDS = ("brush",)
 ANIMATIONS = L.ANIMATIONS
@@ -336,15 +338,15 @@ def project_is_folder(path: str) -> bool:
 
 
 def _file_problem(kind: str, path: str) -> str:
-    """What is wrong with the path of a tool or project item, or "". A full path on this PC: a tool must end .ztl; a
-    project is a .zpr file or a folder, so an existing file that is not .zpr, or anything ending .ztl, is refused. The
-    file need not be there: a drive may be unplugged."""
+    """What is wrong with the path of a tool, project or layout item, or "". A full path on this PC: a tool must end
+    .ztl and a layout .cfg; a project is a .zpr file or a folder, so an existing file that is not .zpr, or anything
+    ending .ztl, is refused. The file need not be there: a drive may be unplugged."""
     text = path.strip()
     ext = FILE_EXTS[kind]
     if _network_path(text):
         return "must be on this PC, not a network path"
     if not (os.path.splitdrive(text)[0] and os.path.isabs(text)):
-        return f"'{path}' must be a full path, such as C:\\Models\\Hero{ext}"
+        return f"'{path}' must be a full path, such as {_FILE_EXAMPLES[kind]}"
     if kind == "project":
         if text.lower().endswith(".ztl") or (not text.lower().endswith(ext) and os.path.isfile(text)):
             return f"'{path}' must be a .zpr file or a folder"
@@ -372,7 +374,7 @@ def _check_action(a, errors, where, allow_nested=True) -> bool:
     if k == "steps":
         if not allow_nested or not isinstance(a["steps"], list) or not a["steps"]:
             errors.append(f"{where}: 'steps' must be a non-empty list of brush/alpha/material/texture/press/set/"
-                          f"toggle/capture/tool/project actions")
+                          f"toggle/capture/tool/project/layout actions")
             return False
         for i, s in enumerate(a["steps"]):
             if not _check_action(s, errors, f"{where} step {i + 1}", allow_nested=False):

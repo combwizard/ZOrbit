@@ -16,6 +16,9 @@
    update dialog downloads for two seconds; with ?portable it only links to the release, ?updatefail ends the download with the hash message;
    Don't remind me again stores skipped_version in rm_prefs, so clear it to see the chip again), ?unreach
    (check_update cannot reach GitHub), ?prefsfail (set_pref is rejected).
+   Library folders (Settings > Library folders; state in localStorage rm_libfolders): ?libfolders=two (while nothing is stored, a brush folder D:\Art\Brushes with 330 files
+   and an alpha folder E:\Packs\Alphas that cannot be found), ?libfolderbad (Add a folder is refused as a network folder). Without a switch Add a folder adds
+   D:\Art\<Kind> pack with 12 files.
    Tags (state in localStorage rm_tags, seeded with the built-in Favourites tag (always first, cannot be renamed, merged or deleted), the two
    starters and a few tagged brushes, three of them starred): ?tags=empty (only Favourites, nothing tagged),
    ?tagsmany (Favourites and 30 tags with long names), ?tagfail (every tag change is refused), ?tagexists (create and rename always clash with
@@ -81,7 +84,7 @@
   var TAG_DEFAULTS = { radius: 145, slot: 72, dead_zone: 38, labels: 'name', slot_corner: 0.28, border_width: 2, icon_scale: 1, hub_style: 'dot', hub_color: 'accent', hub_glow: 1,
     glow_color: '', glow_opacity: 0.55, label_color: 'text', when_full: 'grow', look: undefined,
     hub: 10, slot_shape: 'circle', tag_colors: 'tint', tag_band: 'medium', tag_band_opacity: 0.45, tag_glow_opacity: 0.4, tag_tint_opacity: 0.3, tag_tint_style: 'gradient', tag_tint_blend: 'multiply' };
-  var KINDS = ['brush', 'alpha', 'material', 'texture', 'press', 'set', 'toggle', 'capture', 'tool', 'project', 'steps', 'menu', 'auto', 'tag', 'browser', 'empty'];
+  var KINDS = ['brush', 'alpha', 'material', 'texture', 'press', 'set', 'toggle', 'capture', 'tool', 'project', 'layout', 'steps', 'menu', 'auto', 'tag', 'browser', 'empty'];
   if (q.has('kinds') && saved.menus && saved.menus.tools) saved.menus.tools.items.push({ tag: 'blocking' }, { browser: '' });
   var mtime = 1700000000000000000, conflictDone = false;
   var FAV = 'favourite';
@@ -144,8 +147,8 @@
     "ring.labels: 'all' unknown; one of name, none", "ring.tag_band: 'huge' unknown; one of none, hairline, narrow, medium, wide", 'ring.raduis: unknown setting (did you mean radius?)',
     'menus: must be a non-empty object of id -> menu',
     'menu odd: not an object', "menu tag:x: ids starting with 'tag:' are reserved for tag submenus", "menu brushes: unknown setting 'hotkye' (did you mean hotkey?)",
-    'menu brushes item 1: not an object', 'menu brushes item 2: needs exactly one of brush, alpha, material, texture, press, set, toggle, capture, tool, project, steps, menu, auto, tag, browser',
-    "menu brushes item 3: 'set' needs a 'value'", "menu brushes item 3: 'set' value must be a number", "menu brushes item 4: 'steps' must be a non-empty list of brush/alpha/material/texture/press/set/toggle/capture/tool/project actions",
+    'menu brushes item 1: not an object', 'menu brushes item 2: needs exactly one of brush, alpha, material, texture, press, set, toggle, capture, tool, project, layout, steps, menu, auto, tag, browser',
+    "menu brushes item 3: 'set' needs a 'value'", "menu brushes item 3: 'set' value must be a number", "menu brushes item 4: 'steps' must be a non-empty list of brush/alpha/material/texture/press/set/toggle/capture/tool/project/layout actions",
     'menu brushes item 4 step 2: not an object', "menu brushes item 4 step 1: 'brush' must be a non-empty string", 'menu brushes item 4 step 2: steps cannot open menus, nest steps, be auto slots, be empty slots or open tags or the browser',
     "menu brushes item 5: 'auto' must be one of brush", "menu brushes item 5: 'browser' must be a string (a tag key, or \"\" for everything)", "menu brushes item 5: browser 'kind' must be one of brush, alpha, material, texture",
     "menu brushes item 6: 'press' must be a non-empty string", "menu brushes item 6: brush name 'C:\\x\\Clay' must not contain \\ / : or ..", "menu brushes item 7: submenu 'nope' does not exist",
@@ -185,11 +188,11 @@
     return { menus: out, root: map[root], renames: ren };
   }
 
-  // What config.py (_file_problem) says is wrong with a Tool or Project path, or "" when nothing is: a full path on this PC.
+  // What config.py (_file_problem) says is wrong with a Tool, Project or Layout path, or "" when nothing is: a full path on this PC.
   function fileProblem(kind, path) {
-    var text = String(path).trim(), ext = kind === 'tool' ? '.ztl' : '.zpr';
+    var text = String(path).trim(), ext = { tool: '.ztl', project: '.zpr', layout: '.cfg' }[kind];
     if (/^\\\\/.test(text)) return 'must be on this PC, not a network path';
-    if (!/^[A-Za-z]:[\\\/]/.test(text)) return "'" + path + "' must be a full path, such as C:\\Models\\Hero" + ext;
+    if (!/^[A-Za-z]:[\\\/]/.test(text)) return "'" + path + "' must be a full path, such as " + { tool: 'C:\\Models\\Hero.ztl', project: 'C:\\Projects\\Hero.zpr', layout: 'C:\\Layouts\\Sculpt.cfg' }[kind];
     // A project is a .zpr file or a folder: anything not ending .zpr is a folder, but the mock cannot see the disk, so an existing non-.zpr file passes here.
     if (kind === 'project') return text.toLowerCase().slice(-4) === '.ztl' ? "'" + path + "' must be a .zpr file or a folder" : '';
     if (text.toLowerCase().slice(-ext.length) === ext) return '';
@@ -212,7 +215,7 @@
         if (kinds.length !== 1) { out.push(where + ': needs exactly one of ' + KINDS.join(', ')); return; }
         var k = kinds[0];
         if (k === 'steps') {
-          if (!Array.isArray(it.steps) || !it.steps.length) { out.push(where + ": 'steps' must be a non-empty list of brush/alpha/material/texture/press/set/toggle/capture/tool/project actions"); return; }
+          if (!Array.isArray(it.steps) || !it.steps.length) { out.push(where + ": 'steps' must be a non-empty list of brush/alpha/material/texture/press/set/toggle/capture/tool/project/layout actions"); return; }
           for (var j = 0; j < it.steps.length; j++) {
             var sk = KINDS.filter(function (x) { return it.steps[j] && x in it.steps[j]; });
             if (sk.some(function (x) { return ['menu', 'steps', 'auto', 'tag', 'browser', 'empty'].indexOf(x) >= 0; })) {
@@ -226,7 +229,7 @@
         else if (k === 'set' && typeof it.value !== 'number') { out.push(where + ": 'set' value must be a number"); return; }
         else if (k === 'capture') { if (typeof it.capture !== 'string') { out.push(where + ": 'capture' must be a folder path, or \"\" for the default folder"); return; } }
         else if (typeof it[k] !== 'string' || !it[k].trim()) { out.push(where + ": '" + k + "' must be a non-empty string"); return; }
-        else if (k === 'tool' || k === 'project') { var why = fileProblem(k, it[k]); if (why) { out.push(where + ': ' + k + ' ' + why); return; } }
+        else if (k === 'tool' || k === 'project' || k === 'layout') { var why = fileProblem(k, it[k]); if (why) { out.push(where + ': ' + k + ' ' + why); return; } }
         var gc = it.style && it.style.glow_color;
         if (gc && !(typeof gc === 'string' && /^(#[0-9a-fA-F]{6}|bg|accent|highlight|text|lines)$/.test(gc))) out.push(where + ': style.glow_color: ' + pyr(gc) + ' is not a #rrggbb colour or a theme colour (bg, accent, highlight, text, lines)');
         if (it.glow !== undefined) out.push(where + ": unknown setting 'glow' (glow is now style.glow_color)");
@@ -520,6 +523,22 @@
       sources: [{ label: 'ZBrush 2026 textures', path: 'C:\\Users\\you\\Documents\\ZBrush 2026 Assets\\ZStartup\\Textures', exists: true },
                 { label: 'ZBrush 2022 textures', path: 'C:\\Program Files\\Maxon ZBrush 2022\\ZStartup\\Textures', exists: false }] }
   };
+  /* The user's own library folders (get_library_folders and the two calls that change them): localStorage rm_libfolders, seeded once by ?libfolders=two. */
+  function libFolders() {
+    var all = null, raw = null;
+    try { raw = localStorage.getItem('rm_libfolders'); } catch (e) {}
+    if (raw) { try { all = JSON.parse(raw); } catch (e) {} }
+    if (!all || typeof all !== 'object') {
+      all = {};
+      if (q.get('libfolders') === 'two') {
+        all.brush = [{ path: 'D:\\Art\\Brushes', name: 'Brushes', exists: true, count: 330, hidden: 0, error: null }];
+        all.alpha = [{ path: 'E:\\Packs\\Alphas', name: 'Alphas', exists: false, count: null, hidden: null, error: null }];
+      }
+    }
+    Object.keys(ASSET_KIND).forEach(function (k) { if (!Array.isArray(all[k])) all[k] = []; });
+    return all;
+  }
+  function libFoldersSave(all) { try { localStorage.setItem('rm_libfolders', JSON.stringify(all)); } catch (e) {} }
   var libCache = {};
   function libFor(kind) {
     if (libCache[kind]) return clone(libCache[kind]);
@@ -952,6 +971,28 @@
           fit: menuId ? mockFit(cfg, menuId) : null, problems: Z.problems(cfg, ctx) };
       });
     },
+    // The user's own library folders (state in localStorage rm_libfolders, {brush: [row], ...}; ?libfolders=two seeds an empty state).
+    get_library_folders: function () { return sleep(80).then(function () { return { ok: true, folders: libFolders() }; }); },
+    add_library_folder: function (kind) {
+      if (!ASSET_KIND[kind]) return Promise.resolve({ ok: false, message: 'That is not a kind of library.' });
+      if (q.has('libfolderbad')) return sleep(150).then(function () { return { ok: false, message: 'That is a network folder. ZOrbit cannot watch one for changes, so pick a folder on this PC.' }; });
+      return sleep(150).then(function () {
+        var all = libFolders(), word = kind.charAt(0).toUpperCase() + kind.slice(1), path = 'D:\\Art\\' + word + ' pack';
+        if (all[kind].some(function (f) { return f.path === path; })) return { ok: true, already: true, message: path + ' is already added.', folders: all };
+        all[kind].push({ path: path, name: word + ' pack', exists: true, count: 12, hidden: 0, error: null });
+        libFoldersSave(all);
+        return { ok: true, message: 'Added ' + word + ' pack.', folders: all };
+      });
+    },
+    forget_library_folder: function (kind, path) {
+      return sleep(100).then(function () {
+        var all = libFolders();
+        if (!all[kind]) return { ok: false, message: 'That is not a kind of library.', folders: all };
+        all[kind] = all[kind].filter(function (f) { return f.path !== path; });
+        libFoldersSave(all);
+        return { ok: true, message: 'Forgot ' + path + '. The folder itself was not touched.', folders: all };
+      });
+    },
     get_library: function (refresh, kind, since) {
       kind = ASSET_KIND[kind] ? kind : 'brush';
       var libCalls = (libSeq[kind] = (libSeq[kind] || 0) + 1);
@@ -960,9 +1001,9 @@
         var sig = 'mock-' + kind + '-' + n + (q.get('libsig') === 'changing' ? '-' + libCalls : '');       // like the backend: a hash of what was found
         if (since && since === sig && !q.has('liberr') && !q.has('nozbrush') && !q.has('nolib')) {
           console.log('[mock] get_library', kind, 'unchanged');
-          return { kind: kind, unchanged: true, signature: sig, sources: A.sources.map(function (src, i) { return { label: src.label, path: src.path, exists: src.exists, count: i === 0 ? n : 0 }; }), zbrush_found: true, error: null };
+          return { kind: kind, unchanged: true, signature: sig, sources: A.sources.map(function (src, i) { return { label: src.label, path: src.path, exists: src.exists, count: i === 0 ? n : 0, user_folders: 0, added: false }; }), zbrush_found: true, error: null };
         }
-        var sources = A.sources.map(function (src, i) { return { label: src.label, path: src.path, exists: src.exists, count: i === 0 ? n : 0 }; });
+        var sources = A.sources.map(function (src, i) { return { label: src.label, path: src.path, exists: src.exists, count: i === 0 ? n : 0, user_folders: 0, added: false }; });
         if (q.has('liberr')) return { kind: kind, items: [], brushes: [], categories: [], sources: [], zbrush_found: true, error: 'Could not read the ' + kind + ' folders: [WinError 5] Access is denied (mock)' };
         if (q.has('nozbrush')) return { kind: kind, items: [], brushes: [], categories: [], sources: [], zbrush_found: false, error: null };
         if (q.has('nolib')) { sources[0].count = 0; return { kind: kind, items: [], brushes: [], categories: [], sources: sources, zbrush_found: true, error: null }; }
@@ -1189,7 +1230,7 @@
     },
     choose_file: function (kind) {
       // The file dialog for a Tool or a Project: the chosen file as text (the mock always picks the same one), or null.
-      return Promise.resolve(kind === 'tool' ? 'D:/Models/Hero.ztl' : kind === 'project' ? 'D:/Projects/Hero.zpr' : null);
+      return Promise.resolve(kind === 'tool' ? 'D:/Models/Hero.ztl' : kind === 'project' ? 'D:/Projects/Hero.zpr' : kind === 'layout' ? 'D:/Layouts/Sculpt.cfg' : null);
     },
     add_zbrush_folder: function () {
       // A ZBrush 2026 or later: ok, python: true. It joins the modern installs (Setup lists it, with Fix while it is unregistered, and Forget).

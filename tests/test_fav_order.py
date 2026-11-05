@@ -32,11 +32,15 @@ class FakeAssets:
 
     def __init__(self, **by_kind):
         self.idx = {k: {} for k in C.ASSET_KINDS}
+        self.listed = {}                # kind -> key -> the name listed, where it is not the file's
         for kind, names in by_kind.items():
             self.idx[kind] = {tags._norm(n): Path(f"C:/x/{n}.zbp") for n in names}
 
     def index(self, kind):
         return self.idx[kind]
+
+    def names(self, kind):
+        return self.listed.get(kind, {})
 
     def rescan(self, kind):
         pass
@@ -87,6 +91,12 @@ def test_a_favourites_fan_follows_the_order_of_a_kind_with_brushes_still_first(t
     ex, _ = fan(tmp_path, monkeypatch, STARS, {"alpha": ["two", "one", "ten"]}, **INSTALLED)
     assert labels(ex.tag_menu(FAVOURITE)) == [("brush", "Plum"), ("brush", "Pear"), ("brush", "Apple"),
                                               ("alpha", "Two"), ("alpha", "One"), ("alpha", "Ten")]
+
+
+def test_a_fan_in_your_order_shows_the_listed_name_of_a_file_from_an_added_folder(tmp_path, monkeypatch):
+    ex, _ = fan(tmp_path, monkeypatch, STARS, {"brush": ["pear", "apple", "plum"]}, **INSTALLED)
+    expand.assets.listed = {"brush": {"apple": "Apple (Pack)"}}
+    assert labels(ex.tag_menu(FAVOURITE))[:3] == [("brush", "Pear"), ("brush", "Apple (Pack)"), ("brush", "Plum")]
 
 
 def test_a_fan_skips_a_saved_item_that_is_not_installed_and_keeps_the_others_in_order(tmp_path, monkeypatch):

@@ -198,8 +198,21 @@ def test_an_asset_pick_counts_in_recent_under_the_name_of_its_file(app, monkeypa
     recorded = []
     monkeypatch.setattr(app, "_record_pick", recorded.append)
     monkeypatch.setattr(radiald.assets, "find", lambda kind, name: f"D:/ZBrush/{name.upper()}.zbp")
+    monkeypatch.setattr(radiald.assets, "name_of", lambda kind, name: None)     # not in any walk
     command(app, "--pick", "brush:clay")
     assert [i.data for i in recorded] == [{"brush": "CLAY"}]
+
+
+def test_an_asset_pick_counts_in_recent_under_its_listed_name(app, monkeypatch):
+    recorded = []
+    monkeypatch.setattr(app, "_record_pick", recorded.append)
+    monkeypatch.setattr(radiald.assets, "find", lambda kind, name: "D:/Packs/PackA/10.png")
+    monkeypatch.setattr(radiald.assets, "name_of", lambda kind, name: "10 (PackA)" if name == "10 (packa)" else None)
+    command(app, "--pick", "alpha:10 (packa)")
+    assert [(i.label, i.data) for i in recorded] == [("10 (PackA)", {"alpha": "10 (PackA)"})]
+    recorded.clear()
+    command(app, "--pick", "alpha:other")                # no listed name: the file's own
+    assert [i.data for i in recorded] == [{"alpha": "10"}]
 
 
 def test_a_mistyped_name_is_still_tried_but_does_not_count(app, monkeypatch):

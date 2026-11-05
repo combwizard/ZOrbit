@@ -26,8 +26,8 @@
   }
 
   /* Which gap between the cards a point is at, and where to draw the marker. rects: the cards' { left, top, right, bottom } in list order.
-     Only the cards drawn so far need be there: renderGrid draws a long list a part at a time, front first, so a gap still counts from the
-     start of the list. The cards wrap in rows, and a row starts where a card is not to the right of the one before (by position across,
+     Only the cards that exist need be there (see paintWindow), and the index counts among them: the caller adds the place of the first.
+     The cards wrap in rows, and a row starts where a card is not to the right of the one before (by position across,
      so the small lift of a hovered card does not matter). A point in a row, or in the space above it, is at that row's gap nearest in x;
      below the last row it is at the end of the list. Returns { index, x, top, bottom }, or null without cards. gap: the grid's gap in px. */
   function gapAt(rects, x, y, gap = 0) {

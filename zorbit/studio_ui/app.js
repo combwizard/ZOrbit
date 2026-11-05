@@ -90,6 +90,7 @@ const ICONS = {
   k_capture: '<path d="M4 8.500a1.500 1.500 0 0 1 1.500-1.500h2.300l1.500-2.300h5.400l1.500 2.300h2.300A1.500 1.500 0 0 1 20 8.500v8a1.500 1.500 0 0 1-1.500 1.500h-13A1.500 1.500 0 0 1 4 16.500z"/><circle cx="12" cy="12.500" r="3.200"/>',
   k_tool: '<path d="M12 3.500l7.500 4.300v8.400L12 20.500l-7.500-4.300V7.800z"/><path d="M4.500 7.800L12 12.100l7.500-4.300M12 12.100v8.400"/>',
   k_project: '<path d="M3.500 7.500a1.500 1.500 0 0 1 1.500-1.500h4.200l1.800 2h8a1.500 1.500 0 0 1 1.500 1.500v7.500a1.500 1.500 0 0 1-1.500 1.500H5a1.500 1.500 0 0 1-1.500-1.500z"/>',
+  k_layout: '<rect x="3.500" y="5" width="17" height="14" rx="1.500"/><path d="M9.500 5v14M9.500 12h11"/>',
   k_steps: '<path d="M12 4l8 4-8 4-8-4z"/><path d="M4 12l8 4 8-4M4 16l8 4 8-4"/>',
   k_menu: '<circle cx="12" cy="12" r="8.500"/><path d="M10 8.500l5 3.500-5 3.500z" fill="currentColor"/>',
   k_auto: '<path d="M19.500 12a7.500 7.500 0 0 1-13 5.100M4.500 12a7.500 7.500 0 0 1 13-5.100"/><path d="M17.500 3.500v3.400h-3.400M6.500 20.500v-3.400h3.400"/>',
@@ -122,7 +123,8 @@ function setRoving(rows, cur) { const stop = rows.includes(cur) ? cur : rows[0];
 function noTab(btn) { btn.tabIndex = -1; return btn; }
 
 /* ================================================================== state */
-const ACTIONS = ['brush', 'alpha', 'material', 'texture', 'press', 'set', 'toggle', 'capture', 'tool', 'project', 'steps', 'menu', 'auto', 'tag', 'browser', 'empty'];
+const ACTIONS = ['brush', 'alpha', 'material', 'texture', 'press', 'set', 'toggle', 'capture', 'tool', 'project', 'layout', 'steps', 'menu', 'auto', 'tag', 'browser', 'empty'];
+const FILE_KINDS = ['tool', 'project', 'layout'];                  // the items that name a file on this PC (FILE_EXTS in config.py)
 const KIND = {
   brush: { label: 'Brush', icon: 'k_brush', hint: 'Select a brush' },
   alpha: { label: 'Alpha', icon: 'k_alpha', hint: 'Select an alpha' },
@@ -134,6 +136,7 @@ const KIND = {
   capture: { label: 'Capture', icon: 'k_capture', hint: 'Save the picture as a PNG' },
   tool: { label: 'Tool', icon: 'k_tool', hint: 'Load a tool from a file' },
   project: { label: 'Project', icon: 'k_project', hint: 'Open a project, or the newest in a folder' },
+  layout: { label: 'Layout', icon: 'k_layout', hint: 'Load a UI layout from a file' },
   steps: { label: 'Steps', icon: 'k_steps', hint: 'Run several actions in order' },
   menu: { label: 'Submenu', icon: 'k_menu', hint: 'Open another ring' },
   auto: { label: 'Auto', icon: 'k_auto', hint: 'A slot filled with a brush you pick often' },
@@ -256,11 +259,11 @@ const needsFull = cfg => MODE.needsFull(cfg, modeCtx());
 const targetNeedsFull = t => MODE.targetNeedsFull(t, modeCtx());
 /* A capture item's folder as the list shows it: the folder, or Pictures\ZBrush when it is empty (the default folder). */
 const captureFolder = it => String(it.capture ?? '').trim() || 'Pictures\\ZBrush';
-/* A tool or project item's label when it has none, as _default_label in config.py: the file's name without a .zpr or
-   .ztl (any case), so a folder keeps its whole name. */
+/* A tool, project or layout item's label when it has none, as _default_label in config.py: the file's name without a .zpr,
+   .ztl or .cfg (any case), so a folder keeps its whole name. */
 function fileLabel(k, path) {
   const name = String(path ?? '').trim().replace(/[\\/]+$/, '').split(/[\\/]/).pop();
-  return name.replace(/(.+)\.(zpr|ztl)$/i, '$1');
+  return name.replace(/(.+)\.(zpr|ztl|cfg)$/i, '$1');
 }
 /* One line saying what an item targets; the item rows and the read-only line in Simple share it. */
 function itemSub(it) {
@@ -277,14 +280,14 @@ function defaultLabel(it) {
   if (k === 'empty') return 'Empty slot';
   if (k === 'tag') return tagName(it.tag);
   if (k === 'capture') return 'Capture';
-  if (k === 'tool' || k === 'project') return fileLabel(k, it[k]);
+  if (FILE_KINDS.includes(k)) return fileLabel(k, it[k]);
   if (k === 'browser') return it.browser && S.tagMap.has(it.browser) ? tagName(it.browser) : 'Browser';   // as _default_label in config.py
   return String(it[k] || '').split(':').pop();
 }
 /* A tag's label, or its key when the tag is not (or not yet) known. */
 function tagName(key) { const t = S.tagMap.get(key); return (t && t.label) || String(key || ''); }
 const itemLabel = it => String(it.label || defaultLabel(it) || '(empty)');
-const FILE_LABEL = { tool: 'Tool file', project: 'Project file or folder' };     // the field labels of the two file items
+const FILE_LABEL = { tool: 'Tool file', project: 'Project file or folder', layout: 'Layout file' };     // the field labels of the file items
 
 function actionValid(a, nested) {
   if (!a || typeof a !== 'object') return false;
@@ -344,8 +347,8 @@ function makeItem(kind, target, extra = {}) {
 }
 /* A target lives in one of these namespaces: each library kind's names, ZBrush item paths (press, set, toggle), menu ids and tags.
    Switching kind keeps a target only inside its own namespace, so a brush name never lands in a path field. */
-const nsOf = k => (isLib(k) ? k : k === 'menu' ? 'menu' : k === 'tag' || k === 'browser' ? 'tag' : k === 'capture' ? 'folder' : k === 'tool' || k === 'project' ? k : 'path');
-const TARGET_NOUN = { brush: 'brush', alpha: 'alpha', material: 'material', texture: 'texture', press: 'button path', set: 'value path', toggle: 'switch path', capture: 'folder', tool: 'tool file', project: 'project file or folder', menu: 'submenu', tag: 'tag', browser: 'tag filter' };
+const nsOf = k => (isLib(k) ? k : k === 'menu' ? 'menu' : k === 'tag' || k === 'browser' ? 'tag' : k === 'capture' ? 'folder' : FILE_KINDS.includes(k) ? k : 'path');
+const TARGET_NOUN = { brush: 'brush', alpha: 'alpha', material: 'material', texture: 'texture', press: 'button path', set: 'value path', toggle: 'switch path', capture: 'folder', tool: 'tool file', project: 'project file or folder', layout: 'layout file', menu: 'submenu', tag: 'tag', browser: 'tag filter' };
 /* Brush names are compared ignoring case and spaces (the guide says neither matters). */
 const nameKey = s => String(s === undefined || s === null ? '' : s).toLowerCase().replace(/\s+/g, '');
 /* An asset's key in tags.json: its kind, a colon and its name in lower case without spaces (tags.item_key in Python). */
@@ -1725,6 +1728,7 @@ function buildMenusScreen(root) {
     else {
       if (!dock) dock = makeBrowser({ compact: true, st: S.dock });
       body.append(dock.el);
+      dock.relayout();
       dock.scroller().scrollTop = dockScroll;
       R.badges = () => dock.updateBadges();
     }
@@ -2329,10 +2333,10 @@ function buildItemInspector() {
   } else if (k === 'tag' || k === 'browser') {
     box.append(tagTargetField(it, k, updateHead));
   } else if (k !== 'steps') {
-    const placeholders = { ...Object.fromEntries(LIB_KINDS.map(lk => [lk, 'Search ' + K(lk).many + ', e.g. ' + K(lk).eg])), press: 'Item path, e.g. Tool:Masking:Clear', set: 'Item path, e.g. Draw:Draw Size', toggle: 'Item path, e.g. Transform:Activate Symmetry', capture: 'The ZBrush folder in your Pictures folder', tool: 'D:\\Models\\Hero.ztl', project: 'D:\\Projects\\Hero.zpr, or a folder', menu: 'Pick a menu' };
+    const placeholders = { ...Object.fromEntries(LIB_KINDS.map(lk => [lk, 'Search ' + K(lk).many + ', e.g. ' + K(lk).eg])), press: 'Item path, e.g. Tool:Masking:Clear', set: 'Item path, e.g. Draw:Draw Size', toggle: 'Item path, e.g. Transform:Activate Symmetry', capture: 'The ZBrush folder in your Pictures folder', tool: 'D:\\Models\\Hero.ztl', project: 'D:\\Projects\\Hero.zpr, or a folder', layout: 'D:\\Layouts\\Sculpt.cfg', menu: 'Pick a menu' };
     let touched = false;                                   // "required" hints wait until the field has been edited or left once
     let inp, openBtn = null;
-    const isFile = k === 'tool' || k === 'project';        // a path to a file on this PC, with Browse buttons and no ZBrush path suggestions
+    const isFile = FILE_KINDS.includes(k);                 // a path to a file on this PC, with Browse buttons and no ZBrush path suggestions
     if (isLib(k)) ensureLib(k);                            // its load repaints this inspector (loadLibrary)
     if (k === 'menu') {
       // A pick list rather than free text: only real menus, never this one (a menu cannot open itself).
@@ -2366,7 +2370,7 @@ function buildItemInspector() {
           if (typeof picked !== 'string' || !picked.trim()) return;               // cancelled: nothing changes
           inp.value = picked.trim(); inp.dispatchEvent(new Event('input'));
         } }, withIcon ? icon('folder', 13) : null, text);
-        openBtn = k === 'tool' ? browse('Browse...', 'choose_file', ['tool'], false)
+        openBtn = k !== 'project' ? browse('Browse...', 'choose_file', [k], false)           // only a project can be a folder
           : [browse('Browse file...', 'choose_file', ['project'], false), browse('Browse folder...', 'choose_folder', [], true)];
       } else combo(inp, q => matchOpts(isLib(k) ? libOpts(k) : pathOpts(), q), { thumb: isLib(k) ? k : null, mono: !isLib(k) });
     }
@@ -2381,7 +2385,7 @@ function buildItemInspector() {
         const L = lib(k), W = K(k);
         if (L.state === 'loading' || L.state === 'idle') hintEl.append('Reading your ' + W.one + ' library...');
         else if (L.state === 'error') { hintEl.classList.add('warn'); hintEl.append(`Your ${W.one} library could not be read: `, linkBtn('see Library', () => { S.lib.kind = k; showScreen('library'); }), '.'); }
-        else if (!L.zbrushFound) { hintEl.classList.add('warn'); hintEl.append('ZBrush was not found: ', linkBtn('see Setup', () => showScreen('setup')), '.'); }
+        else if (!L.zbrushFound && !L.sources.some(s => s.added)) { hintEl.classList.add('warn'); hintEl.append('ZBrush was not found: ', linkBtn('see Setup', () => showScreen('setup')), '.'); }
         else if (v && L.items.length && !L.byName.has(nameKey(v))) { hintEl.classList.add('warn'); hintEl.append(`Not found in your ${W.one} folders. ZBrush can still select it if it is loaded there; a picture needs ${W.files} with this name.`); }
         else if (!v) hintEl.append('Type to search your library.');
       } else if (k === 'menu') {
@@ -2399,7 +2403,7 @@ function buildItemInspector() {
       } else if (k === 'capture') {
         hintEl.append(v ? 'Each capture is a PNG in this folder, named by the time. The folder is made if it is missing.' : 'Empty: captures go to the ZBrush folder in your Pictures folder.');
       } else if (isFile) {
-        hintEl.append(k === 'tool' ? 'Loads this tool into the Tool palette.' : 'Opens this project. Give a folder to always open its newest project. ZBrush asks first if the open project has unsaved changes.');
+        hintEl.append(k === 'tool' ? 'Loads this tool into the Tool palette.' : k === 'layout' ? 'Loads this UI layout. It lasts until ZBrush closes, unless you press Store Config in ZBrush (Preferences > Config).' : 'Opens this project. Give a folder to always open its newest project. ZBrush asks first if the open project has unsaved changes.');
       } else {
         const s = S.suggestions.find(x => x.path.replace(/\s/g, '').toLowerCase() === v.replace(/\s/g, '').toLowerCase());
         if (s) hintEl.append('Known item: ' + s.source);
@@ -2425,7 +2429,7 @@ function buildItemInspector() {
       paintVal();
     }
   } else {
-    box.append(field('Steps', buildSteps(it), 'Steps can select brushes, alphas, materials and textures, press buttons, set values, flip switches, save captures, load tools and open projects (no submenus).'));
+    box.append(field('Steps', buildSteps(it), 'Steps can select brushes, alphas, materials and textures, press buttons, set values, flip switches, save captures, load tools and layouts, and open projects (no submenus).'));
   }
 
   const iconInp = textInput(it.icon || '', v => { if (v.trim()) it.icon = v.trim(); else delete it.icon; commit(); updateIcon(); }, { placeholder: 'Optional: brush name or path to a .png / .zbp', label: 'Icon override', mono: !!it.icon && isPath(it.icon) });
@@ -2495,7 +2499,7 @@ function autoNow(m, i) {
   return el;
 }
 
-const STEP_KINDS = ['brush', 'alpha', 'material', 'texture', 'press', 'set', 'toggle', 'capture', 'tool', 'project'];
+const STEP_KINDS = ['brush', 'alpha', 'material', 'texture', 'press', 'set', 'toggle', 'capture', 'tool', 'project', 'layout'];
 function buildSteps(it) {
   const host = h('div', { class: 'steps' });
   const render = f => {                                          // f: { j, k } the control to focus afterwards (step j; k = type, up, down or rm)
@@ -2512,11 +2516,11 @@ function buildSteps(it) {
         if (lost.length) undoToast(`Step ${j + 1} is now ${KIND[nk].label}. Dropped ${joinList(lost)}.`, { ms: 6500 });
       } },
         STEP_KINDS.map(x => h('option', { value: x, selected: x === sk }, KIND[x].label)));
-      const tin = textInput(targetOf(st), v => { st[sk] = v; commit(); }, { mono: !isLib(sk), placeholder: isLib(sk) ? KIND[sk].label + ' name' : sk === 'capture' ? 'The ZBrush folder in your Pictures folder' : sk === 'tool' ? 'D:\\Models\\Hero.ztl' : sk === 'project' ? 'D:\\Projects\\Hero.zpr, or a folder' : 'Item path', label: 'Step ' + (j + 1) + ' target' });
+      const tin = textInput(targetOf(st), v => { st[sk] = v; commit(); }, { mono: !isLib(sk), placeholder: isLib(sk) ? KIND[sk].label + ' name' : sk === 'capture' ? 'The ZBrush folder in your Pictures folder' : sk === 'tool' ? 'D:\\Models\\Hero.ztl' : sk === 'project' ? 'D:\\Projects\\Hero.zpr, or a folder' : sk === 'layout' ? 'D:\\Layouts\\Sculpt.cfg' : 'Item path', label: 'Step ' + (j + 1) + ' target' });
       tin.addEventListener('change', () => { st[sk] = tin.value.trim(); tin.value = st[sk]; commit(); });
       tin.classList.add('stgt');
       if (isLib(sk)) ensureLib(sk);
-      if (sk !== 'capture' && sk !== 'tool' && sk !== 'project') combo(tin, q => matchOpts(isLib(sk) ? libOpts(sk) : pathOpts(), q), { thumb: isLib(sk) ? sk : null, mono: !isLib(sk) });   // a folder has no ZBrush path suggestions
+      if (sk !== 'capture' && !FILE_KINDS.includes(sk)) combo(tin, q => matchOpts(isLib(sk) ? libOpts(sk) : pathOpts(), q), { thumb: isLib(sk) ? sk : null, mono: !isLib(sk) });   // a folder has no ZBrush path suggestions
       const vhint = h('div', { class: 'fhint bad svhint', hidden: true });
       const row = h('div', { class: 'step' }, h('span', { class: 'snum mono' }, String(j + 1)), sel, tin,
         sk === 'set' ? (() => {
@@ -2905,7 +2909,6 @@ async function tagCall(name, ...args) {
 const railDotsSoon = debounce(() => { if (S.ready && !S.fatal) { refreshAppDown(); refreshZsBadge(); } }, 600);
 function tagsChanged(keysChanged = false) {
   if (keysChanged && !POPOUT && S.cfg && S.ready) { validateSoon(); railDotsSoon(); }   // the problems pill and the row markers name tags that may be gone (or back)
-  for (const el of $$('.tag-path')) { setText(el, S.tagsPath); el.hidden = !S.tagsPath; }
   for (const b of browsers.values()) b.updateTags();
   if (R.itemList) R.itemList();
   if (R.libTarget) R.libTarget();
@@ -3258,6 +3261,7 @@ function addManyToCurrent(kind, names) {
      onKind(kind)    optional: the browser switched to another kind */
 const STUDIO_HOST = {
   dnd: true,
+  addFolder: true,                                                 // the Add a folder button under the folders: only Studio can open the picker and write studio.json
   tools: () => h('button', { class: 'btn small', type: 'button', title: 'Open the browser in its own window', onclick: openBrowserFromButton }, icon('k_browser', 13), 'Browser'),
   primaryIcon: () => 'plus',
   primaryLabel() { const m = curMenu(); return m ? 'Add to ' + (m.title || S.menuId) : 'No menu to add to'; },
@@ -3327,7 +3331,7 @@ function libEmptyState(kind) {
   const L = lib(kind), w = K(kind);
   let el;
   if (L.state === 'error') el = emptyState('alert', 'Could not read the ' + w.one + ' library', L.error || 'The backend could not list your ZBrush ' + w.one + ' folders.');
-  else if (!L.zbrushFound) {
+  else if (!L.zbrushFound && !L.sources.some(s => s.added)) {
     // The Setup screen lists the ZBrush installs ZOrbit knows. The browser window has no way to open Studio, so it only says where to look.
     el = emptyState('library', 'No ' + w.many + ' to show', 'ZBrush was not found. ZOrbit Studio reads the ' + w.one + ' folders of a ZBrush that has run at least once. Start ZBrush once, then press Rescan' + (POPOUT ? '. If it is still not found, open Studio from the tray icon and add its folder in Setup.' : '.'),
       POPOUT ? null : { text: 'Find ZBrush in Studio', fn: () => showScreen('setup') });
@@ -3355,15 +3359,29 @@ function makeBrowser({ compact, st, host = STUDIO_HOST, kindUi = compact ? 'comp
   const orderBtn = h('button', { class: 'btn small b-order', type: 'button', hidden: true, title: 'Forget your order for this tab and go back to most used first', onclick: () => forgetOrder() }, 'Most used');
   const fchips = h('span', { class: 'filter-chips', hidden: true });     // the popout's toolbar: the filters that are on (styles.css shows them only while its column is collapsed)
   const grid = h('div', { class: 'bgrid' });
-  const scroll = h('div', { class: 'b-scroll' }, grid);
+  const libWarn = h('div', { class: 'fhint warn lib-warn', role: 'status', hidden: true, style: 'margin-bottom: 10px' });   // a folder that could not be read while the others were: its items are the ones it had
+  const scroll = h('div', { class: 'b-scroll', tabindex: '-1' }, libWarn, grid);   // tabindex: it can hold the keyboard while the focused card has scrolled away (paintWindow)
   const side = h('div', { class: 'lib-side' });
   const catsBox = h('div', { class: 'cats', role: 'listbox', 'aria-label': 'Folders' });
   const tagSec = h('div', { class: 'tag-sec', role: 'group', 'aria-label': 'Tags' });                     // full: the Tags section under Folders
   const tagRow = h('div', { class: 'tagrow', role: 'group', 'aria-label': 'Filter by tag', hidden: true });   // compact: the same chips, wrapped
-  side.append(catsBox, tagSec);
+  const addFolderBtn = !compact && host.addFolder ? h('button', { class: 'btn small lib-addfolder', type: 'button', onclick: async () => {     // the same list as Settings > Library folders, for the tab on show
+    const kind = st.kind;
+    addFolderBtn.disabled = true;
+    let r = null;
+    try { r = await call('add_library_folder', kind); } catch (e) { toast('Could not add the folder: ' + e.message, { tone: 'warn', ms: 5000 }); }
+    addFolderBtn.disabled = false;
+    if (!r || r.cancelled) return;
+    toast(r.message || (r.ok ? 'Added.' : 'That did not work.'), !r.ok ? { tone: 'warn', ms: 5000 } : r.already ? { ms: 4000 } : { tone: 'ok', ms: 4000 });
+    if (r.ok && !r.already) await loadLibrary(kind, true);
+  } }, icon('folder', 12), 'Add a folder...') : null;
+  side.append(...[catsBox, addFolderBtn, tagSec].filter(Boolean));
   const lazy = makeLazyIO(scroll);
-  let token = 0, curRes = compact ? 128 : resFor(st.size), lastSig = '';
-  let built = '', gridKind = '';         // built: kind + names of the cards on show once all are drawn (renderGrid keeps them when the list is the same); gridKind: the kind they were made for
+  let curRes = compact ? 128 : resFor(st.size), lastSig = '';
+  let built = '', gridKind = '';         // built: kind + names of the list on show (renderGrid keeps its cards when the list is the same); gridKind: the kind they were made for
+  let win = null;                        // the list on show and the part of it that has cards: { list, first, end, cols, rowH, pool } (see paintWindow)
+  let winFrame = 0, winMeasure = false;  // a paintWindow waiting for the next frame, and whether it measures the rows again
+  let focusAway = false;                 // the card with the keyboard (rov) scrolled away, and the scroller holds the keyboard for it
   let rov = null, rovEl = null;          // the card that is the grid's one Tab stop (name, node)
   const sel = new Set();                 // names of the selected items
   let anchor = null;                     // the last plain or Ctrl click: where a Shift-click range starts
@@ -3459,6 +3477,7 @@ function makeBrowser({ compact, st, host = STUDIO_HOST, kindUi = compact ? 'comp
       if (host.onSize) host.onSize(st.size);
       const r = resFor(st.size);
       if (r !== curRes) { curRes = r; $$('.bcard .thumb', grid).forEach(t => rethumb(t, r)); }
+      paintWindowSoon(true);                                   // the rows have another height now
     });
     paint(); grid.style.setProperty('--card', st.size + 'px');
     rescan = rescanBtn(st.kind);
@@ -3582,8 +3601,7 @@ function makeBrowser({ compact, st, host = STUDIO_HOST, kindUi = compact ? 'comp
         st.tags.size > 1 ? tagModeSwitch() : null,
         userTags.length ? h('div', { class: 'tagchips' }, chips) : h('div', { class: 'tag-none fhint' }, `No tags yet. Select ${W().many} and press Tag to make one.`),
         S.tagsErr ? h('div', { class: 'fhint bad' }, S.tagsErr) : null,
-        isFull() || POPOUT ? manageTagsBtn('btn small tag-manage') : null,
-        isFull() && !POPOUT ? h('div', { class: 'fhint mono tag-path', hidden: !S.tagsPath }, S.tagsPath) : null].filter(Boolean));
+        isFull() || POPOUT ? manageTagsBtn('btn small tag-manage') : null].filter(Boolean));
     }
     if (fk !== null) { const t = $$('[data-tk], [data-tm]', host).find(x => (x.dataset.tk !== undefined ? x.dataset.tk : 'tm:' + x.dataset.tm) === fk); if (t) t.focus(); }
   }
@@ -3631,25 +3649,38 @@ function makeBrowser({ compact, st, host = STUDIO_HOST, kindUi = compact ? 'comp
     btn.title = text; btn.setAttribute('aria-label', text + ': ' + name);
   }
   /* --- dragging a card to a new place in Favourites. One card moves, whatever is selected. The pointer drag of the Library (DnD, through
-     the zone below) and the native drag of the popout share these; the list comes from filtered() and only the gap from the cards, so a
-     long list that is still being drawn works too. A drag that cannot reorder, or a drop elsewhere, goes on as any other drag. */
+     the zone below) and the native drag of the popout share these; the list comes from filtered() and only the gap from the cards that
+     exist (see paintWindow). A drag that cannot reorder, or a drop elsewhere, goes on as any other drag. */
   const canReorder = () => st.cat === '@fav' && !st.q.trim() && !search.value.trim() && !tagFilterOn() && L().state === 'ready';
   const dropMark = h('div', { class: 'bdrop', 'aria-hidden': 'true' });
-  let reorder = null;                    // the drag on show: { name, x, y }, the last place the pointer was over the grid
-  const gapAtPoint = (x, y) => ZFavOrder.gapAt(cardEls().map(c => c.getBoundingClientRect()), x, y, parseFloat(getComputedStyle(grid).columnGap) || 0);
+  let reorder = null;                    // the drag on show: { name, x, y }, the last place the pointer was over the grid; stop: see watchDragEnd
+  /* The gap counts from the start of the list, and the first card that exists may be far into it. */
+  function gapAtPoint(x, y) {
+    const g = ZFavOrder.gapAt(cardEls().map(c => c.getBoundingClientRect()), x, y, parseFloat(getComputedStyle(grid).columnGap) || 0);
+    if (g && win) g.index += win.first;
+    return g;
+  }
   function paintDrop(name, x, y) {
     if (!reorder || reorder.name !== name) { endReorder(); reorder = { name, x, y }; const c = cardEls().find(e => e.dataset.name === name); if (c) c.classList.add('reordering'); }
     reorder.x = x; reorder.y = y;
-    const g = gapAtPoint(x, y), box = grid.getBoundingClientRect();
+    const g = gapAtPoint(x, y), box = scroll.getBoundingClientRect();
     if (!g) { dropMark.remove(); return; }
-    dropMark.style.left = (g.x - box.left) + 'px'; dropMark.style.top = (g.top - box.top) + 'px'; dropMark.style.height = (g.bottom - g.top) + 'px';
-    if (dropMark.parentNode !== grid) grid.append(dropMark);
+    dropMark.style.left = (g.x - box.left + scroll.scrollLeft) + 'px'; dropMark.style.top = (g.top - box.top + scroll.scrollTop) + 'px'; dropMark.style.height = (g.bottom - g.top) + 'px';
+    if (dropMark.parentNode !== scroll) scroll.append(dropMark);      // not in the grid: paintWindow takes every child of the grid for a card
   }
   function endReorder() {
+    if (reorder && reorder.stop) reorder.stop();
     reorder = null; dropMark.remove(); edgeSpeed = 0;
     $$('.bcard.reordering', grid).forEach(c => c.classList.remove('reordering'));
   }
-  function dropCard(name, x, y) {
+  /* A native drag can scroll its card out of the part of the list that exists, and a card that is gone may never hear dragend. No mouse
+     move reaches the page during a native drag, so the first one with the card gone means the drag is over. */
+  function watchDragEnd(card) {
+    const moved = () => { if (!card.isConnected) endReorder(); };
+    window.addEventListener('mousemove', moved, true);
+    reorder.stop = () => window.removeEventListener('mousemove', moved, true);
+  }
+  function dropInGap(name, x, y) {
     const g = gapAtPoint(x, y), next = g && canReorder() ? ZFavOrder.moved(filtered().map(b => nameKey(b.name)), nameKey(name), g.index) : null;
     if (next) tagCall('set_favourite_order', st.kind, next);                  // its answer repaints every browser (tagsChanged); no change saves nothing
   }
@@ -3679,7 +3710,7 @@ function makeBrowser({ compact, st, host = STUDIO_HOST, kindUi = compact ? 'comp
     accept: p => p.type === 'asset' && p.from === st && canReorder(),         // only a card of this grid: a drag from the popout has no .from
     over: (p, x, y) => { paintDrop(p.name, x, y); edgeScroll(y); },
     leave: endReorder,
-    drop: (p, x, y) => dropCard(p.name, x, y),
+    drop: (p, x, y) => dropInGap(p.name, x, y),
   });
   scroll.addEventListener('dragover', e => {                                   // the popout: the page's own handler refused the drag a moment ago (bindNativeDrop)
     if (!reorder || !DnD.native.mine(e.dataTransfer) || !canReorder()) return;
@@ -3693,14 +3724,14 @@ function makeBrowser({ compact, st, host = STUDIO_HOST, kindUi = compact ? 'comp
     e.preventDefault();
     const name = reorder.name;
     endReorder();
-    dropCard(name, e.clientX, e.clientY);
+    dropInGap(name, e.clientX, e.clientY);
   });
   function makeCard(b) {
     const on = sel.has(b.name);
     const card = h('div', { class: 'bcard' + (on ? ' sel' : ''), tabindex: '-1', role: 'button', 'aria-pressed': on ? 'true' : 'false', dataset: { name: b.name } },   // renderGrid gives one card tabindex 0
       h('div', { class: 'bthumb' }, thumb(b.name, { size: 0, lazy, cls: 'fill', res: curRes, kind: st.kind }),
         h('button', { class: 'badd', type: 'button', tabindex: '-1', title: host.cardTitle(st.kind), 'aria-label': host.cardLabel(b.name, st.kind), onclick: e => { e.stopPropagation(); host.primary(b.name, st.kind); } }, icon(host.primaryIcon(st.kind), 14))),
-      h('div', { class: 'bname' }, b.name));
+      h('div', { class: 'bname', title: b.name }, b.name));           // the title: a long name is cut off, and in a pack the end of it tells two items apart
     card.addEventListener('click', e => {
       if (e.shiftKey && anchor && L().byName.has(nameKey(anchor))) {      // a range over the items on show, from the last plain click
         const names = filtered().map(x => x.name), a = names.indexOf(anchor), z = names.indexOf(b.name);
@@ -3749,7 +3780,7 @@ function makeBrowser({ compact, st, host = STUDIO_HOST, kindUi = compact ? 'comp
         dt.setData(ITEM_MIME, JSON.stringify({ kind: st.kind, name: b.name }));
         dt.setData('text/plain', ITEM_TEXT + st.kind + ':' + b.name);
         if (t) { const r = t.getBoundingClientRect(); dt.setDragImage(t, Math.round(r.width / 2), Math.round(r.height / 2)); }
-        if (canReorder()) { reorder = { name: b.name, x: e.clientX, y: e.clientY }; card.classList.add('reordering'); }
+        if (canReorder()) { endReorder(); reorder = { name: b.name, x: e.clientX, y: e.clientY }; card.classList.add('reordering'); watchDragEnd(card); }
       });
       card.addEventListener('dragend', endReorder);                          // Esc, or a drop anywhere else: nothing was saved
     }
@@ -3770,10 +3801,99 @@ function makeBrowser({ compact, st, host = STUDIO_HOST, kindUi = compact ? 'comp
   /* The grid is one Tab stop: the card that has the keyboard (or was clicked) is the one with tabindex 0. */
   grid.addEventListener('focusin', e => {
     const c = e.target.closest && e.target.closest('.bcard[data-name]');
-    if (!c || c.classList.contains('skel') || c === rovEl) return;
+    if (c) focusAway = false;
+    if (!c || c.classList.contains('skel') || (c === rovEl && rov === c.dataset.name)) return;
     if (rovEl) rovEl.tabIndex = -1;
     c.tabIndex = 0; rovEl = c; rov = c.dataset.name;
   });
+  /* The Tab stop among the cards that exist: the card it belongs to, or while that one has no card, the first on show. */
+  function paintTabStop() {
+    if (rovEl && rovEl.isConnected && rovEl.dataset.name === rov) return;
+    if (rovEl) rovEl.tabIndex = -1;
+    rovEl = cardNamed(rov) || grid.querySelector('.bcard[data-name]');
+    if (rovEl) rovEl.tabIndex = 0;
+  }
+  const cardNamed = name => (name ? Array.from(grid.children).find(c => c.dataset.name === name) : null) || null;
+  function measureWindow() {
+    const c = grid.querySelector('.bcard[data-name]'), high = c ? c.getBoundingClientRect().height : 0;   // not offsetHeight: it is rounded, and the padding would jump by the difference at each row
+    if (!high) return;                                         // not laid out (hidden, or taken off the page for a while): what was measured stays
+    const cs = getComputedStyle(grid);
+    win.cols = Math.max(1, cs.gridTemplateColumns.split(' ').filter(Boolean).length);       // the resolved columns
+    win.rowH = high + (parseFloat(cs.rowGap) || 0);
+  }
+  /* Cards win.list[a] up to b, in order, reusing the ones the last list had. */
+  function cardsFor(a, b) {
+    const frag = document.createDocumentFragment();
+    for (let i = a; i < b; i++) {
+      const it = win.list[i], old = win.pool && win.pool.get(it.name), card = old ? reuseCard(old) : makeCard(it);
+      card.tabIndex = -1;
+      card.classList.toggle('reordering', !!reorder && reorder.name === it.name);   // the card being dragged, scrolled back into view
+      frag.append(card);
+    }
+    return frag;
+  }
+  function dropCard(card) {
+    const t = card.querySelector('.thumb');
+    if (t && t._io) t._io.unobserve(t);
+    card.remove();
+  }
+  /* A library can hold thousands of items, so only the cards near the view exist (gridwindow.js); padding on the grid stands for
+     the rest. This brings them up to date with the scroll position. Called for each new list, each scroll and each resize. */
+  function paintWindow(measure = false) {
+    if (!win || (win.rowH && !scroll.clientHeight)) return;    // hidden: the cards and the padding wait as they are, so the scroll position can be put back
+    if (measure || !win.rowH) measureWindow();
+    const r = ZGridWindow.range({ top: scroll.getBoundingClientRect().top - grid.getBoundingClientRect().top, height: scroll.clientHeight,
+      rowH: win.rowH, cols: win.cols, total: win.list.length, margin: 480 });
+    const changed = r.first !== win.first || r.end !== win.end, act = document.activeElement;
+    const held = changed && act && act !== document.body && grid.contains(act) ? act.closest('.bcard') : null, heldAt = held ? win.first + Array.prototype.indexOf.call(grid.children, held) : -1;
+    const hadFocus = !!held && (heldAt < r.first || heldAt >= r.end);
+    if (hadFocus) act.blur();                                   // first: taking away a focused element forces a layout, and part way through the swap the list is shorter, so the scroll position would clamp
+    if (changed) {
+      if (r.first >= win.end || r.end <= win.first) {           // a jump: nothing stays
+        Array.from(grid.children).forEach(dropCard);
+        grid.append(cardsFor(r.first, r.end));
+      } else {
+        for (let i = win.first; i < r.first; i++) dropCard(grid.firstElementChild);
+        for (let i = win.end; i > r.end; i--) dropCard(grid.lastElementChild);
+        if (r.first < win.first) grid.prepend(cardsFor(r.first, win.first));
+        if (r.end > win.end) grid.append(cardsFor(win.end, r.end));
+      }
+      win.first = r.first; win.end = r.end;
+    }
+    grid.style.paddingTop = r.padTop + 'px';                    // before anything that forces a layout: with the new cards and the old padding the list is shorter, and the scroll position would clamp to it
+    grid.style.paddingBottom = r.padBottom + 'px';
+    if (changed) {
+      paintTabStop();
+      if (hadFocus) {                                           // the card with the keyboard scrolled away: the scroller holds the keyboard, so Enter or Ctrl+D cannot land on a card nobody chose
+        focusAway = true;
+        scroll.focus({ preventScroll: true });
+      } else if (focusAway && document.activeElement === scroll && rovEl && rovEl.dataset.name === rov) {   // and it is back
+        rovEl.focus({ preventScroll: true });
+      }
+    }
+    if (!win.rowH && win.end > 0) {                             // the first cards are there to measure: now the real window
+      measureWindow();
+      if (win.rowH) paintWindow();
+    }
+  }
+  function paintWindowSoon(measure = false) {
+    winMeasure = winMeasure || measure;
+    if (!winFrame) winFrame = requestAnimationFrame(() => { const m = winMeasure; winFrame = 0; winMeasure = false; paintWindow(m); });
+  }
+  scroll.addEventListener('scroll', () => paintWindowSoon(), { passive: true });
+  new ResizeObserver(() => paintWindowSoon(true)).observe(scroll);
+  /* Scrolls item i of the list on show into view (only as far as it takes) and gives back its card. */
+  function revealCard(i) {
+    if (!win.rowH) measureWindow();
+    const row = Math.floor(i / win.cols), lastRow = Math.floor((win.list.length - 1) / win.cols);
+    const y = grid.getBoundingClientRect().top - scroll.getBoundingClientRect().top + scroll.scrollTop + row * win.rowH;
+    if (!row) scroll.scrollTop = 0;                            // the first and last rows go right to the edge, past the scroller's padding
+    else if (row === lastRow) scroll.scrollTop = scroll.scrollHeight;
+    else if (y < scroll.scrollTop) scroll.scrollTop = y;
+    else if (y + win.rowH > scroll.scrollTop + scroll.clientHeight) scroll.scrollTop = y + win.rowH - scroll.clientHeight;
+    paintWindow();
+    return cardNamed(win.list[i].name);
+  }
   function paintCount(list) {
     const f = tagFilterOn();
     let t = list.length + ' ' + (list.length === 1 ? W().one : W().many) + (st.cat !== 'All' || st.q || f ? ' of ' + L().items.length : '');
@@ -3789,6 +3909,8 @@ function makeBrowser({ compact, st, host = STUDIO_HOST, kindUi = compact ? 'comp
       if (gone.length) { gone.forEach(n => sel.delete(n)); paintSel(); }
     }
     const usable = !loading && L().state !== 'error' && L().items.length > 0;
+    libWarn.hidden = !(usable && L().error);
+    setText(libWarn, usable && L().error ? L().error : '');
     const list = usable ? filtered() : null;
     const sig = list ? list.map(b => b.name).join('\n') : '';
     const dropHidden = () => {
@@ -3805,8 +3927,9 @@ function makeBrowser({ compact, st, host = STUDIO_HOST, kindUi = compact ? 'comp
     const act = document.activeElement, focusName = act && act.classList && act.classList.contains('bcard') && grid.contains(act) ? act.dataset.name : null;
     const pool = new Map(usable && gridKind === st.kind ? cardEls().map(c => [c.dataset.name, c]) : []);   // cards of this kind already built: reused by name, not made again
     $$('.thumb', grid).forEach(t => { if (t._io) t._io.unobserve(t); });   // the old cards are about to go: do not keep them in the observer
-    const my = ++token;
     grid.replaceChildren();
+    grid.style.paddingTop = grid.style.paddingBottom = '';
+    win = null;
     lastSig = ''; built = ''; gridKind = ''; rovEl = null;
     if (loading) {
       setText(count, 'Scanning...');
@@ -3844,25 +3967,17 @@ function makeBrowser({ compact, st, host = STUDIO_HOST, kindUi = compact ? 'comp
     }
     gridKind = st.kind;
     const have = new Set(list.map(b => b.name));
-    const stop = [rov, anchor, sel.values().next().value].find(n => n && have.has(n)) || list[0].name;       // the card that is the one Tab stop of the grid
-    let i = 0;
-    const chunk = () => {
-      if (my !== token) return;
-      const frag = document.createDocumentFragment();
-      let focusEl = null;
-      for (const end = Math.min(i + 160, list.length); i < end; i++) {
-        const name = list[i].name, old = pool.get(name), card = old ? reuseCard(old) : makeCard(list[i]);
-        if (name === stop) { card.tabIndex = 0; rovEl = card; rov = name; } else card.tabIndex = -1;
-        if (name === focusName) focusEl = card;
-        frag.append(card);
-      }
-      grid.append(frag);
-      if (focusEl) focusEl.focus({ preventScroll: true });                                  // the card that had the keyboard is still here: it keeps it
-      if (i >= list.length) built = st.kind + '\n' + sig;
-      if (keepTop !== null && (i >= list.length || scroll.scrollHeight - scroll.clientHeight >= keepTop)) { scroll.scrollTop = keepTop; keepTop = null; }
-      if (i < list.length) requestAnimationFrame(chunk);
-    };
-    chunk();
+    rov = [rov, anchor, sel.values().next().value].find(n => n && have.has(n)) || list[0].name;       // the card that is the one Tab stop of the grid
+    win = { list, first: 0, end: 0, cols: 1, rowH: 0, pool };
+    built = st.kind + '\n' + sig;
+    paintWindow();                                             // the first cards, measured, and the padding for the rest
+    scroll.scrollTop = keepTop === null ? 0 : keepTop;         // a new list starts at the top; a rescan or a refresh must not throw you there
+    paintWindow();
+    win.pool = null;
+    if (focusName && have.has(focusName)) {                    // the card that had the keyboard is still in the list: it keeps it
+      const c = revealCard(list.findIndex(b => b.name === focusName));
+      if (c) c.focus({ preventScroll: true });
+    }
   }
   function renderCats() {
     const tree = catTree(st.kind);
@@ -3929,31 +4044,28 @@ function makeBrowser({ compact, st, host = STUDIO_HOST, kindUi = compact ? 'comp
   /* Moves the highlight one card (dx) or one row (dy). The row length is however many cards sit at the first card's height. */
   function move(dx, dy) {
     onSearch.flush();
-    const cards = $$('.bcard[data-name]', grid);
-    if (!cards.length) return false;
-    const top0 = cards[0].offsetTop;
-    let cols = 0;
-    while (cols < cards.length && cards[cols].offsetTop === top0) cols++;
-    const act = document.activeElement, onCard = !!act && act.classList.contains('bcard') && grid.contains(act);
-    const at = onCard ? cards.indexOf(act) : anchor ? cards.findIndex(c => c.dataset.name === anchor) : -1;     // from the card that has the keyboard, else from the highlight
-    const to = at < 0 ? 0 : clamp(at + dx + dy * cols, 0, cards.length - 1);
-    setSel(cards[to].dataset.name, onCard);
-    cards[to].scrollIntoView({ block: 'nearest' });
+    if (!win || !win.list.length) return false;
+    measureWindow();
+    const list = win.list, act = document.activeElement, away = act === scroll && focusAway, onCard = away || (!!act && act.classList.contains('bcard') && grid.contains(act));
+    const from = away ? rov : onCard ? act.dataset.name : anchor;   // from the card that has the keyboard (or had it, and scrolled away), else from the highlight
+    const at = from ? list.findIndex(b => b.name === from) : -1;
+    const to = at < 0 ? 0 : clamp(at + dx + dy * win.cols, 0, list.length - 1);
+    revealCard(to);                                            // first: the card may not exist yet, and setSel gives it the focus
+    setSel(list[to].name, onCard);
     return true;
   }
   /* Home and End on a card: the first or the last card on show. */
   function moveEdge(last) {
     onSearch.flush();
-    const cards = $$('.bcard[data-name]', grid);
-    if (!cards.length) return false;
-    const c = cards[last ? cards.length - 1 : 0];
-    setSel(c.dataset.name, true);
-    c.scrollIntoView({ block: 'nearest' });
+    if (!win || !win.list.length) return false;
+    const to = last ? win.list.length - 1 : 0;
+    revealCard(to);
+    setSel(win.list[to].name, true);
     return true;
   }
   /* Studio's Library and the dock: the arrow keys on a card move to the next one (the popout's window handler does the same from its search box). */
   scroll.addEventListener('keydown', e => {
-    if (e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey || e.shiftKey || !e.target.classList || !e.target.classList.contains('bcard')) return;
+    if (e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey || e.shiftKey || !e.target.classList || !(e.target.classList.contains('bcard') || e.target === scroll)) return;
     const dx = e.key === 'ArrowLeft' ? -1 : e.key === 'ArrowRight' ? 1 : 0, dy = e.key === 'ArrowUp' ? -1 : e.key === 'ArrowDown' ? 1 : 0;
     if (dx || dy) { e.preventDefault(); move(dx, dy); }
     else if (e.key === 'Home' || e.key === 'End') { e.preventDefault(); moveEdge(e.key === 'End'); }
@@ -3978,6 +4090,7 @@ function makeBrowser({ compact, st, host = STUDIO_HOST, kindUi = compact ? 'comp
     search.placeholder = `Search ${w.many}...`; search.setAttribute('aria-label', `Search ${w.many}`);
     tagBtn.title = tagText; tagBtn.setAttribute('aria-label', tagText);
     strip.setAttribute('aria-label', `Selected ${w.many}`);
+    if (addFolderBtn) addFolderBtn.title = `Add a folder of your own ${w.many}. ZBrush 2026 and newer.`;
     if (dockHint) setText(dockHint, `Click ${aOrAn(w.one)} and press Add, or drag it onto the ring or the list.`);
   }
   /* Switches to another kind: its own folders and selection, the same search text and tag filter. */
@@ -4005,6 +4118,7 @@ function makeBrowser({ compact, st, host = STUDIO_HOST, kindUi = compact ? 'comp
     el: root, scroller: () => scroll,
     kind: () => st.kind, setKind, navStep,
     refresh() { renderAll(true); paintTarget(); },                  // after a library load: the scroll position stays
+    relayout() { paintWindow(true); },                              // just put on the page: measure now, so a scroll position can be put back this frame (the ResizeObserver comes a frame later)
     hasSel: () => sel.size > 0,
     focusSearch(select = true) { search.focus(); if (select) search.select(); },
     typeChar(ch) { search.value += ch; search.dispatchEvent(new Event('input', { bubbles: true })); },
@@ -4018,7 +4132,7 @@ function makeBrowser({ compact, st, host = STUDIO_HOST, kindUi = compact ? 'comp
       renderTags(); paintFavBtn();
       if (L().state === 'ready') renderCats();                 // the Favourites count
       paintOrderBtn();
-      if (L().state === 'ready' && filtered().map(b => b.name).join('\n') !== lastSig) renderGrid(true);   // a long list is drawn a part at a time: keep waits for it
+      if (L().state === 'ready' && filtered().map(b => b.name).join('\n') !== lastSig) renderGrid(true);   // the view stays where it is
     },
     /* After get_usage / forget_recent: the Recent count, and the grid when Favourites or Recent is on show and its order or members changed. */
     updateUsage() {
@@ -4044,6 +4158,7 @@ function buildLibraryScreen(root) {
   const browser = makeBrowser({ compact: false, st: S.lib });
   const target = h('aside', { class: 'col lib-target' });
   root.replaceChildren(browser.el, target);
+  browser.relayout();                                 // showScreen puts the scroll position back next
   R.libRefresh = kind => { if (kind === S.lib.kind) browser.refresh(); };
   R.badges = () => browser.updateBadges();
   const list = h('div', { class: 'ilist' });          // kept between repaints, so a tag change does not send it back to the top
@@ -4419,8 +4534,75 @@ function buildSettingsScreen(root) {
     { const o0 = bOwner(S.cfg.browser && S.cfg.browser.hotkey); if (o0) bhk.say(bsay(o0), 'warn'); }
     { const o1 = pOwner(S.cfg.profile && S.cfg.profile.next_hotkey); if (o1) phk.say(psay(o1), 'warn'); }
 
+    /* --- library folders: the user's own folders of brushes, alphas, materials and textures. Acts straight away; the lists live in studio.json, not in the menus */
+    const lfBox = h('div', { class: 'lf-kinds' }, h('div', { class: 'fhint' }, 'Looking for your folders...'));
+    let lfGen = 0;                                             // a slower earlier answer must not paint over a newer one
+    const lfPaint = folders => {
+      lfBox.replaceChildren(...LIB_KINDS.map(kind => {
+        const w = K(kind), rows = Array.isArray(folders && folders[kind]) ? folders[kind] : [];
+        const list = rows.map(f => {
+          const tags = [];
+          if (f.error) tags.push(h('span', { class: 'tag amber', title: String(f.error) }, 'Cannot be read'));
+          else if (!f.exists) tags.push(h('span', { class: 'tag amber' }, 'Missing'));
+          else if (typeof f.count === 'number') tags.push(h('span', { class: 'tag dim' }, plural(f.count, 'file') + (f.hidden > 0 ? ', ' + f.hidden + ' hidden' : '')));
+          const forget = iconBtn('x', 'Forget this folder', async () => {
+            forget.disabled = true;
+            let r = null;
+            try { r = await call('forget_library_folder', kind, f.path); }
+            catch (e) { toast('Could not forget the folder: ' + e.message, { tone: 'warn' }); }
+            forget.disabled = false;
+            lfAfter(kind, r, 'Forgot that folder.');
+          });
+          return h('div', { class: 'zrow' }, h('div', { class: 'grow' }, h('div', { class: 'zname' }, f.name || f.path, ...tags), h('div', { class: 'zpath mono', title: f.path }, f.path)),
+            h('div', { class: 'btn-row' }, forget));
+        });
+        if (!list.length) list.push(h('div', { class: 'fhint' }, 'None added.'));
+        const add = h('button', { class: 'btn small', type: 'button', onclick: async () => {
+          add.disabled = true;
+          let r = null;
+          try { r = await call('add_library_folder', kind); }
+          catch (e) { toast('Could not add the folder: ' + e.message, { tone: 'warn' }); }
+          add.disabled = false;
+          lfAfter(kind, r, 'Added.');
+        } }, icon('folder', 12), 'Add a folder...');
+        return h('div', { class: 'lf-kind' }, h('div', { class: 'flabel' }, w.tab), h('div', { class: 'zrows' }, ...list), h('div', { class: 'btn-row' }, add));
+      }));
+    };
+    // What add and forget answer: say it, paint the lists they hand back, and when this page holds that kind's library, read it again so the Library screen and the dock follow.
+    const lfAfter = async (kind, r, fallback) => {
+      if (!r || r.cancelled) return;
+      toast(r.message || (r.ok ? fallback : 'That did not work.'), !r.ok ? { tone: 'warn', ms: 5000 } : r.already ? { ms: 4000 } : { tone: 'ok', ms: 4000 });
+      if (r.folders) { ++lfGen; lfPaint(r.folders); }
+      else if (!r.ok) { lfLook(); return; }                    // refused without a list (the file changed under the card): paint what is there now
+      if (r.ok && !r.already) {
+        await loadLibrary(kind, true);                         // also a kind not read yet, or one still being read: its list then has the folder
+        lfLook();                                              // the counts fill in once the folder has been read
+      }
+    };
+    const lfLook = async () => {
+      if (R.libfolders && R.libfolders !== lfLook) return R.libfolders();   // this card was rebuilt (undo, reload): paint the live one
+      const gen = ++lfGen;
+      let r;
+      try { r = await call('get_library_folders'); if (gen !== lfGen) return; }
+      catch (e) { if (gen !== lfGen) return; lfBox.replaceChildren(h('div', { class: 'fhint bad' }, 'Could not read your folders: ' + e.message)); return; }
+      if (r && r.ok && r.folders) lfPaint(r.folders);
+      else { lfBox.replaceChildren(h('div', { class: 'fhint bad' }, (r && r.message) || 'Could not read your folders.')); return; }
+      // A kind with folders that this page has not read yet: read it now, so the rows get their counts (and Cannot be read) without a visit to the Library.
+      const unread = LIB_KINDS.filter(k => (r.folders[k] || []).length && !lib(k).loaded && !lib(k).busy);
+      if (!unread.length) return;
+      try {
+        await Promise.all(unread.map(k => loadLibrary(k)));
+        if (gen !== lfGen) return;
+        const r2 = await call('get_library_folders');
+        if (gen === lfGen && r2 && r2.ok && r2.folders) lfPaint(r2.folders);
+      } catch (e) { /* the rows stay without counts; the Library screen will say */ }
+    };
+    page.append(card('Library folders', 'Your own folders of brushes, alphas, materials and textures, searched after ZBrush’s own. ZBrush 2026 and newer. Acts straight away.', lfBox));
+    R.libfolders = lfLook;
+    lfLook();
+
     /* --- studio (preferences of this window, saved immediately, not part of the menus file) */
-    const updNote = h('div', { class: 'fhint upd-status', role: 'status' });
+    const updNote =h('div', { class: 'fhint upd-status', role: 'status' });
     const updBtn = h('button', { class: 'btn small primary', type: 'button', hidden: true, title: 'Get the new version',
       onclick: () => openUpdate(window.RadialUpdate && window.RadialUpdate.last) }, 'Install update');
     let updTok = 0;
@@ -5193,10 +5375,10 @@ function describeProblem(raw) {
     if (t.startsWith(": 'browser' must be a string")) return 'has a browser filter that is not a tag';
     if (t.startsWith(": browser 'kind' must be one of ")) return 'opens a browser tab that does not exist';
     if (t.startsWith(': capture folder ')) return 'has a capture folder that cannot be used: ' + t.slice(': capture folder '.length);
-    if ((r = /^: (tool|project) must be on this PC, not a network path$/.exec(t))) return `has a ${r[1]} on a network path. Use a file on this PC`;
-    if ((r = /^: (tool|project) '(.*)' must be a full path, such as (.*)$/s.exec(t))) return `has the ${r[1]} ${r[2]}, which is not a full path. Use a path such as ${r[3]}`;
+    if ((r = /^: (tool|project|layout) must be on this PC, not a network path$/.exec(t))) return `has a ${r[1]} on a network path. Use a file on this PC`;
+    if ((r = /^: (tool|project|layout) '(.*)' must be a full path, such as (.*)$/s.exec(t))) return `has the ${r[1]} ${r[2]}, which is not a full path. Use a path such as ${r[3]}`;
     if ((r = /^: project '(.*)' must be a \.zpr file or a folder$/s.exec(t))) return `has the project ${r[1]}, which must be a .zpr file or a folder`;
-    if ((r = /^: (tool|project) '(.*)' must be a (\.\w+) file$/s.exec(t))) return `has the ${r[1]} ${r[2]}, which must be a ${r[3]} file`;
+    if ((r = /^: (tool|project|layout) '(.*)' must be a (\.\w+) file$/s.exec(t))) return `has the ${r[1]} ${r[2]}, which must be a ${r[3]} file`;
     if ((r = /^: '(\w+)' must be a non-empty string$/.exec(t))) return 'needs a ' + (own(TARGET_NOUN, r[1]) ? TARGET_NOUN[r[1]] : 'target');
     if ((r = /^: (\w+) name (.+) must not contain /s.exec(t))) return `has the ${r[1]} name ${r[2]}, which looks like a path. Use only the name, without \\ / : or ..`;
     if ((r = /^: submenu (.+) does not exist$/s.exec(t))) return `opens the submenu ${unq(r[1])}, which does not exist`;
@@ -5974,7 +6156,7 @@ function describeChanges() {
   const after = S.cfg || {};
   const groups = [];
   const q = s => '\u201c' + s + '\u201d';
-  const itemName = it => it.empty === true ? 'Empty slot' : it.label || it.brush || it.alpha || it.material || it.texture || it.press || it.toggle || it.set || ('capture' in it ? 'Capture' : '') || ('tool' in it ? 'Tool' : '') || ('project' in it ? 'Project' : '') ||(it.menu ? 'Submenu ' + it.menu : it.steps ? 'Steps' : it.tag ? 'Tag ' + it.tag : 'browser' in it ? 'Browser' + (it.browser ? ' ' + it.browser : '') : 'item');
+  const itemName = it => it.empty === true ? 'Empty slot' : it.label || it.brush || it.alpha || it.material || it.texture || it.press || it.toggle || it.set || ('capture' in it ? 'Capture' : '') || ('tool' in it ? 'Tool' : '') || ('project' in it ? 'Project' : '') || ('layout' in it ? 'Layout' : '') ||(it.menu ? 'Submenu ' + it.menu : it.steps ? 'Steps' : it.tag ? 'Tag ' + it.tag : 'browser' in it ? 'Browser' + (it.browser ? ' ' + it.browser : '') : 'item');
   const bm = before.menus || {}, am = after.menus || {};
   for (const id of Object.keys(am)) {
     const a = am[id] || {}, b = own(bm, id) ? bm[id] : undefined;
@@ -6305,8 +6487,10 @@ async function loadLibrary(kind = 'brush', refresh = false) {
   const since = refresh && L.loaded && L.state === 'ready' && L.signature ? L.signature : '';      // the list the page holds: the backend answers "unchanged" without it when the folders still give that list
   try { r = await call('get_library', ...(since ? [true, kind, since] : [!!refresh, kind])); } catch (e) { r = { error: String((e && e.message) || e) }; }
   r = r || {};
-  if (refresh && r.error && L.loaded && L.state === 'ready' && L.items.length) {   // a rescan that failed: keep what is on show, report the error
+  const gotList = r.unchanged || (Array.isArray(r.items) ? r.items : Array.isArray(r.brushes) ? r.brushes : []).length > 0;
+  if (refresh && r.error && !gotList && L.loaded && L.state === 'ready' && L.items.length) {   // a rescan that brought no list at all (the call failed): keep what is on show, report the error; one unreadable folder still brings the others' list
     L.error = String(r.error); L.busy = false; paintRescan();
+    if (R.libRefresh) R.libRefresh(kind);                                  // the error shows above the list
     return;
   }
   if (since && r.unchanged && r.signature === since) {                    // the same list: keep it, and take only what may differ beside it
@@ -6314,7 +6498,7 @@ async function loadLibrary(kind = 'brush', refresh = false) {
     L.sources = Array.isArray(r.sources) ? r.sources : [];
     L.zbrushFound = r.zbrush_found !== false;
     L.error = r.error ? String(r.error) : null;
-    L.state = L.error ? 'error' : 'ready';
+    L.state = L.error && !L.items.length ? 'error' : 'ready';        // one folder that cannot be read: the others' items still show, with the error above them
     L.busy = false;
     popScanned[kind] = Date.now();
     Thumbs.forgetMisses(kind);
@@ -6331,7 +6515,7 @@ async function loadLibrary(kind = 'brush', refresh = false) {
   L.sorted = L.items.slice().sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base', numeric: true }));
   L.byName = new Map(L.items.map(b => [nameKey(b.name), b]));
   L._tree = L._tc = null;
-  L.state = L.error ? 'error' : 'ready';
+  L.state = L.error && !L.items.length ? 'error' : 'ready';          // the backend keeps an unreadable folder's items and reads the others: show them, with the error above
   L.loaded = true; L.busy = false;
   if (refresh) Thumbs.forgetMisses(kind);
   if (R.libRefresh) R.libRefresh(kind);

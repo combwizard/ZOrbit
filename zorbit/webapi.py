@@ -109,7 +109,7 @@ def library_signature(walk) -> str:
         h.update(str(it["path"]).encode("utf-8", "surrogatepass"))
         h.update(b"\n")
     for rep in walk.sources:
-        h.update(repr((rep["label"], str(rep["path"]), rep["exists"], rep["count"], rep["error"])).encode("utf-8", "surrogatepass"))
+        h.update(repr((rep["label"], str(rep["path"]), rep["exists"], rep["count"], rep["error"], rep.get("display"))).encode("utf-8", "surrogatepass"))
     return h.hexdigest()
 
 
@@ -124,7 +124,7 @@ class LibraryApi:
         give the same list, the answer is {"unchanged": True, "signature", "kind", "sources", "zbrush_found",
         "error"} with no items or categories (and no "brushes"), so nothing big crosses the bridge."""
         out = {"kind": kind, "items": [], "categories": [], "sources": [], "zbrush_found": False, "error": None,
-               "signature": ""}
+               "signature": "", "user_folders": 0}
         if kind not in assets.ALL_KINDS:
             out["error"] = "unknown kind"
             return out
@@ -141,8 +141,9 @@ class LibraryApi:
                 items, categories = [], []
             else:
                 items, cats = [], {}
+                shown = {r["label"]: r.get("display") or labels.get(r["label"], r["label"]) for r in walk.sources}
                 for it in walk.items:
-                    src = labels.get(it["label"], it["label"])
+                    src = shown.get(it["label"]) or labels.get(it["label"], it["label"])
                     cat = f"{src}/{it['rel']}" if it["rel"] else src
                     cats[cat] = cats.get(cat, 0) + 1
                     items.append({"name": it["name"], "source": src, "category": cat, "path": it["path"]})
@@ -150,11 +151,18 @@ class LibraryApi:
                 _lib_cache[kind] = (sig, items, categories)
             sources = []
             for rep in walk.sources:
-                sources.append({"label": labels.get(rep["label"], rep["label"]), "path": rep["path"],
-                                "exists": rep["exists"], "count": rep["count"], "error": rep["error"]})
+                sources.append({"label": rep.get("display") or labels.get(rep["label"], rep["label"]),
+                                "path": rep["path"], "exists": rep["exists"], "count": rep["count"],
+                                "error": rep["error"], "added": brushes.is_added(rep["label"]),
+                                "hidden": rep.get("hidden", 0)})
             if refresh:
-                brushes.cache_prune(8000)
+                total = 0
+                for k in assets.ALL_KINDS:
+                    w = assets.last_walk(k)
+                    total += len(w.items) if w is not None else 0
+                brushes.cache_prune(max(8000, 2 * total))     # a big library keeps its pictures between rescans
             out.update(items=items, categories=categories, sources=sources, signature=sig,
+                       user_folders=sum(1 for x in sources if x["added"]),
                        zbrush_found=bool(dirs.get("install") or dirs.get("user_assets")),
                        error=brushes.walk_error(walk))   # the browser keeps the list it had when a rescan reports one
             if same:
@@ -163,7 +171,7 @@ class LibraryApi:
                 out["unchanged"] = True
                 return out
         except Exception as e:
-            out.update(items=[], categories=[], sources=[], zbrush_found=False,
+            out.update(items=[], categories=[], sources=[], zbrush_found=False, user_folders=0,
                        error=str(e) or e.__class__.__name__)
         if kind == "brush":
             out["brushes"] = out["items"]

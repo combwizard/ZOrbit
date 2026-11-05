@@ -26,6 +26,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 
 import config as C          # noqa: E402
+import assets               # noqa: E402
 import brushes              # noqa: E402
 import changelog            # noqa: E402
 import expand               # noqa: E402
@@ -855,16 +856,17 @@ class Api(webapi.LibraryApi, webapi.TagApi):
         to a tag, so every tag setting shows even when no menu has a tagged brush; the submenu slot is plain.
         look: the resolved look the menu is drawn with (None: the ring's own)."""
         store = app.tags.load()
-        index = {k.replace(" ", ""): p for k, p in brushes.brush_index().items()}
+        listed = assets.names("brush")
+        index = {k.replace(" ", ""): (listed.get(k) or p.stem) for k, p in brushes.brush_index().items()}
         names = []
         for ik in store.tagged("brush"):
             if ik.split(":", 1)[1] in index:
-                names.append(index[ik.split(":", 1)[1]].stem)
-        for p in index.values():
+                names.append(index[ik.split(":", 1)[1]])
+        for n in index.values():
             if len(names) >= SAMPLE_SLOTS - 1:
                 break
-            if p.stem not in names:
-                names.append(p.stem)
+            if n not in names:
+                names.append(n)
         names = (names or list(SAMPLE_BRUSHES))[:SAMPLE_SLOTS - 1]
         colors = [t["color"] for t in store.tags()] or [tags.PALETTE[0]]
         items = [C.Item(label=n, kind="brush", data={"brush": n},
@@ -1281,7 +1283,10 @@ class Api(webapi.LibraryApi, webapi.TagApi):
         shown = [f"{c[0]}: {c[1]}"[:report.LINE_CHARS] for c in (cards if isinstance(cards, list) else [])[:8]
                  if isinstance(c, list) and len(c) == 2 and all(isinstance(x, str) for x in c)]
         modern, legacy = any(e.get("python") for e in known), any(not e.get("python") for e in known)
-        sections = [("ZBrush", report.zbrush_lines(known, procs)), ("Status cards", shown or ["(not shown yet)"]),
+        library = part(lambda: report.library_folder_lines(self.get_library_folders()["folders"]),
+                       lambda e: [f"could not be read: {e!r}"])
+        sections = [("ZBrush", report.zbrush_lines(known, procs)), ("Library folders", library),
+                    ("Status cards", shown or ["(not shown yet)"]),
                     ("Problems in the menus file", problems or ["none"])]
         sections += report.log_sections(DATA_DIR, modern, legacy, clean)
         return {"ok": True, "text": report.build(facts, sections, clean)}
@@ -1443,12 +1448,13 @@ class Api(webapi.LibraryApi, webapi.TagApi):
         return str(picked[0] if isinstance(picked, (list, tuple)) else picked)
 
     def choose_file(self, kind):
-        """File picker for a Tool or a Project item: the chosen path as text, or None when cancelled or the kind is not one
-        of those two."""
+        """File picker for a Tool, a Project or a Layout item: the chosen path as text, or None when cancelled or the kind
+        is not one of those three."""
         import webview
-        if kind not in ("tool", "project"):                  # a tuple, so an odd value from the page never raises here
+        if kind not in ("tool", "project", "layout"):                  # a tuple, so an odd value from the page never raises here
             return None
-        filters = {"tool": ("ZBrush tool (*.ztl)",), "project": ("ZBrush project (*.zpr)",)}
+        filters = {"tool": ("ZBrush tool (*.ztl)",), "project": ("ZBrush project (*.zpr)",),
+                   "layout": ("ZBrush UI layout (*.cfg)",)}
         picked = self._window.create_file_dialog(webview.FileDialog.OPEN, file_types=filters[kind])
         if not picked:
             return None
@@ -1496,6 +1502,110 @@ class Api(webapi.LibraryApi, webapi.TagApi):
             _write_studio_file(data)
         e = installs.entry(path)
         return {"ok": True, "message": f"Forgot {e['name'] if e else os.path.basename(os.path.normpath(str(path)))}."}
+
+    def get_library_folders(self):
+        """The folders the user added, per kind, for the Library screen. count, hidden and error come from the last
+        walk of that kind in this process (None when there was none, or it did not reach the folder)."""
+        out = {}
+        for kind in brushes.LIBRARY_KINDS:
+            folders = brushes.user_folders(kind)
+            try:
+                walk = assets.last_walk(kind)
+            except Exception as e:
+                _startup(f"get_library_folders: last_walk({kind}): {e!r}")
+                walk = None
+            found = {s.get("label"): s for s in (walk.sources if walk else [])}
+            rows = []
+            for f, name in zip(folders, brushes.display_names(folders)):
+                src = found.get(brushes.added_label(f))
+                rows.append({"path": str(f), "name": name, "exists": os.path.isdir(f),
+                             "count": src.get("count") if src else None,
+                             "hidden": (src.get("hidden") or 0) if src else None,
+                             "error": src.get("error") if src else None})
+            out[kind] = rows
+        return {"ok": True, "folders": out}
+
+    def add_library_folder(self, kind):
+        """Folder picker for a folder of the user's own brushes, alphas, materials or textures; remembered per kind in
+        studio.json. Refuses a network folder, one ZBrush's own folders already cover and one that overlaps a folder
+        already added (everything in it would be listed twice)."""
+        import webview
+        if kind not in brushes.LIBRARY_KINDS:
+            return {"ok": False, "message": "Unknown kind."}
+        picked = self._window.create_file_dialog(webview.FileDialog.FOLDER)
+        if not picked:
+            return {"ok": False, "cancelled": True}
+        p = os.path.normpath(str(picked[0] if isinstance(picked, (list, tuple)) else picked))
+        if p.startswith(("\\\\", "//")):
+            return {"ok": False, "message": "That is a network folder. Add a folder on this PC."}
+        if not os.path.isdir(p):
+            return {"ok": False, "message": "That folder cannot be found."}
+        zb_name = self._zbrush_folder_overlap(kind, p)
+        if zb_name:
+            return {"ok": False, "message": f"ZOrbit already searches that folder: it is part of ZBrush ({zb_name})."}
+        have = [str(f) for f in brushes.user_folders(kind)]
+        names = brushes.display_names(have)
+        key = os.path.normcase(p)
+        for f, name in zip(have, names):
+            if os.path.normcase(f) == key:
+                return {"ok": True, "already": True, "message": f"{name} is already listed.",
+                        "folders": self.get_library_folders()["folders"]}
+        for f, name in zip(have, names):
+            if _inside(p, f):
+                return {"ok": False, "message": f"{name} is already searched, and this one is inside it."}
+            if _inside(f, p):
+                return {"ok": False, "message": f"{name} is already searched, and this one would contain it."}
+        with _studio_lock:                     # read, change and write as one step
+            data = _studio_for_update()
+            if data is None:
+                return {"ok": False, "message": STUDIO_UNREADABLE}
+            lib = data.get("library_folders")
+            if not isinstance(lib, dict):
+                lib = {}
+            if not isinstance(lib.get(kind), list):
+                lib[kind] = []
+            lib[kind].append(p)
+            data["library_folders"] = lib
+            _write_studio_file(data)
+        folders = self.get_library_folders()["folders"]
+        name = next((r["name"] for r in folders[kind] if os.path.normcase(r["path"]) == key), os.path.basename(p))
+        return {"ok": True, "message": f"Added {name}.", "folders": folders}
+
+    def _zbrush_folder_overlap(self, kind, p):
+        """The name of the ZBrush folder that p is, is inside or contains; None when it overlaps none of them."""
+        labels = assets.source_labels(kind)
+        for label, folder, _recursive in assets.sources(kind):      # the named library first
+            if not brushes.is_added(label) and (_inside(p, str(folder)) or _inside(str(folder), p)):
+                return labels.get(label) or "the ZBrush folder"
+        dirs = brushes.zbrush_dirs()
+        for d in (dirs.get("install"), dirs.get("user_assets")):
+            if d and (_inside(p, str(d)) or _inside(str(d), p)):
+                return "the ZBrush folder"
+        return None
+
+    def forget_library_folder(self, kind, path):
+        """Takes a folder out of the list of that kind. The folder itself is not touched."""
+        if kind not in brushes.LIBRARY_KINDS:
+            return {"ok": False, "message": "Unknown kind."}
+        key = os.path.normcase(os.path.normpath(str(path)))
+        with _studio_lock:                     # read, change and write as one step
+            data = _studio_for_update()
+            if data is None:
+                return {"ok": False, "message": STUDIO_UNREADABLE}
+            lib = data.get("library_folders")
+            listed = lib.get(kind) if isinstance(lib, dict) else None
+            listed = listed if isinstance(listed, list) else []
+            kept = [f for f in listed if not (isinstance(f, str) and os.path.normcase(os.path.normpath(f)) == key)]
+            if len(kept) == len(listed):
+                return {"ok": False, "message": "That folder is not in the list."}
+            have = brushes.user_folders(kind)
+            name = next((n for f, n in zip(have, brushes.display_names(have)) if os.path.normcase(str(f)) == key),
+                        os.path.basename(key))
+            lib[kind] = kept
+            data["library_folders"] = lib
+            _write_studio_file(data)
+        return {"ok": True, "message": f"Forgot {name}. The folder itself was not touched.",
+                "folders": self.get_library_folders()["folders"]}
 
     # --- import / export (menus, settings and tags in one file) -----------------------------------
     def _export_name(self):
@@ -1719,7 +1829,7 @@ class Api(webapi.LibraryApi, webapi.TagApi):
         # build() has cleaned the menus already, so count what was there before: the raw menus of the same ids
         left = menushare.left_out({mid: menus[mid] for mid in menushare.collect(cfg, menu_id)})
         if left:
-            note += f" {_plural(left, 'Tool or Project item')} left out of the file, because their paths belong to this PC."
+            note += f" {_plural(left, 'Tool, Project or Layout item')} left out of the file, because their paths belong to this PC."
         subs = len(bundle["menus"]) - 1
         what = f'"{title}"' + (f" and its {_plural(subs, 'submenu')}" if subs else "")
         try:
@@ -2294,6 +2404,14 @@ def _write_studio_file(data: dict):
     with _studio_lock:
         os.makedirs(paths.CONFIG_DIR, exist_ok=True)
         fsutil.write_atomic(STUDIO_FILE, json.dumps(data, indent=2))
+
+
+def _inside(a, b) -> bool:
+    """True when folder a is folder b or inside it (case and slashes ignored). A separator is appended, so
+    D:\\ZBrush 2026 beta is not taken for being inside D:\\ZBrush 2026."""
+    a = os.path.normcase(os.path.normpath(str(a))).rstrip("\\/") + os.sep
+    b = os.path.normcase(os.path.normpath(str(b))).rstrip("\\/") + os.sep
+    return a.startswith(b)
 
 
 def _on_closing(api):

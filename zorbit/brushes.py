@@ -1,7 +1,9 @@
 """Locate ZBrush brushes (.zbp) and produce cached icon thumbnails."""
 from __future__ import annotations
 
+import hashlib
 import io
+import json
 import time
 import os
 import re
@@ -21,7 +23,10 @@ except ImportError:  # run as a plain module / script
 _DIR_RE = re.compile(r"^(?:Maxon )?ZBrush (\d{4})_", re.I)
 _index: dict[str, Path] | None = None
 _install_index: dict[str, dict[str, Path]] = {}
-_index_lock = threading.Lock()
+_index_lock = threading.Lock()         # held only to swap what a walk made in: find_brush() never waits for a walk
+_build_lock = threading.Lock()         # one walk of the brush folders at a time
+_walk = None                           # the Walk _index was built from (merged with what an unreadable folder had)
+_walk_t0 = float("-inf")               # time.perf_counter() when that walk began
 _write_lock = threading.Lock()
 
 
@@ -79,10 +84,115 @@ def zbrush_dirs() -> dict:
     return res
 
 
+LIBRARY_KINDS = ("brush", "alpha", "material", "texture")
+ADDED = "added:"            # label prefix of a folder the user added; the rest is its normcased, normalised path
+_FIXED_NAMES = {"my brushes", "zbrush", "lightbox", "my alphas", "my materials", "my textures"}
+_settings_cache: dict[str, tuple] = {}     # {studio.json path: (its bytes, the parsed folder lists)}
+
+
+def added_label(path) -> str:
+    """The label of a folder the user added. It is made from the path, so the same folder gets the same label
+    whatever the case or the slashes, and a list of saved picks can name it."""
+    return ADDED + os.path.normcase(os.path.normpath(str(path)))
+
+
+def is_added(label) -> bool:
+    return isinstance(label, str) and label.startswith(ADDED)
+
+
+def _settings() -> dict:
+    """{kind: [path, ...]} for every kind, from "library_folders" in studio.json. The file is read each time and
+    parsed only when its bytes changed. A missing, unreadable or odd file gives empty lists; an entry that is not
+    an absolute local path is left out (a network path would stall the walk), and a repeat is dropped."""
+    import paths                          # at call time: the tests point CONFIG_DIR elsewhere
+    path = os.path.join(paths.CONFIG_DIR, "studio.json")
+    hit = _settings_cache.get(path)
+    try:
+        with open(path, "rb") as f:
+            raw = f.read()
+    except FileNotFoundError:
+        _settings_cache.pop(path, None)
+        return {k: [] for k in LIBRARY_KINDS}
+    except OSError:                       # held for a moment (Studio rewriting it, a scanner): the last good read holds,
+        if hit:                           # or the app would drop every added folder until the next tick
+            return {k: list(v) for k, v in hit[1].items()}
+        return {k: [] for k in LIBRARY_KINDS}
+    if hit and hit[0] == raw:
+        return {k: list(v) for k, v in hit[1].items()}
+    res: dict = {k: [] for k in LIBRARY_KINDS}
+    try:
+        data = json.loads(raw.decode("utf-8-sig"))
+    except ValueError:                    # includes UnicodeDecodeError
+        if hit:                           # a hand edit gone wrong: the last good read holds, and is not replaced in the cache
+            return {k: list(v) for k, v in hit[1].items()}
+        data = None
+    lib = data.get("library_folders") if isinstance(data, dict) else None
+    if isinstance(lib, dict):
+        for kind in LIBRARY_KINDS:
+            seen: set = set()
+            entries = lib.get(kind)
+            for p in entries if isinstance(entries, list) else []:
+                if not isinstance(p, str) or not p.strip() or p.strip().startswith(("\\\\", "//")):
+                    continue
+                if not os.path.isabs(p):
+                    continue
+                p = os.path.normpath(p)
+                key = os.path.normcase(p)
+                if key not in seen:
+                    seen.add(key)
+                    res[kind].append(p)
+    _settings_cache[path] = (raw, res)
+    return {k: list(v) for k, v in res.items()}
+
+
+def user_folders(kind) -> list:
+    """The folders the user added for a kind (brush, alpha, material or texture), in the order they chose."""
+    return [Path(p) for p in _settings().get(kind, [])]
+
+
+def user_folders_signature() -> tuple:
+    """All the lists as one value the app can compare to see that the user changed them."""
+    s = _settings()
+    return tuple((k, tuple(s[k])) for k in LIBRARY_KINDS)
+
+
+def _safe(s) -> str:
+    """A folder name as a label that is also a plain name: no slash, colon or "..", never empty."""
+    s = re.sub(r"[\\/:]+", " ", str(s))
+    while ".." in s:
+        s = s.replace("..", ".")
+    return re.sub(r" +", " ", s).strip() or "folder"
+
+
+def display_names(folders) -> list:
+    """What each folder is called in the browser: its own name, or Drive X for a drive root. A name that is
+    taken (by one of ZBrush's own libraries or by an earlier folder, case ignored) gets (2), (3) and so on."""
+    taken = set(_FIXED_NAMES)
+    out = []
+    for f in folders:
+        f = str(f)
+        name = Path(f).name
+        if not name:
+            letter = os.path.splitdrive(f)[0].rstrip(":\\/")
+            name = f"Drive {letter.upper()}" if letter else "folder"
+        name = _safe(name)
+        cand, n = name, 1
+        while cand.lower() in taken:
+            n += 1
+            cand = f"{name} ({n})"
+        taken.add(cand.lower())
+        out.append(cand)
+    return out
+
+
 class Walk(NamedTuple):
-    items: list           # [{"label", "rel", "name", "path"}] in list order; a name seen before is left out
+    items: list           # [{"label", "rel", "name", "stem", "path"}] in list order; name is the stem, or for a
+                          # file of an added folder whose stem is taken, the stem with its folder in brackets
     index: dict           # {tags._norm(name): Path}; the first folder that has the name wins
-    sources: list         # [{"label", "path", "exists", "count", "error", "skipped"}], one per folder searched
+    sources: list         # [{"label", "path", "exists", "count", "error", "skipped", "hidden"}], one per folder
+                          # searched; an added folder also has "display" and "base"
+    names: dict = {}      # {tags._norm(name): name}, the same keys as index
+    files: tuple = ()     # per source, parallel to sources: [(rel, stem, path)] in walk order, before deduplication
 
 
 _seen_lock = threading.Lock()
@@ -96,77 +206,140 @@ def _real(p) -> str:
         return os.path.normcase(os.path.abspath(p))
 
 
+def _read_source(label, folder, recursive, exts, display=None) -> tuple:
+    """(report, files) for one folder: every matching file in walk order, a name seen before included, so a
+    later step can merge walks without reading the disk again. files is [(rel, stem, path)]. display is the
+    folder's name in the browser when it is one the user added."""
+    folder = Path(folder)
+    rep = {"label": label, "path": str(folder), "exists": False, "count": 0, "error": None, "skipped": 0,
+           "hidden": 0}
+    if is_added(label):
+        if display is None:
+            display = display_names([folder])[0]
+        rep["display"] = display
+        rep["base"] = _safe(folder.name) if folder.name else display      # a drive root has no name of its own
+    out: list = []
+    try:
+        rep["exists"] = folder.is_dir()
+    except OSError:
+        rep["exists"] = False
+    key = os.path.normcase(str(folder))
+    if not rep["exists"]:
+        with _seen_lock:
+            was = key in _seen_folders
+        try:
+            drive_gone = bool(folder.anchor) and not os.path.exists(folder.anchor)
+        except OSError:
+            drive_gone = True
+        if was:
+            rep["error"] = f"{folder} was there before and cannot be read now"
+        elif drive_gone:
+            rep["error"] = f"The drive of {folder} cannot be reached"
+        return rep, out
+    with _seen_lock:
+        _seen_folders.add(key)
+    top = os.path.normcase(os.path.abspath(folder))
+
+    def onerror(e):
+        if os.path.normcase(os.path.abspath(str(e.filename or ""))) == top:
+            rep["error"] = f"{folder} cannot be read: {e.strerror or e}"
+        else:
+            rep["skipped"] += 1
+
+    visited = {_real(folder)}
+    for root, subs, files in os.walk(folder, onerror=onerror, followlinks=True):
+        if recursive:
+            keep = []
+            for d in sorted(subs, key=lambda n: (n.lower(), n)):
+                if d.startswith("_"):
+                    continue
+                r = _real(os.path.join(root, d))
+                if r not in visited:
+                    visited.add(r)
+                    keep.append(d)
+            subs[:] = keep
+        else:
+            subs[:] = []
+        rel = os.path.relpath(root, folder)
+        rel = "" if rel == "." else rel.replace(os.sep, "/")
+        for fn in sorted(files, key=lambda n: (n.lower(), n)):
+            if not fn.lower().endswith(exts):
+                continue
+            rep["count"] += 1
+            out.append((rel, os.path.splitext(fn)[0], os.path.join(root, fn)))
+    return rep, out
+
+
+def _candidates(stem, rel, rep) -> list:
+    """The names a file of an added folder tries, in order: its stem, then the stem with its first subfolder (or
+    the folder's own name at the top), its whole subfolder path, and last the folder's display name in front of
+    that. Display names are unique in a walk, so the last one is taken only by a file beside one with the same
+    stem."""
+    parts = [_safe(p) for p in rel.split("/")] if rel else [rep["base"]]
+    out = [stem, f"{stem} ({parts[0]})"]
+    if len(parts) > 1:
+        out.append(f"{stem} ({', '.join(parts)})")
+    out.append(f"{stem} ({rep['display']}, {', '.join(parts)})" if rel else f"{stem} ({rep['display']})")
+    return list(dict.fromkeys(out))
+
+
+def assemble(reports, files) -> Walk:
+    """The list and the index from the folders' reports and files, in source order. A name already taken is
+    dropped in ZBrush's own folders, as ZBrush itself does; a file of an added folder tries the names of
+    _candidates() and is hidden (counted in its report's "hidden") only when every one is taken. One folder holds
+    one file per stem (the first by name): ZBrush names a loaded item after the stem, so 10.png beside 10.psd is
+    the same item to it, and packs often ship an alpha in two formats."""
+    items: list = []
+    index: dict = {}
+    names: dict = {}
+    for rep, fl in zip(reports, files):
+        rep["hidden"] = 0
+        user = is_added(rep["label"])
+        in_folder: set = set()
+        for rel, stem, path in fl:
+            here = (rel, _tags._norm(stem))
+            if here in in_folder:
+                if user:
+                    rep["hidden"] += 1
+                continue
+            in_folder.add(here)
+            cands = _candidates(stem, rel, rep) if user else (stem,)
+            for name in cands:
+                k = _tags._norm(name)
+                if k not in index:
+                    break
+            else:
+                if user:
+                    rep["hidden"] += 1
+                continue
+            index[k] = Path(path)
+            names[k] = name
+            items.append({"label": rep["label"], "rel": rel, "name": name, "stem": stem, "path": path})
+    return Walk(items, index, reports, names, tuple(files))
+
+
 def walk_sources(sources, exts: tuple = (".zbp",)) -> Walk:
     """Walks the folders once, in priority order, and returns the list and the lookup index together, so the
     browser's list and the app's find() cannot disagree.
 
-    One rule for both: the files of a folder before its subfolders, each sorted by name without regard to case;
+    The first folder that has a name (case and spaces ignored) wins. In ZBrush's own folders a later file with
+    that name is left out, as ZBrush does; in a folder the user added it is listed under its stem with its folder
+    in brackets, such as "10 (PackA)", because packs often share names like 10 and 11.
+
+    The walk: the files of a folder before its subfolders, each sorted by name without regard to case;
     subfolders that start with "_" are skipped; links and junctions are followed, but a folder is entered once
-    per source (by its real path), so a loop ends; the first folder that has a name (case and spaces ignored)
-    wins. A source that cannot be read is reported in its "error", not raised: one that was there on an earlier
-    walk and is not now, one on a drive that cannot be reached, or one whose top folder cannot be listed."""
-    items: list = []
-    index: dict = {}
+    per source (by its real path), so a loop ends. A source that cannot be read is reported in its "error", not
+    raised: one that was there on an earlier walk and is not now, one on a drive that cannot be reached, or one
+    whose top folder cannot be listed."""
+    sources = list(sources)
+    shown = iter(display_names([folder for label, folder, _ in sources if is_added(label)]))
     reports: list = []
+    files: list = []
     for label, folder, recursive in sources:
-        folder = Path(folder)
-        rep = {"label": label, "path": str(folder), "exists": False, "count": 0, "error": None, "skipped": 0}
+        rep, fl = _read_source(label, folder, recursive, exts, next(shown) if is_added(label) else None)
         reports.append(rep)
-        try:
-            rep["exists"] = folder.is_dir()
-        except OSError:
-            rep["exists"] = False
-        key = os.path.normcase(str(folder))
-        if not rep["exists"]:
-            with _seen_lock:
-                was = key in _seen_folders
-            try:
-                drive_gone = bool(folder.anchor) and not os.path.exists(folder.anchor)
-            except OSError:
-                drive_gone = True
-            if was:
-                rep["error"] = f"{folder} was there before and cannot be read now"
-            elif drive_gone:
-                rep["error"] = f"The drive of {folder} cannot be reached"
-            continue
-        with _seen_lock:
-            _seen_folders.add(key)
-        top = os.path.normcase(os.path.abspath(folder))
-
-        def onerror(e, rep=rep, folder=folder, top=top):
-            if os.path.normcase(os.path.abspath(str(e.filename or ""))) == top:
-                rep["error"] = f"{folder} cannot be read: {e.strerror or e}"
-            else:
-                rep["skipped"] += 1
-
-        visited = {_real(folder)}
-        for root, subs, files in os.walk(folder, onerror=onerror, followlinks=True):
-            if recursive:
-                keep = []
-                for d in sorted(subs, key=lambda n: (n.lower(), n)):
-                    if d.startswith("_"):
-                        continue
-                    r = _real(os.path.join(root, d))
-                    if r not in visited:
-                        visited.add(r)
-                        keep.append(d)
-                subs[:] = keep
-            else:
-                subs[:] = []
-            rel = os.path.relpath(root, folder)
-            rel = "" if rel == "." else rel.replace(os.sep, "/")
-            for fn in sorted(files, key=lambda n: (n.lower(), n)):
-                if not fn.lower().endswith(exts):
-                    continue
-                rep["count"] += 1
-                name = os.path.splitext(fn)[0]
-                nk = _tags._norm(name)
-                if nk in index:
-                    continue
-                path = os.path.join(root, fn)
-                index[nk] = Path(path)
-                items.append({"label": label, "rel": rel, "name": name, "path": path})
-    return Walk(items, index, reports)
+        files.append(fl)
+    return assemble(reports, files)
 
 
 def walk_error(walk: Walk) -> str | None:
@@ -177,12 +350,26 @@ def walk_error(walk: Walk) -> str | None:
     return None
 
 
-def keep_index(old: dict | None, walk: Walk) -> tuple:
-    """(index to keep, changed). A walk that could not read a source does not replace an index that was built:
-    a drive that is away for a minute must not make every brush lose its picture."""
-    if old is not None and (walk_error(walk) or old == walk.index):
-        return old, False
-    return walk.index, True
+def merge_walk(old: Walk | None, new: Walk) -> Walk:
+    """new, with each folder it could not read given back the files it had in old: a drive that is away for a
+    minute must not make its items lose their pictures, and the other folders are still read afresh (a brush
+    just saved to My Brushes is found). Such a folder keeps new's error, so the browser still says so, and is
+    marked "kept". A folder that is not in new (one the user forgot) drops out. old is never changed."""
+    if old is None:
+        return new
+    before = {(r["label"], os.path.normcase(str(r["path"]))): (r, fl) for r, fl in zip(old.sources, old.files)}
+    reports: list = []
+    files: list = []
+    for r, fl in zip(new.sources, new.files):
+        rep = dict(r)
+        was = before.get((r["label"], os.path.normcase(str(r["path"])))) if r["error"] else None
+        if was is not None:
+            rep["count"] = was[0]["count"]
+            rep["kept"] = True
+            fl = was[1]
+        reports.append(rep)
+        files.append(fl)
+    return assemble(reports, files)
 
 
 def brush_sources() -> list[tuple[str, Path, bool]]:
@@ -193,6 +380,7 @@ def brush_sources() -> list[tuple[str, Path, bool]]:
         src.append(("user ZStartup/BrushPresets", ua / "ZStartup" / "BrushPresets", True))
     if ins:
         src += install_brush_sources(ins)
+    src += [(added_label(p), p, True) for p in user_folders("brush")]      # the user's own folders come last
     return src
 
 
@@ -206,25 +394,36 @@ def install_brush_sources(ins) -> list[tuple[str, Path, bool]]:
 
 
 def library() -> tuple:
-    """Walks the brush folders once and stores the lookup index. (Walk, whether the stored index changed)."""
-    global _index
-    with _index_lock:
-        walk = walk_sources(brush_sources(), (".zbp",))
-        _index, changed = keep_index(_index, walk)
-        return walk, changed
+    """Walks the brush folders once and stores the lookup index. (Walk, whether the stored index changed). The
+    walk is merged with the last one (merge_walk), and it runs outside _index_lock, so a slow folder does not hold
+    up find_brush(). A caller that asked while another walk was waiting to start takes that walk's result."""
+    global _walk, _index, _walk_t0
+    asked = time.perf_counter()
+    with _build_lock:
+        if _walk is not None and _walk_t0 > asked:      # a walk that began after we asked: it already covers us
+            return _walk, False
+        t0 = time.perf_counter()
+        new = walk_sources(brush_sources(), (".zbp",))
+        with _index_lock:
+            merged = merge_walk(_walk, new)
+            changed = _index is None or _index != merged.index
+            _walk, _index, _walk_t0 = merged, merged.index, t0
+    return merged, changed
 
 
 def brush_index(refresh: bool = False) -> dict[str, Path]:
-    global _index
-    with _index_lock:
-        if _index is None or refresh:
-            walk = walk_sources(brush_sources(), (".zbp",))
-            _index, _ = keep_index(_index, walk)
-        return _index
+    if _index is None or refresh:
+        library()
+    return _index
 
 
 def has_index() -> bool:
     return _index is not None
+
+
+def last_walk() -> Walk | None:
+    """The Walk the brush index was built from, or None before the first build."""
+    return _walk
 
 
 def has_install_index(ins) -> bool:
@@ -239,10 +438,12 @@ def forget_install_index(ins) -> None:
 def install_index(ins) -> dict[str, Path]:
     """Brushes of one ZBrush installation only (an older ZBrush may not load a newer version's .zbp)."""
     key = os.path.normcase(str(ins))
+    idx = _install_index.get(key)
+    if idx is not None:
+        return idx
+    idx = walk_sources(install_brush_sources(ins), (".zbp",)).index      # outside the lock; a second builder's walk is wasted
     with _index_lock:
-        if key not in _install_index:
-            _install_index[key] = walk_sources(install_brush_sources(ins), (".zbp",)).index
-        return _install_index[key]
+        return _install_index.setdefault(key, idx)
 
 
 def find_brush(name, install=None) -> Path | None:
@@ -259,6 +460,13 @@ def _cache_dir() -> Path:
     return Path(base) / "ZOrbit" / "thumbs"
 
 
+def _cache_tag(p) -> str:
+    """Eight hex characters from the file's full path (case ignored), for the cache file name. A name, a time and
+    a size do not tell apart two packs in different folders that both hold a 10.png and were copied or unzipped
+    with their timestamps kept; the path does."""
+    return hashlib.blake2b(os.path.normcase(str(p)).encode("utf-8", "surrogatepass"), digest_size=4).hexdigest()
+
+
 def thumbnail(name_or_path, size: int = 96):
     try:
         from PIL import Image
@@ -270,7 +478,7 @@ def thumbnail(name_or_path, size: int = 96):
             return None
         mtime = p.stat().st_mtime_ns
         cdir = _cache_dir()
-        cfile = cdir / f"{p.stem}_{mtime}_{size}.png"
+        cfile = cdir / f"{p.stem}_{_cache_tag(p)}_{mtime}_{size}.png"
         try:
             with Image.open(cfile) as im:
                 return im.convert("RGBA")
@@ -308,7 +516,7 @@ def thumbnail_png(name_or_path, size: int = 96) -> bytes | None:
             p = find_brush(str(name_or_path))
         if p is None:
             return None
-        cfile = _cache_dir() / f"{p.stem}_{p.stat().st_mtime_ns}_{size}.png"
+        cfile = _cache_dir() / f"{p.stem}_{_cache_tag(p)}_{p.stat().st_mtime_ns}_{size}.png"
         try:
             data = cfile.read_bytes()
             if data.startswith(_PNG_SIG) and data.endswith(_PNG_END):
