@@ -247,7 +247,8 @@ class TagApi:
         st = store()
         with st._lock:                                      # one consistent view: counts, items and mtime together
             tag_list = [dict(t, builtin=True) if t["key"] == tags.FAVOURITE else t for t in st.tags()]
-            return {"ok": True, "tags": tag_list, "items": st.items(), "palette": list(tags.PALETTE),
+            return {"ok": True, "tags": tag_list, "items": st.items(), "favourite_order": st.favourite_orders(),
+                    "palette": list(tags.PALETTE),
                     "mtime_ns": st.mtime, "path": st.path, "error": st.error or None}
 
     def get_tags(self, since_mtime_ns=None, since_path=None):
@@ -310,3 +311,8 @@ class TagApi:
 
     def tag_items(self, item_keys, add=None, remove=None):
         return self._tag_result(store().tag_items(item_keys, add or (), remove or ()))
+
+    def set_favourite_order(self, kind, names=None):
+        """The order of a kind's Favourites, from a drag in the browser: the names on show, without the kind, in
+        their new order. None forgets the order (the Most used button)."""
+        return self._tag_result(store().set_favourite_order(kind, names))

@@ -6,6 +6,10 @@ All notable changes to this project are listed here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Favourites can follow your own order. In the browser or Studio's Library, drag a card to a new place in the **Favourites** folder; each tab has its own order, kept per profile, and a **Favourites** slot on the ring follows it. **Most used** goes back to most used first.
+
 ### Fixed
 
 - Studio and the docs said a ZBrush under Program Files always asks for administrator rights. It only asks when your account cannot write to that folder, and the ZBrush 2022 install we tested lets every account write there.

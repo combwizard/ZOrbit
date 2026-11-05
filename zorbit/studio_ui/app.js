@@ -137,7 +137,7 @@ const KIND = {
   steps: { label: 'Steps', icon: 'k_steps', hint: 'Run several actions in order' },
   menu: { label: 'Submenu', icon: 'k_menu', hint: 'Open another ring' },
   auto: { label: 'Auto', icon: 'k_auto', hint: 'A slot filled with a brush you pick often' },
-  tag: { label: 'Tag', icon: 'tag', hint: 'Every item with a tag: brushes first, most used first, then alphas, materials and textures' },
+  tag: { label: 'Tag', icon: 'tag', hint: 'Every item with a tag: brushes first, most used first (or your own order on Favourites), then alphas, materials and textures' },
   browser: { label: 'Browser', icon: 'k_browser', hint: 'Open the browser' },
   empty: { label: 'Empty slot', icon: 'k_empty', hint: 'Holds its place in the ring and does nothing' },
 };
@@ -200,7 +200,7 @@ const S = {
   cameFrom: null,                              // { menuId, itemIdx }: where a submenu was opened from (drives the Back chip)
   suggestions: [],
   version: 0, hist: [], histI: 0,
-  tags: [], tagMap: new Map(), itemTags: {}, tagMtime: null, tagsErr: '', tagsLoaded: false, tagsPath: '', palette: null,   // see "tags" below
+  tags: [], tagMap: new Map(), itemTags: {}, favOrder: {}, tagMtime: null, tagsErr: '', tagsLoaded: false, tagsPath: '', palette: null,   // see "tags" below
   lib: { kind: 'brush', cat: 'All', q: '', size: 112 },
   dock: { kind: 'brush', cat: 'All', q: '' },
   pop: { kind: 'brush', cat: 'All', q: '', size: 96 }, popOnTop: true, popSide: 'left', popColumn: true,   // the popout's browser state, whether its window stays above others, and the side of its folders column
@@ -2726,6 +2726,8 @@ const allKindsText = n => plural(n, 'item') + ' across brushes, alphas, material
 
 const tagsOf = (kind, name) => { const l = S.itemTags[tagKey(kind, name)]; return l ? l.filter(k => S.tagMap.has(k)) : []; };
 const isFav = (kind, name) => tagsOf(kind, name).includes(FAV);
+/* The order a tab's Favourites were dragged into, as nameKey()s; empty while the tab is most used first (see favorder.js). */
+const favOrderOf = kind => { const o = S.favOrder[kind]; return Array.isArray(o) ? o : []; };
 /* An asset's colour cue: its first tag other than Favourites (null when it has none). Favourites shows as a star instead. */
 const firstTag = (kind, name) => { const k = tagsOf(kind, name).find(x => x !== FAV); return k ? S.tagMap.get(k) : null; };
 /* The tags in the order lists show them: Favourites first, then the others as the backend sends them. */
@@ -2770,9 +2772,10 @@ function tagTargetField(it, k, updateHead) {
       if (touched) hint.classList.add('bad');
       hint.append('Pick a tag. ');
     } else if (isTag) {
+      const fanOrder = cur === FAV && favOrderOf('brush').length ? 'brushes first, in your order' : 'brushes first (most used first)';
       if (t && !n) { hint.classList.add('warn'); hint.append('No item has this tag yet; the slot stays empty until one does. '); }
-      else if (n > ringNum('tag_limit')) hint.append('Opens a fan of the first ' + (ringNum('tag_limit') - 1) + ' of ', h('b', null, plural(n, 'item')), ': brushes first (most used first), then alphas, materials and textures. A fan holds ' + ringNum('tag_limit') + ' slots, so the last one, More..., opens the browser on this tag. ');
-      else hint.append('Opens a fan of ', h('b', null, plural(n, 'item')), ': brushes first (most used first), then alphas, materials and textures. A fan holds at most ' + ringNum('tag_limit') + ' slots. ');
+      else if (n > ringNum('tag_limit')) hint.append('Opens a fan of the first ' + (ringNum('tag_limit') - 1) + ' of ', h('b', null, plural(n, 'item')), ': ' + fanOrder + ', then alphas, materials and textures. A fan holds ' + ringNum('tag_limit') + ' slots, so the last one, More..., opens the browser on this tag. ');
+      else hint.append('Opens a fan of ', h('b', null, plural(n, 'item')), ': ' + fanOrder + ', then alphas, materials and textures. A fan holds at most ' + ringNum('tag_limit') + ' slots. ');
     } else hint.append(t ? `Opens the browser on ${K(it.kind).tab}, filtered to this tag. ` : `Opens the browser on ${K(it.kind).tab} with every ${K(it.kind).one}. Pick a tag to filter it. `);
     hint.append(h('button', { class: 'link', type: 'button', onmousedown: e => e.preventDefault(), onclick: () => openTagManager() }, 'Manage tags...'));
   };
@@ -2862,12 +2865,13 @@ function applyTagSnapshot(res, mutated = false, seq = ++tagSeq) {
   if (res.unchanged) { S.tagMtime = res.mtime_ns; return false; }
   if (!Array.isArray(res.tags)) return false;
   const err = mutated ? (res.ok ? '' : S.tagsErr) : (res.error ? String(res.error) : '');
-  const sig = JSON.stringify([res.tags, res.items || {}]);
+  const sig = JSON.stringify([res.tags, res.items || {}, res.favourite_order || {}]);
   const changed = !S.tagsLoaded || sig !== S._tagSig || err !== S.tagsErr;
   const keysChanged = S.tagsLoaded && S.tags.map(t => t.key).join('\n') !== res.tags.map(t => t.key).join('\n');   // a tag came or went: slots that use it are right or wrong now
   if (err && err !== S.tagsErr) toast(err, { tone: 'warn', ms: 5000 });
   S.tags = res.tags; S.tagMap = new Map(res.tags.map(t => [t.key, t]));
   S.itemTags = res.items && typeof res.items === 'object' ? res.items : {};
+  S.favOrder = res.favourite_order && typeof res.favourite_order === 'object' ? res.favourite_order : {};
   const favTag = S.tagMap.get(FAV);                         // the star's colour follows the Favourites tag (its colour can be changed)
   if (favTag && /^#[0-9a-f]{6}$/i.test(favTag.color || '')) document.documentElement.style.setProperty('--fav', favTag.color);
   else document.documentElement.style.removeProperty('--fav');
@@ -3348,6 +3352,7 @@ function makeBrowser({ compact, st, host = STUDIO_HOST, kindUi = compact ? 'comp
   const search = h('input', { class: 'inp', type: 'text', value: st.q, spellcheck: 'false', autocomplete: 'off' });   // placeholder and label: paintStrings
   const clearBtn = h('button', { class: 'ibtn', type: 'button', title: 'Clear search', 'aria-label': 'Clear search', hidden: !st.q, onclick: () => { clearQuery(); renderGrid(); rehighlight(); search.focus(); } }, icon('x', 13));
   const count = h('span', { class: 'b-count mono' });
+  const orderBtn = h('button', { class: 'btn small b-order', type: 'button', hidden: true, title: 'Forget your order for this tab and go back to most used first', onclick: () => forgetOrder() }, 'Most used');
   const fchips = h('span', { class: 'filter-chips', hidden: true });     // the popout's toolbar: the filters that are on (styles.css shows them only while its column is collapsed)
   const grid = h('div', { class: 'bgrid' });
   const scroll = h('div', { class: 'b-scroll' }, grid);
@@ -3445,7 +3450,7 @@ function makeBrowser({ compact, st, host = STUDIO_HOST, kindUi = compact ? 'comp
     catSel = h('select', { class: 'inp sel', 'aria-label': 'Category', onchange: () => { setCat(catSel.value); renderGrid(); } });
     tools = h('div', { class: 'b-tools' }, searchBox, catSel);
     dockHint = h('div', { class: 'dock-hint' });
-    root.append(...[tabs && tabs.el, dockHint, tools, tagRow, count, scroll, strip].filter(Boolean));
+    root.append(...[tabs && tabs.el, dockHint, tools, tagRow, orderBtn, count, scroll, strip].filter(Boolean));
   } else {
     const size = h('input', { type: 'range', min: 84, max: 220, step: 4, value: st.size, 'aria-label': 'Thumbnail size' });
     const paint = () => size.style.setProperty('--pct', ((st.size - 84) / (220 - 84)) * 100 + '%');
@@ -3458,7 +3463,7 @@ function makeBrowser({ compact, st, host = STUDIO_HOST, kindUi = compact ? 'comp
     paint(); grid.style.setProperty('--card', st.size + 'px');
     rescan = rescanBtn(st.kind);
     tools = h('div', { class: 'b-tools' }, searchBox, h('div', { class: 'size-ctl' }, icon('library', 13), size), rescan, fchips, host.tools ? host.tools() : null);
-    root.append(side, h('div', { class: 'lib-main' }, tabs ? tabs.el : null, tools, h('div', { class: 'b-sub' }, hint, count), scroll, strip));
+    root.append(side, h('div', { class: 'lib-main' }, tabs ? tabs.el : null, tools, h('div', { class: 'b-sub' }, hint, count, orderBtn), scroll, strip));
   }
 
   /* --- tag filter: an item shows when it carries any chosen tag (or every one, with the Any / All switch on All); "Untagged" shows the items without a tag */
@@ -3470,15 +3475,15 @@ function makeBrowser({ compact, st, host = STUDIO_HOST, kindUi = compact ? 'comp
     const ks = tagsOf(st.kind, b.name);
     return st.untagged ? !ks.some(k => k !== FAV) : ZTagFilter.match(ks, st.tags, st.tagAll);     // untagged: no ordinary tag (see tagCounts)
   };
-  /* The items on show: in name order, except Favourites (most used first, by the usage scores) and Recent (newest pick first).
-     L().sorted is in name order and sort is stable, so ties keep it. */
+  /* The items on show: in name order, except Favourites (the tab's own order if it has one, else most used first by the usage scores)
+     and Recent (newest pick first). L().sorted is in name order and sort is stable, so ties keep it. */
   const filtered = () => {
     pruneTagSel();
     const q = st.q.trim().toLowerCase(), terms = q ? q.split(/\s+/) : [];
     const list = L().sorted.filter(b => catMatch(b, st.cat, host, st.kind) && (!terms.length || terms.every(t => b.name.toLowerCase().includes(t))) && tagMatch(b));
     const u = usageOf(st.kind);
-    if (st.cat === '@fav') list.sort((a, b) => (u.scores[b.name.toLowerCase()] || 0) - (u.scores[a.name.toLowerCase()] || 0));
-    else if (st.cat === '@recent') list.sort((a, b) => (u.recentT.get(nameKey(b.name)) || 0) - (u.recentT.get(nameKey(a.name)) || 0));
+    if (st.cat === '@fav') return ZFavOrder.sorted(list, favOrderOf(st.kind), b => nameKey(b.name), b => u.scores[b.name.toLowerCase()] || 0);
+    if (st.cat === '@recent') list.sort((a, b) => (u.recentT.get(nameKey(b.name)) || 0) - (u.recentT.get(nameKey(a.name)) || 0));
     return list;
   };
   /* The selected items that are on show. renderGrid drops the rest, but a pick must never act on an item the filter hides. */
@@ -3625,6 +3630,71 @@ function makeBrowser({ compact, st, host = STUDIO_HOST, kindUi = compact ? 'comp
     btn.setAttribute('aria-pressed', on ? 'true' : 'false');
     btn.title = text; btn.setAttribute('aria-label', text + ': ' + name);
   }
+  /* --- dragging a card to a new place in Favourites. One card moves, whatever is selected. The pointer drag of the Library (DnD, through
+     the zone below) and the native drag of the popout share these; the list comes from filtered() and only the gap from the cards, so a
+     long list that is still being drawn works too. A drag that cannot reorder, or a drop elsewhere, goes on as any other drag. */
+  const canReorder = () => st.cat === '@fav' && !st.q.trim() && !search.value.trim() && !tagFilterOn() && L().state === 'ready';
+  const dropMark = h('div', { class: 'bdrop', 'aria-hidden': 'true' });
+  let reorder = null;                    // the drag on show: { name, x, y }, the last place the pointer was over the grid
+  const gapAtPoint = (x, y) => ZFavOrder.gapAt(cardEls().map(c => c.getBoundingClientRect()), x, y, parseFloat(getComputedStyle(grid).columnGap) || 0);
+  function paintDrop(name, x, y) {
+    if (!reorder || reorder.name !== name) { endReorder(); reorder = { name, x, y }; const c = cardEls().find(e => e.dataset.name === name); if (c) c.classList.add('reordering'); }
+    reorder.x = x; reorder.y = y;
+    const g = gapAtPoint(x, y), box = grid.getBoundingClientRect();
+    if (!g) { dropMark.remove(); return; }
+    dropMark.style.left = (g.x - box.left) + 'px'; dropMark.style.top = (g.top - box.top) + 'px'; dropMark.style.height = (g.bottom - g.top) + 'px';
+    if (dropMark.parentNode !== grid) grid.append(dropMark);
+  }
+  function endReorder() {
+    reorder = null; dropMark.remove(); edgeSpeed = 0;
+    $$('.bcard.reordering', grid).forEach(c => c.classList.remove('reordering'));
+  }
+  function dropCard(name, x, y) {
+    const g = gapAtPoint(x, y), next = g && canReorder() ? ZFavOrder.moved(filtered().map(b => nameKey(b.name)), nameKey(name), g.index) : null;
+    if (next) tagCall('set_favourite_order', st.kind, next);                  // its answer repaints every browser (tagsChanged); no change saves nothing
+  }
+  /* Most used: forgets the tab's order, once asked. There while the tab has one and Favourites is on show. */
+  function paintOrderBtn() { orderBtn.hidden = !(st.cat === '@fav' && favOrderOf(st.kind).length); }
+  async function forgetOrder() {
+    const kind = st.kind;
+    const ok = await modal({ title: 'Back to most used first?', body: h('p', null, `Your order for ${K(kind).many} is forgotten, and your favourite ${K(kind).many} go back to most used first.`),
+      actions: [{ text: 'Cancel', value: false, focus: true }, { text: 'Most used', kind: 'danger', value: true }] });
+    if (ok) tagCall('set_favourite_order', kind, null);
+  }
+  /* A pointer drag scrolls the grid when it nears the top or bottom edge, and a scroll moves the marker: the card under the pointer changed. */
+  let edgeSpeed = 0, edgeFrame = 0, edgeTime = 0;                              // px per ms, by the clock: a screen's refresh rate must not set the speed
+  function edgeScroll(y) {
+    const r = scroll.getBoundingClientRect(), near = 32;
+    edgeSpeed = y < r.top + near ? -0.6 : y > r.bottom - near ? 0.6 : 0;
+    const step = t => {
+      edgeFrame = 0;
+      if (!edgeSpeed) return;
+      scroll.scrollTop += edgeSpeed * Math.min(t - edgeTime, 50); edgeTime = t;
+      edgeFrame = requestAnimationFrame(step);
+    };
+    if (edgeSpeed && !edgeFrame) { edgeTime = performance.now(); edgeFrame = requestAnimationFrame(step); }
+  }
+  scroll.addEventListener('scroll', () => { if (reorder) paintDrop(reorder.name, reorder.x, reorder.y); });
+  DnD.zone(scroll, {
+    accept: p => p.type === 'asset' && p.from === st && canReorder(),         // only a card of this grid: a drag from the popout has no .from
+    over: (p, x, y) => { paintDrop(p.name, x, y); edgeScroll(y); },
+    leave: endReorder,
+    drop: (p, x, y) => dropCard(p.name, x, y),
+  });
+  scroll.addEventListener('dragover', e => {                                   // the popout: the page's own handler refused the drag a moment ago (bindNativeDrop)
+    if (!reorder || !DnD.native.mine(e.dataTransfer) || !canReorder()) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';                                        // what the card allows, so the same drag can land in Studio
+    paintDrop(reorder.name, e.clientX, e.clientY);
+  });
+  scroll.addEventListener('dragleave', e => { if (reorder && !scroll.contains(e.relatedTarget)) dropMark.remove(); });
+  scroll.addEventListener('drop', e => {
+    if (!reorder) return;
+    e.preventDefault();
+    const name = reorder.name;
+    endReorder();
+    dropCard(name, e.clientX, e.clientY);
+  });
   function makeCard(b) {
     const on = sel.has(b.name);
     const card = h('div', { class: 'bcard' + (on ? ' sel' : ''), tabindex: '-1', role: 'button', 'aria-pressed': on ? 'true' : 'false', dataset: { name: b.name } },   // renderGrid gives one card tabindex 0
@@ -3666,7 +3736,7 @@ function makeBrowser({ compact, st, host = STUDIO_HOST, kindUi = compact ? 'comp
         if (e.ctrlKey || e.metaKey) { if (sel.has(b.name)) sel.delete(b.name); else sel.add(b.name); anchor = b.name; paintSel(); } else setSel(b.name);
       }
     });
-    if (host.dnd) DnD.source(card, () => ({ type: 'asset', kind: st.kind, name: b.name }), () => h('span', { class: 'ghost-chip' }, thumb(b.name, { size: 26, kind: st.kind }), b.name));
+    if (host.dnd) DnD.source(card, () => ({ type: 'asset', kind: st.kind, name: b.name, from: canReorder() ? st : null }), () => h('span', { class: 'ghost-chip' }, thumb(b.name, { size: 26, kind: st.kind }), b.name));
     if (host.nativeDrag) {                                                   // the popout: a drag the other window can take (see ITEM_MIME)
       card.setAttribute('draggable', 'true');
       let downOnButton = false;                                              // a press on the card's own button picks, it never drags
@@ -3679,7 +3749,9 @@ function makeBrowser({ compact, st, host = STUDIO_HOST, kindUi = compact ? 'comp
         dt.setData(ITEM_MIME, JSON.stringify({ kind: st.kind, name: b.name }));
         dt.setData('text/plain', ITEM_TEXT + st.kind + ':' + b.name);
         if (t) { const r = t.getBoundingClientRect(); dt.setDragImage(t, Math.round(r.width / 2), Math.round(r.height / 2)); }
+        if (canReorder()) { reorder = { name: b.name, x: e.clientX, y: e.clientY }; card.classList.add('reordering'); }
       });
+      card.addEventListener('dragend', endReorder);                          // Esc, or a drop anywhere else: nothing was saved
     }
     paintBadge(card);
     paintTags(card);
@@ -3710,6 +3782,7 @@ function makeBrowser({ compact, st, host = STUDIO_HOST, kindUi = compact ? 'comp
   }
   /* keep: put the scroll position back once enough cards are drawn (a rescan or a refresh must not throw you to the top). */
   function renderGrid(keep = false) {
+    paintOrderBtn();
     const loading = L().state === 'loading' || L().state === 'idle';
     if (!loading) {
       const gone = Array.from(sel).filter(n => !L().byName.has(nameKey(n)));
@@ -3944,7 +4017,8 @@ function makeBrowser({ compact, st, host = STUDIO_HOST, kindUi = compact ? 'comp
       $$('.bcard[data-name]', grid).forEach(c => { paintTags(c); paintFav(c); });
       renderTags(); paintFavBtn();
       if (L().state === 'ready') renderCats();                 // the Favourites count
-      if (L().state === 'ready' && filtered().map(b => b.name).join('\n') !== lastSig) { const top = scroll.scrollTop; renderGrid(); scroll.scrollTop = top; }
+      paintOrderBtn();
+      if (L().state === 'ready' && filtered().map(b => b.name).join('\n') !== lastSig) renderGrid(true);   // a long list is drawn a part at a time: keep waits for it
     },
     /* After get_usage / forget_recent: the Recent count, and the grid when Favourites or Recent is on show and its order or members changed. */
     updateUsage() {

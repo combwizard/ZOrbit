@@ -12,11 +12,11 @@
 
 - The menus and settings load into the editor as an unsaved change. **Save** keeps them and **Undo** takes them back.
 - If the file has tags, you choose each time (both buttons also load the file's menus and settings, as above):
-  - **Merge tags** adds the tags you do not have. A tag that matches one of yours, by key or by label, keeps your name and colour. Each item's tag list is joined with yours, your tags first and no repeats.
-  - **Replace tags** swaps your tags for the file's. Your old `tags.json` is kept as `tags.json.bak` first.
+  - **Merge tags** adds the tags you do not have. A tag that matches one of yours, by key or by label, keeps your name and colour. Each item's tag list is joined with yours, your tags first and no repeats. Your [Favourites order](browser.md#favourites-and-recent) stays and the file's is not used; an item that gains a star goes at the end of it.
+  - **Replace tags** swaps your tags, and your Favourites order, for the file's. Your old `tags.json` is kept as `tags.json.bak` first.
 - Tags save straight away, as tag edits always do, so they are not part of **Undo**.
 
-To share one menu, use **Export menu...** in the **Menu** tab. It writes the menu, its submenus, their tags and the looks of your own that they use to a small file, which **Import menu...** in the **Menus** list adds to someone else's setup. See [Share a menu](menus.md#share-a-menu).
+To share one menu, use **Export menu...** in the **Menu** tab. It writes the menu, its submenus, their tags and the looks of your own that they use to a small file, which **Import menu...** in the **Menus** list adds to someone else's setup. Your Favourites order is not in it. See [Share a menu](menus.md#share-a-menu).
 
 ## Files and logs
 
@@ -45,7 +45,7 @@ To share one menu, use **Export menu...** in the **Menu** tab. It writes the men
 | `%LOCALAPPDATA%\ZOrbit\zscript_launch.log` | ZBrush 2022 to 2025: how the plugin last started the app or Studio. |
 | `%LOCALAPPDATA%\ZOrbit\zscript_hotkey.log` | ZBrush 2022 to 2025: the hotkey Apply had when the plugin loaded, and the one it has after (88 is F9). |
 | `%APPDATA%\ZOrbit\studio.json` | Studio's own preferences: `check_updates` (the update check), `setup_done` (Setup finished or skipped), `last_screen` (the screen Studio reopens on), `mode` (`simple` or `full`, see [Simple and Full mode](studio.md#simple-and-full-mode)), `theme` (`dark`, `light`, `system` for **Follow Windows** or `zbrush` for **Match ZBrush**, see [Theme](appearance.md#theme)), `zbrush_folders` (ZBrush folders added by hand on Setup or Older ZBrush), `seen_version` (the version whose **What's new** you closed last, see [Version and update check](studio.md#version-and-update-check)), `tour_seen` (true once the [tour](studio.md#the-tour) has been offered or taken), `skipped_version` (the version you chose **Don't remind me again** for), and `window` (window placement). |
-| `%APPDATA%\ZOrbit\profiles\<profile>\tags.json` | The tags of one profile: each tag's label and colour (Favourites included), and which items carry which tags. Created the first time you change a tag. See [Tags](tags.md#where-tags-live). |
+| `%APPDATA%\ZOrbit\profiles\<profile>\tags.json` | The tags of one profile: each tag's label and colour (Favourites included), which items carry which tags, and any order you dragged Favourites into. Created the first time you change a tag. See [Tags](tags.md#where-tags-live). |
 | `%APPDATA%\ZOrbit\profiles\<profile>\tags.json.bak` | The profile's old `tags.json`, kept when you import a file with **Replace tags** (see [Import and export](#import-and-export)). Only the last one is kept. |
 | `%APPDATA%\ZOrbit\popout.json` | The browser's window position and size, whether it is maximised, Keep on top, thumbnail size, the side of the folders column (`side`), whether it is shown (`column`) and the tab you were last on (`kind`). Safe to delete. |
 | `%LOCALAPPDATA%\ZOrbit\popout.log` | The browser: how it started, what it showed, the picks it sent to the app. |

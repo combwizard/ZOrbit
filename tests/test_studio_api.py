@@ -11,6 +11,7 @@ import fsutil
 import paths
 import studio
 import theme
+import webapi
 import zbrush_colors
 
 
@@ -282,6 +283,27 @@ def test_pick_import_an_empty_tags_object_is_not_tags(api, tmp_path, monkeypatch
     res = _pick(api, tmp_path, monkeypatch, {"zorbit_settings": 1, "config": _default(), "tags": {"tags": {}}})
     assert res["ok"] and not res["has_tags"] and res["tags"] == 0
     assert api.apply_import("merge")["ok"]               # the file is menus only: no tag error on the way
+
+
+def test_the_favourites_order_goes_through_export_and_import(api, tmp_path, monkeypatch):
+    """Export keeps it, Replace tags brings it back, and a merge keeps what you have."""
+    _fake_webview(monkeypatch)
+    f = tmp_path / "out.json"
+    api._window = types.SimpleNamespace(create_file_dialog=lambda *a, **k: [str(f)])
+    store = webapi.store()
+    store.tag_items(["brush:a", "brush:b", "brush:c"], add=["favourite"])
+    assert store.set_favourite_order("brush", ["c", "a", "b"])["ok"]
+    assert api.export_settings(_default())["ok"]
+    assert json.loads(f.read_text(encoding="utf-8"))["tags"]["favourite_order"] == {"brush": ["c", "a", "b"]}
+
+    assert store.set_favourite_order("brush", ["b", "c", "a"])["ok"]
+    assert api.pick_import()["ok"]
+    assert api.apply_import("merge")["ok"]
+    assert store.favourite_order("brush") == ["b", "c", "a"]
+
+    assert api.pick_import()["ok"]
+    assert api.apply_import("replace")["ok"]
+    assert store.favourite_order("brush") == ["c", "a", "b"]
 
 
 # --- C: the first window fits the screen -------------------------------------------------------------

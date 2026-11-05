@@ -51,7 +51,23 @@ star stays visible while the item is starred. The selection strip has a star but
 first, with a star.
 
 Favourites is the first entry in the folders list on every tab, with a count. It lists starred items, most used first,
-then by name. It is not among the tag chips, because it has its own entry.
+then by name, until you give the tab your own order. It is not among the tag chips, because it has its own entry.
+
+To set your own order, open **Favourites** and drag a card to a new place in the grid. A line between the cards shows
+where it will land, and the order is saved when you drop. It works the same in the browser and in Studio's Library. One
+card moves at a time: with several selected, only the card you drag moves. **Esc**, or a drop outside the grid, leaves
+the order as it was, and a drop on a Studio slot still fills that slot. While a search, a tag chip or **Untagged** is on, you cannot reorder, and a drag does what it does anywhere else.
+
+Each tab has its own order, and your first drag on a tab starts it. Until then the tab stays most used first. After it,
+the tab follows your order and no longer moves by itself as you pick. An item you star later goes at the end. Unstarring
+an item takes it out of the order, so starring it again puts it at the end. An item that is not installed right now, such
+as one on an unplugged drive, keeps its place in the order and returns to it when you plug the drive back in.
+
+While a tab has its own order, a **Most used** button shows in Favourites: next to the count in the Library, and above
+the cards in the browser. Press it and confirm, and ZOrbit forgets your order for that tab and goes back to most used first.
+
+Your order is kept per [profile](profiles.md), in its `tags.json` (see [Where tags live](tags.md#where-tags-live)). A
+[Favourites slot](menus.md#tag) on the ring follows it too.
 
 **Recent** sits right under Favourites. It holds every brush, alpha, material or texture you pick in ZBrush, from a
 ring or from the browser, newest first. Each tab keeps the latest 24, and the file keeps 200 across all kinds. To take

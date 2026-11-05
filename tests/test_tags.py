@@ -24,6 +24,12 @@ def keys(store):
     return [t["key"] for t in store.tags()]
 
 
+def starred(*names, kind="brush"):
+    """A tags.json-shaped dict with these names starred, in this order."""
+    return {"version": 1, "tags": {"favourite": {"label": "Favourites", "color": "#FFD166"}},
+            "items": {f"{kind}:{n}": [FAVOURITE] for n in names}}
+
+
 def read(path):
     with open(path, encoding="utf-8") as f:
         return json.load(f)
@@ -722,3 +728,283 @@ def test_an_unreadable_tags_file_is_not_reported_as_changed_on_every_poll(tmp_pa
     monkeypatch.setattr(store, "_retry_at", 1.0)          # due: it reads again, but nothing changed
     assert store.reload_if_changed() is False
     assert store.error
+
+
+# --- the order of Favourites ----------------------------------------------------------------------
+def test_an_older_file_has_no_order_and_a_write_leaves_the_key_out(tags_file):
+    store = TagStore(tags_file(starred("a", "b"))).load()
+    assert store.favourite_order("brush") == []
+    assert store.favourite_orders() == {}
+    assert "favourite_order" not in store.snapshot()
+    store.tag_items(["brush:c"], add=[FAVOURITE])
+    assert "favourite_order" not in read(store.path)
+    assert read(store.path)["version"] == 1
+
+
+def test_a_good_order_is_read_with_its_names_normalised(tags_file):
+    raw = starred("a", "b", "dam_standard")
+    raw["favourite_order"] = {"brush": ["Dam Standard", "b", "a"]}
+    raw["items"]["brush:damstandard"] = raw["items"].pop("brush:dam_standard")
+    assert TagStore(tags_file(raw)).load().favourite_order("brush") == ["damstandard", "b", "a"]
+
+
+@pytest.mark.parametrize("bad", [
+    "not an object", 3, None, ["brush"], {"brush": "a"}, {"brush": 3}, {"brush": None}, {"brush": {"a": 1}},
+    {"sound": ["a"]}, {"": ["a"]}, {"brush": []}, {"brush": [1, None, {}, []]}, {"brush": ["  "]},
+])
+def test_a_malformed_order_is_dropped(tags_file, bad):
+    raw = starred("a", "b")
+    raw["favourite_order"] = bad
+    store = TagStore(tags_file(raw)).load()
+    assert store.error == ""
+    assert store.favourite_orders() == {}
+    assert store.items_with(FAVOURITE, "brush") == ["brush:a", "brush:b"]
+
+
+def test_junk_in_a_list_goes_and_the_rest_stays(tags_file):
+    raw = starred("a", "b", "c")
+    raw["favourite_order"] = {"brush": ["c", 7, None, "c", "A", "b", "a"], "sound": ["a"]}
+    assert TagStore(tags_file(raw)).load().favourite_orders() == {"brush": ["c", "a", "b"]}
+
+
+def test_a_name_without_a_star_is_dropped_and_a_star_without_a_name_goes_at_the_end(tags_file):
+    """What an older ZOrbit leaves: it writes the list back as it was, while it stars and unstars."""
+    raw = starred("b", "c", "new")
+    raw["favourite_order"] = {"brush": ["unstarred", "c", "b"]}
+    assert TagStore(tags_file(raw)).load().favourite_order("brush") == ["c", "b", "new"]
+
+
+def test_each_kind_has_its_own_order(tags_file):
+    raw = starred("a", "b")
+    raw["items"].update({"alpha:a": [FAVOURITE], "alpha:b": [FAVOURITE]})
+    store = TagStore(tags_file(raw)).load()
+    assert store.set_favourite_order("alpha", ["b", "a"])["ok"]
+    assert store.favourite_order("alpha") == ["b", "a"]
+    assert store.favourite_order("brush") == []
+
+
+def test_setting_an_order_writes_it_and_a_new_store_reads_it(tags_file):
+    store = TagStore(tags_file(starred("a", "b", "c"))).load()
+    assert store.set_favourite_order("brush", ["c", "a", "b"]) == {"ok": True}
+    assert read(store.path)["favourite_order"] == {"brush": ["c", "a", "b"]}
+    assert read(store.path)["version"] == 1
+    assert TagStore(store.path).load().favourite_order("brush") == ["c", "a", "b"]
+
+
+def test_names_are_normalised_and_a_name_twice_counts_once(tags_file):
+    store = TagStore(tags_file(starred("damstandard", "b"))).load()
+    assert store.set_favourite_order("brush", ["B", "Dam Standard", "b"])["ok"]
+    assert store.favourite_order("brush") == ["b", "damstandard"]
+
+
+@pytest.mark.parametrize("empty", [None, [], ()])
+def test_clearing_an_order_takes_the_key_out_of_the_file(tags_file, empty):
+    store = TagStore(tags_file(starred("a", "b"))).load()
+    store.set_favourite_order("brush", ["b", "a"])
+    assert store.set_favourite_order("brush", empty) == {"ok": True}
+    assert store.favourite_order("brush") == []
+    assert "favourite_order" not in read(store.path)
+    assert store.items_with(FAVOURITE, "brush") == ["brush:a", "brush:b"]        # the stars stay
+
+
+def test_clearing_one_kind_leaves_the_other(tags_file):
+    raw = starred("a", "b")
+    raw["items"].update({"alpha:a": [FAVOURITE], "alpha:b": [FAVOURITE]})
+    store = TagStore(tags_file(raw)).load()
+    store.set_favourite_order("brush", ["b", "a"])
+    store.set_favourite_order("alpha", ["b", "a"])
+    store.set_favourite_order("brush", None)
+    assert store.favourite_orders() == {"alpha": ["b", "a"]}
+
+
+@pytest.mark.parametrize("kind", ["sound", "", None, 3, ["brush"]])
+def test_an_unknown_kind_is_refused_and_nothing_is_written(tags_file, kind):
+    store = TagStore(tags_file(starred("a", "b"))).load()
+    before = open(store.path, "rb").read()
+    assert store.set_favourite_order(kind, ["b", "a"])["ok"] is False
+    assert open(store.path, "rb").read() == before
+
+
+@pytest.mark.parametrize("keys", ["ab", 3, {"a": 1}, ["a", 3], [None]])
+def test_a_list_that_is_not_names_is_refused(tags_file, keys):
+    store = TagStore(tags_file(starred("a", "b"))).load()
+    store.set_favourite_order("brush", ["b", "a"])
+    assert store.set_favourite_order("brush", keys)["ok"] is False
+    assert store.favourite_order("brush") == ["b", "a"]
+
+
+def test_a_broken_file_refuses_an_order_and_stays_as_it_is(tags_file):
+    store = TagStore(tags_file("{ not json")).load()
+    assert store.set_favourite_order("brush", ["a"])["ok"] is False
+    assert open(store.path, encoding="utf-8").read() == "{ not json"
+
+
+# rule 4: a saved name whose item is not on show right now keeps its place
+def test_a_reorder_keeps_the_names_not_on_show_in_their_places(tags_file):
+    raw = starred("off1", "b", "c", "off2", "e")
+    raw["favourite_order"] = {"brush": ["off1", "b", "c", "off2", "e"]}
+    store = TagStore(tags_file(raw)).load()
+    assert store.set_favourite_order("brush", ["e", "c", "b"])["ok"]
+    assert store.favourite_order("brush") == ["off1", "e", "c", "off2", "b"]
+    assert read(store.path)["favourite_order"]["brush"] == ["off1", "e", "c", "off2", "b"]
+
+
+def test_the_first_drag_puts_a_star_not_on_show_at_the_end(tags_file):
+    store = TagStore(tags_file(starred("off", "a", "b"))).load()
+    assert store.set_favourite_order("brush", ["b", "a"])["ok"]
+    assert store.favourite_order("brush") == ["b", "a", "off"]
+
+
+def test_a_name_in_the_request_without_a_star_is_left_out(tags_file):
+    """Another window took the star off while this one was dragging."""
+    store = TagStore(tags_file(starred("a", "b"))).load()
+    assert store.set_favourite_order("brush", ["b", "gone", "a"])["ok"]
+    assert store.favourite_order("brush") == ["b", "a"]
+
+
+def test_a_star_from_another_window_during_a_drag_goes_at_the_end(tags_file):
+    store = TagStore(tags_file(starred("a", "b"))).load()
+    other = TagStore(store.path).load()
+    assert other.tag_items(["brush:new"], add=[FAVOURITE])["ok"]
+    assert store.set_favourite_order("brush", ["b", "a"])["ok"]
+    assert store.favourite_order("brush") == ["b", "a", "new"]
+
+
+# rule 3: stars
+def test_a_star_goes_at_the_end_of_the_order_and_only_of_its_kind(tags_file):
+    store = TagStore(tags_file(starred("a", "b"))).load()
+    store.set_favourite_order("brush", ["b", "a"])
+    assert store.tag_items(["brush:c", "alpha:x"], add=[FAVOURITE])["ok"]
+    assert store.favourite_orders() == {"brush": ["b", "a", "c"]}
+
+
+def test_a_star_on_a_tab_with_no_order_makes_no_order(tags_file):
+    store = TagStore(tags_file(starred("a", "b"))).load()
+    assert store.tag_items(["brush:c"], add=[FAVOURITE])["ok"]
+    assert store.favourite_order("brush") == []
+
+
+def test_unstarring_takes_a_name_out_and_a_new_star_puts_it_at_the_end(tags_file):
+    store = TagStore(tags_file(starred("a", "b", "c"))).load()
+    store.set_favourite_order("brush", ["a", "b", "c"])
+    assert store.tag_items(["brush:a"], remove=[FAVOURITE])["ok"]
+    assert store.favourite_order("brush") == ["b", "c"]
+    assert read(store.path)["favourite_order"]["brush"] == ["b", "c"]
+    assert store.tag_items(["brush:a"], add=[FAVOURITE])["ok"]
+    assert store.favourite_order("brush") == ["b", "c", "a"]
+
+
+def test_set_tags_stars_and_unstars_like_tag_items(tags_file):
+    raw = starred("a", "b")
+    raw["tags"]["rock"] = {"label": "Rock", "color": "#A8DF23"}
+    store = TagStore(tags_file(raw)).load()
+    store.set_favourite_order("brush", ["b", "a"])
+    assert store.set_tags("brush:b", ["rock"])["ok"]              # keeps another tag, loses the star
+    assert store.favourite_order("brush") == ["a"]
+    assert store.set_tags("brush:b", ["rock", FAVOURITE])["ok"]
+    assert store.favourite_order("brush") == ["a", "b"]
+    assert store.set_tags("brush:a", [])["ok"]
+    assert store.favourite_order("brush") == ["b"]
+
+
+def test_another_tag_coming_or_going_leaves_the_order_alone(tags_file):
+    raw = starred("a", "b")
+    raw["tags"]["rock"] = {"label": "Rock", "color": "#A8DF23"}
+    store = TagStore(tags_file(raw)).load()
+    store.set_favourite_order("brush", ["b", "a"])
+    store.tag_items(["brush:a"], add=["rock"])
+    store.tag_items(["brush:a"], remove=["rock"])
+    store.delete_tag("rock")
+    assert store.favourite_order("brush") == ["b", "a"]
+
+
+def test_merging_a_tag_into_favourites_stars_its_items_at_the_end(tags_file):
+    raw = starred("a", "b")
+    raw["tags"]["rock"] = {"label": "Rock", "color": "#A8DF23"}
+    raw["items"]["brush:c"] = ["rock"]
+    store = TagStore(tags_file(raw)).load()
+    store.set_favourite_order("brush", ["b", "a"])
+    assert store.merge_tags("rock", FAVOURITE)["ok"]
+    assert store.favourite_order("brush") == ["b", "a", "c"]
+
+
+def test_the_last_item_leaving_ends_the_order(tags_file):
+    store = TagStore(tags_file(starred("a"))).load()
+    store.set_favourite_order("brush", ["a"])
+    assert store.tag_items(["brush:a"], remove=[FAVOURITE])["ok"]
+    assert store.favourite_orders() == {}
+    assert "favourite_order" not in read(store.path)
+    assert store.tag_items(["brush:b"], add=[FAVOURITE])["ok"]
+    assert store.favourite_order("brush") == []                   # most used again, not an order of one
+
+
+# export and import
+def test_snapshot_and_from_raw_carry_the_order_and_a_copy_is_a_copy(tags_file):
+    store = TagStore(tags_file(starred("a", "b"))).load()
+    store.set_favourite_order("brush", ["b", "a"])
+    snap = store.snapshot()
+    assert snap["favourite_order"] == {"brush": ["b", "a"]}
+    assert TagStore.from_raw(snap).favourite_order("brush") == ["b", "a"]
+    assert TagStore.from_raw(snap).snapshot() == snap
+    snap["favourite_order"]["brush"].append("x")
+    assert store.favourite_order("brush") == ["b", "a"]
+    store.favourite_order("brush").append("x")
+    assert store.favourite_order("brush") == ["b", "a"]
+
+
+def test_import_replace_takes_the_order_of_the_file(tags_file):
+    store = TagStore(tags_file(starred("a", "b"))).load()
+    store.set_favourite_order("brush", ["b", "a"])
+    incoming = starred("x", "y", "z")
+    incoming["favourite_order"] = {"brush": ["z", "x", "y"]}
+    assert store.import_tags(incoming, "replace")["ok"]
+    assert store.favourite_orders() == {"brush": ["z", "x", "y"]}
+    assert read(store.path)["favourite_order"] == {"brush": ["z", "x", "y"]}
+
+
+def test_import_replace_with_a_file_without_an_order_leaves_most_used(tags_file):
+    store = TagStore(tags_file(starred("a", "b"))).load()
+    store.set_favourite_order("brush", ["b", "a"])
+    assert store.import_tags(starred("a", "b"), "replace")["ok"]
+    assert store.favourite_orders() == {}
+    assert "favourite_order" not in read(store.path)
+
+
+def test_import_merge_keeps_your_order_takes_none_and_puts_new_stars_at_the_end(tags_file):
+    store = TagStore(tags_file(starred("a", "b"))).load()
+    store.set_favourite_order("brush", ["b", "a"])
+    incoming = starred("z", "a")
+    incoming["favourite_order"] = {"brush": ["a", "z"], "alpha": ["q"]}
+    incoming["items"]["alpha:q"] = [FAVOURITE]
+    assert store.import_tags(incoming, "merge")["ok"]
+    assert store.favourite_orders() == {"brush": ["b", "a", "z"]}
+
+
+def test_import_merge_onto_a_tab_with_no_order_stays_most_used(tags_file):
+    store = TagStore(tags_file(starred("a", "b"))).load()
+    incoming = starred("z")
+    incoming["favourite_order"] = {"brush": ["z"]}
+    assert store.import_tags(incoming, "merge")["ok"]
+    assert store.favourite_orders() == {}
+
+
+def test_import_preview_ignores_the_order(good):
+    raw = dict(INCOMING, favourite_order={"brush": ["claybuildup"]})
+    assert good.import_preview(raw) == good.import_preview(INCOMING)
+
+
+def test_an_unknown_key_beside_the_order_is_still_written_back(tags_file):
+    raw = starred("a", "b")
+    raw["from_the_future"] = {"x": 1}
+    store = TagStore(tags_file(raw)).load()
+    store.set_favourite_order("brush", ["b", "a"])
+    on_disk = read(store.path)
+    assert on_disk["from_the_future"] == {"x": 1} and on_disk["favourite_order"] == {"brush": ["b", "a"]}
+
+
+def test_reload_if_changed_sees_an_order_changed_in_another_process(tags_file):
+    store = TagStore(tags_file(starred("a", "b"))).load()
+    other = TagStore(store.path).load()
+    other.set_favourite_order("brush", ["b", "a"])
+    assert store.reload_if_changed() is True
+    assert store.favourite_order("brush") == ["b", "a"]
