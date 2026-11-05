@@ -45,6 +45,8 @@ PARALLEL = 6                                            # shots taken at the sam
 # to whatever handles it), card(name) is a Settings card by its title, alone at the top of the screen, and
 # lookGroup(name) is the same for a group on the Look screen (Slots, Hub, Labels, Colours, Tag colours, Opening); it opens the group if it starts folded.
 HELPERS = """
+window.typeTarget = t => { const i = document.querySelector('[data-focus=target]'); i.focus(); i.value = t;
+  i.dispatchEvent(new Event('input', {bubbles: true})); return true; };
 window.click = t => new Promise((ok, fail) => { const t0 = Date.now(); (function poll() {
   const hits = [...document.querySelectorAll('body *')].filter(e => e.offsetParent && e.textContent.trim().startsWith(t));
   const b = hits[hits.length - 1];
@@ -123,6 +125,18 @@ SHOTS = {
         " if (document.querySelector('#versionChip.has-update') || Date.now() - t0 > 5000) r(); else setTimeout(w, 100); })(); })",
         "document.getElementById('versionChip').click()",
     ], clip="document.querySelector('.modal')"),
+    # macro-suggest: what a Press slot suggests. It types as far as Macro:Misc:Toggle because the suggestions also list the
+    # macros in the developer's own folder, and only the ones that come with ZBrush may be in a picture.
+    "macro-suggest": dict(q="screen=menus&menu=tools&item=0", steps=["typeTarget('Macro:Misc:Toggle')",
+        # The list is see-through, and the panel behind it would show in the crop.
+        "(() => { const t = document.querySelector('[data-focus=target]');"
+        " document.querySelectorAll('.insp *').forEach(e => { if (!e.contains(t)) e.style.visibility = 'hidden'; }); return true; })()"],
+                          clip="({getBoundingClientRect: () => { const a = document.querySelector('[data-focus=target]').getBoundingClientRect(),"
+                               " b = document.querySelector('.combo-list').getBoundingClientRect();"
+                               " return {left: Math.min(a.left, b.left) - 12, top: Math.min(a.top, b.top) - 8,"
+                               " right: Math.max(a.right, b.right) + 12, bottom: Math.max(a.bottom, b.bottom) + 2}; }})"),
+    # status-report: the log card on Status with Copy report and Report a bug (?calmlog: no made-up failures in the log).
+    "status-report": dict(q="screen=status&calmlog", clip="document.querySelector('.logbox').closest('.card')"),
     "studio-profiles": dict(q="screen=menus&profiles=3", steps=["document.getElementById('profileBtn').click()"],
                             clip="({getBoundingClientRect: () => { const p = document.querySelector('.popover').getBoundingClientRect();"
                                  " return {left: 0, top: 0, right: Math.max(p.right + 24, 520), bottom: p.bottom + 12}; }})"),

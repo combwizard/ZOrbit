@@ -16,6 +16,8 @@ There are also three new kinds of slot for things that used to mean a dialog in 
 
 ## The commands
 
+![The command ZOrbit.exe --open "brushes" lights up, the Brushes ring opens at the cursor, the cursor moves to ClayBuildup and a flick picks it](../../images/command-open.gif)
+
 ```
 ZOrbit.exe --open "brushes"
 ZOrbit.exe --pick "brush:ClayBuildup"
@@ -42,6 +44,8 @@ Elgato doesn't document options in that field. If the button doesn't run the com
 
 ## Capture, Tool and Project slots
 
+![A ring of five brushes with a Capture slot drawn as a camera, a Tool slot called Hero drawn as a cube, and a Project slot called Blockout drawn as a folder, which is hovered](../../images/file-slots.png)
+
 All three are Full mode types, and Studio has browse buttons for their paths.
 
 A [Capture](../../menus.md#capture) slot saves ZBrush's document as a PNG. The picture is the canvas at its own size, so neither the ring nor ZBrush's interface is in it. The file is named for the time you picked it, and a name that is already taken gets `_2`, so nothing is overwritten. Leave the folder empty and it saves to the **ZBrush** folder in your **Pictures** folder.
@@ -58,9 +62,13 @@ These slots need the new plugin, so do one thing after you update. Restart ZBrus
 
 ## Your macros in a Press slot
 
+![A Press slot's path field with Macro:Misc:Toggle typed in it, and the list under it suggesting four macros that come with ZBrush, such as Macro:Misc:Toggle See-Through](../../images/macro-suggest.png)
+
 Type `Macro` in a **Press** slot's path field and Studio lists your macros, as paths such as `Macro:Misc:Toggle See-Through`. It reads them from the macro folders of your ZBrush installs. A macro file with no button doesn't appear, because ZBrush doesn't make one for it.
 
 ## Copy report
+
+![The App log card on the Status screen: the last lines of the log, with Copy log, Copy report, Report a bug, Open logs folder and Open menus folder under them](../../images/status-report.png)
 
 When something goes wrong on your PC, I need your versions and your logs, and until now you had to go and find them. **Copy report** on the **Status** screen copies it all in one block: the ZOrbit and Windows versions, your ZBrush installs, the **Status** cards and the ends of the logs, with your Windows user name and folders hidden. **Report a bug** next to it opens the bug form with the versions filled in. Look the report over before you send it, and take out anything you'd rather not share.
 

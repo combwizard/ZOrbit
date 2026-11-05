@@ -4,7 +4,7 @@
    with reason "zbrush"), ?status=up (the app already runs; by default ZBrush and the app both run; with ?appoff, ?startfail or any other ?status the app stays off until Start app succeeds),
    ?startfail (start_app answers reason "failed" with three lines after 1.5 s; ?startfail=empty: no lines, "It wrote nothing to its log"),
    ?startwait (start_app answers starting: true after 2 s, and the app is up 6 s later), ?startslow (start_app takes 7 s, then works), ?legacy (legacy_only: key-bridge listener card),
-   ?nocheck (zbrush_check_ok false: the ZBrush card says "Could not check"),
+   ?calmlog (the app log is an ordinary session, with no failure lines), ?nocheck (zbrush_check_ok false: the ZBrush card says "Could not check"),
    ?lag=300 (artificial latency in ms for preview calls and for the ZScript install/remove, so the busy row is visible), ?broken (get_config fails to parse: recovery screen),
    ?conflict (the first save without force reports "file changed on disk"), ?keptbroken (the first save says the old file was not valid JSON and is kept as radial.json.broken),
    ?badmenus=null|noitems|string|items (get_config hands out a hand-edited file: a null menu, a menu without items, a menu that is a string, an item that is null),
@@ -353,6 +353,12 @@
     var msgs = M.get_status.app_log.slice(0, 10).map(function (l) { return l.replace(/^\S+ \S+ /, ''); });
     msgs.push('bridge message failed: listener window did not answer, using the bridge key');
     msgs.push("pick #7 'Orb': message failed, fell back to the bridge key");
+    if (q.has('calmlog')) {   // ?calmlog: an ordinary session, for a picture of the Status screen
+      var calm = ['ZOrbit started', "ring 'brushes' sprites built in 41 ms", "pick #1 'ClayBuildup': brush ClayBuildup: selected", "ring 'brushes' sprites from cache (3 ms)", "pick #2 'Move': brush Move: selected",
+        "ring 'brushes' sprites from cache (2 ms)", "pick #3 'DamStandard': brush DamStandard: selected", "ring 'brushes' sprites from cache (3 ms)", "pick #4 'hPolish': brush hPolish: selected",
+        "ring 'brushes' sprites from cache (2 ms)", "pick #5 'TrimDynamic': brush TrimDynamic: selected"];
+      return calm.map(function (l, n) { return stamp(Date.now() - (calm.length - n) * 9000) + ' ' + l; });
+    }
     var now = Date.now(), y = now - 26 * 3600e3, out = [];
     out.push(stamp(y) + ' ZOrbit started (mock)', stamp(y + 4000) + " pick #1 'hPolish': brush hPolish: selected", stamp(y + 9000) + ' ring load failed: menu tools: no usable items');
     for (var i = 0; i < 36; i++) out.push(stamp(now - (37 - i) * 6000) + ' ' + msgs[i % msgs.length]);
