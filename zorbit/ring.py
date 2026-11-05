@@ -1067,14 +1067,16 @@ class Ring:
         return pen
 
     def _fan_art(self, menu, upto=None):
-        """(sprites, labels) of a fan's slots, rendered once per menu (upto: stop after that many)."""
+        """(sprites, labels) of a fan's slots, rendered once per menu (upto: stop after that many). Each slot comes
+        from _slot_cache, so a ring made for every preview frame (Studio) does not draw the fan again."""
         art = self._art.setdefault(menu.id, [])
         sizes = self._fan_sizes(menu)
         look = self._look_for(menu)
         while len(art) < len(menu.items) and (upto is None or len(art) < upto):
             it = menu.items[len(art)]
             cs = sizes[len(art)]
-            art.append((self._slot_sprites(it, cs, look), self._label_sprites(it, cs, look)))
+            art.append(_slot_get(self._slot_key(it, cs, look),
+                                 lambda it=it, cs=cs: (self._slot_sprites(it, cs, look), self._label_sprites(it, cs, look))))
         return art
 
     def _warm_step(self):
@@ -1211,11 +1213,11 @@ class Ring:
             hub = (getattr(self.menu, "icon", "") or "", self.menu.title, _icon_sig(self._hub_icon()))   # the menu's icon
         return self.menu.id, items, self.look.sig, self.scale, hub
 
-    def _slot_key(self, it, size):
+    def _slot_key(self, it, size, look=None):
         """What one slot's sprites and label are drawn from: the item, its icon by content, whether it fans out,
-        its width, and the ring's look, scale and slot size."""
+        its width, and the look it is drawn in (the ring's, or a fan's own), the scale and the slot size."""
         return (_item_sig(it), _icon_sig(self._icon(it)), self._fans_out(it) if it.kind == "menu" else False,
-                size, self.look.sig, self.scale, self.slot)
+                size, (look or self.look).sig, self.scale, self.slot)
 
     def _slot_sprites(self, it, size=None, look=None):
         """(idle, hover) RGBA sprites, drawn at the 1.12x hover size so scaling always reduces. size: the slot's

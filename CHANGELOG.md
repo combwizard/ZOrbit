@@ -19,6 +19,7 @@ All notable changes to this project are listed here. The format follows
 
 ### Changed
 
+- Studio's ring preview draws a fan's slots once and keeps them, instead of drawing them again for every frame. A preview with open fans, and the fan-out animation, come up quicker.
 - Studio and the browser can be resized from all four edges and corners, the top included. A thin strip around the page, in the theme's background colour, makes room for this. It is not there while the window is maximised.
 
 ### Fixed
