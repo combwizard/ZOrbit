@@ -26,7 +26,7 @@
   'use strict';
   const K = window.ZStudio, Z = window.ZLook;
   if (!K || !Z) return;                                       // app.js or look.js did not load: app.js shows a note in place of this screen
-  const { h, $, $$, S, R, icon, iconBtn, linkBtn, card, foldSection, foldOpen, foldIsOpen, foldSum, choiceCards, sliderRow, toggleSwitch, normHex, commit, tidyRing, usableIdx, menuOf, kindOf,
+  const { h, $, $$, S, R, icon, iconBtn, linkBtn, card, foldSection, foldOpen, foldIsOpen, foldSum, choiceCards, sliderRow, toggleSwitch, normHex, commit, tidyRing, slotIdx, menuOf, kindOf,
     isLib, firstTag, isFull, setMode, fullOnlyChanges, RingLoader, SAMPLE_MENU, COLOR_INFO, lookCtx, clearedText, modal, promptModal, popover, undoToast, plural, hasMenu, clamp,
     makeRingView, itemLabel } = K;
 
@@ -74,9 +74,9 @@
     if (!ambientMemo || ambientMemo.key !== key) ambientMemo = { key, vals: Z.explain(S.cfg, { level: 'menu', menu: target().menu }, lookCtx()).values };
     return ambientMemo.vals;
   };
-  /* The slot's item and its place among the menu's usable items, for the words around the slot level. */
+  /* The slot's item and its place among the menu's slots, for the words around the slot level. */
   const slotInfo = t => {
-    const m = menuOf(t.menu), idxs = usableIdx(t.menu), at = idxs.indexOf(t.slot), it = m && m.items ? m.items[t.slot] : null;
+    const m = menuOf(t.menu), idxs = slotIdx(t.menu), at = idxs.indexOf(t.slot), it = m && m.items ? m.items[t.slot] : null;
     return { it, n: idxs.length, pos: at + 1, label: it ? itemLabel(it) : '', idxs };
   };
 
@@ -208,7 +208,7 @@
       'aria-label': isFull() ? 'Ring preview. Click a slot to style it on its own. At the slot level the arrow keys move between slots and Escape goes back to the menu.' : 'Ring preview' },
     h('div', { class: 'stage-rings', 'aria-hidden': 'true' }), wrap, cap);
     let msize = 447, ptok = 0, lastFit = null, hoverPtr = null, glowInView = false;
-    const previewCount = () => { const id = previewId(); return id === SAMPLE_MENU ? null : usableIdx(id).length; };
+    const previewCount = () => { const id = previewId(); return id === SAMPLE_MENU ? null : slotIdx(id).length; };
     const ring = makeRingView({ wrap, img, count: previewCount });
     const paintDZ = () => { const k = (wrap.clientWidth || 280) / msize, d = (Number(valueNow('dead_zone') !== undefined ? valueNow('dead_zone') : ambientDead()) || K.ringNum('dead_zone')) * 2 * k; dz.style.width = dz.style.height = d + 'px'; };
     const ambientDead = () => (slotT() ? ambient().dead_zone : undefined);
@@ -219,7 +219,7 @@
       return view.menuId === SAMPLE_MENU ? SAMPLE_MENU : (view.menuId && menuOf(view.menuId) ? view.menuId : S.menuId);
     };
     /* ring slot i is which item of the menu (its index in menu.items)? null for a More slot or when the layout does not fit. */
-    const itemOfSlot = i => { const L = ring.layout(), idxs = usableIdx(previewId()); return L && L.slots[i] && !L.slots[i].more && idxs[i] !== undefined ? idxs[i] : null; };
+    const itemOfSlot = i => { const L = ring.layout(), idxs = slotIdx(previewId()); return L && L.slots[i] && !L.slots[i].more && idxs[i] !== undefined ? idxs[i] : null; };
     const slotOfItem = ix => { const L = ring.layout(); if (!L || ix === null || ix === undefined) return null; for (let i = 0; i < L.slots.length; i++) if (itemOfSlot(i) === ix) return i; return null; };
     const glowPinned = () => slotT() && (view.pinHover || (glowInView && !view.pinOff));
     /* What the picture shows lit: the slot under the pointer, else (when pinned) the selected one. */
@@ -251,7 +251,7 @@
       paintCap();
       if (lookPlayer.state !== 'idle') return;                // the animation owns the picture until it ends; it calls this again then
       const id = previewId(), sample = id === SAMPLE_MENU, tok = ++ptok;
-      const none = !sample && (!menuOf(id) || !usableIdx(id).length);
+      const none = !sample && (!menuOf(id) || !slotIdx(id).length);
       stage.classList.toggle('none', none);
       wrap.hidden = none;
       if (none) return;
@@ -285,7 +285,7 @@
     stage.addEventListener('keydown', e => {
       if (sl0 === null || e.target !== stage || e.altKey || e.ctrlKey || e.metaKey) return;
       if (e.key === 'Escape') { e.preventDefault(); goMenuLevel(); return; }
-      const idxs = usableIdx(target().menu), at = idxs.indexOf(target().slot);
+      const idxs = slotIdx(target().menu), at = idxs.indexOf(target().slot);
       const to = e.key === 'ArrowRight' || e.key === 'ArrowDown' ? at + 1 : e.key === 'ArrowLeft' || e.key === 'ArrowUp' ? at - 1 : e.key === 'Home' ? 0 : e.key === 'End' ? idxs.length - 1 : null;
       if (to === null || !idxs.length) return;
       e.preventDefault();
@@ -326,8 +326,8 @@
        ring is no menu: the first one with something to show stands in. */
     const playNow = () => {
       if (lookPlayer.state === 'loading') return;
-      const pid = previewId(), id = pid !== SAMPLE_MENU ? pid : Object.keys(S.cfg.menus).find(m => usableIdx(m).length);
-      if (!id || !hasMenu(id) || !usableIdx(id).length) { K.toast('The current menu has no usable items to animate.', { tone: 'warn' }); return; }
+      const pid = previewId(), id = pid !== SAMPLE_MENU ? pid : Object.keys(S.cfg.menus).find(m => slotIdx(m).length);
+      if (!id || !hasMenu(id) || !slotIdx(id).length) { K.toast('The current menu has no usable items to animate.', { tone: 'warn' }); return; }
       stage.scrollIntoView({ block: 'nearest' });               // the stacked layout of a narrow window
       lookPlayer.play(id, level0 !== 'menu');
     };
@@ -342,7 +342,7 @@
         if (!hasMenu(id)) return;
         view.target = { level: 'menu', menu: id };
         if (lv === 'slot') {                                    // the selected item if it is on the ring, else the first one
-          const idxs = usableIdx(id);
+          const idxs = slotIdx(id);
           const ix = id === S.menuId && idxs.includes(S.itemIdx) ? S.itemIdx : (view.lastSlot && view.lastSlot.menu === id && idxs.includes(view.lastSlot.slot) ? view.lastSlot.slot : idxs[0]);
           if (ix === undefined) return;
           view.target = { level: 'menu', menu: id, slot: ix };
@@ -355,7 +355,7 @@
       const lvls = [['global', full ? 'Global' : 'All menus', full ? 'The look every menu starts from.' : 'The look for every menu.'],
         ['menu', 'This menu', full ? 'Only the menu you pick. Whatever you do not set here follows Global.' : 'Only the menu you pick.']];
       if (full) lvls.push(['slot', 'This slot', 'Only one slot of the menu. Whatever you do not set here follows the menu.']);
-      const noSlots = () => !usableIdx(view.last && hasMenu(view.last) ? view.last : S.menuId).length;
+      const noSlots = () => !slotIdx(view.last && hasMenu(view.last) ? view.last : S.menuId).length;
       const chips = lvls.map(([id, label, hint]) => h('button', { class: 'look-chip' + (id === curLevel ? ' on' : ''), type: 'button', role: 'radio', 'aria-checked': id === curLevel ? 'true' : 'false',
         tabindex: id === curLevel || (curLevel === 'preset' && id === 'global') ? '0' : '-1', title: id === 'slot' && noSlots() && curLevel !== 'slot' ? 'The menu has no slot to pick yet.' : hint, dataset: { level: id, fk: 'look:level/' + id },
         'aria-disabled': id === 'slot' && noSlots() && curLevel !== 'slot' ? 'true' : null,
@@ -1063,7 +1063,7 @@
     if (t.level === 'preset' && !isFull()) { view.target = { level: 'global' }; return; }       // editing a look is Full only
     if (t.level === 'menu' && !hasMenu(t.menu)) view.target = { level: 'global' };
     else if (t.level === 'preset' && !Z.lookDict(S.cfg, t.name, c)) view.target = { level: 'global' };
-    else if (Z.isSlot(t) && (!isFull() || !usableIdx(t.menu).includes(t.slot))) view.target = { level: 'menu', menu: t.menu };      // no slot level in Simple, or the item is gone or unusable
+    else if (Z.isSlot(t) && (!isFull() || !slotIdx(t.menu).includes(t.slot))) view.target = { level: 'menu', menu: t.menu };      // no slot level in Simple, or the item is gone
     if (view.target.level === 'menu') view.last = view.target.menu;
     if (Z.isSlot(view.target)) view.lastSlot = { menu: view.target.menu, slot: view.target.slot };
   }

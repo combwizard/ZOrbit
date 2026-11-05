@@ -361,6 +361,8 @@ Opens the [browser window](browser.md). `kind` chooses the tab it opens on: `bru
 
 An empty slot takes up its place in the ring and holds nothing. In the ring it is a faint outline of the slot's shape, with no label and no line from the hub. Hovering it highlights nothing, and releasing or clicking over it does nothing, with no message. An empty slot cannot be a step of a `steps` item. A menu made only of empty slots still loads and opens, as a ring of outlines.
 
+An item that cannot be used holds its place the same way: a slot you have picked a type for but not filled in, or a submenu slot whose menu is gone. The ring draws it as an empty slot, so the slots after it stay where they are, and Studio lists the problem. The file keeps the item as it is. A menu with only such items has no usable items and does not open.
+
 Empty slots are how a menu [keeps its slots in place](#keep-slots-in-place). In Studio they show dimmed and in italics in the item list. Drag something into one from the Library, or pick a type for it in the **Item** tab.
 
 ### Labels and icons

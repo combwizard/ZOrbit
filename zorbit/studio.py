@@ -500,7 +500,8 @@ class Api(webapi.LibraryApi, webapi.TagApi):
 
     def save_config(self, cfg, mtime_ns=None, force=False, allow_unusable=False, profile=None):
         """Writes radial.json. The app notices the change within half a second. Saves even with problems (the
-        loader skips bad items) and reports them, but refuses a config no ring can open from unless allow_unusable.
+        loader draws a bad item as an empty slot) and reports them, but refuses a config no ring can open from unless
+        allow_unusable.
         mtime_ns is the file's time when the page loaded it: if the file has changed since, nothing is written
         (conflict) unless force. allow_unusable saves a config no ring can open from. The two flags are separate
         so confirming one warning never skips the other. The previous version is kept as radial.json.bak, only

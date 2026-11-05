@@ -21,6 +21,7 @@ All notable changes to this project are listed here. The format follows
 
 ### Fixed
 
+- Picking an action for a slot in Studio took the slot out of the ring until its target was filled in, and the slots after it closed up, in the preview and in the real ring. An item that cannot be used now stays in its place as an empty outline, and Studio still lists the problem.
 - Studio and the docs said a ZBrush under Program Files always asks for administrator rights. It only asks when your account cannot write to that folder, and the ZBrush 2022 install we tested lets every account write there.
 - A folder that is slow to read no longer holds up a pick.
 - The path field of a **Project** slot showed only about 9 characters of the path, because it shared its row with the two browse buttons. On **Project**, **Tool** and **Capture** slots the buttons now sit under the field, which has the panel's whole width.

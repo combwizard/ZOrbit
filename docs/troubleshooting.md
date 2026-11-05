@@ -211,11 +211,11 @@ Studio keeps the last version as `radial.json.bak`. If you edit the file by hand
 
 The rail and the **Alt+1** to **Alt+6** keys do nothing, and the rail is dimmed, until the file loads. Nothing is changed or saved until you choose a button.
 
-A section of the wrong type, for example `"ring": "big"`, is reported with the section name, and the defaults are used for it. A brush, alpha, material or texture name may not contain `\ / :` or `..`, and an `icon` may not point at a network path; the problem names the item, and a bad name skips the item. A byte-order mark left by an editor is accepted. Deleting the profile's `radial.json` makes the app create a fresh one from the starter menus, in that profile's folder.
+A section of the wrong type, for example `"ring": "big"`, is reported with the section name, and the defaults are used for it. A brush, alpha, material or texture name may not contain `\ / :` or `..`, and an `icon` may not point at a network path; the problem names the item, and a bad name leaves an empty slot in its place. A byte-order mark left by an editor is accepted. Deleting the profile's `radial.json` makes the app create a fresh one from the starter menus, in that profile's folder.
 
 If the file cannot be read when the app starts, the app still starts: the tray icon appears, no ring opens, and `radiald.log` says "cannot load radial.json" with the reason. Fix the file in Studio or by hand; the app reads it again as soon as it changes. **Reload menus** in the tray menu logs "tray: reload failed" with the reason when the file is still unreadable.
 
-A setting name ZOrbit does not know, such as `raduis` for `radius` in `ring` or `itmes` in a menu, is listed as a problem and ignored, with a "did you mean" when a known name is close. A `swallow` that is not `true` or `false` is a problem too, and counts as `true`. A submenu slot that points at a menu with no usable items is listed and skipped.
+A setting name ZOrbit does not know, such as `raduis` for `radius` in `ring` or `itmes` in a menu, is listed as a problem and ignored, with a "did you mean" when a known name is close. A `swallow` that is not `true` or `false` is a problem too, and counts as `true`. A submenu slot that points at a menu with no usable items is listed and stays as an empty slot.
 
 ### These files were made by a newer ZOrbit
 

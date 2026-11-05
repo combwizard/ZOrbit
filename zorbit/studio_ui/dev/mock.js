@@ -125,7 +125,8 @@
   // Python's repr of a string, close enough for the messages: 'x'
   function pyr(v) { return typeof v === 'string' ? "'" + v + "'" : String(v); }
 
-  // The items the ring would draw: one action each, submenu targets that exist (the order preview_ring's indices count in)
+  // The slots the ring would draw (the order preview_ring's indices count in): every item, since config.py holds the place of one
+  // it cannot use, in a menu with at least one it can
   function usable(m) { return usableAt(m).map(function (i) { return m.items[i]; }); }
   function usableAt(m) {                    // their indices in m.items
     var out = [];
@@ -135,7 +136,7 @@
       var k = ks[0];                       // config.py: every string target but a browser's must be non-empty; an empty slot (true) always counts, so the ring keeps its place
       if (k === 'empty' ? it.empty === true : k === 'steps' || k === 'auto' || k === 'browser' || (typeof it[k] === 'string' && it[k].trim() !== '')) out.push(i);
     });
-    return out;
+    return out.length ? (m.items || []).map(function (_, i) { return i; }) : out;
   }
 
   // One of every message config.py can produce (menu ids are the recorded ones), for ?allproblems

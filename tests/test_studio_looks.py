@@ -249,6 +249,16 @@ def test_preview_ring_keeps_empty_slots_in_the_layout_and_the_count(api):
     assert res["fit"]["items"] == 5
 
 
+def test_preview_ring_keeps_the_place_of_an_item_with_no_target_yet(api):
+    cfg = cfg_of(n=0, keep_slots=True)
+    cfg["menus"]["main"]["items"] = [{"brush": "B0"}, {"steps": [{"brush": ""}]}, {"press": ""}, {"brush": "B3"}]
+    res = api.preview_ring(cfg, "main")
+    assert res["image"].startswith("data:image/png")
+    assert [s["i"] for s in res["layout"]["slots"]] == [0, 1, 2, 3]
+    assert res["fit"]["items"] == 4
+    assert any("item 2" in p for p in res["problems"]) and any("item 3" in p for p in res["problems"])
+
+
 def test_preview_ring_of_a_menu_of_only_empty_slots_draws_outlines(api):
     cfg = cfg_of(n=0, keep_slots=True)
     cfg["menus"]["main"]["items"] = [{"empty": True}] * 8
