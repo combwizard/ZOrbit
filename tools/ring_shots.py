@@ -73,6 +73,10 @@ PANEL_CENTRE = (130, 137)
 PANEL_SCALE = 0.6
 PANEL_BIG, PANEL_BIG_CENTRE, PANEL_BIG_SCALE = (340, 390), (170, 176), 0.78   # a larger panel, for the hub pictures
 RING_SCALE = 1.342                             # makes the ring pictures 600 pixels square
+FILE_SLOTS = [("Capture", "capture", ""), ("Hero", "tool", "D:/Models/Hero.ztl"),   # the file slots picture: label, type, path
+              ("Blockout", "project", "D:/Projects/Blockout")]
+COMMAND = 'ZOrbit.exe --open "brushes"'            # the command animation: what it shows, its band's height and its lit colour
+COMMAND_BAND, COMMAND_ON = 56, (255, 122, 61)
 FAN_SCALE = 0.95                               # the fan picture is a little smaller, about 594 pixels wide
 
 
@@ -329,6 +333,45 @@ def shot_second_ring(w):
     w.define("full14", BRUSHES_14, look={"when_full": "rings"})
     im = w.preview("full14", hover=11, held=True, scale=0.95)
     return with_cursor(on_background(im), *hovered(im))
+
+
+def shot_file_slots(w):
+    """A Capture, a Tool and a Project slot among brushes, with their own icons: the camera, the cube and the folder."""
+    w.fans(False)
+    menu = w.define("files", ["ClayBuildup", "Move", "DamStandard", "hPolish", "TrimDynamic"], title="Sculpt")
+    menu.items += [C.Item(label=label, kind=kind, data={kind: value}) for label, kind, value in FILE_SLOTS]
+    im = w.preview("files", hover=7, held=True, scale=RING_SCALE)
+    return with_cursor(on_background(im), *hovered(im))
+
+
+def command_band(frame, text, pressed):
+    """The frame with the command above it, as a button on a device or a line in a script would send it."""
+    f = font("consola.ttf", 16)
+    out = Image.new("RGB", (frame.width, frame.height + COMMAND_BAND), BG)
+    out.paste(frame, (0, COMMAND_BAND))
+    d = ImageDraw.Draw(out)
+    box = d.textbbox((0, 0), text, font=f)
+    w, h = box[2] - box[0] + 32, box[3] - box[1] + 22
+    x, y = (out.width - w) // 2, (COMMAND_BAND - h) // 2 + 4
+    d.rounded_rectangle([x, y, x + w, y + h], radius=8, fill=(38, 40, 47), outline=COMMAND_ON if pressed else (78, 81, 91),
+                        width=2 if pressed else 1)
+    d.text((x + 16 - box[0], y + 11 - box[1]), text, font=f, fill=COMMAND_ON if pressed else TEXT)
+    return out
+
+
+def shot_command_open(w):
+    """A command opens the ring at the cursor, the cursor hovers ClayBuildup, and a flick picks it."""
+    w.fans(False)
+    r = Reel(w, 1.0)
+    at = r.offset("brushes", (1,), None)
+    r.frames.append((None, (0, 0), 900))       # the command before it runs, with no ring yet
+    r.new_ring()
+    r.hold("brushes", (0, 0), 0.8)
+    r.move("brushes", (0, 0), at, 0.4, (1,), ())
+    r.hold("brushes", at, 0.5, (1,))
+    r.flick("brushes", at, (at[0] * 1.6, at[1] * 1.6), (1,), ())
+    frames, durations = r.save()
+    return [command_band(fr, COMMAND, 1 <= i <= 6) for i, fr in enumerate(frames)], durations
 
 
 def shot_more_slot(w):
@@ -733,6 +776,10 @@ SHOTS = {
                        "the ring opens, two brushes are hovered, More Brushes opens as a ring, a flick picks ClayTubes"),
     "fan-out": ("fan-out.gif", shot_fan_out,
                 "More Brushes fans out, then Tools, SubDivide fans out above it, a flick past 1.00 picks it"),
+    "file-slots": ("file-slots.png", shot_file_slots,
+                   "five brushes with a Capture, a Tool and a Project slot, the Project slot hovered"),
+    "command-open": ("command-open.gif", shot_command_open,
+                     "the command lights up, the ring opens at the cursor, a flick picks ClayBuildup"),
 }
 
 
