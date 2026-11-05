@@ -6,6 +6,10 @@ All notable changes to this project are listed here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- A new **Layout** item loads a ZBrush interface layout (a `.cfg` file) with no dialog, in the same way as a **Tool** or **Project** item. The layout lasts until ZBrush closes, unless you press **Store Config**.
+
 ### Fixed
 
 - Studio and the docs said a ZBrush under Program Files always asks for administrator rights. It only asks when your account cannot write to that folder, and the ZBrush 2022 install we tested lets every account write there.

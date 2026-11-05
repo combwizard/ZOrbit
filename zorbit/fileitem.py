@@ -1,9 +1,11 @@
-"""The Tool and Project items, {"tool": "<.ztl file>"} and {"project": "<.zpr file or folder>"}: which file the pick names.
+"""The Tool, Project and Layout items, {"tool": "<.ztl file>"}, {"project": "<.zpr file or folder>"} and
+{"layout": "<.cfg file>"}: which file the pick names.
 
 The app turns the pick into the general file action of the bridges, {"filepress": button, "file": path}: ZBrush is
 told the next file name, then the button is pressed, and the file is read with no dialog. Tool:Load Tool takes a .ZTL,
-File:Open a .ZPR. File:Open over a project with unsaved changes still shows ZBrush's own "save changes?" box and waits
-for the answer: nothing here works around it.
+File:Open a .ZPR, Preferences:Config:Load Ui a UI layout (.cfg). A layout lasts until ZBrush closes: nothing here
+presses Store Config. File:Open over a project with unsaved changes still shows ZBrush's own "save changes?" box and
+waits for the answer: nothing here works around it.
 
 A project given as a folder means the newest .zpr directly in it (not in its subfolders), by modified time, a tie going
 to the name that sorts last. It is looked up at each pick, so a project saved since needs no change to the menu.
@@ -14,7 +16,8 @@ import os
 import config as C
 import zscript_bridge
 
-BUTTONS = {"tool": "Tool:Load Tool", "project": "File:Open"}
+BUTTONS = {"tool": "Tool:Load Tool", "project": "File:Open", "layout": "Preferences:Config:Load Ui"}
+_VERBS = {"tool": "loads ", "project": "opens ", "layout": "loads the layout "}
 
 
 class FileItemError(Exception):
@@ -32,7 +35,7 @@ def forward(p) -> str:
 
 
 def _kind(action) -> str:
-    return "tool" if "tool" in action else "project"
+    return next(k for k in C.FILE_EXTS if k in action)
 
 
 def _newest(folder) -> str:
@@ -58,7 +61,7 @@ def _newest(folder) -> str:
 
 
 def resolve(action, legacy=False):
-    """(button, path) for a Tool or Project action: the button to press and the file ZBrush is told to use, with
+    """(button, path) for a Tool, Project or Layout action: the button to press and the file ZBrush is told to use, with
     forward slashes. legacy: the ZBrush in front is a 2022-2025 one, whose plugin must be given an ASCII path.
     Raises FileItemError."""
     kind = _kind(action)
@@ -85,4 +88,4 @@ def describe(action) -> str:
             return f"opens the newest of {text}: {os.path.basename(resolve(action)[1])}"
         except FileItemError as e:
             return f"opens the newest of {text}, " + ("no .zpr there" if e.kind == "empty" else "not there")
-    return ("loads " if kind == "tool" else "opens ") + text + ("" if os.path.isfile(text) else ", not there")
+    return _VERBS[kind] + text + ("" if os.path.isfile(text) else ", not there")

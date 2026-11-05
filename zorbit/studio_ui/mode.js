@@ -11,7 +11,7 @@
   'use strict';
 
   /* Item types that only Full offers. The everyday types (Brush, Alpha, Material, Texture, Press, Toggle, Submenu) are in both modes. */
-  const FULL_KINDS = new Set(['set', 'capture', 'tool', 'project', 'steps', 'auto', 'tag', 'browser']);
+  const FULL_KINDS = new Set(['set', 'capture', 'tool', 'project', 'layout', 'steps', 'auto', 'tag', 'browser']);
   const kindIsFull = k => FULL_KINDS.has(k);
 
   /* Ring settings that only Full shows, with the names the "changed in Full mode" note uses. The hint line is not here: both modes
