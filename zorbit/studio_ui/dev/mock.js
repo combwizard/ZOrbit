@@ -70,7 +70,8 @@
   var clone = function (o) { return JSON.parse(JSON.stringify(o)); };
   var straysFound = q.has('strays'), appRestarted = false;
   var mockUpd = { state: 'idle', version: '', done: 0, total: 0, message: '', file: '' };
-  // The release an older install (0.18.0) is offered in ?update: the real 0.18.1 notes, so the docs picture of the dialog is true.
+  // The release an older install (0.18.0) is offered in ?update: the real 0.18.1 notes. It stays at this example on purpose:
+  // the docs picture of the dialog (tools/docs_shots.py studio-update) must not change with every release.
   var UPD_NOTES = { version: '0.18.1', date: '2026-11-04', url: 'https://github.com/combwizard/zorbit/releases/tag/v0.18.1', blog: '',
     summary: ['ZOrbit 0.18.1 fixes **Install update**. Studio refused every release’s setup file, so it only offered the download page, and wrongly said your copy was not installed with Setup. If you are on 0.18.0 or older, install this version by hand once, and later updates work from Studio.'],
     items: ['**Install update** was not offered, because Studio refused every release’s setup file.', 'When an installed copy cannot trust a setup file, the dialog now says that.'] };

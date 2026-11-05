@@ -137,5 +137,6 @@ only brushes included with ZBrush appear.
 `python tools\docs_shots.py` takes the Studio and browser screenshots from the mock UI. `python tools\ring_shots.py`
 draws the ring pictures and GIFs (`ring.png`, `fan.png`, `looks.png` and the rest of the `SHOTS` table in the script)
 with the real ring renderer. Both work on a throw-away copy of the starter menus, so your own menus
-and tags never appear in a picture. Name pictures after the script to retake only those, and add `--out DIR` to look
+and tags never appear in a picture, and the Studio pictures leave out the version at the top, so a release does not
+change them. Name pictures after the script to retake only those, and add `--out DIR` to look
 at them before they replace the ones in `docs\images`.
