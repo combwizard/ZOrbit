@@ -4,10 +4,16 @@ All notable changes to this project are listed here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.20.0] - 2026-11-05
+
+ZOrbit 0.20.0 finds brushes, alphas, materials and textures in folders of your own, in ZBrush 2026 and newer, so a
+pack on another drive shows up in the browser, the Library and on the ring. Favourites can follow an order you drag
+them into, and a new **Layout** slot loads a ZBrush interface layout with no dialog. A tab of thousands of items now
+opens at once and scrolls smoothly, and a slot with no target yet holds its place on the ring.
 
 ### Added
 
+- A new **Layout** item loads a ZBrush interface layout (a `.cfg` file) with no dialog, in the same way as a **Tool** or **Project** item. The layout lasts until ZBrush closes, unless you press **Store Config**.
 - Favourites can follow your own order. In the browser or Studio's Library, drag a card to a new place in the **Favourites** folder; each tab has its own order, kept per profile, and a **Favourites** slot on the ring follows it. **Most used** goes back to most used first.
 - **Library folders** on Studio's **Settings** screen, and **Add a folder...** under the folders on the **Library** screen, add folders of your own brushes, alphas, materials and textures. The browser, the Library and the ring search them after ZBrush's own folders, in the order you added them, and each shows as a folder of its own. A file whose name is already taken is listed with its pack folder in brackets, such as **10 (Crack Alphas Vol 1)**, since packs often reuse the same names. ZBrush 2026 and newer only. **Copy report** lists the folders too.
 
@@ -17,7 +23,6 @@ All notable changes to this project are listed here. The format follows
 - The browser and the Library build only the cards near the view, so a tab of thousands of items opens at once and scrolls smoothly. Hovering a card shows its whole name.
 - The thumbnail cache keeps at least twice as many pictures as the library has items, instead of a fixed 8,000.
 - The Library no longer shows the path of the tags file under **Manage tags...**. The Tags page of the docs says where the file is.
-- A new **Layout** item loads a ZBrush interface layout (a `.cfg` file) with no dialog, in the same way as a **Tool** or **Project** item. The layout lasts until ZBrush closes, unless you press **Store Config**.
 
 ### Fixed
 
@@ -988,6 +993,7 @@ First public release.
   only brushes included with ZBrush.
 - Documentation: README, user guide, third-party notices and contributing guide.
 
+[0.20.0]: https://github.com/combwizard/zorbit/releases/tag/v0.20.0
 [0.19.0]: https://github.com/combwizard/zorbit/releases/tag/v0.19.0
 [0.18.1]: https://github.com/combwizard/zorbit/releases/tag/v0.18.1
 [0.18.0]: https://github.com/combwizard/zorbit/releases/tag/v0.18.0
