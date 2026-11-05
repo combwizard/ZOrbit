@@ -1260,14 +1260,14 @@ def test_a_layout_is_a_full_path_to_a_cfg_file(load_menus, path):
                                   "C:Sculpt.cfg", "/Sculpt.cfg"])
 def test_a_layout_must_be_a_full_path_ending_cfg(load_menus, path):
     cfg = load_menus({"main": one_item_menu({"layout": path}, {"brush": "A"})})
-    assert problems(cfg, "menu main item 1: layout") and [it.kind for it in cfg.menus["main"].items] == ["brush"]
+    assert problems(cfg, "menu main item 1: layout") and [it.kind for it in cfg.menus["main"].items] == ["empty", "brush"]
 
 
 def test_a_folder_is_not_a_layout_even_when_it_is_there(load_menus, tmp_path):
     (tmp_path / "Layouts").mkdir()
     cfg = load_menus({"main": one_item_menu({"layout": str(tmp_path / "Layouts")}, {"brush": "A"})})
     assert problems(cfg, f"layout '{tmp_path / 'Layouts'}' must be a .cfg file")
-    assert [it.kind for it in cfg.menus["main"].items] == ["brush"]
+    assert [it.kind for it in cfg.menus["main"].items] == ["empty", "brush"]
 
 
 def test_the_message_for_a_bad_path_gives_an_example_of_its_own_kind(load_menus):
@@ -1287,7 +1287,7 @@ def test_a_layout_cannot_be_on_a_network_share(load_menus, path):
 def test_a_layout_must_not_be_empty(load_menus, value):
     cfg = load_menus({"main": one_item_menu({"layout": value}, {"brush": "A"})})
     assert problems(cfg, "'layout' must be a non-empty string")
-    assert [it.kind for it in cfg.menus["main"].items] == ["brush"]
+    assert [it.kind for it in cfg.menus["main"].items] == ["empty", "brush"]
 
 
 def test_a_layout_need_not_be_there_when_the_menus_load(load_menus):
