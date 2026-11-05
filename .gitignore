@@ -9,6 +9,7 @@ build/
 dist/
 packaging/Output/
 *.spec.bak
+.pytest_cache/
 # mkdocs build output
 site/
 

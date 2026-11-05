@@ -4,7 +4,7 @@
 #
 # To regenerate it, make a clean venv and freeze it:
 #   py -3.14 -m venv lock-venv
-#   lock-venv\Scripts\python -m pip install -r requirements.txt pyinstaller pytest
+#   lock-venv\Scripts\python -m pip install -r requirements.txt pyinstaller pytest pytest-xdist
 #   lock-venv\Scripts\python -m pip freeze > requirements-lock.txt
 # then put this header back. That is requirements-dev.txt without mkdocs, which the docs build installs
 # from requirements-docs.txt, so it is kept out of the lock.
@@ -13,6 +13,7 @@ bottle==0.13.4
 cffi==2.1.1
 clr_loader==0.3.1
 colorama==0.4.6
+execnet==2.1.2
 iniconfig==2.3.1
 packaging==26.3
 pefile==2024.8.26
@@ -24,6 +25,7 @@ pygments==2.20.0
 pyinstaller==6.22.3
 pyinstaller-hooks-contrib==2026.9
 pytest==9.2.0
+pytest-xdist==3.8.0
 pythonnet==3.2.1
 pywebview==6.2.1
 pywin32-ctypes==0.2.3
