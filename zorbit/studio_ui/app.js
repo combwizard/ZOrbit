@@ -4387,8 +4387,9 @@ function buildSettingsScreen(root) {
       if (!r || r.cancelled) return;
       toast(r.message || (r.ok ? fallback : 'That did not work.'), !r.ok ? { tone: 'warn', ms: 5000 } : r.already ? { ms: 4000 } : { tone: 'ok', ms: 4000 });
       if (r.folders) { ++lfGen; lfPaint(r.folders); }
+      else if (!r.ok) { lfLook(); return; }                    // refused without a list (the file changed under the card): paint what is there now
       if (r.ok && !r.already) {
-        if (lib(kind).loaded) await loadLibrary(kind, true);
+        await loadLibrary(kind, true);                         // also a kind not read yet, or one still being read: its list then has the folder
         lfLook();                                              // the counts fill in once the folder has been read
       }
     };
@@ -4399,7 +4400,16 @@ function buildSettingsScreen(root) {
       try { r = await call('get_library_folders'); if (gen !== lfGen) return; }
       catch (e) { if (gen !== lfGen) return; lfBox.replaceChildren(h('div', { class: 'fhint bad' }, 'Could not read your folders: ' + e.message)); return; }
       if (r && r.ok && r.folders) lfPaint(r.folders);
-      else lfBox.replaceChildren(h('div', { class: 'fhint bad' }, (r && r.message) || 'Could not read your folders.'));
+      else { lfBox.replaceChildren(h('div', { class: 'fhint bad' }, (r && r.message) || 'Could not read your folders.')); return; }
+      // A kind with folders that this page has not read yet: read it now, so the rows get their counts (and Cannot be read) without a visit to the Library.
+      const unread = LIB_KINDS.filter(k => (r.folders[k] || []).length && !lib(k).loaded && !lib(k).busy);
+      if (!unread.length) return;
+      try {
+        await Promise.all(unread.map(k => loadLibrary(k)));
+        if (gen !== lfGen) return;
+        const r2 = await call('get_library_folders');
+        if (gen === lfGen && r2 && r2.ok && r2.folders) lfPaint(r2.folders);
+      } catch (e) { /* the rows stay without counts; the Library screen will say */ }
     };
     page.append(card('Library folders', 'Your own folders of brushes, alphas, materials and textures, searched after ZBrush’s own. ZBrush 2026 and newer. Acts straight away.', lfBox));
     R.libfolders = lfLook;

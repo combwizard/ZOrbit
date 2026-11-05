@@ -6,9 +6,19 @@ All notable changes to this project are listed here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **Library folders** on Studio's **Settings** screen adds folders of your own brushes, alphas, materials and textures. The browser, the Library and the ring search them after ZBrush's own folders, in the order you added them, and each shows as a folder of its own. A file whose name is already taken is listed with its pack folder in brackets, such as **10 (Crack Alphas Vol 1)**, since packs often reuse the same names. ZBrush 2026 and newer only. **Copy report** lists the folders too.
+
+### Changed
+
+- A folder that cannot be read (its drive unplugged, the folder renamed) keeps the items it had and no longer empties the list or holds up the other folders. The browser and the Library show the reason in a line above the list.
+- The thumbnail cache keeps at least twice as many pictures as the library has items, instead of a fixed 8,000.
+
 ### Fixed
 
 - Studio and the docs said a ZBrush under Program Files always asks for administrator rights. It only asks when your account cannot write to that folder, and the ZBrush 2022 install we tested lets every account write there.
+- A folder that is slow to read no longer holds up a pick.
 - The path field of a **Project** slot showed only about 9 characters of the path, because it shared its row with the two browse buttons. On **Project**, **Tool** and **Capture** slots the buttons now sit under the field, which has the panel's whole width.
 
 ## [0.19.0] - 2026-11-05
