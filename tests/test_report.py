@@ -244,3 +244,25 @@ def test_the_bug_form_link_fills_in_the_versions():
     assert url == ("https://github.com/combwizard/zorbit/issues/new?template=bug_report.yml&zorbit=0.18.1&zbrush=2026"
                    "&windows=Windows+11+%28build+26200%29")
     assert "zbrush=" not in report.bug_url("0.18.1", None, "")
+
+
+def test_the_library_folders_are_listed_per_kind():
+    rows = {"brush": [{"path": r"D:\Lib\Brushes", "exists": True, "count": 330, "hidden": 2, "error": None},
+                      {"path": r"D:\Lib\More", "exists": True, "count": 0, "hidden": 0, "error": None}],
+            "alpha": [{"path": r"D:\Gone", "exists": False, "count": None, "hidden": None, "error": None}],
+            "material": [{"path": r"E:\Unplugged", "exists": True, "count": None, "hidden": None,
+                          "error": "drive not ready"}],
+            "texture": [{"path": r"D:\Tex", "exists": True, "count": None, "hidden": None, "error": None}]}
+    assert report.library_folder_lines(rows) == [
+        r"Brushes: D:\Lib\Brushes: found, 330 files, 2 hidden",
+        r"Brushes: D:\Lib\More: found, 0 files",
+        r"Alphas: D:\Gone: missing",
+        r"Materials: E:\Unplugged: could not be read: drive not ready",
+        r"Textures: D:\Tex: found"]
+
+
+def test_no_library_folders_say_none_added():
+    none = {k: [] for k in ("brush", "alpha", "material", "texture")}
+    assert report.library_folder_lines(none) == [
+        "Brushes: none added", "Alphas: none added", "Materials: none added", "Textures: none added"]
+    assert report.library_folder_lines({}) == report.library_folder_lines(none)

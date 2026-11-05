@@ -28,7 +28,7 @@ The browser follows the Theme setting (**Dark**, **Light**, **Follow Windows** o
 
 - The header has four tabs: **Brushes**, **Alphas**, **Materials** and **Textures**. Click a tab, or press **Ctrl+Tab** and **Ctrl+Shift+Tab** to move through them. With a tab focused, **Left** and **Right** move between them too. The search text, the tag filter and the thumbnail size stay when you switch tab. The folder and the selection do not: each tab opens on **All** with nothing selected. The tab you were on last is remembered.
 - The **Back** and **Forward** buttons on a mouse step through the tabs and folders you have visited, like the pages of a web browser. A new choice drops whatever was ahead. The search text and the tag filter are not part of the history.
-- Type to search by name: any letter you type goes to the search box. Two files whose names differ only by capitals or spaces count as one item, and the first folder searched wins, as it does on the ring. Subfolders are included; folders whose name starts with `_` are skipped.
+- Type to search by name: any letter you type goes to the search box. Two files whose names differ only by capitals or spaces count as one item, and the first folder searched wins, as it does on the ring. Subfolders are included; folders whose name starts with `_` are skipped. Folders you added yourself are searched after ZBrush's own and name their files a little differently: see [Your own folders](#your-own-folders).
 - Click chips to filter by tag, and folders to filter by folder, as in the Library. With two or more tags on, the **Match** switch chooses whether an item needs any of them (**Any**) or all of them (**All**); see [Filtering](tags.md#filtering). If you have collapsed the folders and tags column (see below), a filter that is on shows as a chip beside **Rescan**, such as **Filtered: Blocking** or **Folder: My Brushes** (**Filtered: Blocking + Hard** under **All**). Click it to clear that filter.
 - **Arrow keys** move from item to item, and **Home** and **End** on a card jump to the first and last. After a search the first match is highlighted. The arrows and **Enter** work on what the search shows, even when you press them straight after typing.
 - After you click a chip, a folder, a tab, **Rescan** or the pin, the cursor goes back to the search box, so **Enter** still picks the highlighted item and letters still search. Tab to a control and press **Enter** or **Space** and that control keeps the focus, as usual.
@@ -40,7 +40,49 @@ The browser follows the Theme setting (**Dark**, **Light**, **Follow Windows** o
 - The pin button in the header is **Keep on top**. It is on by default: the browser stays above other windows, so it is there when you glance at it. Switch it off and it sits in the stack like any other window. The choice is remembered.
 - The panel button next to it collapses the folders and tags column, so the thumbnails get the whole window, and shows it again. The arrows button beside it moves the column to the right side of the window, and back. Both are remembered.
 - The slider next to the search box sets the size of the thumbnails, from 84 to 220 pixels. The size is remembered.
-- **Rescan** looks for brush, alpha, material or texture files again, on the tab you are on. The browser also does this by itself when it appears, or when you open a tab, if the last look is more than a minute old, so a brush you saved in ZBrush a moment ago is there. The list updates where it is: the highlighted item and the scroll position stay. When the folders still hold the same files, the cards are left alone and nothing is redrawn, which keeps a rescan quick on a big library. A tab's thumbnails are fetched a few at a time, the ones in view first, so the first cards fill in before the rest. The toast says what it found, for example **Found 12 brushes, 2 new**. If no ZBrush is known, the list says **ZBrush was not found** and to start ZBrush once and press **Rescan**; if a ZBrush is known but its folders hold no files, the list names the file types it looks for, for example `.psd`, `.bmp`, `.jpg`, `.jpeg`, `.png`, `.tif` and `.tiff` for alphas. If the folders cannot be read (a folder that was there before is gone, or its drive cannot be reached), the list you had stays and the toast says why.
+- **Rescan** looks for brush, alpha, material or texture files again, on the tab you are on. The browser also does this by itself when it appears, or when you open a tab, if the last look is more than a minute old, so a brush you saved in ZBrush a moment ago is there. The list updates where it is: the highlighted item and the scroll position stay. When the folders still hold the same files, the cards are left alone and nothing is redrawn, which keeps a rescan quick on a big library. A tab's thumbnails are fetched a few at a time, the ones in view first, so the first cards fill in before the rest. The toast says what it found, for example **Found 12 brushes, 2 new**. If no ZBrush is known and you have added no folder of your own, the list says **ZBrush was not found** and to start ZBrush once and press **Rescan**; with a folder added, the list shows without ZBrush. If the folders hold no files, the list names the file types it looks for, for example `.psd`, `.bmp`, `.jpg`, `.jpeg`, `.png`, `.tif` and `.tiff` for alphas. If a folder cannot be read (it was there before and is gone, or its drive cannot be reached), the items it had stay, the other folders are read afresh, and a line above the list and the toast say why (see [A folder that cannot be read](#a-folder-that-cannot-be-read)).
+
+## Your own folders
+
+If you keep brushes, alphas, materials or textures in folders of your own, such as a pack you bought, add the folder and the browser, the Library and the ring find its files. You add them in Studio, with **Add a folder...** under the folders on the **Library** screen (for the tab you are on), or on **Settings > Library folders**, which lists them all. It works in Simple and Full mode and needs ZBrush 2026 or newer.
+
+![The Library folders card on Settings: a Brushes folder that was found with its file count, a missing Alphas folder, and an Add a folder button under each of the four kinds](images/settings-library-folders.png)
+
+The card has a list for each of **Brushes**, **Alphas**, **Materials** and **Textures**. Press **Add a folder...** under a list and pick the folder. Each row shows the folder's name, its path and a tag: how many files ZOrbit found in it, **Missing** when the folder is not there, or **Cannot be read**. **X** on a row (**Forget this folder**) takes the folder out of the list. It does not touch the folder or its files. Both act straight away; there is no **Save**.
+
+The lists belong to this PC. They are in `studio.json` under `library_folders`, not in a profile, so switching profile does not change them and [exporting a menu](menus.md#share-a-menu) does not carry them.
+
+ZOrbit searches the folders you added after ZBrush's own, in the order you added them. Subfolders are searched, except folders whose name starts with `_`. Studio refuses a folder when:
+
+- it is a network folder ("That is a network folder. Add a folder on this PC.");
+- it cannot be found;
+- ZOrbit already searches it, because it is one of ZBrush's own folders or lies inside or around one ("ZOrbit already searches that folder: it is part of ZBrush (My Brushes).");
+- it lies inside or around a folder you already added for that kind, since everything in it would be listed twice. A folder that is already in the list says so.
+
+In the browser and the Library each folder you add is a folder of its own in the folders column, under its name. Two folders with the same name show as **Alphas** and **Alphas (2)**, and a name that clashes with **My Brushes**, **ZBrush** or **Lightbox** gets **(2)** too.
+
+### Names in a folder you added
+
+Packs often name their files `10`, `11`, `12`, and the same names sit in many packs. In ZBrush's own folders the first folder with a name wins, as before. In a folder you added, a file whose name is already taken is listed under its name with its pack folder in brackets. The pack folder is the first subfolder under the folder you added, or the added folder's own name for a file at its top. So `10.png` in the pack folder `Crack Alphas Vol 1` is listed as **10 (Crack Alphas Vol 1)** when another `10` is already listed. If that name is taken too, ZOrbit uses the whole subfolder path, such as **10 (Crack Alphas Vol 1, Tiled)**, and last it puts the added folder's name in front.
+
+One folder lists one file per name. If `10.png` and `10.psd` sit side by side, they are one item, the first by name, and the other is counted as hidden: the tag on the Settings row says, for example, "212 files, 3 hidden".
+
+A slot or a tag keeps the name as it is listed, so a slot can hold **10 (Crack Alphas Vol 1)**. Two limits come with this:
+
+- **ZBrush names a loaded item after its file.** Once a `10` from one pack is loaded, picking **10 (another pack)** selects the loaded one instead of loading the other. The first pick of each loads the right file, as long as no other item with that file name is loaded.
+- **A listed name can change.** If a file named `10` later appears in a folder searched earlier, such as **My Alphas**, the `10` in your added folder becomes **10 (its pack)**, and a slot that holds `10` then points at the new file. Pick the item again from the Library if that happens.
+
+### A folder that cannot be read
+
+When a folder you added cannot be read (its drive is unplugged, or the folder was renamed), it keeps the items it had, and the other folders are read afresh. The browser and the Library show the reason in a line above the list, and the **Rescan** toast says it too. On Settings the row says **Missing** or **Cannot be read**. Plug the drive back in or add the folder again under its new name, then press **Rescan**.
+
+### When the lists change
+
+The ring app notices a change to the lists within a second and reads the library again. `radiald.log` says `library folders changed: reading the library again`, then `library read again: N kinds, generation G`. Studio's Library updates at once. The browser takes it up on its next rescan (when it appears, or when you open a tab that was last read more than a minute ago), or when you press **Rescan**.
+
+### ZBrush 2022 to 2025
+
+A pick in ZBrush 2022 to 2025 searches only that ZBrush's own installation, as it always did. An item that only a folder you added has is listed, but a pick says **<name> could not be found in ZBrush**. See [Troubleshooting](troubleshooting.md#the-ring-opens-but-picks-do-nothing).
 
 ## Favourites and Recent
 
@@ -67,7 +109,7 @@ The browser is a separate program that sends your pick to the ZOrbit app, which 
 
 A browser you opened from Studio has no ZBrush of its own, so its picks go to the only ZBrush running. With more than one running, ZOrbit cannot tell which you mean: in `auto` mode it presses the bridge key if a ZBrush is in front, and in `message` mode the pick is dropped.
 
-The browser's list is the same whichever ZBrush is in front. A pick in ZBrush 2022 to 2025 only searches [that ZBrush's own folders](menus.md#brush), so an item that only a newer ZBrush has can be listed and still not load. The message near the cursor then says it **could not be found in ZBrush**.
+The browser's list is the same whichever ZBrush is in front. A pick in ZBrush 2022 to 2025 only searches [that ZBrush's own folders](menus.md#brush), so an item that only a newer ZBrush has, or that only a folder you added has, can be listed and still not load. The message near the cursor then says it **could not be found in ZBrush**.
 
 ## In the background
 

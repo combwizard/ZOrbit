@@ -16,6 +16,9 @@
    update dialog downloads for two seconds; with ?portable it only links to the release, ?updatefail ends the download with the hash message;
    Don't remind me again stores skipped_version in rm_prefs, so clear it to see the chip again), ?unreach
    (check_update cannot reach GitHub), ?prefsfail (set_pref is rejected).
+   Library folders (Settings > Library folders; state in localStorage rm_libfolders): ?libfolders=two (while nothing is stored, a brush folder D:\Art\Brushes with 330 files
+   and an alpha folder E:\Packs\Alphas that cannot be found), ?libfolderbad (Add a folder is refused as a network folder). Without a switch Add a folder adds
+   D:\Art\<Kind> pack with 12 files.
    Tags (state in localStorage rm_tags, seeded with the built-in Favourites tag (always first, cannot be renamed, merged or deleted), the two
    starters and a few tagged brushes, three of them starred): ?tags=empty (only Favourites, nothing tagged),
    ?tagsmany (Favourites and 30 tags with long names), ?tagfail (every tag change is refused), ?tagexists (create and rename always clash with
@@ -507,6 +510,22 @@
       sources: [{ label: 'ZBrush 2026 textures', path: 'C:\\Users\\you\\Documents\\ZBrush 2026 Assets\\ZStartup\\Textures', exists: true },
                 { label: 'ZBrush 2022 textures', path: 'C:\\Program Files\\Maxon ZBrush 2022\\ZStartup\\Textures', exists: false }] }
   };
+  /* The user's own library folders (get_library_folders and the two calls that change them): localStorage rm_libfolders, seeded once by ?libfolders=two. */
+  function libFolders() {
+    var all = null, raw = null;
+    try { raw = localStorage.getItem('rm_libfolders'); } catch (e) {}
+    if (raw) { try { all = JSON.parse(raw); } catch (e) {} }
+    if (!all || typeof all !== 'object') {
+      all = {};
+      if (q.get('libfolders') === 'two') {
+        all.brush = [{ path: 'D:\\Art\\Brushes', name: 'Brushes', exists: true, count: 330, hidden: 0, error: null }];
+        all.alpha = [{ path: 'E:\\Packs\\Alphas', name: 'Alphas', exists: false, count: null, hidden: null, error: null }];
+      }
+    }
+    Object.keys(ASSET_KIND).forEach(function (k) { if (!Array.isArray(all[k])) all[k] = []; });
+    return all;
+  }
+  function libFoldersSave(all) { try { localStorage.setItem('rm_libfolders', JSON.stringify(all)); } catch (e) {} }
   var libCache = {};
   function libFor(kind) {
     if (libCache[kind]) return clone(libCache[kind]);
@@ -939,6 +958,28 @@
           fit: menuId ? mockFit(cfg, menuId) : null, problems: Z.problems(cfg, ctx) };
       });
     },
+    // The user's own library folders (state in localStorage rm_libfolders, {brush: [row], ...}; ?libfolders=two seeds an empty state).
+    get_library_folders: function () { return sleep(80).then(function () { return { ok: true, folders: libFolders() }; }); },
+    add_library_folder: function (kind) {
+      if (!ASSET_KIND[kind]) return Promise.resolve({ ok: false, message: 'That is not a kind of library.' });
+      if (q.has('libfolderbad')) return sleep(150).then(function () { return { ok: false, message: 'That is a network folder. ZOrbit cannot watch one for changes, so pick a folder on this PC.' }; });
+      return sleep(150).then(function () {
+        var all = libFolders(), word = kind.charAt(0).toUpperCase() + kind.slice(1), path = 'D:\\Art\\' + word + ' pack';
+        if (all[kind].some(function (f) { return f.path === path; })) return { ok: true, already: true, message: path + ' is already added.', folders: all };
+        all[kind].push({ path: path, name: word + ' pack', exists: true, count: 12, hidden: 0, error: null });
+        libFoldersSave(all);
+        return { ok: true, message: 'Added ' + word + ' pack.', folders: all };
+      });
+    },
+    forget_library_folder: function (kind, path) {
+      return sleep(100).then(function () {
+        var all = libFolders();
+        if (!all[kind]) return { ok: false, message: 'That is not a kind of library.', folders: all };
+        all[kind] = all[kind].filter(function (f) { return f.path !== path; });
+        libFoldersSave(all);
+        return { ok: true, message: 'Forgot ' + path + '. The folder itself was not touched.', folders: all };
+      });
+    },
     get_library: function (refresh, kind, since) {
       kind = ASSET_KIND[kind] ? kind : 'brush';
       var libCalls = (libSeq[kind] = (libSeq[kind] || 0) + 1);
@@ -947,9 +988,9 @@
         var sig = 'mock-' + kind + '-' + n + (q.get('libsig') === 'changing' ? '-' + libCalls : '');       // like the backend: a hash of what was found
         if (since && since === sig && !q.has('liberr') && !q.has('nozbrush') && !q.has('nolib')) {
           console.log('[mock] get_library', kind, 'unchanged');
-          return { kind: kind, unchanged: true, signature: sig, sources: A.sources.map(function (src, i) { return { label: src.label, path: src.path, exists: src.exists, count: i === 0 ? n : 0 }; }), zbrush_found: true, error: null };
+          return { kind: kind, unchanged: true, signature: sig, sources: A.sources.map(function (src, i) { return { label: src.label, path: src.path, exists: src.exists, count: i === 0 ? n : 0, user_folders: 0, added: false }; }), zbrush_found: true, error: null };
         }
-        var sources = A.sources.map(function (src, i) { return { label: src.label, path: src.path, exists: src.exists, count: i === 0 ? n : 0 }; });
+        var sources = A.sources.map(function (src, i) { return { label: src.label, path: src.path, exists: src.exists, count: i === 0 ? n : 0, user_folders: 0, added: false }; });
         if (q.has('liberr')) return { kind: kind, items: [], brushes: [], categories: [], sources: [], zbrush_found: true, error: 'Could not read the ' + kind + ' folders: [WinError 5] Access is denied (mock)' };
         if (q.has('nozbrush')) return { kind: kind, items: [], brushes: [], categories: [], sources: [], zbrush_found: false, error: null };
         if (q.has('nolib')) { sources[0].count = 0; return { kind: kind, items: [], brushes: [], categories: [], sources: sources, zbrush_found: true, error: null }; }

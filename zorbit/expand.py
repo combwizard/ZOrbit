@@ -148,7 +148,8 @@ class Expander:
             if any(k not in index for k in tagged):
                 missing = True
                 self._rescan_later(kind)                 # saved since the scan? the next build sees the new generation
-            stems = [index[k].stem for k in tagged if k in index]
+            listed = assets.names(kind)                  # the listed names: "10 (PackA)", not the stem 10
+            stems = [listed.get(k) or index[k].stem for k in tagged if k in index]
             stems = self.usage.rank(stems) if kind == "brush" else sorted(stems, key=str.lower)
             found += [(kind, n) for n in stems]
         menu = None

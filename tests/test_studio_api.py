@@ -805,3 +805,210 @@ def test_a_2022_install_reads_its_startup_macros_only(api, tmp_path, monkeypatch
     monkeypatch.setattr(api, "_all_installs", lambda: [{"name": "ZBrush 2022", "year": 2022, "path": str(install),
                                                         "python": False, "supported": True}])
     assert [s["path"] for s in api.get_suggestions() if s["source"] == "macro"] == ["Macro:Macros:Old"]
+
+
+# --- library folders (issue #170) ----------------------------------------------------------------------
+@pytest.fixture
+def lib(api, tmp_path, monkeypatch):
+    """The api with a fake ZBrush (install and user assets folders under tmp_path) and a folder dialog the test steers:
+    lib.pick(path) sets what the next dialog returns (None cancels)."""
+    import brushes
+    _fake_webview(monkeypatch)
+    install, user = tmp_path / "ZB" / "ZBrush 2026", tmp_path / "ZB" / "Data"
+    for d in (install, user / "ZStartup" / "BrushPresets", tmp_path / "mine"):
+        d.mkdir(parents=True, exist_ok=True)
+    monkeypatch.setattr(brushes, "zbrush_dirs", lambda: {"install": install, "user_assets": user})
+    state = {"next": None}
+    api._window = types.SimpleNamespace(
+        create_file_dialog=lambda *a, **k: [str(state["next"])] if state["next"] is not None else None)
+    api.pick = lambda p: state.update(next=p)
+    api.install, api.user = install, user
+    return api
+
+
+def _folders(tmp_path):
+    return json.loads((tmp_path / "studio.json").read_text(encoding="utf-8")).get("library_folders")
+
+
+def test_a_library_folder_is_added_and_listed(lib, tmp_path):
+    (tmp_path / "mine" / "Clay").mkdir()
+    lib.pick(tmp_path / "mine" / "Clay")
+    res = lib.add_library_folder("brush")
+    assert res["ok"] and res["message"] == "Added Clay."
+    row = res["folders"]["brush"][0]
+    assert row == {"path": str(tmp_path / "mine" / "Clay"), "name": "Clay", "exists": True, "count": None,
+                   "hidden": None, "error": None}
+    assert res["folders"]["alpha"] == [] and res["folders"]["texture"] == []
+    assert lib.get_library_folders()["folders"] == res["folders"]
+    assert _folders(tmp_path) == {"brush": [str(tmp_path / "mine" / "Clay")]}
+
+
+def test_a_listed_folder_that_vanished_is_listed_as_missing(lib, tmp_path):
+    (tmp_path / "studio.json").write_text(json.dumps({"library_folders": {"alpha": [str(tmp_path / "gone")]}}),
+                                          encoding="utf-8")
+    row = lib.get_library_folders()["folders"]["alpha"][0]
+    assert row["exists"] is False and row["name"] == "gone"
+
+
+def test_the_count_comes_from_the_last_walk(lib, tmp_path, monkeypatch):
+    import assets
+    import brushes
+    folder = tmp_path / "mine"
+    (tmp_path / "studio.json").write_text(json.dumps({"library_folders": {"alpha": [str(folder)]}}), encoding="utf-8")
+    src = {"label": brushes.added_label(folder), "count": 330, "hidden": 2, "error": None}
+    monkeypatch.setattr(assets, "last_walk", lambda kind: types.SimpleNamespace(sources=[src]) if kind == "alpha" else None)
+    row = lib.get_library_folders()["folders"]["alpha"][0]
+    assert (row["count"], row["hidden"], row["error"]) == (330, 2, None)
+    src.update(count=0, error="drive not ready")
+    del src["hidden"]
+    row = lib.get_library_folders()["folders"]["alpha"][0]
+    assert (row["count"], row["hidden"], row["error"]) == (0, 0, "drive not ready")
+
+
+def test_a_folder_already_listed_is_not_added_twice(lib, tmp_path):
+    lib.pick(tmp_path / "mine")
+    assert lib.add_library_folder("texture")["ok"]
+    lib.pick(str(tmp_path / "mine").upper() + "/")
+    res = lib.add_library_folder("texture")
+    assert res["ok"] and res["already"] is True and "already listed" in res["message"]
+    assert len(_folders(tmp_path)["texture"]) == 1
+
+
+def test_the_same_folder_can_be_listed_for_two_kinds(lib, tmp_path):
+    lib.pick(tmp_path / "mine")
+    assert lib.add_library_folder("alpha")["ok"] and lib.add_library_folder("material")["ok"]
+
+
+def test_a_library_folder_is_forgotten_and_the_others_keep_their_order(lib, tmp_path):
+    for n in ("a", "b", "c"):
+        (tmp_path / "mine" / n).mkdir()
+        lib.pick(tmp_path / "mine" / n)
+        lib.add_library_folder("brush")
+    res = lib.forget_library_folder("brush", str(tmp_path / "mine" / "B"))
+    assert res["ok"] and res["message"] == "Forgot b. The folder itself was not touched."
+    assert [r["name"] for r in res["folders"]["brush"]] == ["a", "c"]
+    assert (tmp_path / "mine" / "b").is_dir()
+    res = lib.forget_library_folder("brush", str(tmp_path / "mine" / "b"))
+    assert res == {"ok": False, "message": "That folder is not in the list."}
+    assert lib.forget_library_folder("alpha", str(tmp_path / "mine" / "a"))["ok"] is False
+
+
+def test_an_unknown_kind_is_refused_without_a_dialog(lib, tmp_path):
+    lib.pick(tmp_path / "mine")
+    for kind in ("tool", "", None, ["brush"]):
+        assert lib.add_library_folder(kind) == {"ok": False, "message": "Unknown kind."}
+    assert not (tmp_path / "studio.json").exists()
+
+
+def test_a_cancelled_dialog_adds_nothing(lib, tmp_path):
+    lib.pick(None)
+    assert lib.add_library_folder("brush") == {"ok": False, "cancelled": True}
+    assert not (tmp_path / "studio.json").exists()
+
+
+def test_a_network_folder_is_refused(lib, tmp_path):
+    lib.pick("//server/share/brushes")
+    res = lib.add_library_folder("brush")
+    assert res["ok"] is False and "network folder" in res["message"]
+    assert not (tmp_path / "studio.json").exists()
+
+
+def test_a_folder_that_is_not_there_is_refused(lib, tmp_path):
+    lib.pick(tmp_path / "nowhere")
+    res = lib.add_library_folder("brush")
+    assert res == {"ok": False, "message": "That folder cannot be found."}
+
+
+def test_a_folder_zbrush_already_searches_is_refused(lib, tmp_path):
+    (lib.install / "ZData" / "Sub").mkdir(parents=True)
+    (tmp_path / "ZB" / "Data2").mkdir()
+    for inside in (lib.install, lib.user, lib.install / "ZData" / "Sub", lib.user / "ZStartup" / "BrushPresets"):
+        lib.pick(inside)
+        res = lib.add_library_folder("brush")
+        assert res["ok"] is False and "already searches that folder" in res["message"], inside
+    lib.pick(tmp_path / "ZB")                                     # holds ZBrush: everything in it would be listed twice
+    assert "already searches that folder" in lib.add_library_folder("alpha")["message"]
+    lib.pick(lib.user / "ZStartup" / "BrushPresets")
+    assert "(My Brushes)" in lib.add_library_folder("brush")["message"]
+    assert not (tmp_path / "studio.json").exists()
+
+
+def test_a_folder_that_only_starts_like_a_zbrush_folder_is_fine(lib, tmp_path):
+    beside = tmp_path / "ZB" / "ZBrush 2026 beta"
+    beside.mkdir()
+    lib.pick(beside)
+    assert lib.add_library_folder("brush")["ok"] is True
+
+
+def test_a_folder_inside_or_around_an_added_one_is_refused(lib, tmp_path):
+    (tmp_path / "mine" / "deep").mkdir()
+    lib.pick(tmp_path / "mine")
+    assert lib.add_library_folder("alpha")["ok"]
+    lib.pick(tmp_path / "mine" / "deep")
+    res = lib.add_library_folder("alpha")
+    assert res["ok"] is False and res["message"] == "mine is already searched, and this one is inside it."
+    assert lib.add_library_folder("brush")["ok"]                  # another kind has its own list
+    lib.forget_library_folder("alpha", str(tmp_path / "mine"))
+    assert lib.add_library_folder("alpha")["ok"]
+    lib.pick(tmp_path / "mine")
+    res = lib.add_library_folder("alpha")
+    assert res["ok"] is False and res["message"] == "deep is already searched, and this one would contain it."
+    assert len(_folders(tmp_path)["alpha"]) == 1
+
+
+def test_adding_keeps_the_other_kinds_and_the_other_keys(lib, tmp_path):
+    other = str(tmp_path / "elsewhere")
+    (tmp_path / "studio.json").write_text(json.dumps({"check_updates": False, "library_folders": {"alpha": [other]}}),
+                                          encoding="utf-8")
+    lib.pick(tmp_path / "mine")
+    assert lib.add_library_folder("brush")["ok"]
+    data = json.loads((tmp_path / "studio.json").read_text(encoding="utf-8"))
+    assert data["check_updates"] is False
+    assert data["library_folders"] == {"alpha": [other], "brush": [str(tmp_path / "mine")]}
+
+
+def test_a_library_entry_that_is_not_a_dict_or_list_is_replaced(lib, tmp_path):
+    (tmp_path / "studio.json").write_text(json.dumps({"library_folders": ["x"]}), encoding="utf-8")
+    lib.pick(tmp_path / "mine")
+    assert lib.add_library_folder("brush")["ok"]
+    assert _folders(tmp_path) == {"brush": [str(tmp_path / "mine")]}
+    (tmp_path / "studio.json").write_text(json.dumps({"library_folders": {"brush": "x"}}), encoding="utf-8")
+    assert lib.add_library_folder("brush")["ok"]
+    assert _folders(tmp_path) == {"brush": [str(tmp_path / "mine")]}
+
+
+def test_library_folders_are_not_changed_over_an_unreadable_studio_file(lib, tmp_path):
+    f = tmp_path / "studio.json"
+    f.write_text('{"library_folders": {"brush": ["D:/Lib"]}, "check_updates": false,', encoding="utf-8")
+    before = f.read_bytes()
+    lib.pick(tmp_path / "mine")
+    res = lib.add_library_folder("brush")
+    assert res == {"ok": False, "message": studio.STUDIO_UNREADABLE}
+    assert lib.forget_library_folder("brush", "D:/Lib") == {"ok": False, "message": studio.STUDIO_UNREADABLE}
+    assert f.read_bytes() == before
+
+
+def test_inside_is_about_whole_folder_names():
+    assert studio._inside(r"D:\ZBrush 2026\ZData", r"D:\ZBrush 2026")
+    assert studio._inside("d:/zbrush 2026/", r"D:\ZBrush 2026")
+    assert not studio._inside(r"D:\ZBrush 2026 beta", r"D:\ZBrush 2026")
+    assert not studio._inside(r"D:\ZBrush 2026", r"D:\ZBrush 2026\ZData")
+
+
+def test_the_report_lists_the_library_folders_with_the_name_hidden(report_api, tmp_path):
+    (tmp_path / "studio.json").write_text(json.dumps({"library_folders": {
+        "brush": ["C:/Users/brush/Lib/Brushes"], "alpha": [str(tmp_path)]}}), encoding="utf-8")
+    text = report_api.get_report()["text"]
+    assert "--- Library folders ---\n" in text
+    assert "Brushes: C:/Users/brush/Lib/Brushes" not in text and "brush/Lib" not in text
+    assert "Brushes: %USERPROFILE%" in text and "Lib" in text and ": missing" in text
+    assert "Alphas: " in text and "Materials: none added" in text and "Textures: none added" in text
+
+
+def test_a_library_part_that_fails_leaves_the_rest_of_the_report(report_api, monkeypatch):
+    def boom():
+        raise OSError("no listing")
+    monkeypatch.setattr(report_api, "get_library_folders", boom)
+    text = report_api.get_report()["text"]
+    assert "--- Library folders ---\ncould not be read: OSError('no listing')" in text
+    assert "--- Status cards ---" in text

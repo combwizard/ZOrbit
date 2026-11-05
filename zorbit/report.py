@@ -194,6 +194,30 @@ def zbrush_lines(all_installs, procs):
     return lines or ["none found"]
 
 
+def library_folder_lines(folders):
+    """One line per folder the user added to the library, or "<Kind>: none added". folders: {kind: [{path, exists,
+    count, hidden, error}]} as Api.get_library_folders gives it."""
+    lines = []
+    for kind, heading in (("brush", "Brushes"), ("alpha", "Alphas"), ("material", "Materials"),
+                          ("texture", "Textures")):
+        rows = folders.get(kind) or []
+        if not rows:
+            lines.append(f"{heading}: none added")
+        for row in rows:
+            if row.get("error"):
+                state = f"could not be read: {row['error']}"
+            elif not row.get("exists"):
+                state = "missing"
+            else:
+                state = "found"
+                if row.get("count") is not None:
+                    state += f", {row['count']} files"
+                if row.get("hidden"):
+                    state += f", {row['hidden']} hidden"
+            lines.append(f"{heading}: {row['path']}: {state}")
+    return lines
+
+
 def bug_url(zorbit, zbrush, windows):
     """The bug form with its version fields filled in. The report is too long for a URL: it comes from the clipboard."""
     fields = {"template": "bug_report.yml", "zorbit": zorbit, "zbrush": zbrush, "windows": windows}

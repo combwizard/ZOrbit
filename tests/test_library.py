@@ -47,6 +47,17 @@ def srcs(*folders):
     return [(f"folder {i}", f, True) for i, f in enumerate(folders)]
 
 
+@pytest.fixture(autouse=True)
+def fresh_library(monkeypatch):
+    """No stored walk or index from another test: the merge and the coalescing look at them."""
+    monkeypatch.setattr(assets, "_index", {})
+    monkeypatch.setattr(assets, "_walks", {})
+    monkeypatch.setattr(assets, "_walk_t0", {})
+    monkeypatch.setattr(brushes, "_index", None)
+    monkeypatch.setattr(brushes, "_walk", None)
+    monkeypatch.setattr(brushes, "_walk_t0", float("-inf"))
+
+
 # --- the walker -----------------------------------------------------------------------------------
 
 def test_order_and_first_folder_wins(two_folders):
@@ -123,34 +134,132 @@ def test_unreachable_drive_is_an_error():
     assert "cannot be reached" in brushes.walk_error(w)
 
 
-def test_an_index_survives_a_walk_that_failed(two_folders):
-    good = brushes.walk_sources(srcs(*two_folders))
-    free = [c for c in "QRSTUVWXYZ" if not os.path.exists(c + ":\\")]
-    if not free:
-        pytest.skip("every drive letter is in use")
-    bad = brushes.walk_sources(srcs(Path(free[0] + ":\\Gone")))
-    keep, changed = brushes.keep_index(good.index, bad)
-    assert keep is good.index and changed is False
-    keep, changed = brushes.keep_index(None, bad)
-    assert keep == {} and changed is True
-    keep, changed = brushes.keep_index(good.index, good)
-    assert changed is False
+def test_only_the_folder_that_cannot_be_read_keeps_its_items(two_folders):
+    a, b = two_folders
+    good = brushes.walk_sources(srcs(a, b))
+    assert brushes.merge_walk(None, good) is good
+    away = b.with_name("second away")
+    b.rename(away)                                      # was there before and cannot be read now
+    touch(a / "saved now.zbp")
+    bad = brushes.walk_sources(srcs(a, b))
+    merged = brushes.merge_walk(good, bad)
+    assert merged.index["savednow"] == a / "saved now.zbp"            # the readable folder is read afresh
+    assert merged.index["onlysecond"] == b / "only second.zbp"         # the unreadable one keeps what it had
+    assert "second" in brushes.walk_error(merged) and "before" in brushes.walk_error(merged)
+    assert merged.sources[1]["kept"] is True and merged.sources[1]["count"] == 2
+    assert "kept" not in merged.sources[0] and "kept" not in good.sources[1]      # the old walk is not changed
+    assert bad.sources[1]["count"] == 0 and "kept" not in bad.sources[1]
+    away.rename(b)
+    back = brushes.merge_walk(merged, brushes.walk_sources(srcs(a, b)))
+    assert brushes.walk_error(back) is None and not any(s.get("kept") for s in back.sources)
+    assert back.index == brushes.walk_sources(srcs(a, b)).index
+    b.rename(away)
+    forgot = brushes.merge_walk(merged, brushes.walk_sources(srcs(a)))  # the user forgot the folder: it drops out
+    assert len(forgot.sources) == 1 and "onlysecond" not in forgot.index
 
 
 def test_library_and_find_come_from_one_walk(two_folders, monkeypatch):
-    monkeypatch.setattr(assets, "sources", lambda kind: srcs(*two_folders))
+    a, b = two_folders
+    monkeypatch.setattr(assets, "sources", lambda kind: srcs(a, b))
     monkeypatch.setattr(assets, "exts", lambda kind: (".zbp",))
-    monkeypatch.setattr(assets, "_index", {})
     w = assets.library("alpha")
-    assert assets.find("alpha", "CLAY buildup") == two_folders[0] / "Clay Buildup.zbp"
+    assert assets.find("alpha", "CLAY buildup") == a / "Clay Buildup.zbp"
     assert assets.find("alpha", "Only  Second").name == "only second.zbp"
     assert {tags._norm(i["name"]) for i in w.items} == set(assets.index("alpha"))
+    assert assets.last_walk("alpha") is w and assets.has_built("alpha") and not assets.has_built("material")
     gen = assets.generation
     assets.library("alpha")
     assert assets.generation == gen                 # nothing changed: no new generation
-    touch(two_folders[0] / "added.zbp")
+    touch(a / "added.zbp")
     assets.library("alpha")
     assert assets.generation == gen + 1
+    away = b.with_name("second away")
+    b.rename(away)
+    w = assets.library("alpha")                     # an error, and nothing else changed: the same index
+    assert brushes.walk_error(w) and assets.generation == gen + 1
+    assert assets.last_walk("alpha") is w and w.sources[1]["kept"] is True
+    touch(a / "another.zbp")
+    assets.library("alpha")                         # an error, and a new file in the other folder
+    assert assets.generation == gen + 2
+    assert assets.find("alpha", "another") == a / "another.zbp" and assets.find("alpha", "only second")
+
+
+class BlockedWalk:
+    """brushes.walk_sources that, after the first call, waits for release() before it walks."""
+
+    def __init__(self, monkeypatch):
+        self.real = brushes.walk_sources
+        self.calls = 0
+        self.started = threading.Event()
+        self.go = threading.Event()
+        monkeypatch.setattr(brushes, "walk_sources", self)
+
+    def __call__(self, *a, **k):
+        self.calls += 1
+        if self.calls > 1:
+            self.started.set()
+            assert self.go.wait(5)
+        return self.real(*a, **k)
+
+
+@pytest.mark.parametrize("kind", ["alpha", "brush"])
+def test_a_slow_walk_does_not_hold_up_a_find(two_folders, monkeypatch, kind):
+    monkeypatch.setattr(assets, "sources", lambda k: srcs(*two_folders))
+    monkeypatch.setattr(assets, "exts", lambda k: (".zbp",))
+    monkeypatch.setattr(brushes, "brush_sources", lambda: srcs(*two_folders))
+    walk = BlockedWalk(monkeypatch)
+    assets.library(kind)
+    t = threading.Thread(target=assets.library, args=(kind,))
+    t.start()
+    try:
+        assert walk.started.wait(5)
+        found = []
+        f = threading.Thread(target=lambda: found.append(assets.find(kind, "Clay Buildup")))
+        f.start()
+        f.join(0.5)
+        assert found == [two_folders[0] / "Clay Buildup.zbp"]          # while the walk is still waiting
+        lock = brushes._index_lock if kind == "brush" else assets._index_lock
+        assert lock.acquire(timeout=0.5)
+        lock.release()
+    finally:
+        walk.go.set()
+        t.join(5)
+    assert not t.is_alive()
+
+
+def test_callers_waiting_for_a_walk_share_the_next_one(two_folders, monkeypatch):
+    monkeypatch.setattr(assets, "sources", lambda k: srcs(*two_folders))
+    monkeypatch.setattr(assets, "exts", lambda k: (".zbp",))
+    walk = BlockedWalk(monkeypatch)
+    assets.library("alpha")
+
+    class CountingLock:                                 # the build lock, counting who has asked for it
+        def __init__(self, lock):
+            self.lock, self.asked, self.three = lock, 0, threading.Event()
+
+        def __enter__(self):
+            self.asked += 1
+            if self.asked >= 3:
+                self.three.set()
+            return self.lock.__enter__()
+
+        def __exit__(self, *a):
+            return self.lock.__exit__(*a)
+    lock = CountingLock(assets._build_locks["alpha"])
+    monkeypatch.setitem(assets._build_locks, "alpha", lock)
+    out = {}
+    first = threading.Thread(target=lambda: out.setdefault("first", assets.library("alpha")))
+    first.start()
+    assert walk.started.wait(5)
+    waiting = [threading.Thread(target=lambda n=n: out.setdefault(n, assets.library("alpha"))) for n in ("b", "c")]
+    for w in waiting:
+        w.start()
+    assert lock.three.wait(5)                           # both have asked and wait for the walk on show to end
+    walk.go.set()
+    for w in [first] + waiting:
+        w.join(5)
+    assert walk.calls - 1 <= 2                          # three callers, two walks: the first's and one for both
+    assert out["b"].index == out["c"].index and out["b"] is out["c"]
 
 
 def test_get_library_reports_an_unreadable_source(two_folders, monkeypatch):
@@ -169,6 +278,99 @@ def test_get_library_reports_an_unreadable_source(two_folders, monkeypatch):
         assert "cannot be reached" in r["error"]
         assert len(r["items"]) == 5                 # what was read is still returned, with the error
         assert len(assets.index("alpha")) == 5      # and the lookup keeps what it had
+
+
+# --- names in an added folder ---------------------------------------------------------------------
+
+def own_and_added(tmp_path, *added):
+    """An own source with 10.psd, then each added folder; the sources and the walk."""
+    own = tmp_path / "own"
+    touch(own / "10.psd")
+    s = [("own", own, True)] + [(brushes.added_label(f), f, True) for f in added]
+    return s, brushes.walk_sources(s, (".psd", ".png"))
+
+
+def test_an_added_file_whose_name_is_taken_gets_its_subfolder(tmp_path):
+    added = tmp_path / "Added"
+    touch(added / "PackA" / "10.png")
+    _, w = own_and_added(tmp_path, added)
+    assert [i["name"] for i in w.items] == ["10", "10 (PackA)"]
+    assert w.index[tags._norm("10 (PackA)")] == added / "PackA" / "10.png"
+    assert w.items[1]["stem"] == "10" and w.items[1]["rel"] == "PackA"
+    assert w.names == {tags._norm("10"): "10", tags._norm("10 (PackA)"): "10 (PackA)"}
+
+
+def test_a_top_file_of_an_added_folder_gets_the_folder_name(tmp_path):
+    added = tmp_path / "Added"
+    touch(added / "10.png")
+    _, w = own_and_added(tmp_path, added)
+    assert [i["name"] for i in w.items] == ["10", "10 (Added)"]
+
+
+def test_the_second_subfolder_gets_the_whole_path(tmp_path):
+    added = tmp_path / "Added"
+    touch(added / "PackA" / "a" / "10.png")
+    touch(added / "PackA" / "b" / "10.png")
+    _, w = own_and_added(tmp_path, added)
+    assert [i["name"] for i in w.items] == ["10", "10 (PackA)", "10 (PackA, b)"]
+    assert w.index[tags._norm("10 (PackA)")] == added / "PackA" / "a" / "10.png"
+
+
+def test_two_added_folders_with_one_name_get_the_display_name(tmp_path):
+    one, two = tmp_path / "x" / "Alphas", tmp_path / "y" / "Alphas"
+    touch(one / "10.png")
+    touch(two / "10.png")
+    _, w = own_and_added(tmp_path, one, two)
+    assert [i["name"] for i in w.items] == ["10", "10 (Alphas)", "10 (Alphas (2))"]
+    assert w.index[tags._norm("10 (Alphas (2))")] == two / "10.png"
+
+
+def test_a_file_beside_one_with_its_stem_is_hidden(tmp_path):
+    added = tmp_path / "Added"
+    touch(added / "10.png")
+    touch(added / "10.psd")
+    _, w = own_and_added(tmp_path, added)                # one file per stem in a folder: ZBrush would call both "10"
+    assert [i["name"] for i in w.items] == ["10", "10 (Added)"]
+    assert w.items[1]["path"] == str(added / "10.png")
+    assert w.sources[1]["hidden"] == 1 and w.sources[1]["count"] == 2
+    touch(added / "sub" / "20.png")
+    touch(added / "sub" / "20.psd")
+    w = brushes.walk_sources([(brushes.added_label(added), added, True)], (".png", ".psd"))
+    assert [i["name"] for i in w.items] == ["10", "20"]     # with no other 10, no qualifying, still one each
+    assert w.sources[0]["hidden"] == 2
+
+
+def test_a_qualified_name_is_a_plain_name(tmp_path):
+    import config
+    added = tmp_path / "Added"
+    try:
+        touch(added / "a:b..c" / "10.png")
+    except OSError:                                     # Windows refuses the colon; the ".." is the point
+        touch(added / "a_b..c" / "10.png")
+    _, w = own_and_added(tmp_path, added)
+    names = [i["name"] for i in w.items]
+    assert len(names) == 2 and names[1] != "10"
+    assert not config._bad_asset_name(names[1])
+
+
+def test_own_sources_never_qualify_or_hide(two_folders):
+    w = brushes.walk_sources(srcs(*two_folders))
+    assert all(i["name"] == i["stem"] for i in w.items)
+    assert [s["hidden"] for s in w.sources] == [0, 0]
+    assert "display" not in w.sources[0] and "base" not in w.sources[0]
+
+
+def test_files_and_names_line_up_with_sources_and_index(tmp_path, two_folders):
+    added = tmp_path / "Added"
+    touch(added / "PackA" / "10.png")
+    touch(added / "beta.zbp")
+    s = srcs(*two_folders) + [(brushes.added_label(added), added, True)]
+    w = brushes.walk_sources(s, (".zbp", ".png"))
+    assert len(w.files) == len(w.sources) == 3
+    assert [len(f) for f in w.files] == [rep["count"] for rep in w.sources]
+    assert set(w.names) == set(w.index)
+    assert w.names[tags._norm("beta (Added)")] == "beta (Added)"
+    assert w.sources[2]["display"] == "Added" and w.sources[2]["base"] == "Added"
 
 
 # --- zbrush_dirs ----------------------------------------------------------------------------------
@@ -230,6 +432,7 @@ class FakeAssets:
     def __init__(self):
         self.generation = 1
         self.idx = {k: {} for k in ("brush", "alpha", "material", "texture")}
+        self.listed = {}                            # {kind: {key: listed name}}, as assets.names() gives
         self.rescans = []
         self.done = threading.Event()
         self.refuse = False
@@ -237,6 +440,9 @@ class FakeAssets:
 
     def index(self, kind, refresh=False):
         return self.idx[kind]
+
+    def names(self, kind):
+        return self.listed.get(kind, {})
 
     def rescan(self, kind, install=None):
         self.gate.wait(5)
@@ -334,3 +540,84 @@ def test_a_refused_rescan_is_asked_again_at_the_next_build(monkeypatch):
     wait_idle(ex, fake)
     assert len(fake.rescans) == 2
     assert ex.tag_menu("fresh") is not None
+
+
+def test_a_tag_fan_lists_the_qualified_name_of_an_item(monkeypatch):
+    fake = FakeAssets()
+    fake.idx["alpha"]["10(packa)"] = Path("C:/x/PackA/10.png")
+    fake.idx["alpha"]["11"] = Path("C:/x/11.png")
+    fake.listed["alpha"] = {"10(packa)": "10 (PackA)"}            # 11 has no entry: its stem is the name
+    tg = FakeTags()
+    tg.items_with = lambda key, kind=None: ["alpha:10(packa)", "alpha:11"] if kind == "alpha" else []
+    monkeypatch.setattr(expand, "assets", fake)
+    ex = expand.Expander(SimpleNamespace(ring={}), FakeUsage(), tg)
+    menu = ex.tag_menu("fresh")
+    assert [(i.kind, i.label, i.data) for i in menu.items] == [
+        ("alpha", "10 (PackA)", {"alpha": "10 (PackA)"}), ("alpha", "11", {"alpha": "11"})]
+
+
+# --- folders the user added are the last sources -----------------------------------------------------
+
+@pytest.fixture
+def added(tmp_path, monkeypatch):
+    """studio.json in a temp config folder with one added folder per kind."""
+    import json
+    import paths
+    folder = tmp_path / "My Packs"
+    monkeypatch.setattr(paths, "CONFIG_DIR", str(tmp_path / "cfg"))
+    brushes._settings_cache.clear()
+    (tmp_path / "cfg").mkdir()
+    (tmp_path / "cfg" / "studio.json").write_text(json.dumps({"library_folders": {
+        k: [str(folder)] for k in ("brush", "alpha", "material", "texture")}}), encoding="utf-8")
+    return folder
+
+
+def test_an_added_folder_is_the_last_source_of_a_kind(tmp_path, monkeypatch, added):
+    m = maxon(tmp_path, monkeypatch)
+    touch(m / "ZBrush 2026_BBBB" / "userassets_path.txt").write_text(str(tmp_path / "assets"), encoding="utf-8")
+    here = tmp_path / "ZBrush 2026"
+    touch(here / "ZBrush.exe")
+    touch(m / "ZBrush 2026_BBBB" / "installpath.txt").write_text(str(here), encoding="utf-8")
+    for kind in ("alpha", "material", "texture", "brush"):
+        src = assets.sources(kind)
+        assert len(src) > 1 and src[-1] == (brushes.added_label(added), added, True)
+        assert not any(brushes.is_added(label) for label, _, _ in src[:-1])
+    assert brushes.brush_sources()[-1] == (brushes.added_label(added), added, True)
+
+
+def test_with_no_zbrush_an_added_folder_is_the_only_source(tmp_path, monkeypatch, added):
+    maxon(tmp_path, monkeypatch)
+    assert brushes.zbrush_dirs() == {"user_assets": None, "install": None}
+    for kind in ("alpha", "brush"):
+        assert assets.sources(kind) == [(brushes.added_label(added), added, True)]
+    assert brushes.brush_sources() == [(brushes.added_label(added), added, True)]
+
+
+def test_the_older_zbrush_installs_do_not_search_added_folders(tmp_path, added):
+    for kind in ("alpha", "material", "texture", "brush"):
+        assert not any(brushes.is_added(label) for label, _, _ in assets.install_sources(tmp_path / "ZBrush 2022", kind))
+    assert not any(brushes.is_added(label) for label, _, _ in brushes.install_brush_sources(tmp_path / "ZBrush 2022"))
+
+
+def test_source_labels_name_an_added_folder_by_its_display_name(added):
+    for kind in ("alpha", "brush"):
+        labels = assets.source_labels(kind)
+        assert labels[brushes.added_label(added)] == "My Packs"
+        assert labels[brushes.added_label(added)] == brushes.display_names([added])[0]
+    assert assets.source_labels("alpha")["install ZData/Alphas"] == "ZBrush"
+
+
+def test_name_of_and_names_read_the_last_walk(tmp_path):
+    assert assets.name_of("alpha", "10") is None and assets.names("alpha") == {}
+    pack = tmp_path / "Pack"
+    touch(pack / "10.png")
+    touch(tmp_path / "Other" / "10.png")
+    walk = brushes.walk_sources([("first", tmp_path / "first", True),
+                                 (brushes.added_label(tmp_path / "Pack"), pack, True),
+                                 (brushes.added_label(tmp_path / "Other"), tmp_path / "Other", True)], (".png",))
+    assets._walks["alpha"] = walk
+    assert assets.name_of("alpha", "10 (Pack)") is None
+    assert assets.name_of("alpha", "10") == "10"
+    assert assets.name_of("alpha", "10 (Other)") == "10 (Other)"
+    assert assets.name_of("alpha", "10(other)") == "10 (Other)"            # any spelling
+    assert assets.names("alpha") is walk.names
