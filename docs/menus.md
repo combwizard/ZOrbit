@@ -64,7 +64,7 @@ The hotkey and its **Swallow hotkey** switch, the ring settings and the bridge a
 
 The folder of a [Capture](#capture) item stays behind too. It usually holds your Windows name, so the item arrives with an empty folder and saves to that person's `Pictures\ZBrush`. **Import menu...** clears the folder of any capture item it brings in, for the same reason.
 
-The paths of **Tool** and **Project** items stay behind too. They usually hold your Windows name, so a Tool or Project slot arrives as an empty slot that keeps its place. In `steps`, the Tool and Project actions are removed. **Export menu...** says how many were left out of the file.
+The paths of **Tool**, **Project** and **Layout** items stay behind too. They usually hold your Windows name, so a Tool, Project or Layout slot arrives as an empty slot that keeps its place. In `steps`, the Tool, Project and Layout actions are removed. **Export menu...** says how many were left out of the file.
 
 **Import menu...**, under **Add menu** at the foot of the **Menus** list, asks for the file and shows what it holds before anything changes: the menu and its submenus, any title or id that is already taken, the tags it brings, and any brushes, alphas, materials or textures this PC does not have. Those still import, and show as missing until you install them.
 
@@ -88,6 +88,7 @@ Every item does exactly one thing. Besides the action, an item can have a `label
 | `capture` | Saves ZBrush's document as a PNG in a folder, with no dialog. See [Capture](#capture). |
 | `tool` | Loads a tool from a `.ZTL` file into the Tool palette, with no dialog. See [Tool](#tool). |
 | `project` | Opens a `.ZPR` project, or the newest one in a folder, with no dialog. See [Project](#project). |
+| `layout` | Loads a ZBrush interface layout from a `.cfg` file, with no dialog. See [Layout](#layout). |
 | `steps` | Runs a list of the actions above, in order. |
 | `menu` | Opens another ring in place of this one. |
 | `auto` | A slot that holds a brush you pick often. ZOrbit fills it. |
@@ -95,7 +96,7 @@ Every item does exactly one thing. Besides the action, an item can have a `label
 | `browser` | Opens the [browser](browser.md) on one of its tabs, optionally on one tag. |
 | `empty` | Holds a slot's place in the ring and does nothing. See [Empty](#empty). |
 
-Studio's [Simple mode](studio.md#simple-and-full-mode) offers `brush`, `alpha`, `material`, `texture`, `press`, `toggle`, `menu` and `empty` in **Add item**. The other types (`set`, `capture`, `tool`, `project`, `steps`, `auto`, `tag` and `browser`) need Full mode. An existing item of one of those types still shows in the list and on the ring, and still works. Select it in Simple and the inspector shows its type and what it does on one line, with an **Edit in Full mode** link. Its label and icon can still be changed, except on an `auto` slot.
+Studio's [Simple mode](studio.md#simple-and-full-mode) offers `brush`, `alpha`, `material`, `texture`, `press`, `toggle`, `menu` and `empty` in **Add item**. The other types (`set`, `capture`, `tool`, `project`, `layout`, `steps`, `auto`, `tag` and `browser`) need Full mode. An existing item of one of those types still shows in the list and on the ring, and still works. Select it in Simple and the inspector shows its type and what it does on one line, with an **Edit in Full mode** link. Its label and icon can still be changed, except on an `auto` slot.
 
 ### Brush
 
@@ -225,7 +226,7 @@ In Studio, **Tool** is a Full mode type. Its **Tool file** field has a **Browse.
 
 A **Project** slot opens that project, with no dialog. Give a folder instead, as in the second example, and the slot opens the newest `.zpr` directly in that folder, by the time it was saved. Subfolders are not searched. Saving `Blockout_012` after `Blockout_011` needs no change to the menu.
 
-The path is a full path on this PC, not a network path. A value ending in `.zpr` is a file; anything else is a folder, so `D:/Work/v1.3` is a folder even though it has a dot in its name. A file or folder that is not there does not stop the menu from loading. It is a problem only when you pick the slot, since a drive may be unplugged. Then nothing is sent, and the message says so (see [Troubleshooting](troubleshooting.md#the-ring-opens-but-picks-do-nothing)). A Project slot can also be a step in `steps`, and as with a Tool slot, it should be the last step, since ZBrush finishes loading a file only after the pick returns, so a step after it may run too early. Neither a Tool nor a Project pick counts in **Recent**.
+The path is a full path on this PC, not a network path. A value ending in `.zpr` is a file; anything else is a folder, so `D:/Work/v1.3` is a folder even though it has a dot in its name. A file or folder that is not there does not stop the menu from loading. It is a problem only when you pick the slot, since a drive may be unplugged. Then nothing is sent, and the message says so (see [Troubleshooting](troubleshooting.md#the-ring-opens-but-picks-do-nothing)). A Project slot can also be a step in `steps`, and as with a Tool slot, it should be the last step, since ZBrush finishes loading a file only after the pick returns, so a step after it may run too early. A Tool, Project or Layout pick does not count in **Recent**.
 
 A Project slot goes through ZBrush's own check for unsaved work. If the open project has changes, ZBrush asks **Project has been changed. Would you like to save changes?**
 
@@ -236,6 +237,28 @@ A Project slot goes through ZBrush's own check for unsaved work. If the open pro
 (Measured in ZBrush 2022 and 2026.)
 
 In Studio, **Project** is a Full mode type. Its **Project file or folder** field has **Browse file...** and **Browse folder...** buttons. In ZBrush 2022 to 2025 the slot needs the plugin to be up to date, as [Capture](#capture) does. A name outside plain ASCII needs a Windows short name, and a path that is too long is refused.
+
+### Layout
+
+```json
+{"layout": "D:/Layouts/Sculpt.cfg"}
+```
+
+A **Layout** slot loads that ZBrush interface layout, with no dialog. The path is a `.cfg` file, a full path on this PC such as `D:/Layouts/Sculpt.cfg`. A network path does not work, and neither does a folder. Without a `label`, the slot is named after the file, such as Sculpt.
+
+ZBrush ships with some layouts of its own: Default, LeftRightShelf, Minimal, Sculpt01, compact_UI, compact_UI_brush_materials and legacy4R8. In ZBrush 2022 to 2025 they are in the `UserInterfaceLayouts` folder inside `ZStartup`, under your ZBrush folder. In ZBrush 2026 and 2027 they are in `UserInterfaceLayouts` inside `ZData`. To save a layout of your own, arrange the interface and press **Preferences > Config > Save Ui**, which asks for a file name. The slot presses **Preferences > Config > Load Ui** for you.
+
+The layout lasts for this session of ZBrush. The slot does not change the interface ZBrush stores, so the next time ZBrush starts it shows your stored layout again, unless you press **Preferences > Config > Store Config**.
+
+The folder `ZStartup\UserInterfaceColors` also holds `.cfg` files, but those are colour schemes, and ZBrush loads them with a different button. A **Layout** slot wants a layout file. It has not been tested with a colour file, and ZOrbit does not check which kind of file it was given.
+
+A file that is not there does not stop the menu from loading, since a drive may be unplugged. It is a problem only when you pick the slot. Then nothing is sent, and the message says so (see [Troubleshooting](troubleshooting.md#the-ring-opens-but-picks-do-nothing)). A Layout slot can also be a step in `steps`, and the steps after it still run. It does not count in **Recent**.
+
+Picks keep working after a layout change, even with a layout such as Minimal that hides the palettes. A second slot for Default gets you back.
+
+In Studio, **Layout** is a Full mode type. Its **Layout file** field has a **Browse...** button that picks the file. In ZBrush 2022 to 2025 the slot needs the plugin to be up to date, as [Capture](#capture) does. A name outside plain ASCII needs a Windows short name, and a path that is too long is refused.
+
+(Measured in ZBrush 2022.0.7 and 2026.2.1.)
 
 ### Finding a button's path
 
@@ -262,7 +285,7 @@ Some buttons only exist while a 3D model is in Edit mode, such as everything und
  "label": "Fresh Start", "icon": "Standard"}
 ```
 
-Steps run in order. Each step is a `brush`, `alpha`, `material`, `texture`, `press`, `set`, `toggle`, `capture`, `tool` or `project`. Steps cannot open menus, cannot contain more steps, and cannot hold `auto`, `tag` or `browser` items. Without an `icon`, a `steps` item uses the thumbnail of its first brush, alpha, material or texture step, or a placeholder if it has none.
+Steps run in order. Each step is a `brush`, `alpha`, `material`, `texture`, `press`, `set`, `toggle`, `capture`, `tool`, `project` or `layout`. Steps cannot open menus, cannot contain more steps, and cannot hold `auto`, `tag` or `browser` items. Without an `icon`, a `steps` item uses the thumbnail of its first brush, alpha, material or texture step, or a placeholder if it has none.
 
 A pick of a `steps` item does not count for auto slots or for **Recent**, even when a step is a brush. Only a brush, alpha, material or texture item picked on its own does (from a ring, a fan or the [browser](browser.md)).
 

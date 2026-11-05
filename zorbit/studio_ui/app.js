@@ -90,6 +90,7 @@ const ICONS = {
   k_capture: '<path d="M4 8.500a1.500 1.500 0 0 1 1.500-1.500h2.300l1.500-2.300h5.400l1.500 2.300h2.300A1.500 1.500 0 0 1 20 8.500v8a1.500 1.500 0 0 1-1.500 1.500h-13A1.500 1.500 0 0 1 4 16.500z"/><circle cx="12" cy="12.500" r="3.200"/>',
   k_tool: '<path d="M12 3.500l7.500 4.300v8.400L12 20.500l-7.500-4.300V7.800z"/><path d="M4.500 7.800L12 12.100l7.500-4.300M12 12.100v8.400"/>',
   k_project: '<path d="M3.500 7.500a1.500 1.500 0 0 1 1.500-1.500h4.200l1.800 2h8a1.500 1.500 0 0 1 1.500 1.500v7.500a1.500 1.500 0 0 1-1.500 1.500H5a1.500 1.500 0 0 1-1.500-1.500z"/>',
+  k_layout: '<rect x="3.500" y="5" width="17" height="14" rx="1.500"/><path d="M9.500 5v14M9.500 12h11"/>',
   k_steps: '<path d="M12 4l8 4-8 4-8-4z"/><path d="M4 12l8 4 8-4M4 16l8 4 8-4"/>',
   k_menu: '<circle cx="12" cy="12" r="8.500"/><path d="M10 8.500l5 3.500-5 3.500z" fill="currentColor"/>',
   k_auto: '<path d="M19.500 12a7.500 7.500 0 0 1-13 5.100M4.500 12a7.500 7.500 0 0 1 13-5.100"/><path d="M17.500 3.500v3.400h-3.400M6.500 20.500v-3.400h3.400"/>',
@@ -122,7 +123,8 @@ function setRoving(rows, cur) { const stop = rows.includes(cur) ? cur : rows[0];
 function noTab(btn) { btn.tabIndex = -1; return btn; }
 
 /* ================================================================== state */
-const ACTIONS = ['brush', 'alpha', 'material', 'texture', 'press', 'set', 'toggle', 'capture', 'tool', 'project', 'steps', 'menu', 'auto', 'tag', 'browser', 'empty'];
+const ACTIONS = ['brush', 'alpha', 'material', 'texture', 'press', 'set', 'toggle', 'capture', 'tool', 'project', 'layout', 'steps', 'menu', 'auto', 'tag', 'browser', 'empty'];
+const FILE_KINDS = ['tool', 'project', 'layout'];                  // the items that name a file on this PC (FILE_EXTS in config.py)
 const KIND = {
   brush: { label: 'Brush', icon: 'k_brush', hint: 'Select a brush' },
   alpha: { label: 'Alpha', icon: 'k_alpha', hint: 'Select an alpha' },
@@ -134,6 +136,7 @@ const KIND = {
   capture: { label: 'Capture', icon: 'k_capture', hint: 'Save the picture as a PNG' },
   tool: { label: 'Tool', icon: 'k_tool', hint: 'Load a tool from a file' },
   project: { label: 'Project', icon: 'k_project', hint: 'Open a project, or the newest in a folder' },
+  layout: { label: 'Layout', icon: 'k_layout', hint: 'Load a UI layout from a file' },
   steps: { label: 'Steps', icon: 'k_steps', hint: 'Run several actions in order' },
   menu: { label: 'Submenu', icon: 'k_menu', hint: 'Open another ring' },
   auto: { label: 'Auto', icon: 'k_auto', hint: 'A slot filled with a brush you pick often' },
@@ -256,11 +259,11 @@ const needsFull = cfg => MODE.needsFull(cfg, modeCtx());
 const targetNeedsFull = t => MODE.targetNeedsFull(t, modeCtx());
 /* A capture item's folder as the list shows it: the folder, or Pictures\ZBrush when it is empty (the default folder). */
 const captureFolder = it => String(it.capture ?? '').trim() || 'Pictures\\ZBrush';
-/* A tool or project item's label when it has none, as _default_label in config.py: the file's name without a .zpr or
-   .ztl (any case), so a folder keeps its whole name. */
+/* A tool, project or layout item's label when it has none, as _default_label in config.py: the file's name without a .zpr,
+   .ztl or .cfg (any case), so a folder keeps its whole name. */
 function fileLabel(k, path) {
   const name = String(path ?? '').trim().replace(/[\\/]+$/, '').split(/[\\/]/).pop();
-  return name.replace(/(.+)\.(zpr|ztl)$/i, '$1');
+  return name.replace(/(.+)\.(zpr|ztl|cfg)$/i, '$1');
 }
 /* One line saying what an item targets; the item rows and the read-only line in Simple share it. */
 function itemSub(it) {
@@ -277,14 +280,14 @@ function defaultLabel(it) {
   if (k === 'empty') return 'Empty slot';
   if (k === 'tag') return tagName(it.tag);
   if (k === 'capture') return 'Capture';
-  if (k === 'tool' || k === 'project') return fileLabel(k, it[k]);
+  if (FILE_KINDS.includes(k)) return fileLabel(k, it[k]);
   if (k === 'browser') return it.browser && S.tagMap.has(it.browser) ? tagName(it.browser) : 'Browser';   // as _default_label in config.py
   return String(it[k] || '').split(':').pop();
 }
 /* A tag's label, or its key when the tag is not (or not yet) known. */
 function tagName(key) { const t = S.tagMap.get(key); return (t && t.label) || String(key || ''); }
 const itemLabel = it => String(it.label || defaultLabel(it) || '(empty)');
-const FILE_LABEL = { tool: 'Tool file', project: 'Project file or folder' };     // the field labels of the two file items
+const FILE_LABEL = { tool: 'Tool file', project: 'Project file or folder', layout: 'Layout file' };     // the field labels of the file items
 
 function actionValid(a, nested) {
   if (!a || typeof a !== 'object') return false;
@@ -344,8 +347,8 @@ function makeItem(kind, target, extra = {}) {
 }
 /* A target lives in one of these namespaces: each library kind's names, ZBrush item paths (press, set, toggle), menu ids and tags.
    Switching kind keeps a target only inside its own namespace, so a brush name never lands in a path field. */
-const nsOf = k => (isLib(k) ? k : k === 'menu' ? 'menu' : k === 'tag' || k === 'browser' ? 'tag' : k === 'capture' ? 'folder' : k === 'tool' || k === 'project' ? k : 'path');
-const TARGET_NOUN = { brush: 'brush', alpha: 'alpha', material: 'material', texture: 'texture', press: 'button path', set: 'value path', toggle: 'switch path', capture: 'folder', tool: 'tool file', project: 'project file or folder', menu: 'submenu', tag: 'tag', browser: 'tag filter' };
+const nsOf = k => (isLib(k) ? k : k === 'menu' ? 'menu' : k === 'tag' || k === 'browser' ? 'tag' : k === 'capture' ? 'folder' : FILE_KINDS.includes(k) ? k : 'path');
+const TARGET_NOUN = { brush: 'brush', alpha: 'alpha', material: 'material', texture: 'texture', press: 'button path', set: 'value path', toggle: 'switch path', capture: 'folder', tool: 'tool file', project: 'project file or folder', layout: 'layout file', menu: 'submenu', tag: 'tag', browser: 'tag filter' };
 /* Brush names are compared ignoring case and spaces (the guide says neither matters). */
 const nameKey = s => String(s === undefined || s === null ? '' : s).toLowerCase().replace(/\s+/g, '');
 /* An asset's key in tags.json: its kind, a colon and its name in lower case without spaces (tags.item_key in Python). */
@@ -2330,10 +2333,10 @@ function buildItemInspector() {
   } else if (k === 'tag' || k === 'browser') {
     box.append(tagTargetField(it, k, updateHead));
   } else if (k !== 'steps') {
-    const placeholders = { ...Object.fromEntries(LIB_KINDS.map(lk => [lk, 'Search ' + K(lk).many + ', e.g. ' + K(lk).eg])), press: 'Item path, e.g. Tool:Masking:Clear', set: 'Item path, e.g. Draw:Draw Size', toggle: 'Item path, e.g. Transform:Activate Symmetry', capture: 'The ZBrush folder in your Pictures folder', tool: 'D:\\Models\\Hero.ztl', project: 'D:\\Projects\\Hero.zpr, or a folder', menu: 'Pick a menu' };
+    const placeholders = { ...Object.fromEntries(LIB_KINDS.map(lk => [lk, 'Search ' + K(lk).many + ', e.g. ' + K(lk).eg])), press: 'Item path, e.g. Tool:Masking:Clear', set: 'Item path, e.g. Draw:Draw Size', toggle: 'Item path, e.g. Transform:Activate Symmetry', capture: 'The ZBrush folder in your Pictures folder', tool: 'D:\\Models\\Hero.ztl', project: 'D:\\Projects\\Hero.zpr, or a folder', layout: 'D:\\Layouts\\Sculpt.cfg', menu: 'Pick a menu' };
     let touched = false;                                   // "required" hints wait until the field has been edited or left once
     let inp, openBtn = null;
-    const isFile = k === 'tool' || k === 'project';        // a path to a file on this PC, with Browse buttons and no ZBrush path suggestions
+    const isFile = FILE_KINDS.includes(k);                 // a path to a file on this PC, with Browse buttons and no ZBrush path suggestions
     if (isLib(k)) ensureLib(k);                            // its load repaints this inspector (loadLibrary)
     if (k === 'menu') {
       // A pick list rather than free text: only real menus, never this one (a menu cannot open itself).
@@ -2367,7 +2370,7 @@ function buildItemInspector() {
           if (typeof picked !== 'string' || !picked.trim()) return;               // cancelled: nothing changes
           inp.value = picked.trim(); inp.dispatchEvent(new Event('input'));
         } }, withIcon ? icon('folder', 13) : null, text);
-        openBtn = k === 'tool' ? browse('Browse...', 'choose_file', ['tool'], false)
+        openBtn = k !== 'project' ? browse('Browse...', 'choose_file', [k], false)           // only a project can be a folder
           : [browse('Browse file...', 'choose_file', ['project'], false), browse('Browse folder...', 'choose_folder', [], true)];
       } else combo(inp, q => matchOpts(isLib(k) ? libOpts(k) : pathOpts(), q), { thumb: isLib(k) ? k : null, mono: !isLib(k) });
     }
@@ -2400,7 +2403,7 @@ function buildItemInspector() {
       } else if (k === 'capture') {
         hintEl.append(v ? 'Each capture is a PNG in this folder, named by the time. The folder is made if it is missing.' : 'Empty: captures go to the ZBrush folder in your Pictures folder.');
       } else if (isFile) {
-        hintEl.append(k === 'tool' ? 'Loads this tool into the Tool palette.' : 'Opens this project. Give a folder to always open its newest project. ZBrush asks first if the open project has unsaved changes.');
+        hintEl.append(k === 'tool' ? 'Loads this tool into the Tool palette.' : k === 'layout' ? 'Loads this UI layout. It lasts until ZBrush closes, unless you press Store Config in ZBrush (Preferences > Config).' : 'Opens this project. Give a folder to always open its newest project. ZBrush asks first if the open project has unsaved changes.');
       } else {
         const s = S.suggestions.find(x => x.path.replace(/\s/g, '').toLowerCase() === v.replace(/\s/g, '').toLowerCase());
         if (s) hintEl.append('Known item: ' + s.source);
@@ -2426,7 +2429,7 @@ function buildItemInspector() {
       paintVal();
     }
   } else {
-    box.append(field('Steps', buildSteps(it), 'Steps can select brushes, alphas, materials and textures, press buttons, set values, flip switches, save captures, load tools and open projects (no submenus).'));
+    box.append(field('Steps', buildSteps(it), 'Steps can select brushes, alphas, materials and textures, press buttons, set values, flip switches, save captures, load tools and layouts, and open projects (no submenus).'));
   }
 
   const iconInp = textInput(it.icon || '', v => { if (v.trim()) it.icon = v.trim(); else delete it.icon; commit(); updateIcon(); }, { placeholder: 'Optional: brush name or path to a .png / .zbp', label: 'Icon override', mono: !!it.icon && isPath(it.icon) });
@@ -2496,7 +2499,7 @@ function autoNow(m, i) {
   return el;
 }
 
-const STEP_KINDS = ['brush', 'alpha', 'material', 'texture', 'press', 'set', 'toggle', 'capture', 'tool', 'project'];
+const STEP_KINDS = ['brush', 'alpha', 'material', 'texture', 'press', 'set', 'toggle', 'capture', 'tool', 'project', 'layout'];
 function buildSteps(it) {
   const host = h('div', { class: 'steps' });
   const render = f => {                                          // f: { j, k } the control to focus afterwards (step j; k = type, up, down or rm)
@@ -2513,11 +2516,11 @@ function buildSteps(it) {
         if (lost.length) undoToast(`Step ${j + 1} is now ${KIND[nk].label}. Dropped ${joinList(lost)}.`, { ms: 6500 });
       } },
         STEP_KINDS.map(x => h('option', { value: x, selected: x === sk }, KIND[x].label)));
-      const tin = textInput(targetOf(st), v => { st[sk] = v; commit(); }, { mono: !isLib(sk), placeholder: isLib(sk) ? KIND[sk].label + ' name' : sk === 'capture' ? 'The ZBrush folder in your Pictures folder' : sk === 'tool' ? 'D:\\Models\\Hero.ztl' : sk === 'project' ? 'D:\\Projects\\Hero.zpr, or a folder' : 'Item path', label: 'Step ' + (j + 1) + ' target' });
+      const tin = textInput(targetOf(st), v => { st[sk] = v; commit(); }, { mono: !isLib(sk), placeholder: isLib(sk) ? KIND[sk].label + ' name' : sk === 'capture' ? 'The ZBrush folder in your Pictures folder' : sk === 'tool' ? 'D:\\Models\\Hero.ztl' : sk === 'project' ? 'D:\\Projects\\Hero.zpr, or a folder' : sk === 'layout' ? 'D:\\Layouts\\Sculpt.cfg' : 'Item path', label: 'Step ' + (j + 1) + ' target' });
       tin.addEventListener('change', () => { st[sk] = tin.value.trim(); tin.value = st[sk]; commit(); });
       tin.classList.add('stgt');
       if (isLib(sk)) ensureLib(sk);
-      if (sk !== 'capture' && sk !== 'tool' && sk !== 'project') combo(tin, q => matchOpts(isLib(sk) ? libOpts(sk) : pathOpts(), q), { thumb: isLib(sk) ? sk : null, mono: !isLib(sk) });   // a folder has no ZBrush path suggestions
+      if (sk !== 'capture' && !FILE_KINDS.includes(sk)) combo(tin, q => matchOpts(isLib(sk) ? libOpts(sk) : pathOpts(), q), { thumb: isLib(sk) ? sk : null, mono: !isLib(sk) });   // a folder has no ZBrush path suggestions
       const vhint = h('div', { class: 'fhint bad svhint', hidden: true });
       const row = h('div', { class: 'step' }, h('span', { class: 'snum mono' }, String(j + 1)), sel, tin,
         sk === 'set' ? (() => {
@@ -5284,10 +5287,10 @@ function describeProblem(raw) {
     if (t.startsWith(": 'browser' must be a string")) return 'has a browser filter that is not a tag';
     if (t.startsWith(": browser 'kind' must be one of ")) return 'opens a browser tab that does not exist';
     if (t.startsWith(': capture folder ')) return 'has a capture folder that cannot be used: ' + t.slice(': capture folder '.length);
-    if ((r = /^: (tool|project) must be on this PC, not a network path$/.exec(t))) return `has a ${r[1]} on a network path. Use a file on this PC`;
-    if ((r = /^: (tool|project) '(.*)' must be a full path, such as (.*)$/s.exec(t))) return `has the ${r[1]} ${r[2]}, which is not a full path. Use a path such as ${r[3]}`;
+    if ((r = /^: (tool|project|layout) must be on this PC, not a network path$/.exec(t))) return `has a ${r[1]} on a network path. Use a file on this PC`;
+    if ((r = /^: (tool|project|layout) '(.*)' must be a full path, such as (.*)$/s.exec(t))) return `has the ${r[1]} ${r[2]}, which is not a full path. Use a path such as ${r[3]}`;
     if ((r = /^: project '(.*)' must be a \.zpr file or a folder$/s.exec(t))) return `has the project ${r[1]}, which must be a .zpr file or a folder`;
-    if ((r = /^: (tool|project) '(.*)' must be a (\.\w+) file$/s.exec(t))) return `has the ${r[1]} ${r[2]}, which must be a ${r[3]} file`;
+    if ((r = /^: (tool|project|layout) '(.*)' must be a (\.\w+) file$/s.exec(t))) return `has the ${r[1]} ${r[2]}, which must be a ${r[3]} file`;
     if ((r = /^: '(\w+)' must be a non-empty string$/.exec(t))) return 'needs a ' + (own(TARGET_NOUN, r[1]) ? TARGET_NOUN[r[1]] : 'target');
     if ((r = /^: (\w+) name (.+) must not contain /s.exec(t))) return `has the ${r[1]} name ${r[2]}, which looks like a path. Use only the name, without \\ / : or ..`;
     if ((r = /^: submenu (.+) does not exist$/s.exec(t))) return `opens the submenu ${unq(r[1])}, which does not exist`;
@@ -6065,7 +6068,7 @@ function describeChanges() {
   const after = S.cfg || {};
   const groups = [];
   const q = s => '\u201c' + s + '\u201d';
-  const itemName = it => it.empty === true ? 'Empty slot' : it.label || it.brush || it.alpha || it.material || it.texture || it.press || it.toggle || it.set || ('capture' in it ? 'Capture' : '') || ('tool' in it ? 'Tool' : '') || ('project' in it ? 'Project' : '') ||(it.menu ? 'Submenu ' + it.menu : it.steps ? 'Steps' : it.tag ? 'Tag ' + it.tag : 'browser' in it ? 'Browser' + (it.browser ? ' ' + it.browser : '') : 'item');
+  const itemName = it => it.empty === true ? 'Empty slot' : it.label || it.brush || it.alpha || it.material || it.texture || it.press || it.toggle || it.set || ('capture' in it ? 'Capture' : '') || ('tool' in it ? 'Tool' : '') || ('project' in it ? 'Project' : '') || ('layout' in it ? 'Layout' : '') ||(it.menu ? 'Submenu ' + it.menu : it.steps ? 'Steps' : it.tag ? 'Tag ' + it.tag : 'browser' in it ? 'Browser' + (it.browser ? ' ' + it.browser : '') : 'item');
   const bm = before.menus || {}, am = after.menus || {};
   for (const id of Object.keys(am)) {
     const a = am[id] || {}, b = own(bm, id) ? bm[id] : undefined;

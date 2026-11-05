@@ -1245,6 +1245,79 @@ def test_tool_and_project_are_actions_but_not_assets():
     assert config.asset_of({"tool": "C:/Users/you/Hero.ztl"}) is None
 
 
+# --- layout ----------------------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("path", ["C:/Users/you/Layouts/Sculpt.cfg", "C:\\Users\\you\\Layouts\\SCULPT.CFG", "D:/a b/x.Cfg"])
+def test_a_layout_is_a_full_path_to_a_cfg_file(load_menus, path):
+    cfg = load_menus({"main": one_item_menu({"layout": path})})
+    assert cfg.errors == [] and cfg.menus["main"].items[0].data == {"layout": path}
+    assert cfg.menus["main"].items[0].kind == "layout"
+
+
+@pytest.mark.parametrize("path", ["C:/Users/you/Layouts/Sculpt.ztl", "C:/Users/you/Layouts/Sculpt", "C:/Users/you/Layouts/",
+                                  "C:/Users/you/a.cfg.bak", "Sculpt.cfg", "./Sculpt.cfg", "\\Users\\you\\Sculpt.cfg",
+                                  "C:Sculpt.cfg", "/Sculpt.cfg"])
+def test_a_layout_must_be_a_full_path_ending_cfg(load_menus, path):
+    cfg = load_menus({"main": one_item_menu({"layout": path}, {"brush": "A"})})
+    assert problems(cfg, "menu main item 1: layout") and [it.kind for it in cfg.menus["main"].items] == ["brush"]
+
+
+def test_a_folder_is_not_a_layout_even_when_it_is_there(load_menus, tmp_path):
+    (tmp_path / "Layouts").mkdir()
+    cfg = load_menus({"main": one_item_menu({"layout": str(tmp_path / "Layouts")}, {"brush": "A"})})
+    assert problems(cfg, f"layout '{tmp_path / 'Layouts'}' must be a .cfg file")
+    assert [it.kind for it in cfg.menus["main"].items] == ["brush"]
+
+
+def test_the_message_for_a_bad_path_gives_an_example_of_its_own_kind(load_menus):
+    cfg = load_menus({"main": one_item_menu({"layout": "Sculpt.cfg"}, {"tool": "Hero.ztl"}, {"project": "Hero.zpr"},
+                                            {"brush": "A"})})
+    assert problems(cfg, "such as C:\\Layouts\\Sculpt.cfg") and problems(cfg, "such as C:\\Models\\Hero.ztl")
+    assert problems(cfg, "such as C:\\Projects\\Hero.zpr")
+
+
+@pytest.mark.parametrize("path", ["//server/share/Sculpt.cfg", "\\\\server\\share\\Sculpt.cfg"])
+def test_a_layout_cannot_be_on_a_network_share(load_menus, path):
+    cfg = load_menus({"main": one_item_menu({"layout": path}, {"brush": "A"})})
+    assert problems(cfg, "menu main item 1: layout") and problems(cfg, "network")
+
+
+@pytest.mark.parametrize("value", ["", "  ", 5, None, ["C:/x.cfg"]])
+def test_a_layout_must_not_be_empty(load_menus, value):
+    cfg = load_menus({"main": one_item_menu({"layout": value}, {"brush": "A"})})
+    assert problems(cfg, "'layout' must be a non-empty string")
+    assert [it.kind for it in cfg.menus["main"].items] == ["brush"]
+
+
+def test_a_layout_need_not_be_there_when_the_menus_load(load_menus):
+    assert load_menus({"main": one_item_menu({"layout": "Z:/Unplugged/Sculpt.cfg"})}).errors == []
+
+
+def test_a_layout_is_allowed_in_steps(load_menus):
+    steps = [{"layout": "C:/Users/you/Sculpt.cfg"}, {"press": "Tool:Masking:Clear"}]
+    assert load_menus({"main": one_item_menu({"steps": steps})}).errors == []
+    cfg = load_menus({"main": one_item_menu({"steps": [{"layout": "Sculpt.cfg"}]}, {"brush": "A"})})
+    assert problems(cfg, "menu main item 1 step 1: layout")
+
+
+def test_the_default_label_of_a_layout_is_the_file_name_without_its_extension(load_menus):
+    cfg = load_menus({"main": one_item_menu({"layout": "C:/Users/you/Layouts/Sculpt.v2.CFG"},
+                                            {"layout": "C:/Users/you/Layouts/Sculpt.cfg", "label": "Mine"})})
+    assert [it.label for it in cfg.menus["main"].items] == ["Sculpt.v2", "Mine"]
+
+
+def test_a_layout_is_an_action_but_not_an_asset():
+    assert "layout" in config.ACTION_KEYS and "layout" in config.FILE_EXTS and "layout" not in config.ASSET_KINDS
+    assert config.asset_of({"layout": "C:/Users/you/Sculpt.cfg"}) is None
+
+
+def test_an_item_cannot_be_a_layout_and_something_else(load_menus):
+    cfg = load_menus({"main": one_item_menu({"layout": "C:/Users/you/Sculpt.cfg", "tool": "C:/Users/you/Hero.ztl"},
+                                            {"brush": "A"})})
+    assert problems(cfg, "needs exactly one of")
+
+
 def test_an_item_cannot_be_a_tool_and_something_else(load_menus):
     cfg = load_menus({"main": one_item_menu({"tool": "C:/Users/you/Hero.ztl", "project": "C:/Users/you/Work"},
                                             {"brush": "A"})})

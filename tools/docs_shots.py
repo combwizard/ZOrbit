@@ -39,6 +39,11 @@ EDGE = [
     os.path.expandvars(r"%ProgramFiles(x86)%\Microsoft\Edge\Application\msedge.exe"),
     os.path.expandvars(r"%ProgramFiles%\Microsoft\Edge\Application\msedge.exe"),
 ]
+# A fresh profile in plain Edge signs in with the Windows account by itself, then syncs logins, bookmarks and extensions
+# into the temp folder (over 200 MB in 20 s, on every shot). --guest and --inprivate do not stop that; these do.
+EDGE_FLAGS = ["--headless=new", "--no-first-run", "--hide-scrollbars", "--force-color-profile=srgb",
+              "--disable-features=msImplicitSignin", "--disable-sync", "--disable-extensions",
+              "--disable-background-networking", "--disable-component-update"]
 PARALLEL = 6                                            # shots taken at the same time, each in its own Edge
 
 # Steps can use these: click(text) clicks the innermost visible element whose text starts with it (the click bubbles
@@ -208,12 +213,24 @@ def serve():
     return httpd
 
 
+def stop_edge(proc, profile):
+    """Ends Edge with all its child processes and removes its profile. proc.kill() alone ends only the first process: the
+    others run on and hold the profile's files, so it could not be removed."""
+    subprocess.run(["taskkill", "/F", "/T", "/PID", str(proc.pid)], capture_output=True)
+    proc.wait()
+    for _ in range(50):                                 # the last of its files are let go a moment later
+        shutil.rmtree(profile, ignore_errors=True)
+        if not os.path.exists(profile):
+            return
+        time.sleep(0.1)
+    print(f"could not remove {profile}", file=sys.stderr)
+
+
 def start_edge(profile):
     exe = next((p for p in EDGE if os.path.exists(p)), None)
     if not exe:
         sys.exit("Microsoft Edge not found")
-    proc = subprocess.Popen([exe, "--headless=new", "--remote-debugging-port=0", "--user-data-dir=" + profile,
-                             "--no-first-run", "--hide-scrollbars", "--force-color-profile=srgb", "about:blank"],
+    proc = subprocess.Popen([exe, *EDGE_FLAGS, "--remote-debugging-port=0", "--user-data-dir=" + profile, "about:blank"],
                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     port_file = os.path.join(profile, "DevToolsActivePort")
     for _ in range(100):
@@ -224,7 +241,7 @@ def start_edge(profile):
         if port:
             return proc, int(port[0])
         time.sleep(0.1)
-    proc.kill()
+    stop_edge(proc, profile)
     sys.exit("Edge did not open its DevTools port")
 
 
@@ -301,9 +318,7 @@ async def take(sem, base, name):
                 await page.send("Emulation.setEmulatedMedia", features=[{"name": "prefers-reduced-motion", "value": "reduce"}])
                 await shoot(page, base, name, SHOTS[name])
         finally:
-            proc.kill()
-            proc.wait()
-            shutil.rmtree(profile, ignore_errors=True)
+            await asyncio.to_thread(stop_edge, proc, profile)   # it waits for the files, so not on the loop
 
 
 async def run(names):

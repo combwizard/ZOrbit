@@ -241,15 +241,15 @@ def test_export_menu_adds_the_tags_note_when_tags_json_is_broken(api, tmp_path, 
 
 def test_export_menu_says_how_many_tool_and_project_items_stayed_out(api, tmp_path, monkeypatch):
     _save_to(api, monkeypatch, tmp_path / "a.json")
-    res = api.export_menu(_file_cfg(), "a")                 # a and b: 7 Tool or Project actions, steps included
+    res = api.export_menu(_file_cfg(), "a")                 # a and b: 7 Tool, Project or Layout actions, steps included
     assert res["ok"]
-    assert res["message"] == (f'Saved "A" and its 1 submenu to {res["path"]}. 7 Tool or Project items left out of the '
+    assert res["message"] == (f'Saved "A" and its 1 submenu to {res["path"]}. 7 Tool, Project or Layout items left out of the '
                               "file, because their paths belong to this PC.")
     data = json.loads((tmp_path / "a.json").read_text(encoding="utf-8"))
     assert "tool" not in json.dumps(data) and "project" not in json.dumps(data)   # the paths are not in the file
-    assert "Tool or Project" not in api.export_menu(_cfg(), "sculpt")["message"]
+    assert "Layout item" not in api.export_menu(_cfg(), "sculpt")["message"]
     assert api.export_menu(_file_cfg(), "b")["message"].endswith(
-        f'1 Tool or Project item left out of the file, because their paths belong to this PC.')
+        '1 Tool, Project or Layout item left out of the file, because their paths belong to this PC.')
 
 
 # --- Api: pick_menu_import / apply_menu_import -------------------------------------------------------
@@ -675,6 +675,39 @@ def test_build_removes_tool_and_project_from_steps():
 def test_build_makes_a_steps_item_with_nothing_left_an_empty_slot():
     items = menushare.build(_file_cfg(), "a", None, "1")["menus"]["a"]["items"]
     assert items[5] == {"empty": True, "label": "Both", "icon": "Move"}
+
+
+def _layout_cfg():
+    return {"menus": {"a": {"title": "A", "hotkey": "Q", "items": [
+        {"layout": "C:/Users/you/Layouts/Sculpt.cfg", "label": "Sculpt"},
+        {"brush": "Move"},
+        {"steps": [{"press": "Tool:Masking:Clear"}, {"layout": "C:/Users/you/Layouts/Sculpt.cfg"}]},
+        {"steps": [{"layout": "C:/Users/you/Layouts/Sculpt.cfg"}], "label": "Only"}]}}}
+
+
+def test_build_leaves_the_path_of_a_layout_behind():
+    cfg = _layout_cfg()
+    before = json.dumps(cfg, sort_keys=True)
+    items = menushare.build(cfg, "a", None, "1")["menus"]["a"]["items"]
+    assert items == [{"empty": True, "label": "Sculpt"}, {"brush": "Move"},
+                     {"steps": [{"press": "Tool:Masking:Clear"}]}, {"empty": True, "label": "Only"}]
+    assert "Layouts" not in json.dumps(items) and "layout" not in json.dumps(items)
+    assert json.dumps(cfg, sort_keys=True) == before
+
+
+def test_left_out_counts_layouts_and_the_export_message_says_so(api, tmp_path, monkeypatch):
+    assert menushare.left_out(_layout_cfg()["menus"]) == 3
+    _save_to(api, monkeypatch, tmp_path / "a.json")
+    res = api.export_menu(_layout_cfg(), "a")
+    assert res["ok"] and res["message"].endswith(
+        "3 Tool, Project or Layout items left out of the file, because their paths belong to this PC.")
+
+
+def test_plan_import_clears_a_layout_path_too():
+    bundle = {"a": {"title": "A", "items": [{"layout": "C:/Users/you/Sculpt.cfg", "label": "Sculpt"},
+                                            {"steps": [{"layout": "C:/Users/you/Sculpt.cfg"}]}]}}
+    menus, root, _ = menushare.plan_import(bundle, "a", {"menus": {}})
+    assert menus[root]["items"] == [{"empty": True, "label": "Sculpt"}, {"empty": True}]
 
 
 def test_a_bundle_without_tool_and_project_paths_loads_with_no_problems(tmp_path):

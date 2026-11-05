@@ -16,6 +16,7 @@ All notable changes to this project are listed here. The format follows
 - The browser and the Library build only the cards near the view, so a tab of thousands of items opens at once and scrolls smoothly. Hovering a card shows its whole name.
 - The thumbnail cache keeps at least twice as many pictures as the library has items, instead of a fixed 8,000.
 - The Library no longer shows the path of the tags file under **Manage tags...**. The Tags page of the docs says where the file is.
+- A new **Layout** item loads a ZBrush interface layout (a `.cfg` file) with no dialog, in the same way as a **Tool** or **Project** item. The layout lasts until ZBrush closes, unless you press **Store Config**.
 
 ### Fixed
 

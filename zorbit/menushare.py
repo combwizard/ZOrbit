@@ -18,8 +18,8 @@ MENU_FORMAT = 1              # the "zorbit_menu" number of a menu file
 _VALID_ID = re.compile(r"[A-Za-z0-9_-]+")
 _SYNTHETIC = ("tag:", "more:")        # menu ids the app makes up: never in a file
 _PC_KEYS = ("hotkey", "swallow")      # belong to one PC's keyboard: never in a menu file, never imported
-# A Capture item's folder is cleared the same way, and Tool and Project items are left out: see _clean.
-_FILE_KEYS = tuple(C.FILE_EXTS)       # ("tool", "project"): a path of this PC that no other PC has, and an empty path is no item
+# A Capture item's folder is cleared the same way, and Tool, Project and Layout items are left out: see _clean.
+_FILE_KEYS = tuple(C.FILE_EXTS)       # ("tool", "project", "layout"): a path of this PC that no other PC has, and an empty path is no item
 
 
 def menu_slug(s) -> str:
@@ -77,8 +77,8 @@ def _is_file_action(a) -> bool:
 
 
 def left_out(menus) -> int:
-    """How many Tool and Project actions the raw menus (a dict of them) hold, steps included: the ones a menu file
-    cannot carry, since _clean leaves them out. Studio can say so ("2 tool or project items were left out")."""
+    """How many Tool, Project and Layout actions the raw menus (a dict of them) hold, steps included: the ones a menu file
+    cannot carry, since _clean leaves them out. Studio can say so ("2 Tool, Project or Layout items were left out")."""
     n = 0
     for m in menus.values() if isinstance(menus, dict) else ():
         for it in _items(m):
@@ -88,7 +88,7 @@ def left_out(menus) -> int:
 
 
 def _clean(menu) -> dict:
-    """The menu as a file holds it: no hotkey, no capture folder, no icon path, and no Tool or Project path. Their paths
+    """The menu as a file holds it: no hotkey, no capture folder, no icon path, and no Tool, Project or Layout path. Their paths
     are of this PC (they usually hold the Windows user name) and an empty one is not valid, so the item becomes an empty
     slot that keeps its place; in steps the action is removed, and steps left with nothing become an empty slot."""
     out = copy.deepcopy(menu) if isinstance(menu, dict) else {}
