@@ -187,7 +187,7 @@ Menu rows show the menu's title, id, hotkey (or a small submenu icon when it has
 
 - **Grow:** "At a radius of 145 px this ring holds 9 items. With 11 it grows to 160 px." When the grown ring would not fit on your screen, it adds "It is too big for this screen, so it is pushed against the edges." and the note turns amber.
 - **Second ring:** "This ring is full: 3 items go on a second ring."
-- **More slot:** "This ring is full: 4 items are in the More submenu."
+- **More slot:** "This ring is full: 4 items are in the More submenu." The number is what **More** opens with, so it leaves out empty slots and items that cannot be used, which a submenu does not show.
 
 A **Change in Look** link opens the **When full** group for that menu.
 

@@ -811,7 +811,8 @@ class Api(webapi.LibraryApi, webapi.TagApi):
         indices of the fan submenus to show open ([2], or [2, 1] for a fan inside it). With a fan open the
         image is not square around the ring: width, height and centre (x, y) place the ring in it. menu_id may be
         a "more:<id>" menu (the rest of a paged menu). fit: how the items compare with what the ring holds at its
-        radius (see _fit); layout: the renderer's layout map when it gives one."""
+        radius (see _fit); layout: the renderer's layout map when it gives one, and with a More slot its full also
+        says more_items, how many items More opens with."""
         loaded, problems = self._load_dict(cfg)
         paged = isinstance(menu_id, str) and menu_id.startswith(expand.MORE_PREFIX)
         if loaded is None or not isinstance(menu_id, str) or (menu_id not in loaded.menus and not paged):
@@ -829,6 +830,9 @@ class Api(webapi.LibraryApi, webapi.TagApi):
                           open_path=[int(i) for i in open_path] if open_path else None)
         out = self._ring_result(im, problems)
         out["fit"] = self._fit(menu.look or loaded.ring, menu.fan, count)
+        full = out.get("layout", {}).get("full")
+        if full and full.get("more_slot") is not None:
+            full["more_items"] = len(ex._whole(expand.MORE_PREFIX + menu_id).items)
         return out
 
     @staticmethod

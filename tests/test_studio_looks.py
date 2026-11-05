@@ -298,6 +298,24 @@ def test_preview_ring_accepts_more_menus(api):
     assert rest["problems"] == []
 
 
+def test_preview_ring_says_how_many_items_more_opens_with(api):
+    def more_items(tail, menu="main"):
+        cfg = cfg_of(n=8, look={"when_full": "more"})
+        cfg["menus"]["main"]["items"] += tail
+        return api.preview_ring(cfg, menu)["layout"]["full"]["more_items"]
+
+    brushes = [{"brush": n} for n in ("X", "Y", "Z", "W")]
+    assert more_items(brushes) == 4
+    # More leaves out empty slots, and the items the loader holds as empty: no target, or a file it cannot use
+    assert more_items([brushes[0], {"empty": True}, {"brush": ""}, brushes[1]]) == 2
+    assert more_items(brushes[:3] + [{"layout": "D:/nope.txt"}]) == 3
+    # A page that has a More slot of its own counts what is behind that one
+    long = [{"brush": f"L{i}"} for i in range(12)]
+    assert more_items(long) == 12 and more_items(long, "more:main") == 12 - 8
+    # With nothing behind it there is no More slot to count for
+    assert "more_items" not in api.preview_ring(cfg_of(n=5), "main")["layout"]["full"]
+
+
 def test_preview_ring_of_a_more_menu_that_does_not_exist(api):
     res = api.preview_ring(cfg_of(n=3, look={"when_full": "more"}), "more:main")
     assert res["image"] is None and res["problems"]
