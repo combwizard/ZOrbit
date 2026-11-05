@@ -4,7 +4,14 @@ All notable changes to this project are listed here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.19.0] - 2026-11-05
+
+ZOrbit 0.19.0 lets other programs drive the ring. `ZOrbit.exe --open`, `--pick`, `--press` and the rest pass a
+command to the running app, so a Stream Deck, tablet software or a script can open a menu or press a slot. New
+**Capture**, **Tool** and **Project** items save the document as a PNG, load a tool or open a project with no
+dialog, and Studio suggests your ZBrush macros for a **Press** slot. **Copy report** on the **Status** screen
+gathers what a bug report needs, with your user name and folders hidden, and Studio and the browser can be resized
+from every edge.
 
 ### Added
 
@@ -12,7 +19,6 @@ All notable changes to this project are listed here. The format follows
 - **Copy report** on Studio's **Status** screen copies what a bug report needs in one block: the versions, your ZBrush installs, the **Status** cards and the ends of the logs, with your Windows user name and folders hidden. **Report a bug** next to it opens the bug form with the versions filled in.
 - A **Next profile hotkey** in **Settings > Behaviour** (Full mode) steps to the next profile while ZBrush is in front, the same as `ZOrbit.exe --profile next`. Each profile has its own.
 - **Quit hidden browser after** in **Settings > Behaviour** (Full mode) quits a hidden browser that the app started once it has sat unused for that many minutes, to give back its memory. Off by default; the next press starts it again.
-
 - Studio's path field suggests the macros with a button in your ZBrush's **Macro** palette, as `Macro:Misc:...` paths, so a **Press** slot can run one without typing its path.
 - A **Capture** item saves ZBrush's document as a PNG in a folder, with no dialog (Full mode). Pick the folder with **Browse...** in Studio, or leave it empty for the **ZBrush** folder in your **Pictures** folder (Windows' own, wherever you have moved it).
 - **Tool** and **Project** items load a `.ZTL` tool or open a `.ZPR` project, or the newest project in a folder, with no dialog (Full mode). Pick the file with **Browse...** in Studio. Their paths stay out of an exported menu.
@@ -960,6 +966,7 @@ First public release.
   only brushes included with ZBrush.
 - Documentation: README, user guide, third-party notices and contributing guide.
 
+[0.19.0]: https://github.com/combwizard/zorbit/releases/tag/v0.19.0
 [0.18.1]: https://github.com/combwizard/zorbit/releases/tag/v0.18.1
 [0.18.0]: https://github.com/combwizard/zorbit/releases/tag/v0.18.0
 [0.17.1]: https://github.com/combwizard/zorbit/releases/tag/v0.17.1
