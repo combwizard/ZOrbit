@@ -1,6 +1,6 @@
 """Draws the ring pictures in docs/images (ring.png, ring-light.png, ring-zbrush.png, fan.png, tag-colours.png,
 animations.png, the look pictures slot-shapes.png, hub-styles.png, slot-styles.png, looks.png, second-ring.png,
-more-slot.png and empty-slots.png, and the three GIFs) with the real renderer, zorbit/ring.py, so they follow the ring's look whenever it
+more-slot.png and empty-slots.png, and the GIFs) with the real renderer, zorbit/ring.py, so they follow the ring's look whenever it
 changes. No window is opened and no ZBrush is needed, but the brush pictures come from the installed ZBrush's
 presets, so a ZBrush has to be installed.
 
@@ -17,6 +17,7 @@ Run: python tools/ring_shots.py                         (every picture)
      python tools/ring_shots.py --out DIR ...           (somewhere else than docs/images, to look first)
 """
 import atexit
+import colorsys
 import dataclasses
 import glob
 import math
@@ -405,24 +406,28 @@ def shot_more_slot(w):
     return canvas
 
 
-def save_gif(path, frames, durations):
-    """A looping GIF. One palette for every frame, and a frame the same as the one before is dropped (its time added
-    to the one kept), so the file stays small enough to put in the README."""
+def save_gif(path, frames, durations, chapters=None):
+    """A looping GIF. One palette for every frame (or for every chapter, when chapters gives each frame's number), and
+    a frame the same as the one before is dropped (its time added to the one kept), so the file stays small enough to
+    put in the README."""
     keep = []
-    for f, ms in zip(frames, durations):
-        if keep and keep[-1][0].tobytes() == f.tobytes():
+    for f, ms, ch in zip(frames, durations, chapters or [0] * len(frames)):
+        if keep and keep[-1][2] == ch and keep[-1][0].tobytes() == f.tobytes():
             keep[-1][1] += ms
         else:
-            keep.append([f, ms])
-    step = max(1, len(keep) // 16)
-    sample = [f for f, _ in keep[::step]]
-    sheet = Image.new("RGB", (sample[0].width, sample[0].height * len(sample)))
-    for i, f in enumerate(sample):
-        sheet.paste(f, (0, i * f.height))
-    palette = sheet.quantize(256, method=Image.Quantize.MEDIANCUT, dither=Image.Dither.NONE)
-    out = [f.quantize(palette=palette, dither=Image.Dither.NONE) for f, _ in keep]
-    out[0].save(path, save_all=True, append_images=out[1:], duration=[ms for _, ms in keep], loop=0,
-                optimize=False, disposal=1)
+            keep.append([f, ms, ch])
+    palettes = {}
+    for ch in {k[2] for k in keep}:
+        some = [k[0] for k in keep if k[2] == ch]
+        sample = some[::max(1, len(some) // 16)]
+        sheet = Image.new("RGB", (sample[0].width, sample[0].height * len(sample)))
+        for i, f in enumerate(sample):
+            sheet.paste(f, (0, i * f.height))
+        # 255: Pillow needs a free colour to make the pixels that did not change transparent (optimize=True)
+        palettes[ch] = sheet.quantize(255, method=Image.Quantize.MEDIANCUT, dither=Image.Dither.NONE)
+    out = [f.quantize(palette=palettes[ch], dither=Image.Dither.NONE) for f, _, ch in keep]
+    out[0].save(path, save_all=True, append_images=out[1:], duration=[k[1] for k in keep], loop=0,
+                optimize=True, disposal=1)
 
 
 # --- the GIFs ----------------------------------------------------------------------------------------
@@ -744,6 +749,304 @@ def shot_slot_move(w):
     return out, times
 
 
+# --- the trailer -------------------------------------------------------------------------------------
+TRAILER_BOX = (480, 485)                       # where the ring stays, always; the caption goes under it
+TRAILER_SIZE = (480, 548)
+TRAILER_SCALE = 0.92
+TRAILER_SWEEP_MS = 60                          # a slider or a zoom: one frame every so long, to keep the file small
+TRAILER_PACE = 1.15                            # every hold and slider takes this much longer than shot_trailer says
+TRAILER_MARGIN = 10                            # what fit() leaves clear inside the box
+
+
+def open_ages(opened, clock, open_path):
+    """{fan path: seconds since it opened} for the fans on open_path, None for one that has settled."""
+    ages = {}
+    for k in range(1, len(open_path) + 1):
+        age = round(clock - opened.get(open_path[:k], clock), 3)
+        ages[open_path[:k]] = None if age > 0.5 else age
+    return ages
+
+
+class Trailer:
+    """One ring on a canvas of a fixed size, whose settings change under a caption. The cursor glides to the slot a
+    frame hovers, and a slot only lights up once the cursor is there. fit() eases the ring smaller and aside when
+    something would not fit (a fan, a full ring), so the canvas never grows. Anything that still leaves the box is
+    listed in self.clipped."""
+
+    def __init__(self, w):
+        self.w = w
+        self.frames, self.times, self.chapters = [], [], []
+        self.chapter = 0
+        self.zoom, self.zoom_to = TRAILER_SCALE, TRAILER_SCALE
+        self.shift, self.shift_to = (0.0, 0.0), (0.0, 0.0)
+        self.cur = (40.0, 60.0)
+        self.clock = 0.0
+        self.opened = {}                       # fan path -> when it opened
+        self.was_open = ()
+        self.clipped = set()
+        self.last = (None, None)
+
+    def next_chapter(self):
+        self.chapter += 1
+
+    def put(self, canvas, ms):
+        if self.frames and self.chapters[-1] == self.chapter and self.frames[-1].tobytes() == canvas.tobytes():
+            self.times[-1] += ms
+        else:
+            self.frames.append(canvas)
+            self.times.append(ms)
+            self.chapters.append(self.chapter)
+        self.clock += ms / 1000
+
+    def picture(self, menu, world, **state):
+        key = (menu, id(world), self.zoom, repr(sorted(state.items(), key=lambda kv: kv[0])))
+        if self.last[0] != key:
+            self.last = (key, (world or self.w).preview(menu, held=True, scale=self.zoom, **state))
+        return self.last[1]
+
+    def fit(self, *states):
+        """Sets where the ring eases to: small enough, and moved over enough, for all of these states to fit in the
+        box. A state is a dict of frame() arguments. No states: back to its normal size in the middle."""
+        self.zoom_to, self.shift_to = TRAILER_SCALE, (0.0, 0.0)
+        if not states:
+            return
+        left = top = right = bottom = 0.0
+        for st in states:
+            st = dict(st)
+            menu = st.pop("menu", "brushes")
+            world = st.pop("world", None) or self.w
+            im = world.preview(menu, held=True, scale=TRAILER_SCALE, **st)
+            cx, cy = im.info["centre"]
+            box = im.getchannel("A").getbbox()
+            left, top = min(left, box[0] - cx), min(top, box[1] - cy)
+            right, bottom = max(right, box[2] - cx), max(bottom, box[3] - cy)
+        room = 2 * TRAILER_MARGIN
+        k = min(1.0, (TRAILER_BOX[0] - room) / (right - left), (TRAILER_BOX[1] - room) / (bottom - top))
+        self.zoom_to = TRAILER_SCALE * k
+        self.shift_to = (-(left + right) / 2 * k, -(top + bottom) / 2 * k)
+
+    def ease_view(self):
+        self.zoom += (self.zoom_to - self.zoom) * 0.3
+        if abs(self.zoom - self.zoom_to) < 0.003:
+            self.zoom = self.zoom_to
+        x, y = (self.shift[i] + (self.shift_to[i] - self.shift[i]) * 0.3 for i in (0, 1))
+        self.shift = (self.shift_to[0] if abs(x - self.shift_to[0]) < 0.5 else x,
+                      self.shift_to[1] if abs(y - self.shift_to[1]) < 0.5 else y)
+
+    def frame(self, title, value, menu="brushes", hover=None, open_path=(), at=None, world=None, bg=BG,
+              ink=(TEXT, MUTED), ms=FRAME_MS, **state):
+        """One frame. state goes to World.preview (look, styles, fields, tagged, animation, t)."""
+        self.ease_view()
+        open_path = tuple(open_path)
+        im = self.picture(menu, world, hover=hover, open_path=list(open_path) or None,
+                          open_age=open_ages(self.opened, self.clock, open_path), **state)
+        if hover is not None and "hover_at" in im.info:
+            at = (im.info["hover_at"][0] - im.info["centre"][0] + CURSOR_OFFSET[0],
+                  im.info["hover_at"][1] - im.info["centre"][1] + CURSOR_OFFSET[1])
+        if at is not None:
+            x, y = (self.cur[i] + (at[i] - self.cur[i]) * 0.3 for i in (0, 1))
+            self.cur = (at[0] if abs(x - at[0]) < 0.6 else x, at[1] if abs(y - at[1]) < 0.6 else y)
+            if hover is not None and (self.cur[0] - at[0]) ** 2 + (self.cur[1] - at[1]) ** 2 > (28 * self.zoom) ** 2:
+                open_path = self.was_open              # still on its way: nothing lit, no new fan
+                im = self.picture(menu, world, hover=None, open_path=list(open_path) or None,
+                                  open_age=open_ages(self.opened, self.clock, open_path), **state)
+        self.opened = {open_path[:k]: self.opened.get(open_path[:k], self.clock)
+                       for k in range(1, len(open_path) + 1)}
+        self.was_open = open_path
+        cx, cy = TRAILER_BOX[0] / 2 + self.shift[0], TRAILER_BOX[1] / 2 + self.shift[1]
+        x, y = int(round(cx - im.info["centre"][0])), int(round(cy - im.info["centre"][1]))
+        box = im.getchannel("A").getbbox()
+        if box and (x + box[0] < 0 or y + box[1] < 0 or x + box[2] > TRAILER_BOX[0] or y + box[3] > TRAILER_BOX[1]):
+            self.clipped.add(f"{title}: {value}")
+        canvas = Image.new("RGBA", TRAILER_SIZE, bg + (255,))
+        canvas.paste(im, (x, y), im)
+        canvas.paste(bg + (255,), (0, TRAILER_BOX[1], TRAILER_SIZE[0], TRAILER_SIZE[1]))
+        with_cursor(canvas, cx + self.cur[0], cy + self.cur[1])
+        caption(canvas, ((title, font("segoeuib.ttf", 19), TRAILER_BOX[1] + 19, ink[0]),
+                         (value, font("segoeui.ttf", 15), TRAILER_BOX[1] + 44, ink[1])))
+        self.put(canvas.convert("RGB"), ms)
+
+    def settle(self, title, value, **state):
+        """Frames of this state until the ring is where fit() said. A fan opens after this, so it opens inside the box."""
+        while self.zoom != self.zoom_to or self.shift != self.shift_to:
+            self.frame(title, value, ms=TRAILER_SWEEP_MS, **state)
+
+    def hold(self, title, value, seconds, **state):
+        for _ in range(max(1, round(seconds * TRAILER_PACE * 1000 / FRAME_MS))):
+            self.frame(title, value, **state)
+
+    def steps(self, title, values, seconds, **common):
+        """One setting going through its values: values is [(the value to show, frame arguments), ...]."""
+        for value, state in values:
+            self.hold(title, value, seconds, **{**common, **state})
+
+    def sweep(self, title, fmt, stops, seconds, state, **common):
+        """A slider moved smoothly through stops. state(v) gives the frame arguments for the value v."""
+        n = max(1, round(seconds * TRAILER_PACE * 1000 / TRAILER_SWEEP_MS / (len(stops) - 1)))
+        for a, b in zip(stops, stops[1:]):
+            for k in range(1, n + 1):
+                v = a + (b - a) * ease(k / n)
+                self.frame(title, fmt.format(v), ms=TRAILER_SWEEP_MS, **{**common, **state(v)})
+
+    def play(self, title, value, animation, seconds, after=0.25, **common):
+        """The ring opening around the cursor, with this open animation."""
+        self.cur = (0.0, 0.0)
+        for k in range(max(1, round(seconds * 1000 / FRAME_MS))):
+            self.frame(title, value, at=(0, 0), animation=animation, t=k * FRAME_MS / 1000, **common)
+        self.hold(title, value, after, at=(0, 0), **common)
+
+
+def hue(h):
+    r, g, b = colorsys.hsv_to_rgb(h % 1.0, 0.72, 0.97)
+    return f"#{round(r * 255):02x}{round(g * 255):02x}{round(b * 255):02x}"
+
+
+def shot_trailer(w):
+    """The ring's settings in turn on one ring, with a caption naming each the way Studio's Look screen does. It starts
+    on the ring opening, ends on the last look and loops straight back."""
+    w.fans(False)
+    t = Trailer(w)
+    items = w.cfg.menus["brushes"].items
+    empty = C.Item(label="", kind="empty", data={"empty": True})
+
+    t.next_chapter()
+    t.play("The ring", "as it starts", "smooth", 0.3, after=0.4)
+
+    t.sweep("Ring radius", "{:.0f} px", [145, 172, 105, 145], 1.5, lambda v: {"look": {"radius": round(v)}}, hover=1)
+    t.sweep("Slot size", "{:.0f} px", [72, 92, 46, 72], 1.5, lambda v: {"look": {"slot": round(v)}}, hover=1)
+
+    t.next_chapter()
+    t.steps("Slot shape", [(SHAPE_NAMES[s], {"look": {"slot_shape": s}})
+                           for s in looks.SLOT_SHAPES[1:] + looks.SLOT_SHAPES[:1]], 0.45, hover=2)
+    t.sweep("Corner roundness", "{:.0%}", [0.28, 0.0, 0.5, 0.28], 1.2,
+            lambda v: {"look": {"slot_shape": "rounded", "slot_corner": round(v, 3)}}, hover=2)
+    t.sweep("Rim width", "{:.0f} px", [2, 6, 0, 2], 0.9, lambda v: {"look": {"border_width": round(v)}}, hover=3)
+    t.sweep("Icon size", "{:.0%}", [1, 0.5, 1], 0.9, lambda v: {"look": {"icon_scale": round(v, 3)}}, hover=3)
+
+    t.next_chapter()
+    icon = {"fields": {"icon": HUB_ICON}}
+    t.steps("Hub style", [(HUB_NAMES[s], {"look": {"hub_style": s, "hub": HUB_BIG}, **icon})
+                          for s in looks.HUB_STYLES], 0.45, at=(0, 0))
+    t.sweep("Hub size", "{:.0f} px", [40, 64, 0, 40], 1.0, lambda v: {"look": {"hub_style": "ring", "hub": round(v)}},
+            at=(0, 0))
+    t.sweep("Hub glow", "{:.0%}", [1, 0, 1], 0.8,
+            lambda v: {"look": {"hub_style": "disc", "hub": HUB_BIG, "hub_glow": round(v, 3)}}, at=(0, 0))
+    t.steps("Hub colour", [(n, {"look": {"hub_style": "disc", "hub": HUB_BIG, "hub_color": c}})
+                           for n, c in (("Accent", "accent"), ("Highlight", "highlight"), ("Green", "#7bd88f"))],
+            0.3, at=(0, 0))
+
+    t.next_chapter()
+    t.steps("Glow colour", [("Automatic", {"look": {"glow_opacity": 0.9}, "hover": 4}),
+                            ("Highlight", {"look": {"glow_opacity": 0.9, "glow_color": "highlight"}, "hover": 5}),
+                            ("Green", {"look": {"glow_opacity": 0.9, "glow_color": "#7bd88f"}, "hover": 6}),
+                            ("Pink", {"look": {"glow_opacity": 0.9, "glow_color": "#ff6fb5"}, "hover": 0})], 0.5)
+    t.sweep("Glow strength", "{:.0%}", [0.55, 1, 0, 0.55], 1.0, lambda v: {"look": {"glow_opacity": round(v, 3)}},
+            hover=0)
+    t.steps("Labels", [("Icon only", {"look": {"labels": "none"}}), ("Icon and name", {})], 0.45, hover=1)
+    t.steps("Label colour", [(n, {"look": {"label_color": c}})
+                             for n, c in (("Highlight", "highlight"), ("Accent", "accent"), ("Green", "#7bd88f"))],
+            0.3, hover=1)
+
+    t.next_chapter()
+    t.sweep("Colours", "Accent and lines", [0.05, 1.05], 1.8,
+            lambda v: {"look": {"colors": {"accent": hue(v), "lines": hue(v)}}}, hover=1)
+    t.next_chapter()
+    t.hold("Theme", "Dark", 0.6, hover=1)
+    t.next_chapter()
+    light = World("light")
+    light.fans(False)
+    t.hold("Theme", "Light", 0.7, hover=1, world=light, bg=BG_LIGHT, ink=((27, 28, 32), (70, 72, 80)))
+    scheme = stock_scheme()
+    if scheme is not None:
+        t.next_chapter()
+        zbrush_colors.current = lambda: scheme
+        zb = World("zbrush")
+        zb.fans(False)
+        t.hold("Theme", "Match ZBrush", 0.7, hover=1, world=zb, bg=BG_ZBRUSH)
+
+    t.next_chapter()
+    its = list(items)
+    t.hold("Empty slots", "A full ring", 0.3, hover=1, fields={"items": its})
+    for n in (2, 6, 4, 0):
+        its = list(its)
+        its[n] = empty
+        t.hold("Empty slots", f"{items[n].label} deleted: its slot stays", 0.35, hover=1, fields={"items": its})
+    t.steps("Empty slots", [("They take the slot shape", {"look": {"slot_shape": s}})
+                            for s in ("hexagon", "diamond", "rounded")], 0.35, hover=1, fields={"items": its})
+
+    t.next_chapter()
+    styles = {}
+    for name, i, style, what in (("Standard", 0, {"size": 1.25}, "bigger"),
+                                 ("ClayBuildup", 1, {"label_color": "highlight"}, "label colour"),
+                                 ("Move", 2, {"border_color": "#7bd88f"}, "rim colour"),
+                                 ("DamStandard", 3, {"slot_shape": "rounded", "slot_corner": 0.42}, "its own shape"),
+                                 ("TrimDynamic", 4, {"border_width": 6, "border_color": "highlight"}, "thick rim"),
+                                 ("hPolish", 5, {"glow_color": "#7bd88f"}, "glow colour"),
+                                 ("Inflate", 6, {"icon_scale": 0.6}, "smaller icon"),
+                                 ("Tools", 8, {"fill_color": "#5b4a9a"}, "fill colour")):
+        styles = {**styles, i: style}
+        t.hold("One slot", f"{name}: {what}", 0.4, hover=i, styles=styles)
+
+    t.next_chapter()
+    full = w.define("trailer-full", BRUSHES_14)
+    rings = {"menu": "trailer-full", "look": {"when_full": "rings"}}
+
+    def grow(n):
+        return {"menu": "trailer-full", "fields": {"items": full.items[:n]}, "look": {"when_full": "grow"}}
+
+    t.fit(dict(hover=0, **grow(14)), dict(hover=11, **rings))
+    t.settle("When full: Grow", "9 brushes", hover=8, **grow(9))
+    for n in range(9, 15):
+        t.hold("When full: Grow", f"{n} brushes", 0.22, hover=n - 1, **grow(n))
+    t.hold("When full: Second ring", "14 brushes", 0.9, hover=11, **rings)
+    t.hold("When full: More slot", "the first eight, then More", 0.9, hover=8, menu="trailer-full",
+           look={"when_full": "more"})
+    t.fit()
+
+    t.next_chapter()
+    t.steps("Tag colours", [(n, {"look": {"tag_colors": v, "tag_band": "none", "tag_glow_opacity": 0.7}})
+                            for n, v in (("Off", "none"), ("Icon tint", "tint"), ("Glow", "glow"),
+                                         ("Tint and glow", "both"))], 0.45, menu="tags", tagged=True, hover=0)
+    t.steps("Tag colours: Band", [(n, {"look": {"tag_band": n.lower()}})
+                                  for n in ("Hairline", "Narrow", "Medium", "Wide")], 0.3, menu="tags", tagged=True,
+            hover=0)
+
+    # The canvas never grows: the ring zooms out first, and only then does the fan open.
+    t.next_chapter()
+    w.fans(True)
+    open_more = {"hover": (7,), "open_path": [7]}
+    in_more = {"hover": (7, 2), "open_path": [7]}
+    open_tools = {"hover": (8,), "open_path": [8]}
+    on_sub = {"hover": (8, 7), "open_path": [8]}
+    open_sub = {"hover": (8, 7), "open_path": [8, 7]}
+    in_sub = {"hover": (8, 7, 3), "open_path": [8, 7]}
+    beside = "A submenu opens beside its slot"
+    nested = "One fan inside another"
+    t.hold("Fans", beside, 0.35, hover=(7,))
+    t.fit(open_more, in_more)
+    t.settle("Fans", beside, hover=(7,))
+    t.hold("Fans", beside, 0.5, **open_more)
+    t.hold("Fans", beside, 0.5, **in_more)
+    t.fit(open_more, in_more, open_tools, on_sub)
+    t.settle("Fans", nested, **in_more)
+    t.hold("Fans", nested, 0.5, **open_tools)
+    t.hold("Fans", nested, 0.3, **on_sub)
+    t.fit(open_tools, on_sub, open_sub, in_sub)
+    t.settle("Fans", nested, **on_sub)
+    t.hold("Fans", nested, 0.4, **open_sub)
+    t.hold("Fans", nested, 0.6, **in_sub)
+    t.hold("Fans", nested, 0.3, hover=1)
+    t.fit()
+    t.settle("Fans", nested, hover=1)
+    w.fans(False)
+
+    t.next_chapter()
+    t.steps("Looks", [(b["label"], {"look": name}) for name, b in looks.BUILTIN.items()], 0.6, hover=1)
+    if t.clipped:
+        print("the trailer leaves its box at:", "; ".join(sorted(t.clipped)))
+    return t.frames, t.times, t.chapters
+
+
 # name -> (file, function, what it shows)
 SHOTS = {
     "ring": ("ring.png", shot_ring, "the starter Brushes menu in hold mode, ClayBuildup hovered, cursor on it"),
@@ -780,6 +1083,10 @@ SHOTS = {
                    "five brushes with a Capture, a Tool and a Project slot, the Project slot hovered"),
     "command-open": ("command-open.gif", shot_command_open,
                      "the command lights up, the ring opens at the cursor, a flick picks ClayBuildup"),
+    "trailer-readme": ("trailer-readme.gif", shot_trailer,
+                       "one ring going through the ring settings in turn, with a caption naming each: sizes, shapes, "
+                       "hub, glow, labels, colours, theme, empty slots, slot styles, when full, tag colours, fans and "
+                       "looks, for the top of the README"),
 }
 
 
