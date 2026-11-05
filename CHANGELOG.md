@@ -14,6 +14,7 @@ All notable changes to this project are listed here. The format follows
 
 - A folder that cannot be read (its drive unplugged, the folder renamed) keeps the items it had and no longer empties the list or holds up the other folders. The browser and the Library show the reason in a line above the list.
 - The thumbnail cache keeps at least twice as many pictures as the library has items, instead of a fixed 8,000.
+- The Library no longer shows the path of the tags file under **Manage tags...**. The Tags page of the docs says where the file is.
 
 ### Fixed
 

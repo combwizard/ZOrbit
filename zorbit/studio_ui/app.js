@@ -2901,7 +2901,6 @@ async function tagCall(name, ...args) {
 const railDotsSoon = debounce(() => { if (S.ready && !S.fatal) { refreshAppDown(); refreshZsBadge(); } }, 600);
 function tagsChanged(keysChanged = false) {
   if (keysChanged && !POPOUT && S.cfg && S.ready) { validateSoon(); railDotsSoon(); }   // the problems pill and the row markers name tags that may be gone (or back)
-  for (const el of $$('.tag-path')) { setText(el, S.tagsPath); el.hidden = !S.tagsPath; }
   for (const b of browsers.values()) b.updateTags();
   if (R.itemList) R.itemList();
   if (R.libTarget) R.libTarget();
@@ -3578,8 +3577,7 @@ function makeBrowser({ compact, st, host = STUDIO_HOST, kindUi = compact ? 'comp
         st.tags.size > 1 ? tagModeSwitch() : null,
         userTags.length ? h('div', { class: 'tagchips' }, chips) : h('div', { class: 'tag-none fhint' }, `No tags yet. Select ${W().many} and press Tag to make one.`),
         S.tagsErr ? h('div', { class: 'fhint bad' }, S.tagsErr) : null,
-        isFull() || POPOUT ? manageTagsBtn('btn small tag-manage') : null,
-        isFull() && !POPOUT ? h('div', { class: 'fhint mono tag-path', hidden: !S.tagsPath }, S.tagsPath) : null].filter(Boolean));
+        isFull() || POPOUT ? manageTagsBtn('btn small tag-manage') : null].filter(Boolean));
     }
     if (fk !== null) { const t = $$('[data-tk], [data-tm]', host).find(x => (x.dataset.tk !== undefined ? x.dataset.tk : 'tm:' + x.dataset.tm) === fk); if (t) t.focus(); }
   }

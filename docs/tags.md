@@ -39,7 +39,7 @@ A [Tag](menus.md#tag) slot opens a fan of the tag's items. A fan holds 12 slots.
 
 ## Managing tags
 
-**Manage tags...** (under the chips in the Library; it needs [Full mode](studio.md#simple-and-full-mode)) opens the tag manager. The path of the tags file is shown under the button. Each row has:
+**Manage tags...** (under the chips in the Library; it needs [Full mode](studio.md#simple-and-full-mode)) opens the tag manager. Each row has:
 
 - a swatch: click it for the eight preset colours, or type any `#rrggbb` value;
 - the name: edit it and press Enter, or leave the field, to rename the tag. If another tag already has that name, the rename is refused and the name goes back, because no two tags can share a name. The row then offers **Merge into** that tag, or **keep them separate**, which only dismisses the message so you can type another name. Merging asks you to confirm first (**Cancel** is the default), then puts the items of this tag on the other one (in the same place in each item's list, so the colour cue stays) and removes this tag. Ring items that used this tag (**Tag** and **Browser** slots) use the other one instead. In Studio that change is in the editor until you press **Save**, and **Undo** takes it back. In the browser window it is written to `radial.json` at once (the old file is kept as `radial.json.bak`), and the ring follows within a moment. If Studio is open with unsaved changes, its next **Save** asks what to do about the changed file;
