@@ -644,6 +644,8 @@ body.dragging .irow:hover { background: transparent; }
 .kind.on.k-menu { color: var(--cyan); border-color: color-mix(in srgb, var(--cyan) 50%, transparent); background: var(--cyan-wash); }
 .target-row { display: flex; align-items: center; gap: 10px; }
 .target-row .inp { flex: 1; width: auto; min-width: 0; }
+.target-row.browse-under { flex-wrap: wrap; gap: 8px; }                /* a path needs the whole width: its Browse buttons go on a row of their own */
+.target-row.browse-under .inp { flex: 1 0 100%; }
 .style-box { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
 .style-chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .style-chips .tag { text-transform: none; letter-spacing: 0; font: 600 12px/1 var(--font); padding: 4px 9px; border-radius: 99px; color: var(--accent); background: var(--accent-wash); border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent); }

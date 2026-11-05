@@ -2371,7 +2371,7 @@ function buildItemInspector() {
       } else combo(inp, q => matchOpts(isLib(k) ? libOpts(k) : pathOpts(), q), { thumb: isLib(k) ? k : null, mono: !isLib(k) });
     }
     const tlabel = isLib(k) ? KIND[k].label : { press: 'Button path', set: 'Slider or value path', toggle: 'Switch path', capture: 'Folder', menu: 'Submenu', ...FILE_LABEL }[k];
-    const wrap = h('div', { class: 'target-row' }, isLib(k) ? h('span', { class: 'tthumb' }) : null, inp, openBtn);
+    const wrap = h('div', { class: 'target-row' + (k === 'capture' || isFile ? ' browse-under' : '') }, isLib(k) ? h('span', { class: 'tthumb' }) : null, inp, openBtn);
     box.append(field(tlabel, wrap, hintEl));
     function updateHint() {
       const v = targetOf(it).trim(); hintEl.className = 'fhint'; hintEl.replaceChildren();
