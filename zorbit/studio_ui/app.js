@@ -325,11 +325,10 @@ function liveMenus() {
 }
 /* A tag slot whose tag does not exist stays usable: the loader keeps it as an empty slot and the Problems panel warns. */
 const itemUsable = it => actionValid(it, false) && (!('menu' in it) || liveMenus().has(it.menu));
-function usableIdx(menuId) {
+/* The ring's slots, as indices into menu.items. Every item holds its place, since config.py load draws one it cannot use as an empty slot. A menu it drops has no ring. */
+function slotIdx(menuId) {
   const m = menuOf(menuId);
-  const out = [];
-  if (m && Array.isArray(m.items)) { const live = liveMenus(); m.items.forEach((it, i) => { if (actionValid(it, false) && (!('menu' in it) || live.has(it.menu))) out.push(i); }); }
-  return out;
+  return m && Array.isArray(m.items) && liveMenus().has(menuId) ? m.items.map((_, i) => i) : [];
 }
 
 /* Builds an item with a tidy key order (action, value, label, icon). */
@@ -1851,9 +1850,9 @@ const svgEl = (name, attrs) => { const e = document.createElementNS(SVG_NS, name
 /* RingView lays a picture of the ring, an SVG overlay and (optionally) number badges in one box, so they move and scale together; the box is
    the whole picture, which with a fan open is not square and not centred on the ring. The overlay is drawn from the layout map that preview_ring
    sends with the picture (layout, in the picture's pixels): a mark for each slot in the slot's own shape, and the bar where a dropped item goes.
-   It picks as the ring does (ZLook.slotAt, ZLook.gapAt). While the layout does not fit the menu (count() usable items, a More slot allowing for
+   It picks as the ring does (ZLook.slotAt, ZLook.gapAt). While the layout does not fit the menu (count() slots, a More slot allowing for
    fewer), the marks are hidden and the hit tests answer null.
-     opts: { wrap, img, count(): usable items or null to trust the layout, badge(slot, i): the text of a number badge or null for none (omit for no badges) }
+     opts: { wrap, img, count(): the menu's slots or null to trust the layout, badge(slot, i): the text of a number badge or null for none (omit for no badges) }
      setShown(layout): the layout of the picture now in img.    place(fanBox, D, size): puts the box in wrap (fanBox: { w, h, cx, cy } or null).
      rebuild(): draws the marks again (after the layout, the size of the box or the number of items changed).
      paint({ hover, sel, moving, drop, gap }): ring indices (or -1/null), the slot a drop would land on, and the gap bar { x, y, ang, len, noop } or null.
@@ -2050,7 +2049,7 @@ function buildStage() {
   function fanPath() {
     const m = curMenu(); if (!m) return null;
     const at = hoverRing !== null ? itemOf(hoverRing) : S.itemIdx, j = at === null ? -1 : idxs.indexOf(at);
-    const it = j >= 0 ? m.items[at] : null, t = it && 'menu' in it ? menuOf(it.menu) : null;
+    const it = j >= 0 && itemUsable(m.items[at]) ? m.items[at] : null, t = it && 'menu' in it ? menuOf(it.menu) : null;      // an incomplete item is an empty slot on the ring: no fan
     if (it && 'tag' in it) return tagItemCount(it.tag) > 0 ? [j] : null;     // the expander turns it into a fan submenu of its items
     return t && t.fan === true && it.menu !== S.menuId ? [j] : null;
   }
@@ -2067,7 +2066,7 @@ function buildStage() {
   }
   function drawMarks() {
     paintSlotsBar();
-    idxs = usableIdx(S.menuId);
+    idxs = slotIdx(S.menuId);
     if (hoverRing !== null && hoverRing >= nSlots()) { hoverRing = null; wrap.classList.remove('over-slot'); }   // the ring shrank (undo, menu switch)
     if (gap && gap.k > nSlots()) gap = null;
     view.rebuild();
@@ -2089,6 +2088,8 @@ function buildStage() {
       info.replaceChildren(h('b', null, 'More'), h('span', { class: 'mono' }, ' ' + plural(idxs.length - (nSlots() - 1), 'item') + ' in a submenu')); info.classList.add('on');
     } else if (hoverRing !== null && m && m.items[itemOf(hoverRing)] && ZSlots.isEmpty(m.items[itemOf(hoverRing)])) {
       info.replaceChildren(h('b', null, 'Empty slot'), h('span', { class: 'mono' }, ' drop something here')); info.classList.add('on');
+    } else if (hoverRing !== null && m && m.items[itemOf(hoverRing)] && !itemUsable(m.items[itemOf(hoverRing)])) {
+      info.replaceChildren(h('b', null, itemLabel(m.items[itemOf(hoverRing)])), h('span', { class: 'mono' }, ' incomplete')); info.classList.add('on');
     } else if (hoverRing !== null && m && m.items[itemOf(hoverRing)]) {
       const it = m.items[itemOf(hoverRing)];
       info.replaceChildren(h('b', null, itemLabel(it)), h('span', { class: 'mono' }, ' ' + KIND[kindOf(it)].label.toLowerCase() + (['steps', 'auto'].includes(kindOf(it)) ? '' : kindOf(it) === 'tag' ? ' / ' + tagName(it.tag) : kindOf(it) === 'browser' ? ' / ' + (it.browser ? tagName(it.browser) : 'all ' + K(it.kind).many) : ' / ' + targetOf(it))));
@@ -2153,7 +2154,7 @@ function buildStage() {
   function refresh() {
     const m = curMenu();
     paintSlotsBar();
-    idxs = usableIdx(S.menuId);
+    idxs = slotIdx(S.menuId);
     emptyEl.replaceChildren();
     const has = idxs.length > 0;
     if (!has) el.classList.remove('err', 'busy');
@@ -2161,7 +2162,7 @@ function buildStage() {
     if (!m) { emptyEl.append(emptyState('menus', 'No menu selected', 'Pick or create a menu on the left.')); return; }
     if (!has) {
       emptyEl.append(m.items.length
-        ? emptyState('alert', 'No usable items yet', 'Fill in the target of each item (see the problems panel). Incomplete items are skipped by the app.')
+        ? emptyState('alert', 'No usable items yet', 'Fill in the target of an item (see the problems panel). The ring opens once one item is complete.')
         : emptyState('plus', 'This menu is empty', 'Add an item from the Library tab or create one. The ring appears as soon as it has one.', { text: 'Add item', fn: () => addItem('brush') }));
       return;
     }
@@ -2477,8 +2478,8 @@ function styleField(m, i, it) {
   const chips = styleChips(S.menuId, i), has = isPlainObj(it.style) && Object.keys(it.style).length > 0;
   const line = chips.length ? h('div', { class: 'style-chips' }, chips.map(t => h('span', { class: 'tag' }, t))) : h('div', { class: 'locked-line' }, has ? 'Its own style says nothing the menu does not already say' : "Follows the menu's look");
   if (!isFull()) return has ? field('Style', line, ['Set in Full mode. ', linkBtn('Edit in Full mode', () => setMode('full'))]) : null;
-  const usable = usableIdx(S.menuId).includes(i);
-  const edit = h('button', { class: 'btn small', type: 'button', disabled: !usable, title: usable ? 'Open the Look screen at this slot' : 'This item is incomplete, so the ring has no slot for it',
+  const usable = slotIdx(S.menuId).includes(i);
+  const edit = h('button', { class: 'btn small', type: 'button', disabled: !usable, title: usable ? 'Open the Look screen at this slot' : 'This menu has nothing complete yet, so it has no ring',
     onclick: () => goToProblem({ kind: 'look', level: 'menu', menuId: S.menuId, slot: i, key: null, group: null }) }, icon('look', 12), 'Edit in Look');
   const reset = h('button', { class: 'btn small', type: 'button', disabled: !has, onclick: () => {
     sealSnap(); delete it.style; commit({ inspector: true });
@@ -5382,7 +5383,7 @@ function describeProblem(raw) {
     if ((r = /^: '(\w+)' must be a non-empty string$/.exec(t))) return 'needs a ' + (own(TARGET_NOUN, r[1]) ? TARGET_NOUN[r[1]] : 'target');
     if ((r = /^: (\w+) name (.+) must not contain /s.exec(t))) return `has the ${r[1]} name ${r[2]}, which looks like a path. Use only the name, without \\ / : or ..`;
     if ((r = /^: submenu (.+) does not exist$/s.exec(t))) return `opens the submenu ${unq(r[1])}, which does not exist`;
-    if ((r = /^: submenu (.+) has no usable items$/s.exec(t))) return `opens ${titleOf(unq(r[1]))}, which has no usable items, so this slot is dropped`;
+    if ((r = /^: submenu (.+) has no usable items$/s.exec(t))) return `opens ${titleOf(unq(r[1]))}, which has no usable items, so this slot stays empty`;
     if ((r = /^: unknown setting (.+)$/s.exec(t))) return `has an unknown setting ${r[1].replace(/\s*\(did you mean .*$/s, '')}.` + didYouMean(r[1]);
     if ((r = /^: tag (.+) does not exist; the slot stays empty$/s.exec(t))) return `uses the tag ${unq(r[1])}, which does not exist, so the slot stays empty`;
     if ((r = /^: tag (.+) does not exist; the browser opens unfiltered$/s.exec(t))) return `filters by the tag ${unq(r[1])}, which does not exist, so the browser opens unfiltered`;
@@ -5499,7 +5500,7 @@ function menuWarn(id) {
 function itemWarn(menuId, i, ok) {
   const tips = S.problemTips.get(menuId + '#' + i);
   if (ok && !tips) return null;
-  const text = tips ? tips.join('\n') : 'This item is incomplete and will be skipped';
+  const text = tips ? tips.join('\n') : 'This item is incomplete. The ring shows an empty slot here until you fill it in.';
   return h('span', { class: 'iwarn', role: 'img', title: text, 'aria-label': 'Problem: ' + text.replace(/\n/g, '. ') }, icon('alert', 14));
 }
 function paintMarkers() {
@@ -5513,7 +5514,7 @@ function paintMarkers() {
     const menuId = row.dataset.menu, i = +row.dataset.i, want = S.problemTips.get(menuId + '#' + i), cur = $('.iwarn', row);
     const m = menuOf(menuId), bad = !m || !m.items[i] || !itemUsable(m.items[i]);
     if (!want && !bad) { if (cur) cur.remove(); return; }
-    const title = want ? want.join('\n') : 'This item is incomplete and will be skipped';
+    const title = want ? want.join('\n') : 'This item is incomplete. The ring shows an empty slot here until you fill it in.';
     if (cur) { cur.title = title; cur.setAttribute('aria-label', 'Problem: ' + title.replace(/\n/g, '. ')); return; }
     const acts = $('.iacts', row), el = itemWarn(menuId, i, !bad);
     if (el) row.insertBefore(el, acts);
@@ -6418,7 +6419,7 @@ const screenKey = e => { const m = /^Digit([1-6])$/.exec(e.code || ''); return m
 const buildLookScreenLazy = root => { if (typeof window.buildLookScreen === 'function') window.buildLookScreen(root); else root.replaceChildren(h('div', { class: 'fhint warn', style: { padding: '24px' } }, 'The Look screen could not be loaded.')); };
 /* What look-screen.js needs from this closure: it is loaded after app.js and cannot see inside it. */
 window.ZStudio = { h, $, $$, S, R, icon, iconBtn, linkBtn, card, foldSection, foldOpen, foldIsOpen, foldSum, choiceCards, sliderRow, sizeRow, toggleSwitch, call, clamp, own, normHex,
-  commit, toast, ring, ringNum, ranges, ensureRing, tidyRing, usableIdx, menuOf, kindOf, isLib, firstTag, isFull, setMode, fullOnlyChanges,
+  commit, toast, ring, ringNum, ranges, ensureRing, tidyRing, slotIdx, menuOf, kindOf, isLib, firstTag, isFull, setMode, fullOnlyChanges,
   RingLoader, SAMPLE_MENU, COLOR_INFO, FALLBACK_DEFAULTS, showScreen, railTitle, makePlayer, FrameLoader, ANIM_INFO,
   lookCtx, clearedText, modal, promptModal, popover, undoToast, sealSnap, previewSoon, plural, hasMenu, selectMenu, debounce, FALLBACK_RANGES, makeRingView, itemLabel };
 const SCREEN_BUILD = { menus: buildMenusScreen, look: buildLookScreenLazy, library: buildLibraryScreen, settings: buildSettingsScreen, status: buildStatusScreen, setup: buildSetupScreen };

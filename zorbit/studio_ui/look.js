@@ -698,7 +698,7 @@
     for (let k = 0; k < n; k++) pts.push([cx + big * Math.cos(a0 + 2 * Math.PI * k / n), cy + big * Math.sin(a0 + 2 * Math.PI * k / n)]);
     return pts;
   }
-  /* Does the layout belong to a menu with n usable items? A paged menu (a More slot) draws fewer slots than it has items. */
+  /* Does the layout belong to a menu with n slots? A paged menu (a More slot) draws fewer slots than it has items. */
   function layoutFits(layout, n) {
     if (!layout || !Array.isArray(layout.slots) || !layout.slots.length) return false;
     const k = layout.slots.length, more = !!layout.full && layout.full.more_slot !== null && layout.full.more_slot !== undefined;

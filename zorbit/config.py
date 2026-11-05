@@ -77,13 +77,16 @@ Schema (all keys optional except menus):
                                                  tab (default brush); a tag key filters it ("" = everything)
   {"empty": true}                                a slot that holds nothing: drawn as a faint outline, never picked
 
+An item that cannot be used (no target yet, a submenu that is gone) is reported and drawn as an empty slot, so the slots
+after it stay where they are. A menu with nothing but such items is dropped.
+
 Menu ids starting with "tag:" are reserved for the submenus a tag slot opens, and ids starting with "more:" for the
 More submenu of a full ring. Ids that are names a JavaScript object already has (__proto__, constructor, toString and the like) are reserved too.
 """
 import json
 import os
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 import looks as L
 import theme as T
@@ -444,6 +447,12 @@ def _default_label(a: dict, menus_raw: dict, tags=None) -> str:
     return "?"
 
 
+def _held_slot(it, errors, where) -> Item:
+    """The empty slot an item that cannot be used becomes. It keeps the item's style, so Look still shows it."""
+    style = L.check_style(it["style"], errors, where) if isinstance(it, dict) and "style" in it else {}
+    return Item(label="", kind="empty", data={"empty": True}, style=style)
+
+
 def default_ring(theme: str = "dark") -> dict:
     """DEFAULT_RING with the colours a theme gives by default (no "theme" key)."""
     out = json.loads(json.dumps(DEFAULT_RING))
@@ -541,14 +550,16 @@ def load(path: str, tags=None, theme: str = "dark") -> Config:
         for k in m:
             if k not in MENU_KEYS:
                 errors.append(f"menu {mid}: unknown setting {k!r}" + _did_you_mean(k, MENU_KEYS))
-        items = []
+        items = []              # (item number, Item); the number is None for a slot held for an unusable item
         for i, it in enumerate(m.get("items") or []):
             where = f"menu {mid} item {i + 1}"
             if not _check_action(it, errors, where):
+                items.append((None, _held_slot(it, errors, where)))
                 continue
             kind = next(k for k in ACTION_KEYS if k in it)
             if kind == "menu" and it["menu"] not in menus_raw:
                 errors.append(f"{where}: submenu {it['menu']!r} does not exist")
+                items.append((None, _held_slot(it, errors, where)))
                 continue
             for k in it:
                 if k == "glow":
@@ -572,27 +583,23 @@ def load(path: str, tags=None, theme: str = "dark") -> Config:
                                       data=_fix_paths({k: v for k, v in it.items()
                                                        if k not in ("label", "icon", "style", "glow")}),
                                       icon=icon, tag=it["tag"] if kind == "tag" else "", style=style)))
-        if not items:
+        if all(n is None for n, _ in items):
             errors.append(f"menu {mid}: no usable items")
             continue
         built[mid] = (m, items)
-    changed = True              # a submenu slot whose menu was dropped goes too, and may empty its own menu
+    changed = True              # a submenu slot whose menu was dropped is held too, and may leave its own menu with nothing
     while changed:
         changed = False
         for mid in list(built):
             m, items = built[mid]
-            keep = []
-            for n, it in items:
+            for pos, (n, it) in enumerate(items):
                 if it.kind == "menu" and it.data["menu"] not in built:
                     errors.append(f"menu {mid} item {n}: submenu {it.data['menu']!r} has no usable items")
                     changed = True
-                else:
-                    keep.append((n, it))
-            if not keep:
+                    items[pos] = (None, replace(it, label="", kind="empty", data={"empty": True}, icon=""))
+            if all(n is None for n, _ in items):
                 errors.append(f"menu {mid}: no usable items")
                 del built[mid]
-            else:
-                built[mid] = (m, keep)
     used_keys = {}
     for mid, (m, items) in built.items():
         hk = None

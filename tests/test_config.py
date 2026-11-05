@@ -633,9 +633,9 @@ def test_profile_section_with_an_unknown_setting_is_reported_with_a_suggestion(l
 # --- submenus and menus with nothing in them ----------------------------------------------------
 
 
-def test_submenu_pointing_at_a_missing_menu_is_dropped(load_menus):
+def test_submenu_pointing_at_a_missing_menu_holds_its_place(load_menus):
     cfg = load_menus({"main": one_item_menu({"menu": "ghost"}, {"brush": "Standard"})})
-    assert [it.kind for it in cfg.menus["main"].items] == ["brush"]
+    assert [it.kind for it in cfg.menus["main"].items] == ["empty", "brush"]
     assert problems(cfg, "menu main item 1: submenu 'ghost' does not exist")
 
 
@@ -658,10 +658,10 @@ def test_menu_whose_items_are_all_invalid_is_dropped(load_menus):
     assert problems(cfg, "menu bad: no usable items")
 
 
-def test_submenu_item_pointing_at_a_dropped_menu_is_dropped_too(load_menus):
+def test_submenu_item_pointing_at_a_dropped_menu_holds_its_place(load_menus):
     cfg = load_menus({"main": one_item_menu({"menu": "bad"}, {"brush": "Standard"}),
                       "bad": {"items": [{"nothing": 1}]}})
-    assert [it.kind for it in cfg.menus["main"].items] == ["brush"]
+    assert [it.kind for it in cfg.menus["main"].items] == ["empty", "brush"]
     assert problems(cfg, "menu main item 1: submenu 'bad' has no usable items")
 
 
@@ -670,7 +670,7 @@ def test_dropping_a_menu_cascades_up_through_menus_that_only_held_it(load_menus)
                       "mid": {"items": [{"menu": "bad"}]},
                       "bad": {"items": []}})
     assert list(cfg.menus) == ["main"]
-    assert [it.kind for it in cfg.menus["main"].items] == ["brush"]
+    assert [it.kind for it in cfg.menus["main"].items] == ["empty", "brush"]
     assert problems(cfg, "menu mid item 1: submenu 'bad' has no usable items")
     assert problems(cfg, "menu mid: no usable items")
     assert problems(cfg, "menu main item 1: submenu 'mid' has no usable items")
@@ -685,7 +685,7 @@ def test_a_menu_whose_only_item_is_a_dropped_submenu_is_dropped_with_its_hotkey(
 def test_item_numbers_in_problems_count_from_one_in_the_file(load_menus):
     cfg = load_menus({"main": one_item_menu({"brush": "A"}, {"brush": ""}, {"brush": "C"})})
     assert problems(cfg, "menu main item 2: 'brush' must be a non-empty string")
-    assert [it.label for it in cfg.menus["main"].items] == ["A", "C"]
+    assert [it.label for it in cfg.menus["main"].items] == ["A", "", "C"]
 
 
 def test_menus_missing_is_a_problem_and_no_menus(load):
@@ -751,7 +751,7 @@ def test_browser_item_kind_accepts_the_asset_kinds(load_menus, kind):
 def test_browser_item_kind_must_be_an_asset_kind(load_menus):
     cfg = load_menus({"main": one_item_menu({"browser": "", "kind": "tool"}, {"brush": "A"})})
     assert problems(cfg, "browser 'kind' must be one of brush, alpha, material, texture")
-    assert [it.kind for it in cfg.menus["main"].items] == ["brush"]
+    assert [it.kind for it in cfg.menus["main"].items] == ["empty", "brush"]
 
 
 def test_browser_item_value_must_be_a_string(load_menus):
@@ -1041,7 +1041,7 @@ def test_set_without_a_value_is_reported(load_menus):
 def test_set_value_must_be_a_number(load_menus, value):
     cfg = load_menus({"main": one_item_menu({"set": "Draw:Draw Size", "value": value}, {"brush": "A"})})
     assert problems(cfg, "menu main item 1: 'set' value must be a number")
-    assert len(cfg.menus["main"].items) == 1
+    assert [it.kind for it in cfg.menus["main"].items] == ["empty", "brush"]
 
 
 # --- paths that were wrong ----------------------------------------------------------------------
@@ -1099,7 +1099,7 @@ def test_a_capture_folder_is_a_full_path(load_menus, folder):
 def test_a_capture_folder_must_be_a_full_path(load_menus, folder):
     cfg = load_menus({"main": one_item_menu({"capture": folder}, {"brush": "A"})})
     assert problems(cfg, "menu main item 1: capture folder") and problems(cfg, "full path")
-    assert [it.kind for it in cfg.menus["main"].items] == ["brush"]
+    assert [it.kind for it in cfg.menus["main"].items] == ["empty", "brush"]
 
 
 @pytest.mark.parametrize("folder", ["//server/share/shots", "\\\\server\\share"])
@@ -1153,7 +1153,7 @@ def test_a_tool_is_a_full_path_to_a_ztl_file(load_menus, path):
                                   "Hero.ztl", "./Hero.ztl", "\\Users\\you\\Hero.ztl", "C:Hero.ztl", "/Hero.ztl"])
 def test_a_tool_must_be_a_full_path_ending_ztl(load_menus, path):
     cfg = load_menus({"main": one_item_menu({"tool": path}, {"brush": "A"})})
-    assert problems(cfg, "menu main item 1: tool") and [it.kind for it in cfg.menus["main"].items] == ["brush"]
+    assert problems(cfg, "menu main item 1: tool") and [it.kind for it in cfg.menus["main"].items] == ["empty", "brush"]
 
 
 @pytest.mark.parametrize("path", ["C:/Users/you/Projects/Hero.zpr", "C:\\Users\\you\\HERO.ZPR"])
@@ -1178,7 +1178,7 @@ def test_a_project_may_be_a_folder_with_a_dot_in_its_name_when_it_is_there(load_
                                   "Hero.zpr", "Projects", "./Blockout", "C:Blockout"])
 def test_a_project_must_be_a_full_path_to_a_zpr_file_or_a_folder(load_menus, path):
     cfg = load_menus({"main": one_item_menu({"project": path}, {"brush": "A"})})
-    assert problems(cfg, "menu main item 1: project") and [it.kind for it in cfg.menus["main"].items] == ["brush"]
+    assert problems(cfg, "menu main item 1: project") and [it.kind for it in cfg.menus["main"].items] == ["empty", "brush"]
 
 
 def test_an_existing_project_file_that_is_not_a_zpr_is_refused(load_menus, tmp_path):
@@ -1187,7 +1187,7 @@ def test_an_existing_project_file_that_is_not_a_zpr_is_refused(load_menus, tmp_p
     for name in ("Hero.png", "Notes.txt"):
         cfg = load_menus({"main": one_item_menu({"project": str(tmp_path / name)}, {"brush": "A"})})
         assert problems(cfg, f"menu main item 1: project '{tmp_path / name}' must be a .zpr file or a folder")
-        assert [it.kind for it in cfg.menus["main"].items] == ["brush"]
+        assert [it.kind for it in cfg.menus["main"].items] == ["empty", "brush"]
 
 
 def test_a_missing_folder_with_a_dot_in_its_name_is_a_folder(load_menus):
@@ -1208,7 +1208,7 @@ def test_tool_and_project_cannot_be_on_a_network_share(load_menus, key, path):
 def test_tool_and_project_must_not_be_empty(load_menus, key, value):
     cfg = load_menus({"main": one_item_menu({key: value}, {"brush": "A"})})
     assert problems(cfg, f"'{key}' must be a non-empty string")
-    assert [it.kind for it in cfg.menus["main"].items] == ["brush"]
+    assert [it.kind for it in cfg.menus["main"].items] == ["empty", "brush"]
 
 
 def test_the_file_need_not_be_there_when_the_menus_load(load_menus):
@@ -1260,14 +1260,14 @@ def test_a_layout_is_a_full_path_to_a_cfg_file(load_menus, path):
                                   "C:Sculpt.cfg", "/Sculpt.cfg"])
 def test_a_layout_must_be_a_full_path_ending_cfg(load_menus, path):
     cfg = load_menus({"main": one_item_menu({"layout": path}, {"brush": "A"})})
-    assert problems(cfg, "menu main item 1: layout") and [it.kind for it in cfg.menus["main"].items] == ["brush"]
+    assert problems(cfg, "menu main item 1: layout") and [it.kind for it in cfg.menus["main"].items] == ["empty", "brush"]
 
 
 def test_a_folder_is_not_a_layout_even_when_it_is_there(load_menus, tmp_path):
     (tmp_path / "Layouts").mkdir()
     cfg = load_menus({"main": one_item_menu({"layout": str(tmp_path / "Layouts")}, {"brush": "A"})})
     assert problems(cfg, f"layout '{tmp_path / 'Layouts'}' must be a .cfg file")
-    assert [it.kind for it in cfg.menus["main"].items] == ["brush"]
+    assert [it.kind for it in cfg.menus["main"].items] == ["empty", "brush"]
 
 
 def test_the_message_for_a_bad_path_gives_an_example_of_its_own_kind(load_menus):
@@ -1287,7 +1287,7 @@ def test_a_layout_cannot_be_on_a_network_share(load_menus, path):
 def test_a_layout_must_not_be_empty(load_menus, value):
     cfg = load_menus({"main": one_item_menu({"layout": value}, {"brush": "A"})})
     assert problems(cfg, "'layout' must be a non-empty string")
-    assert [it.kind for it in cfg.menus["main"].items] == ["brush"]
+    assert [it.kind for it in cfg.menus["main"].items] == ["empty", "brush"]
 
 
 def test_a_layout_need_not_be_there_when_the_menus_load(load_menus):
@@ -1337,7 +1337,7 @@ def test_steps_of_plain_actions_are_accepted(load_menus):
 def test_steps_cannot_be_nested(load_menus):
     cfg = load_menus({"main": one_item_menu({"steps": [{"steps": [{"brush": "A"}]}]}, {"brush": "B"})})
     assert problems(cfg, "menu main item 1 step 1: 'steps' must be a non-empty list")
-    assert [it.kind for it in cfg.menus["main"].items] == ["brush"]
+    assert [it.kind for it in cfg.menus["main"].items] == ["empty", "brush"]
 
 
 @pytest.mark.parametrize("step", [{"menu": "sub"}, {"auto": "brush"}, {"tag": "blocking"}, {"browser": ""},
@@ -1346,7 +1346,7 @@ def test_steps_cannot_open_menus_hold_auto_slots_or_open_tags_and_the_browser(lo
     cfg = load_menus({"main": one_item_menu({"steps": [{"brush": "A"}, step]}, {"brush": "B"}),
                       "sub": {"items": [{"brush": "C"}]}})
     assert problems(cfg, "menu main item 1 step 2: steps cannot open menus, nest steps, be auto slots")
-    assert [it.kind for it in cfg.menus["main"].items] == ["brush"]
+    assert [it.kind for it in cfg.menus["main"].items] == ["empty", "brush"]
 
 
 @pytest.mark.parametrize("steps", [[], "press", {"press": "x"}, None])
@@ -1397,6 +1397,34 @@ def test_fan_that_is_not_a_boolean_is_reported_and_treated_as_false(load_menus):
 # --- empty slots and keep_slots -------------------------------------------------------------------
 
 
+@pytest.mark.parametrize("item", [{"brush": ""}, {"press": "  "}, {"set": "", "value": ""}, {"toggle": ""},
+                                  {"tool": ""}, {"project": ""}, {"layout": ""}, {"menu": ""}, {"menu": "nowhere"}, {"tag": ""},
+                                  {"steps": []}, {"steps": [{"brush": ""}]}, {"nothing": 1}, "not an object"])
+def test_an_item_that_cannot_be_used_holds_its_place_as_an_empty_slot(load_menus, item):
+    cfg = load_menus({"main": one_item_menu({"brush": "A"}, item, {"brush": "C"})})
+    assert problems(cfg, "menu main item 2")
+    assert [it.kind for it in cfg.menus["main"].items] == ["brush", "empty", "brush"]
+    held = cfg.menus["main"].items[1]
+    assert (held.label, held.data, held.icon) == ("", {"empty": True}, "")
+
+
+def test_a_held_slot_keeps_the_style_of_its_item(load_menus):
+    cfg = load_menus({"main": one_item_menu({"brush": "A"}, {"brush": "", "style": {"size": 1.2}})})
+    assert cfg.menus["main"].items[1].style == {"size": 1.2}
+
+
+def test_a_held_slot_does_not_make_a_menu_usable(load_menus):
+    cfg = load_menus({"main": one_item_menu({"brush": "A"}), "bad": {"items": [{"brush": ""}, {"press": ""}]}})
+    assert "bad" not in cfg.menus
+    assert problems(cfg, "menu bad: no usable items")
+
+
+def test_an_empty_slot_still_keeps_a_menu_with_an_incomplete_item(load_menus):
+    cfg = load_menus({"main": {"items": [{"brush": ""}, {"empty": True}]}})
+    assert [it.kind for it in cfg.menus["main"].items] == ["empty", "empty"]
+    assert problems(cfg, "menu main item 1: 'brush' must be a non-empty string")
+
+
 def test_an_empty_slot_loads_with_no_label(load_menus):
     cfg = load_menus({"main": one_item_menu({"brush": "A"}, {"empty": True})})
     assert cfg.errors == []
@@ -1408,7 +1436,7 @@ def test_an_empty_slot_loads_with_no_label(load_menus):
 def test_an_empty_slot_must_be_exactly_true(load_menus, value):
     cfg = load_menus({"main": one_item_menu({"empty": value}, {"brush": "B"})})
     assert problems(cfg, "menu main item 1: 'empty' must be true")
-    assert [it.kind for it in cfg.menus["main"].items] == ["brush"]
+    assert [it.kind for it in cfg.menus["main"].items] == ["empty", "brush"]
 
 
 def test_an_empty_slot_cannot_hold_another_action(load_menus):
@@ -1447,10 +1475,11 @@ def test_the_starter_menus_keep_slots():
 
 
 @pytest.mark.parametrize("name", ["a\\b", "a/b", "C:Standard", "..", "a..b", "..\\evil"])
-def test_brush_name_with_a_path_in_it_is_reported_and_the_item_skipped(load_menus, name):
+def test_brush_name_with_a_path_in_it_is_reported_and_the_item_holds_its_place(load_menus, name):
     cfg = load_menus({"main": one_item_menu({"brush": name}, {"brush": "Standard"})})
     assert problems(cfg, "menu main item 1:")
-    assert [it.data["brush"] for it in cfg.menus["main"].items] == ["Standard"]
+    assert [it.kind for it in cfg.menus["main"].items] == ["empty", "brush"]
+    assert cfg.menus["main"].items[1].data["brush"] == "Standard"
 
 
 @pytest.mark.parametrize("icon", ["\\\\server\\share\\x.png", "//server/share/x.png"])
@@ -1495,13 +1524,13 @@ def test_icon_with_a_full_path_to_a_missing_file_is_a_warning_that_keeps_the_ite
 def test_other_asset_names_with_a_path_in_them_are_reported_too(load_menus, kind):
     cfg = load_menus({"main": one_item_menu({kind: "a\\b"}, {"brush": "Standard"})})
     assert problems(cfg, f"menu main item 1: {kind} name 'a\\b' must not contain \\ / : or ..")
-    assert [it.kind for it in cfg.menus["main"].items] == ["brush"]
+    assert [it.kind for it in cfg.menus["main"].items] == ["empty", "brush"]
 
 
-def test_a_step_with_a_path_in_its_name_skips_the_item(load_menus):
+def test_a_step_with_a_path_in_its_name_holds_the_items_place(load_menus):
     cfg = load_menus({"main": one_item_menu({"steps": [{"brush": "A"}, {"alpha": "../x"}]}, {"brush": "B"})})
     assert problems(cfg, "menu main item 1 step 2: alpha name")
-    assert [it.kind for it in cfg.menus["main"].items] == ["brush"]
+    assert [it.kind for it in cfg.menus["main"].items] == ["empty", "brush"]
 
 
 def test_browser_section_that_is_not_an_object_is_reported(load):
