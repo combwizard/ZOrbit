@@ -902,8 +902,8 @@ def hue(h):
 
 
 def shot_trailer(w):
-    """The ring's settings in turn on one ring, with a caption naming each the way Studio's Look screen does. It starts
-    on the ring opening, ends on the last look and loops straight back."""
+    """The ring's settings in turn on one ring, with a caption naming each the way Studio's Look screen does. The most
+    striking come first, to catch the eye, and the plain sliders last, so it ends on the ring as it starts and loops."""
     w.fans(False)
     t = Trailer(w)
     items = w.cfg.menus["brushes"].items
@@ -912,104 +912,8 @@ def shot_trailer(w):
     t.next_chapter()
     t.play("The ring", "as it starts", "smooth", 0.3, after=0.4)
 
-    t.sweep("Ring radius", "{:.0f} px", [145, 172, 105, 145], 1.5, lambda v: {"look": {"radius": round(v)}}, hover=1)
-    t.sweep("Slot size", "{:.0f} px", [72, 92, 46, 72], 1.5, lambda v: {"look": {"slot": round(v)}}, hover=1)
-
     t.next_chapter()
-    t.steps("Slot shape", [(SHAPE_NAMES[s], {"look": {"slot_shape": s}})
-                           for s in looks.SLOT_SHAPES[1:] + looks.SLOT_SHAPES[:1]], 0.45, hover=2)
-    t.sweep("Corner roundness", "{:.0%}", [0.28, 0.0, 0.5, 0.28], 1.2,
-            lambda v: {"look": {"slot_shape": "rounded", "slot_corner": round(v, 3)}}, hover=2)
-    t.sweep("Rim width", "{:.0f} px", [2, 6, 0, 2], 0.9, lambda v: {"look": {"border_width": round(v)}}, hover=3)
-    t.sweep("Icon size", "{:.0%}", [1, 0.5, 1], 0.9, lambda v: {"look": {"icon_scale": round(v, 3)}}, hover=3)
-
-    t.next_chapter()
-    icon = {"fields": {"icon": HUB_ICON}}
-    t.steps("Hub style", [(HUB_NAMES[s], {"look": {"hub_style": s, "hub": HUB_BIG}, **icon})
-                          for s in looks.HUB_STYLES], 0.45, at=(0, 0))
-    t.sweep("Hub size", "{:.0f} px", [40, 64, 0, 40], 1.0, lambda v: {"look": {"hub_style": "ring", "hub": round(v)}},
-            at=(0, 0))
-    t.sweep("Hub glow", "{:.0%}", [1, 0, 1], 0.8,
-            lambda v: {"look": {"hub_style": "disc", "hub": HUB_BIG, "hub_glow": round(v, 3)}}, at=(0, 0))
-    t.steps("Hub colour", [(n, {"look": {"hub_style": "disc", "hub": HUB_BIG, "hub_color": c}})
-                           for n, c in (("Accent", "accent"), ("Highlight", "highlight"), ("Green", "#7bd88f"))],
-            0.3, at=(0, 0))
-
-    t.next_chapter()
-    t.steps("Glow colour", [("Automatic", {"look": {"glow_opacity": 0.9}, "hover": 4}),
-                            ("Highlight", {"look": {"glow_opacity": 0.9, "glow_color": "highlight"}, "hover": 5}),
-                            ("Green", {"look": {"glow_opacity": 0.9, "glow_color": "#7bd88f"}, "hover": 6}),
-                            ("Pink", {"look": {"glow_opacity": 0.9, "glow_color": "#ff6fb5"}, "hover": 0})], 0.5)
-    t.sweep("Glow strength", "{:.0%}", [0.55, 1, 0, 0.55], 1.0, lambda v: {"look": {"glow_opacity": round(v, 3)}},
-            hover=0)
-    t.steps("Labels", [("Icon only", {"look": {"labels": "none"}}), ("Icon and name", {})], 0.45, hover=1)
-    t.steps("Label colour", [(n, {"look": {"label_color": c}})
-                             for n, c in (("Highlight", "highlight"), ("Accent", "accent"), ("Green", "#7bd88f"))],
-            0.3, hover=1)
-
-    t.next_chapter()
-    t.sweep("Colours", "Accent and lines", [0.05, 1.05], 1.8,
-            lambda v: {"look": {"colors": {"accent": hue(v), "lines": hue(v)}}}, hover=1)
-    t.next_chapter()
-    t.hold("Theme", "Dark", 0.6, hover=1)
-    t.next_chapter()
-    light = World("light")
-    light.fans(False)
-    t.hold("Theme", "Light", 0.7, hover=1, world=light, bg=BG_LIGHT, ink=((27, 28, 32), (70, 72, 80)))
-    scheme = stock_scheme()
-    if scheme is not None:
-        t.next_chapter()
-        zbrush_colors.current = lambda: scheme
-        zb = World("zbrush")
-        zb.fans(False)
-        t.hold("Theme", "Match ZBrush", 0.7, hover=1, world=zb, bg=BG_ZBRUSH)
-
-    t.next_chapter()
-    its = list(items)
-    t.hold("Empty slots", "A full ring", 0.3, hover=1, fields={"items": its})
-    for n in (2, 6, 4, 0):
-        its = list(its)
-        its[n] = empty
-        t.hold("Empty slots", f"{items[n].label} deleted: its slot stays", 0.35, hover=1, fields={"items": its})
-    t.steps("Empty slots", [("They take the slot shape", {"look": {"slot_shape": s}})
-                            for s in ("hexagon", "diamond", "rounded")], 0.35, hover=1, fields={"items": its})
-
-    t.next_chapter()
-    styles = {}
-    for name, i, style, what in (("Standard", 0, {"size": 1.25}, "bigger"),
-                                 ("ClayBuildup", 1, {"label_color": "highlight"}, "label colour"),
-                                 ("Move", 2, {"border_color": "#7bd88f"}, "rim colour"),
-                                 ("DamStandard", 3, {"slot_shape": "rounded", "slot_corner": 0.42}, "its own shape"),
-                                 ("TrimDynamic", 4, {"border_width": 6, "border_color": "highlight"}, "thick rim"),
-                                 ("hPolish", 5, {"glow_color": "#7bd88f"}, "glow colour"),
-                                 ("Inflate", 6, {"icon_scale": 0.6}, "smaller icon"),
-                                 ("Tools", 8, {"fill_color": "#5b4a9a"}, "fill colour")):
-        styles = {**styles, i: style}
-        t.hold("One slot", f"{name}: {what}", 0.4, hover=i, styles=styles)
-
-    t.next_chapter()
-    full = w.define("trailer-full", BRUSHES_14)
-    rings = {"menu": "trailer-full", "look": {"when_full": "rings"}}
-
-    def grow(n):
-        return {"menu": "trailer-full", "fields": {"items": full.items[:n]}, "look": {"when_full": "grow"}}
-
-    t.fit(dict(hover=0, **grow(14)), dict(hover=11, **rings))
-    t.settle("When full: Grow", "9 brushes", hover=8, **grow(9))
-    for n in range(9, 15):
-        t.hold("When full: Grow", f"{n} brushes", 0.22, hover=n - 1, **grow(n))
-    t.hold("When full: Second ring", "14 brushes", 0.9, hover=11, **rings)
-    t.hold("When full: More slot", "the first eight, then More", 0.9, hover=8, menu="trailer-full",
-           look={"when_full": "more"})
-    t.fit()
-
-    t.next_chapter()
-    t.steps("Tag colours", [(n, {"look": {"tag_colors": v, "tag_band": "none", "tag_glow_opacity": 0.7}})
-                            for n, v in (("Off", "none"), ("Icon tint", "tint"), ("Glow", "glow"),
-                                         ("Tint and glow", "both"))], 0.45, menu="tags", tagged=True, hover=0)
-    t.steps("Tag colours: Band", [(n, {"look": {"tag_band": n.lower()}})
-                                  for n in ("Hairline", "Narrow", "Medium", "Wide")], 0.3, menu="tags", tagged=True,
-            hover=0)
+    t.steps("Looks", [(b["label"], {"look": name}) for name, b in looks.BUILTIN.items()], 0.6, hover=1)
 
     # The canvas never grows: the ring zooms out first, and only then does the fan open.
     t.next_chapter()
@@ -1041,7 +945,104 @@ def shot_trailer(w):
     w.fans(False)
 
     t.next_chapter()
-    t.steps("Looks", [(b["label"], {"look": name}) for name, b in looks.BUILTIN.items()], 0.6, hover=1)
+    t.steps("Tag colours", [(n, {"look": {"tag_colors": v, "tag_band": "none", "tag_glow_opacity": 0.7}})
+                            for n, v in (("Off", "none"), ("Icon tint", "tint"), ("Glow", "glow"),
+                                         ("Tint and glow", "both"))], 0.45, menu="tags", tagged=True, hover=0)
+    t.steps("Tag colours: Band", [(n, {"look": {"tag_band": n.lower()}})
+                                  for n in ("Hairline", "Narrow", "Medium", "Wide")], 0.3, menu="tags", tagged=True,
+            hover=0)
+
+    t.next_chapter()
+    t.steps("Slot shape", [(SHAPE_NAMES[s], {"look": {"slot_shape": s}})
+                           for s in looks.SLOT_SHAPES[1:] + looks.SLOT_SHAPES[:1]], 0.45, hover=2)
+
+    t.next_chapter()
+    t.sweep("Colours", "Accent and lines", [0.05, 1.05], 1.8,
+            lambda v: {"look": {"colors": {"accent": hue(v), "lines": hue(v)}}}, hover=1)
+    t.next_chapter()
+    t.hold("Theme", "Dark", 0.6, hover=1)
+    t.next_chapter()
+    light = World("light")
+    light.fans(False)
+    t.hold("Theme", "Light", 0.7, hover=1, world=light, bg=BG_LIGHT, ink=((27, 28, 32), (70, 72, 80)))
+    scheme = stock_scheme()
+    if scheme is not None:
+        t.next_chapter()
+        zbrush_colors.current = lambda: scheme
+        zb = World("zbrush")
+        zb.fans(False)
+        t.hold("Theme", "Match ZBrush", 0.7, hover=1, world=zb, bg=BG_ZBRUSH)
+
+    t.next_chapter()
+    full = w.define("trailer-full", BRUSHES_14)
+    rings = {"menu": "trailer-full", "look": {"when_full": "rings"}}
+
+    def grow(n):
+        return {"menu": "trailer-full", "fields": {"items": full.items[:n]}, "look": {"when_full": "grow"}}
+
+    t.fit(dict(hover=0, **grow(14)), dict(hover=11, **rings))
+    t.settle("When full: Grow", "9 brushes", hover=8, **grow(9))
+    for n in range(9, 15):
+        t.hold("When full: Grow", f"{n} brushes", 0.22, hover=n - 1, **grow(n))
+    t.hold("When full: Second ring", "14 brushes", 0.9, hover=11, **rings)
+    t.hold("When full: More slot", "the first eight, then More", 0.9, hover=8, menu="trailer-full",
+           look={"when_full": "more"})
+    t.fit()
+
+    t.next_chapter()
+    styles = {}
+    for name, i, style, what in (("Standard", 0, {"size": 1.25}, "bigger"),
+                                 ("ClayBuildup", 1, {"label_color": "highlight"}, "label colour"),
+                                 ("Move", 2, {"border_color": "#7bd88f"}, "rim colour"),
+                                 ("DamStandard", 3, {"slot_shape": "rounded", "slot_corner": 0.42}, "its own shape"),
+                                 ("TrimDynamic", 4, {"border_width": 6, "border_color": "highlight"}, "thick rim"),
+                                 ("hPolish", 5, {"glow_color": "#7bd88f"}, "glow colour"),
+                                 ("Inflate", 6, {"icon_scale": 0.6}, "smaller icon"),
+                                 ("Tools", 8, {"fill_color": "#5b4a9a"}, "fill colour")):
+        styles = {**styles, i: style}
+        t.hold("One slot", f"{name}: {what}", 0.4, hover=i, styles=styles)
+
+    t.next_chapter()
+    t.steps("Glow colour", [("Automatic", {"look": {"glow_opacity": 0.9}, "hover": 4}),
+                            ("Highlight", {"look": {"glow_opacity": 0.9, "glow_color": "highlight"}, "hover": 5}),
+                            ("Green", {"look": {"glow_opacity": 0.9, "glow_color": "#7bd88f"}, "hover": 6}),
+                            ("Pink", {"look": {"glow_opacity": 0.9, "glow_color": "#ff6fb5"}, "hover": 0})], 0.5)
+    t.sweep("Glow strength", "{:.0%}", [0.55, 1, 0, 0.55], 1.0, lambda v: {"look": {"glow_opacity": round(v, 3)}},
+            hover=0)
+
+    t.next_chapter()
+    its = list(items)
+    t.hold("Empty slots", "A full ring", 0.3, hover=1, fields={"items": its})
+    for n in (2, 6, 4, 0):
+        its = list(its)
+        its[n] = empty
+        t.hold("Empty slots", f"{items[n].label} deleted: its slot stays", 0.35, hover=1, fields={"items": its})
+    t.steps("Empty slots", [("They take the slot shape", {"look": {"slot_shape": s}})
+                            for s in ("hexagon", "diamond", "rounded")], 0.35, hover=1, fields={"items": its})
+
+    t.next_chapter()
+    icon = {"fields": {"icon": HUB_ICON}}
+    t.steps("Hub style", [(HUB_NAMES[s], {"look": {"hub_style": s, "hub": HUB_BIG}, **icon})
+                          for s in looks.HUB_STYLES], 0.45, at=(0, 0))
+    t.sweep("Hub size", "{:.0f} px", [40, 64, 0, 40], 1.0, lambda v: {"look": {"hub_style": "ring", "hub": round(v)}},
+            at=(0, 0))
+    t.sweep("Hub glow", "{:.0%}", [1, 0, 1], 0.8,
+            lambda v: {"look": {"hub_style": "disc", "hub": HUB_BIG, "hub_glow": round(v, 3)}}, at=(0, 0))
+    t.steps("Hub colour", [(n, {"look": {"hub_style": "disc", "hub": HUB_BIG, "hub_color": c}})
+                           for n, c in (("Accent", "accent"), ("Highlight", "highlight"), ("Green", "#7bd88f"))],
+            0.3, at=(0, 0))
+
+    t.next_chapter()
+    t.steps("Labels", [("Icon only", {"look": {"labels": "none"}}), ("Icon and name", {})], 0.45, hover=1)
+    t.steps("Label colour", [(n, {"look": {"label_color": c}})
+                             for n, c in (("Highlight", "highlight"), ("Accent", "accent"), ("Green", "#7bd88f"))],
+            0.3, hover=1)
+    t.sweep("Ring radius", "{:.0f} px", [145, 172, 105, 145], 1.5, lambda v: {"look": {"radius": round(v)}}, hover=1)
+    t.sweep("Slot size", "{:.0f} px", [72, 92, 46, 72], 1.5, lambda v: {"look": {"slot": round(v)}}, hover=1)
+    t.sweep("Corner roundness", "{:.0%}", [0.28, 0.0, 0.5, 0.28], 1.2,
+            lambda v: {"look": {"slot_shape": "rounded", "slot_corner": round(v, 3)}}, hover=2)
+    t.sweep("Rim width", "{:.0f} px", [2, 6, 0, 2], 0.9, lambda v: {"look": {"border_width": round(v)}}, hover=3)
+    t.sweep("Icon size", "{:.0%}", [1, 0.5, 1], 0.9, lambda v: {"look": {"icon_scale": round(v, 3)}}, hover=3)
     if t.clipped:
         print("the trailer leaves its box at:", "; ".join(sorted(t.clipped)))
     return t.frames, t.times, t.chapters
@@ -1084,9 +1085,9 @@ SHOTS = {
     "command-open": ("command-open.gif", shot_command_open,
                      "the command lights up, the ring opens at the cursor, a flick picks ClayBuildup"),
     "trailer-readme": ("trailer-readme.gif", shot_trailer,
-                       "one ring going through the ring settings in turn, with a caption naming each: sizes, shapes, "
-                       "hub, glow, labels, colours, theme, empty slots, slot styles, when full, tag colours, fans and "
-                       "looks, for the top of the README"),
+                       "one ring going through the ring settings in turn, with a caption naming each: looks, fans, "
+                       "tag colours, shapes, colours, theme, when full, slot styles, glow, empty slots, hub, labels "
+                       "and sizes, for the top of the README"),
 }
 
 
