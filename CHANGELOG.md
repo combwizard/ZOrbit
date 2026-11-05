@@ -7,10 +7,10 @@ All notable changes to this project are listed here. The format follows
 ## [0.19.0] - 2026-11-05
 
 ZOrbit 0.19.0 lets other programs drive the ring. `ZOrbit.exe --open`, `--pick`, `--press` and the rest pass a
-command to the running app, so a Stream Deck, tablet software or a script can open a menu or press a slot. New
-**Capture**, **Tool** and **Project** items save the document as a PNG, load a tool or open a project with no
-dialog, and Studio suggests your ZBrush macros for a **Press** slot. **Copy report** on the **Status** screen
-gathers what a bug report needs, with your user name and folders hidden, and Studio and the browser can be resized
+command to the running app, so a Stream Deck, tablet software or a script can open a menu, pick a brush or press a
+ZBrush button. New **Capture**, **Tool** and **Project** items save the document as a PNG, load a tool or open a
+project with no dialog, and Studio suggests your ZBrush macros for a **Press** slot. **Copy report** on the
+**Status** screen gathers what a bug report needs, with your user name and folders hidden, and Studio and the browser can be resized
 from every edge.
 
 ### Added
