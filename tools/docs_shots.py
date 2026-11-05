@@ -67,6 +67,13 @@ window.lookGroup = n => { const c = document.getElementById('look-g-' + ({'Tag c
   const f = c.querySelector('.fold-head[aria-expanded="false"]'); if (f) f.click();     // a group the Look screen starts folded
   for (const o of c.parentElement.children) if (o !== c) o.hidden = true;
   c.closest('.look-scroll').scrollTop = 0; return c; };
+// A mouse drag of card number `from` that stops, not released, at the gap before card number `to`.
+window.dragCard = (from, to) => { const cards = [...document.querySelectorAll('.bgrid .bcard[data-name]')], a = cards[from].getBoundingClientRect(),
+    b = cards[to].getBoundingClientRect(), ev = (type, x, y) => (type === 'pointerdown' ? cards[from] : window).dispatchEvent(new PointerEvent(type,
+      {bubbles: true, cancelable: true, button: 0, buttons: 1, clientX: x, clientY: y, pointerId: 1, isPrimary: true}));
+  ev('pointerdown', a.left + a.width / 2, a.top + a.height / 2);
+  ev('pointermove', a.left + a.width / 2 + 12, a.top + a.height / 2 + 12);
+  ev('pointermove', b.left + 6, b.top + b.height / 2); return true; };
 """
 
 # name -> page (default index.html), URL switches (see dev/mock.js; Studio itself reads screen, menu, item, tab,
@@ -89,6 +96,10 @@ SHOTS = {
     # look-full: a menu with more items than its ring holds at its radius, so the note above the items says what the ring does.
     "look-full": dict(q="screen=menus&menu=tools"),
     "studio-library": dict(q="screen=library"),
+    # fav-order: Favourites in the Library part way through a drag: the card dimmed, the marker in the gap, the chip at the pointer.
+    "fav-order": dict(q="screen=library&favs=16", size=(1180, 760), steps=["click('Favourites')", "dragCard(1, 6)"]),
+    # pack-names: the browser on an added folder, whose first files have names another pack took first, so they say which pack they are from.
+    "pack-names": dict(page="popout.html", q="kind=alpha&packs", size=(980, 560), steps=["click('Rock Pack')"]),
     "studio-settings": dict(q="screen=settings"),
     "studio-settings-simple": dict(q="screen=settings&mode=simple"),
     "studio-light": dict(q="screen=settings&theme=light"),

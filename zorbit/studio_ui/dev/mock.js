@@ -21,6 +21,8 @@
    D:\Art\<Kind> pack with 12 files.
    Tags (state in localStorage rm_tags, seeded with the built-in Favourites tag (always first, cannot be renamed, merged or deleted), the two
    starters and a few tagged brushes, three of them starred): ?tags=empty (only Favourites, nothing tagged),
+   ?favs=16 (the first 16 brushes are Favourites, for a list long enough to drag in), ?packs (the Alphas tab also has two pack folders, Crack Pack
+   and Rock Pack, with names that clash, as added folders list them, and pictures borrowed from ZBrush's own alphas),
    ?tagsmany (Favourites and 30 tags with long names), ?tagfail (every tag change is refused), ?tagexists (create and rename always clash with
    the first ordinary tag). The first two keep their state in memory only, so a reload starts clean. A tab's Favourites order is kept with
    them (st.favourite_order, as tags.json holds it), and set_favourite_order keeps a key that is not on show in its place, as tags.py does.
@@ -382,6 +384,20 @@
     k = typeof k === 'string' ? k.replace(/\s+/g, '').toLowerCase() : '';
     return /^[a-z]+:.+$/.test(k) ? k : null;
   }
+  /* ?packs: two pack folders whose numbered files clash, listed as assets.py lists an added folder: the first keeps the name, the next says which pack. */
+  var packThumb = {};
+  function addPacks(out) {
+    var pad = function (n) { return (n < 10 ? '0' : '') + n; }, own = Object.keys(M.get_thumbs_alpha || {}), at = 0, seen = {};
+    [['Crack Pack', 1, 12], ['Rock Pack', 8, 20]].forEach(function (pack) {
+      for (var n = pack[1]; n <= pack[2]; n++) {
+        var name = seen[n] ? pad(n) + ' (' + pack[0] + ')' : pad(n);
+        seen[n] = true;
+        packThumb[name] = own[(at++ * 3 + 11) % own.length];
+        out.items.push({ name: name, source: pack[0], category: pack[0], path: 'D:\\Art\\Alphas\\' + pack[0] + '\\' + pad(n) + '.psd' });
+      }
+      out.categories.push({ id: pack[0], count: pack[2] - pack[1] + 1 });
+    });
+  }
   function tagSeed() {
     var st = { tags: [], items: {} }, names = ((M.get_library && M.get_library.brushes) || []).map(function (b) { return b.name; });
     var key = function (n) { return 'brush:' + n.replace(/\s+/g, '').toLowerCase(); };
@@ -397,7 +413,8 @@
       if (i % 6 === 5) return;
       st.items[key(n)] = i % 5 === 4 ? ['blocking', 'detailing'] : [i % 2 ? 'detailing' : 'blocking'];
     });
-    [0, 3, 5, 8].forEach(function (i) { if (names[i]) st.items[key(names[i])] = (st.items[key(names[i])] || []).concat([FAV]); });   // a few stars (one on an untagged brush)
+    var stars = q.has('favs') ? names.slice(0, +q.get('favs') || 0).map(function (_, i) { return i; }) : [0, 3, 5, 8];
+    stars.forEach(function (i) { if (names[i]) st.items[key(names[i])] = (st.items[key(names[i])] || []).concat([FAV]); });   // a few stars (one on an untagged brush)
     return st;
   }
   function tagState() {
@@ -550,6 +567,7 @@
     } else if (rec) {
       var r = clone(rec);
       out = { items: r.items || r.brushes || [], categories: r.categories || [] };
+      if (kind === 'alpha' && q.has('packs')) addPacks(out);
     } else {
       var items = ((M.get_library && M.get_library.brushes) || []).slice(0, 48).map(function (b, i) {
         var cat = A.cats[i % A.cats.length], name = b.name + A.suffix;
@@ -1023,6 +1041,7 @@
           var v = null;
           if (kind === 'brush') v = (M.get_thumbs && M.get_thumbs[n]) || null;
           else if (own && own[n]) v = own[n];
+          else if (kind === 'alpha' && packThumb[n]) v = own[packThumb[n]];
           else if (!own || !(n in own)) {                  // a synthesised name: the picture of the brush it was made from
             var base = n.length > suffix.length && n.slice(-suffix.length) === suffix ? n.slice(0, -suffix.length) : null;
             v = (base && M.get_thumbs && M.get_thumbs[base]) || null;

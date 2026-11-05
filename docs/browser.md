@@ -63,6 +63,8 @@ In the browser and the Library each folder you add is a folder of its own in the
 
 ### Names in a folder you added
 
+![The browser on the Alphas tab with the Rock Pack folder open. The first cards are called 08 (Rock Pack) to 12 (Rock Pack), because another pack has those names, and the rest are plain 13 to 20](images/pack-names.png)
+
 Packs often name their files `10`, `11`, `12`, and the same names sit in many packs. In ZBrush's own folders the first folder with a name wins, as before. In a folder you added, a file whose name is already taken is listed under its name with its pack folder in brackets. The pack folder is the first subfolder under the folder you added, or the added folder's own name for a file at its top. So `10.png` in the pack folder `Crack Alphas Vol 1` is listed as **10 (Crack Alphas Vol 1)** when another `10` is already listed. If that name is taken too, ZOrbit uses the whole subfolder path, such as **10 (Crack Alphas Vol 1, Tiled)**, and last it puts the added folder's name in front.
 
 One folder lists one file per name. If `10.png` and `10.psd` sit side by side, they are one item, the first by name, and the other is counted as hidden: the tag on the Settings row says, for example, "212 files, 3 hidden".
@@ -94,6 +96,8 @@ first, with a star.
 
 Favourites is the first entry in the folders list on every tab, with a count. It lists starred items, most used first,
 then by name, until you give the tab your own order. It is not among the tag chips, because it has its own entry.
+
+![Favourites in Studio's Library part way through a drag: the Blob card is dimmed, an orange line marks the gap before ClayTubes, and a small Blob chip follows the pointer](images/fav-order.png)
 
 To set your own order, open **Favourites** and drag a card to a new place in the grid. A line between the cards shows
 where it will land, and the order is saved when you drop. It works the same in the browser and in Studio's Library. One

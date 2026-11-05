@@ -74,6 +74,8 @@ PANEL_CENTRE = (130, 137)
 PANEL_SCALE = 0.6
 PANEL_BIG, PANEL_BIG_CENTRE, PANEL_BIG_SCALE = (340, 390), (170, 176), 0.78   # a larger panel, for the hub pictures
 RING_SCALE = 1.342                             # makes the ring pictures 600 pixels square
+LAYOUT_SLOTS = [("Sculpt", "D:/Layouts/Sculpt.cfg"), ("Paint", "D:/Layouts/Paint.cfg"),   # the layout slots picture: label, path
+                ("Minimal", "D:/Layouts/Minimal.cfg")]
 FILE_SLOTS = [("Capture", "capture", ""), ("Hero", "tool", "D:/Models/Hero.ztl"),   # the file slots picture: label, type, path
               ("Blockout", "project", "D:/Projects/Blockout")]
 COMMAND = 'ZOrbit.exe --open "brushes"'            # the command animation: what it shows, its band's height and its lit colour
@@ -345,6 +347,15 @@ def shot_file_slots(w):
     return with_cursor(on_background(im), *hovered(im))
 
 
+def shot_layout_slots(w):
+    """Three Layout slots among brushes, with their own icon."""
+    w.fans(False)
+    menu = w.define("layouts", ["ClayBuildup", "Move", "DamStandard", "hPolish", "TrimDynamic"], title="Sculpt")
+    menu.items += [C.Item(label=label, kind="layout", data={"layout": path}) for label, path in LAYOUT_SLOTS]
+    im = w.preview("layouts", hover=6, held=True, scale=RING_SCALE)
+    return with_cursor(on_background(im), *hovered(im))
+
+
 def command_band(frame, text, pressed):
     """The frame with the command above it, as a button on a device or a line in a script would send it."""
     f = font("consola.ttf", 16)
@@ -593,6 +604,20 @@ def shot_empty_slots(w):
                                big=True, fields={"items": closed}),
                     look_panel(w, "Keep slots in place on", "Move deleted: its slot stays empty", hover=dam,
                                big=True, fields={"items": kept})], 3)
+
+
+def shot_held_slot(w):
+    """The Brushes ring with Move's slot waiting for a target: as it was before 0.20.0 (the rest close up) and as it is
+    now (its slot holds its place as an empty outline). DamStandard is hovered in each, so the eye can follow it."""
+    w.fans(False)
+    items = w.cfg.menus["brushes"].items
+    move = next(i for i, it in enumerate(items) if it.data.get("brush") == "Move")
+    dam = next(i for i, it in enumerate(items) if it.data.get("brush") == "DamStandard")
+    empty = C.Item(label="", kind="empty", data={"empty": True})
+    return gallery([look_panel(w, "Before 0.20.0", "A slot with no target yet: the rest close up", hover=dam - 1, big=True,
+                               fields={"items": items[:move] + items[move + 1:]}),
+                    look_panel(w, "Now", "A slot with no target yet holds its place", hover=dam, big=True,
+                               fields={"items": items[:move] + [empty] + items[move + 1:]})], 2)
 
 
 def bezier_ease(t, x1=0.42, y1=0.0, x2=0.58, y2=1.0):
@@ -1082,6 +1107,10 @@ SHOTS = {
                 "More Brushes fans out, then Tools, SubDivide fans out above it, a flick past 1.00 picks it"),
     "file-slots": ("file-slots.png", shot_file_slots,
                    "five brushes with a Capture, a Tool and a Project slot, the Project slot hovered"),
+    "held-slot": ("held-slot.png", shot_held_slot,
+                  "the Brushes ring with Move's slot waiting for a target, before 0.20.0 and now, DamStandard hovered in each"),
+    "layout-slots": ("layout-slots.png", shot_layout_slots,
+                     "five brushes with three Layout slots, the Paint slot hovered"),
     "command-open": ("command-open.gif", shot_command_open,
                      "the command lights up, the ring opens at the cursor, a flick picks ClayBuildup"),
     "trailer-readme": ("trailer-readme.gif", shot_trailer,
