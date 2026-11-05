@@ -4,6 +4,12 @@ All notable changes to this project are listed here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+
+- The path field of a **Project** slot showed only about 9 characters of the path, because it shared its row with the two browse buttons. On **Project**, **Tool** and **Capture** slots the buttons now sit under the field, which has the panel's whole width.
+
 ## [0.19.0] - 2026-11-05
 
 ZOrbit 0.19.0 lets other programs drive the ring. `ZOrbit.exe --open`, `--pick`, `--press` and the rest pass a
