@@ -8,7 +8,7 @@ ZOrbit is a radial brush menu for ZBrush. Press **Q** over ZBrush and a ring of 
 If you know pie menus from Blender or marking menus from Maya, ZOrbit brings that to ZBrush.
 
 <p align="center">
-  <img src="docs/images/trailer-readme.gif" alt="One ring going through its settings with a caption naming each: ring radius, slot size, slot shape, corner roundness, rim width, icon size, the hub, the glow, labels, colours, the theme, empty slots, styles on single slots, what a full ring does, tag colours, fans and the seven looks" width="480">
+  <img src="docs/images/trailer-readme.gif" alt="One ring going through its settings with a caption naming each: the seven looks, fans, tag colours, slot shapes, colours, the theme, what a full ring does, styles on single slots, the glow, empty slots, the hub, labels, ring radius, slot size, corner roundness, rim width and icon size" width="480">
 </p>
 
 **Contents**
