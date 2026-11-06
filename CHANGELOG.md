@@ -6,6 +6,10 @@ All notable changes to this project are listed here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- The browser can be a strip: a small bar of one tab's favourites that stays on top of ZBrush and never takes the keyboard from it, so one click picks an item. Turn it on with the strip button in the browser's header. Its menu switches the tab, lays the strip vertical or horizontal, opens the full browser or hides the strip. **X** on the browser goes back to the strip, the strip comes up by itself when the app starts the browser hidden, it steps aside while another program is in front, and it closes with the app. (#40)
+
 ### Changed
 
 - With several ZBrush versions installed, the browser, the Library and the ring list the folders of the ZBrush that is running (the newest, when several run) instead of the newest installed, so a ZBrush 2026 session no longer lists a 2027 install's files, and a running ZBrush 2022 to 2025 lists its own installation's. With none running, the newest installed is used, as before. The app reads the library again a few seconds after another ZBrush starts; the browser follows on its next rescan. (#181)

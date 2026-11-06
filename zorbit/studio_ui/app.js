@@ -104,6 +104,8 @@ const ICONS = {
   k_browser: '<rect x="4.500" y="4.500" width="6" height="6" rx="1.300"/><rect x="13.500" y="4.500" width="6" height="6" rx="1.300"/><rect x="4.500" y="13.500" width="6" height="6" rx="1.300"/><rect x="13.500" y="13.500" width="6" height="6" rx="1.300"/>',
   tag: '<path d="M20.600 13.400l-7.200 7.200a2 2 0 0 1-2.800 0L3 13V3h10l7.600 7.600a2 2 0 0 1 0 2.800z"/><circle cx="7.500" cy="7.500" r="1.300" fill="currentColor" stroke="none"/>',
   pin: '<path d="M9 4h6l-.8 5.500L17 13H7l2.800-3.500z"/><path d="M12 13v7"/>',
+  strip: '<rect x="2.500" y="9" width="5" height="6" rx="1.200"/><rect x="9.500" y="9" width="5" height="6" rx="1.200"/><rect x="16.500" y="9" width="5" height="6" rx="1.200"/>',
+  chev_u: '<path d="M6 15l6-6 6 6"/>',
   star: '<path d="M12 2.800l2.900 5.900 6.500.9-4.700 4.600 1.100 6.500L12 17.600l-5.800 3.100 1.100-6.500L2.600 9.600l6.500-.9z"/>',
   clock: '<circle cx="12" cy="12" r="8.500"/><path d="M12 7.500V12l3 2"/>',
   logo: '<circle cx="12" cy="12" r="2.200" fill="currentColor" stroke="none"/><circle cx="12" cy="3.800" r="1.700"/><circle cx="19.100" cy="7.900" r="1.700"/><circle cx="19.100" cy="16.100" r="1.700"/><circle cx="12" cy="20.200" r="1.700"/><circle cx="4.900" cy="16.100" r="1.700"/><circle cx="4.900" cy="7.900" r="1.700"/>',
@@ -491,6 +493,7 @@ async function call(name, ...args) {
 /* Tones: 'ok' (check), 'warn' (amber), 'err' (red, stays until closed). The timer pauses while the pointer is over a toast or focus
    is inside it, and a toast with the same text as one on screen replaces it instead of stacking. */
 function toast(msg, o = {}) {
+  if (S.popMode === 'strip') { call('popout_strip_note', String(msg)).catch(() => {}); return; }   // the browser's strip has no room: near the cursor
   const root = $('#toasts');
   const text = String(msg), tone = o.tone || '', err = tone === 'err';
   let t = $$('.toast', root).find(x => x._msg === text && !x._dying);
@@ -7139,14 +7142,17 @@ function buildPopout(root) {
     catch (e) { S.popSide = was; paintSide(); toast('Could not move the folders column.', { tone: 'warn' }); }
   }
   paintSide();
+  const toStrip = h('button', { class: 'ibtn strip-btn', type: 'button', title: 'Show as a strip', 'aria-label': 'Show as a strip',
+    onclick: () => { call('popout_strip_show').catch(() => toast('Could not show the strip.', { tone: 'warn' })); } }, icon('strip', 15));
   const head = h('header', { class: 'pop-head' },
     popLogo(), (popTabs = kindTabs(() => S.pop.kind, k => popBrowser.setKind(k), 'pop')).el,
-    h('div', { class: 'spacer' }), side, col, pin,
+    h('div', { class: 'spacer' }), side, col, toStrip, pin,
     h('div', { class: 'winctl' }, h('button', { class: 'winbtn close', type: 'button', title: 'Close', 'aria-label': 'Close', onclick: popHide }, icon('x', 14))));
   popBrowser = makeBrowser({ compact: false, st: S.pop, host: POP_HOST, kindUi: 'none' });   // the tabs live in the header
   root.replaceChildren(head, h('div', { class: 'pop-body' }, popBrowser.el));
   R.libRefresh = kind => {
     popScanned[kind] = Date.now();
+    if (popStrip && kind === S.strip.kind) popStrip.paint();
     if (kind !== S.pop.kind) return;
     const had = popBrowser.hasSel();                  // a rescan keeps the highlight and the scroll position; the first list highlights its first item
     popBrowser.refresh();
@@ -7157,8 +7163,10 @@ function buildPopout(root) {
 /* Called by popout.py each time the window is shown. Starts from a clean slate: no search, no folder, the given tag only, the first match
    highlighted. A tag the page has not heard of (made in the Studio a moment ago) is looked for once more with a forced reload. */
 window.__popoutShow = o => {
+  if (o && o.mode === 'strip') return showStrip(o);
   const tag = (o && o.tag) || null, kind = o && isLib(o.kind) ? o.kind : null, reset = !o || o.reset !== false;
   if (!popBrowser) { popWant = { tag, kind, reset }; return false; }
+  setPopMode('browser');
   if (kind) popBrowser.setKind(kind);
   if (reset || tag) popBrowser.setFilter(tag);          // a tab switch alone keeps the search and tag filter
   popBrowser.focusSearch();
@@ -7169,6 +7177,240 @@ window.__popoutShow = o => {
   return true;
 };
 window.__popoutFocus = () => { if (popBrowser) popBrowser.focusSearch(false); return document.hasFocus(); };
+
+/* ---------- the strip (popout.py, popout.json "strip"): one tab's favourites in your order, in a small window that stays on top and never
+   takes the keyboard. A click picks at once. The window is the size of .strip: the page measures it and popout.py fits the window (fitNow,
+   popout_strip_size). A window cannot show a menu outside itself, so the menu takes the strip's place while it is open. S.strip: kind, orient
+   wrap and fold (folded here) come from popout.json through __popoutShow; the last pick (the accent rim) is the page's own. No keys are handled here. */
+S.strip = { kind: 'brush', orient: 'vertical', wrap: false, folded: false, last: '' };
+let popStrip = null;
+const STRIP_CELL = 48, STRIP_GAP = 4, STRIP_LINE = 10;          // px, and how many favourites one line holds before the +N button
+
+function setPopMode(mode) {
+  if ((S.popMode || 'browser') === mode) return;
+  S.popMode = mode;
+  document.body.classList.toggle('strip-mode', mode === 'strip');
+  if (mode === 'strip') {                                        // nothing of the browser stays open over the strip
+    if (openPopover) openPopover();
+    if (activeModal) activeModal.close(undefined);
+    if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+  } else if (popStrip) popStrip.closeMenu(false);
+}
+
+/* __popoutShow({mode: 'strip', kind, orient, wrap, fold}): draws the strip and answers its size, which popout.py gives the window before it shows. */
+function showStrip(o) {
+  if (isLib(o.kind)) S.strip.kind = o.kind;
+  S.strip.orient = o.orient === 'horizontal' ? 'horizontal' : 'vertical';
+  S.strip.wrap = !!o.wrap;
+  S.strip.folded = !!o.fold;
+  if (!popStrip) { popWant = o; return null; }                   // still booting: it sends its size once it is drawn
+  setPopMode('strip');
+  popStrip.closeMenu(false);
+  ensureLib(S.strip.kind); popRescanIfOld(S.strip.kind); loadUsage(S.strip.kind); loadTags();
+  popStrip.paint();
+  return popStrip.fitNow();
+}
+
+function buildStrip() {
+  const st = S.strip;
+  const cells = h('div', { class: 'strip-cells' });
+  const label = h('span', { class: 'strip-kind' });
+  const menuBtn = h('button', { class: 'strip-menu', type: 'button', 'aria-haspopup': 'menu', 'aria-expanded': 'false', onclick: () => (menu ? closeMenu() : openMenu()) },
+    icon('star', 16), label);
+  const more = h('button', { class: 'strip-more', type: 'button', onclick: () => set({ wrap: !st.wrap }) });
+  const openBtn = iconBtn('k_browser', 'Open the browser', () => { call('popout_open_browser', false).catch(() => {}); }, 'strip-open');
+  const fold = iconBtn('chev_u', 'Fold the strip', () => {
+    st.folded = !st.folded; paint();
+    call('popout_strip_set', { fold: st.folded }).catch(() => {});     // remembered: the strip comes back folded
+  }, 'strip-fold');
+  const root = h('div', { class: 'strip', role: 'toolbar', 'aria-label': 'Favourites strip' },
+    h('div', { class: 'strip-grip', title: 'Drag to move the strip' }, icon('grip', 14)),
+    menuBtn, h('div', { class: 'strip-sep' }), cells, more, h('div', { class: 'strip-sep after' }), openBtn, fold);
+  document.body.append(root);
+
+  /* The tab's favourites as the browser's Favourites folder lists them: your order, else most used first. null while the library loads. */
+  function items() {
+    const L = lib(st.kind);
+    if (L.state !== 'ready') return null;
+    const u = usageOf(st.kind);
+    return ZFavOrder.sorted(L.sorted.filter(b => isFav(st.kind, b.name)), favOrderOf(st.kind), b => nameKey(b.name), b => u.scores[b.name.toLowerCase()] || 0);
+  }
+  /* Up to STRIP_LINE a line, fewer when the screen is too short (or narrow) for them and the buttons. */
+  const perLine = () => clamp(Math.floor(((st.orient === 'horizontal' ? screen.availWidth : screen.availHeight) - 260 + STRIP_GAP) / (STRIP_CELL + STRIP_GAP)), 3, STRIP_LINE);
+  const favCount = k => (lib(k).state === 'ready' ? lib(k).sorted.filter(b => isFav(k, b.name)).length
+    : Object.keys(S.itemTags).filter(x => x.startsWith(k + ':') && tagsOf(k, x.slice(k.length + 1)).includes(FAV)).length);
+
+  let built = '';
+  function paint() {
+    const list = items(), per = perLine(), k = st.kind, n = list ? list.length : 0, many = n > per;
+    const shown = list ? (st.wrap || !many ? list : list.slice(0, per)) : null;
+    root.classList.toggle('horiz', st.orient === 'horizontal');
+    root.classList.toggle('folded', st.folded);
+    setText(label, KINDS[k].tab);
+    const menuText = `Favourite ${K(k).many}: the strip's menu`;
+    menuBtn.title = menuText; menuBtn.setAttribute('aria-label', menuText);
+    const foldText = st.folded ? 'Unfold the strip' : 'Fold the strip';
+    fold.title = foldText; fold.setAttribute('aria-label', foldText);
+    cells.style.setProperty('--per', per);
+    cells.classList.toggle('short', !shown || shown.length <= per);
+    more.hidden = !many;
+    setText(more, st.wrap ? 'Less' : '+' + (n - per));
+    more.title = st.wrap ? `Show the first ${per} only` : `Show all ${n} favourite ${K(k).many}`;
+    const sig = k + '|' + (shown ? shown.map(b => b.name).join('\n') : '?');
+    if (sig !== built) {                                         // the same names keep their thumbnails
+      built = sig;
+      cells.replaceChildren(...(!shown ? [0, 1, 2].map(() => h('div', { class: 'strip-cell skel' }, h('span', { class: 'thumb loading' })))
+        : shown.length ? shown.map(cell) : [h('button', { class: 'strip-empty', type: 'button', title: `No favourite ${K(k).many} yet. Click to open the browser and star some.`,
+          'aria-label': `No favourite ${K(k).many} yet. Open the browser`, onclick: () => { call('popout_open_browser', true).catch(() => {}); } }, icon('star', 16))]));
+    }
+    for (const c of $$('.strip-cell[data-name]', cells)) paintCell(c);
+    fitSoon();
+  }
+  /* The tag band (the first tag other than Favourites, as on the browser's cards) and the rim of the last pick. */
+  function paintCell(c) {
+    const name = c.dataset.name, t = firstTag(st.kind, name);
+    c.classList.toggle('tagged', !!t);
+    if (t) c.style.setProperty('--tag', t.color); else c.style.removeProperty('--tag');
+    c.classList.toggle('last', st.last === tagKey(st.kind, name));
+  }
+  function cell(b) {
+    const c = h('button', { class: 'strip-cell', type: 'button', draggable: 'true', dataset: { name: b.name }, 'aria-label': 'Select ' + b.name + ' in ZBrush',
+      onclick: () => pick(b.name) }, thumb(b.name, { size: STRIP_CELL, res: 128, kind: st.kind }));     // 128: the browser's own pictures, cached already
+    c.addEventListener('dragstart', e => {                       // the browser's native drag: to a new place here, or onto Studio
+      const dt = e.dataTransfer;
+      if (!dt) return;
+      dt.effectAllowed = 'copy';
+      dt.setData(ITEM_MIME, JSON.stringify({ kind: st.kind, name: b.name }));
+      dt.setData('text/plain', ITEM_TEXT + st.kind + ':' + b.name);
+      drag = { name: b.name }; c.classList.add('reordering'); hover(null);
+    });
+    c.addEventListener('dragend', endDrag);
+    return c;
+  }
+
+  async function pick(name) {
+    if (popPicking) return;
+    popPicking = true;
+    const kind = st.kind;
+    let r;
+    try { r = await call('popout_pick', name, kind); } catch (e) { r = { ok: false, error: 'Could not reach ZOrbit: ' + ((e && e.message) || e) }; }
+    popPicking = false;
+    if (r && r.ok) { st.last = tagKey(kind, name); for (const c of $$('.strip-cell[data-name]', cells)) paintCell(c); }
+    else toast((r && r.error) || 'ZOrbit is not running. It starts and stops with ZBrush. Start ZBrush, or press Start app on Studio’s Status screen.', { tone: 'warn' });
+  }
+
+  /* The name of the thumbnail under the mouse, in a pill outside the window (popout.py draws it), beside the strip's edge. */
+  let hoverSeq = 0, hoverOn = '';
+  function hover(name, el) {
+    if (name && (menu || drag)) return;
+    if (!name && !hoverOn) return;
+    hoverOn = name || '';
+    let rect = null;
+    if (name) {
+      const c = el.getBoundingClientRect(), s = root.getBoundingClientRect();
+      rect = st.orient === 'horizontal' ? [c.left, s.top, c.right, s.bottom] : [s.left, c.top, s.right, c.bottom];
+    }
+    call('popout_strip_hover', ++hoverSeq, name || null, rect, st.orient === 'horizontal' ? 'below' : 'right').catch(() => {});
+  }
+  root.addEventListener('mouseover', e => {
+    const c = e.target.closest && e.target.closest('.strip-cell[data-name]');
+    if (c) { if (c.dataset.name !== hoverOn) hover(c.dataset.name, c); } else hover(null);
+  });
+  root.addEventListener('mouseleave', () => hover(null));
+
+  /* Your order, as in the browser's Favourites: drag a thumbnail to a gap. ZFavOrder.gapAt reads lines that run across, so a vertical strip's
+     rectangles are given to it turned on their side, and its answer turned back. */
+  let drag = null;
+  const mark = h('div', { class: 'strip-drop', 'aria-hidden': 'true' });
+  function gapAt(x, y) {
+    const vert = st.orient !== 'horizontal';
+    const turn = r => (vert ? { left: r.top, top: r.left, right: r.bottom, bottom: r.right } : r);
+    const g = ZFavOrder.gapAt($$('.strip-cell[data-name]', cells).map(c => turn(c.getBoundingClientRect())), vert ? y : x, vert ? x : y, STRIP_GAP);
+    return g && (vert ? { index: g.index, y: g.x, left: g.top, right: g.bottom } : { index: g.index, x: g.x, top: g.top, bottom: g.bottom });
+  }
+  function paintMark(x, y) {
+    const g = gapAt(x, y), box = cells.getBoundingClientRect();
+    if (!g) { mark.remove(); return; }
+    if (g.y !== undefined) Object.assign(mark.style, { left: (g.left - box.left) + 'px', top: (g.y - box.top - 1) + 'px', width: (g.right - g.left) + 'px', height: '2px' });
+    else Object.assign(mark.style, { left: (g.x - box.left - 1) + 'px', top: (g.top - box.top) + 'px', width: '2px', height: (g.bottom - g.top) + 'px' });
+    if (mark.parentNode !== cells) cells.append(mark);
+  }
+  function endDrag() { drag = null; mark.remove(); $$('.strip-cell.reordering', cells).forEach(c => c.classList.remove('reordering')); }
+  cells.addEventListener('dragover', e => {
+    if (!drag || !e.dataTransfer) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';                          // what the thumbnail allows, so the same drag can land in Studio
+    paintMark(e.clientX, e.clientY);
+  });
+  cells.addEventListener('dragleave', e => { if (drag && !cells.contains(e.relatedTarget)) mark.remove(); });
+  cells.addEventListener('drop', e => {
+    if (!drag) return;
+    e.preventDefault();
+    const name = drag.name, g = gapAt(e.clientX, e.clientY), list = items();
+    endDrag();
+    const next = g && list ? ZFavOrder.moved(list.map(b => nameKey(b.name)), nameKey(name), g.index) : null;
+    if (next) tagCall('set_favourite_order', st.kind, next);   // its answer repaints the strip and every browser (tagsChanged)
+  });
+
+  /* The menu: the tabs with their favourite counts, the orientation, Open browser and Hide strip. It takes the strip's place under the grip and
+     the menu button (which closes it again), and the window takes its size. It closes on a choice, or a moment after the mouse leaves the window
+     (a click in ZBrush never reaches this page). */
+  let menu = null, menuTimer = 0;
+  function openMenu() {
+    if (menu) return;
+    hover(null);
+    const row = (label, fn, o = {}) => h('button', { class: 'pop-item' + (o.on ? ' on' : ''), type: 'button', role: o.radio ? 'menuitemradio' : 'menuitem',
+      'aria-checked': o.radio ? String(!!o.on) : null, onclick: () => { closeMenu(false); fn(); } },
+    o.radio ? h('span', { class: 'pop-tick' }, o.on ? icon('check', 14) : null) : icon(o.icon, 15),
+    h('span', { class: 'pop-text' }, h('b', null, label)), o.count === undefined ? null : h('span', { class: 'pi-count' }, String(o.count)));
+    menu = h('div', { class: 'strip-pop', role: 'menu', 'aria-label': 'Strip' },
+      LIB_KINDS.map(k => row(KINDS[k].tab, () => set({ kind: k }), { on: k === st.kind, count: favCount(k), icon: KIND[k].icon })),
+      h('div', { class: 'pop-sep', role: 'separator' }),
+      row('Vertical', () => set({ orient: 'vertical' }), { radio: true, on: st.orient !== 'horizontal' }),
+      row('Horizontal', () => set({ orient: 'horizontal' }), { radio: true, on: st.orient === 'horizontal' }),
+      h('div', { class: 'pop-sep', role: 'separator' }),
+      row('Open browser', () => { call('popout_open_browser', false).catch(() => {}); paint(); }, { icon: 'k_browser' }),
+      row('Hide strip', () => { call('popout_strip_hide').catch(() => {}); paint(); }, { icon: 'x' }));
+    menuBtn.after(menu);
+    root.classList.add('menu-open');
+    menuBtn.setAttribute('aria-expanded', 'true');
+    fitSoon();
+  }
+  function closeMenu(refit = true) {
+    clearTimeout(menuTimer);
+    if (!menu) return;
+    menu.remove(); menu = null;
+    root.classList.remove('menu-open');
+    menuBtn.setAttribute('aria-expanded', 'false');
+    if (refit) fitSoon();
+  }
+  document.documentElement.addEventListener('mouseleave', () => { clearTimeout(menuTimer); if (menu) menuTimer = setTimeout(() => closeMenu(), 700); });
+  document.documentElement.addEventListener('mouseenter', () => clearTimeout(menuTimer));
+
+  /* orient, kind or wrap: drawn at once, saved, and the window fitted again. */
+  async function set(changes) {
+    Object.assign(st, changes);
+    if (changes.kind) { built = ''; ensureLib(st.kind); popRescanIfOld(st.kind); loadUsage(st.kind); }
+    paint();
+    try { await call('popout_strip_set', changes); } catch (e) { toast('Could not save the strip.', { tone: 'warn' }); }
+  }
+
+  /* The window's size: .strip's own. Sent only when it changed. */
+  let lastFit = '';
+  const measure = () => { const r = root.getBoundingClientRect(); return { w: Math.ceil(r.width), h: Math.ceil(r.height) }; };
+  function sendFit(f) {
+    const key = JSON.stringify(f);
+    if (key === lastFit || S.popMode !== 'strip') return;
+    lastFit = key;
+    call('popout_strip_size', f.w, f.h).catch(() => {});
+  }
+  const fitSoon = debounce(() => { if (S.popMode === 'strip') sendFit(measure()); }, 16);
+  function fitNow() { fitSoon.cancel(); const f = measure(); lastFit = JSON.stringify(f); return f; }   // popout.py sizes the window with the answer
+
+  const api = { el: root, kind: () => st.kind, paint, fitNow, closeMenu, updateTags: paint, updateUsage: paint, resend: () => { lastFit = ''; fitSoon(); } };
+  browsers.set(st, api);                                         // tag and usage changes repaint it as they do the browser
+  return api;
+}
 
 async function bootPopout() {
   S.cfg = { menus: {} };                             // the popout has no menus; the tag manager asks get_tag_uses for the ring items that use a tag
@@ -7186,18 +7428,35 @@ async function bootPopout() {
     if (state.tag === FAV) S.pop.cat = '@fav';           // Favourites is a folder, not a chip
     else if (state.tag) S.pop.tags = new Set([String(state.tag)]);
     if (isLib(state.kind)) S.pop.kind = state.kind;
+    const sp = state.strip || {};
+    if (isLib(sp.kind)) S.strip.kind = sp.kind;
+    S.strip.orient = sp.orient === 'horizontal' ? 'horizontal' : 'vertical';
+    S.strip.wrap = !!sp.wrap;
+    S.strip.folded = !!sp.fold;
   }
   buildPopout($('#app'));                            // makeBrowser loads the library of the starting tab
-  loadTags();
+  popStrip = buildStrip();                           // drawn when __popoutShow asks for the strip
+  const tags = loadTags();
+  if (state && state.strip && state.strip.on) {      // the strip comes up by itself: measured with its favourites in, not as an empty frame
+    const k = S.strip.kind, t0 = Date.now();           // 4 s at most: a library that never loads must not keep this polling, nor the strip waiting
+    const libDone = (async () => { ensureLib(k); while ((lib(k).busy || !lib(k).loaded) && Date.now() - t0 < 4000) await sleep(50); })();
+    await Promise.race([Promise.all([tags, loadUsage(k), libDone]), sleep(4000)]);
+  }
   S.ready = true;
   document.documentElement.classList.add('ready');
-  if (popWant) { const w = popWant; popWant = undefined; window.__popoutShow(w); }
+  if (popWant) {
+    const w = popWant; popWant = undefined;
+    window.__popoutShow(w);
+    if (w.mode === 'strip') popStrip.resend();      // the window went up at a guessed size
+  }
+  window.__popoutBooted = true;                      // popout.py waits for this before it puts the strip up at a start
 }
 
 function initPopout() {
-  installMouseNav(d => { if (popBrowser) popBrowser.navStep(d); });
+  const inStrip = () => S.popMode === 'strip';                               // the strip never has the keyboard: none of this runs there
+  installMouseNav(d => { if (popBrowser && !inStrip()) popBrowser.navStep(d); });
   window.addEventListener('keydown', e => {
-    if (!popBrowser || e.isComposing) return;
+    if (!popBrowser || e.isComposing || inStrip()) return;
     if ($('#overlay-root').firstElementChild || $('.popover')) return;       // a dialog or a popover has the keys
     if (e.key === 'Escape') {                                                // the search box and the selection take theirs first (they stop or prevent it)
       if (e.defaultPrevented) return;
@@ -7239,13 +7498,13 @@ function initPopout() {
      chips' and folders' habit of putting the focus back on themselves after a repaint finds it already on the search box. */
   document.addEventListener('click', e => {
     const t = e.target;
-    if (!popBrowser || !(e.detail > 0) || !t || !t.closest) return;
+    if (!popBrowser || inStrip() || !(e.detail > 0) || !t || !t.closest) return;
     if (!t.closest('button, a, [role="option"], [role="tab"]')) return;       // a click on the card itself keeps its focus: Ctrl+D, Space and Enter work on it
     if (t.closest('input, textarea, select, [contenteditable], #overlay-root, .popover, #toasts')) return;
     popBrowser.focusSearch(false);
   }, true);
   window.addEventListener('contextmenu', e => {                              // the web view's own menu is a window of another
-    if (!(e.target && e.target.closest && e.target.closest('.bcard'))) e.preventDefault();   // process and would read as leaving
+    if (inStrip() || !(e.target && e.target.closest && e.target.closest('.bcard'))) e.preventDefault();   // process and would read as leaving
   });
   window.addEventListener('focus', debounce(() => { if (S.ready) { loadTags(); reloadUsage(); } }, 300));      // tags.json may have changed (the Studio), and picks add to Recent
   // The window stays on top beside the Studio, so it may never get focus while a tag changes there. get_tags answers "unchanged" from a

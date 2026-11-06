@@ -21,9 +21,10 @@ worked out.
    and update on the VM, the docs against the code) found only small things, fixed since. 1.0.0 waits for 0.19 and
    0.20 to be used for a while; it ships with no new feature. One decision goes with it: whether the "experimental"
    note on themes and the "under heavy development" note on the docs index stay.
-2. **Next:** [#39](https://github.com/combwizard/ZOrbit/issues/39), the drag to reorder. Tags may already cover its
-   named lists, so settle that before building them. [#40](https://github.com/combwizard/ZOrbit/issues/40) waits for
-   it, since the strip needs the favourites data settled.
+2. **Done with the strip:** [#40](https://github.com/combwizard/ZOrbit/issues/40), the favourites strip, is built
+   (6 Nov 2026). The drag to reorder of [#39](https://github.com/combwizard/ZOrbit/issues/39) shipped in 0.20.0 and
+   tags cover its named lists, so #39 closes. Left out of the strip on purpose, as issues if anyone asks: a
+   `--strip` command-line option and a Studio setting for its orientation.
 3. **Ring look, back to back, if wanted:** [#35](https://github.com/combwizard/ZOrbit/issues/35) (`Item.colors`; slots
    that are not round are the hard part), then [#37](https://github.com/combwizard/ZOrbit/issues/37) (a large fan has
    two staggered rows, so no one arc runs through its slots) and
