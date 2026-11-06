@@ -115,7 +115,7 @@ ZOrbit searches these folders, in order. The first folder that has the name wins
 
 For a pick in ZBrush 2022 to 2025, only the four folders of that ZBrush's own installation are searched, because an older ZBrush cannot always read a newer version's brushes. A brush that only a folder you added has is listed, but a pick there says it **could not be found in ZBrush**. Subfolders are searched too, except folders whose name starts with `_`. Two files whose names differ only by capitals or spaces count as one brush.
 
-In ZBrush 2026 and newer, with several versions installed, "the installation" is the newest one, whichever ZBrush is running. ZOrbit takes the newest install that recorded its path (ZBrush 2026 and newer write `installpath.txt` under `%APPDATA%\Maxon`), otherwise the newest it finds. So a session in ZBrush 2026 can load files from a ZBrush 2027 install. The theme works the other way: [Match ZBrush](appearance.md#match-zbrush) follows the running one.
+In ZBrush 2026 and newer, with several versions installed, "the installation" is the newest one, whichever ZBrush is running. ZOrbit takes the newest install that recorded its path (ZBrush 2026 and newer write `installpath.txt` under `%APPDATA%\Maxon`), otherwise the newest it finds. So a session in ZBrush 2026 can load files from a ZBrush 2027 install. The theme is different: [Match ZBrush](appearance.md#match-zbrush) follows the running ZBrush.
 
 ### Alpha, material and texture
 

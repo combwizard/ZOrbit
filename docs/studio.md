@@ -62,7 +62,7 @@ While the app runs, ZOrbit has an icon in the notification area. Left-click it t
 - **Profile** lists your profiles, with a tick on the one in use. Pick one to switch; the ring follows within half a second, with no restart. A switch shows a balloon, "Profile: X". See [Profiles](profiles.md#switching).
 - **Manage profiles...** opens Studio.
 - **Open logs folder** opens `%LOCALAPPDATA%\ZOrbit`.
-- **Quit ZOrbit** stops the app. It sits last, below a separator line. The ring stays off until ZBrush is restarted or **Start app** is pressed on **Status**.
+- **Quit ZOrbit** stops the app. The ring stays off until ZBrush is restarted or **Start app** is pressed on **Status**.
 
 ## Setup
 
