@@ -27,7 +27,7 @@ ZOrbit uses three keys that ZBrush may also want:
 
 **The tray icon.** While ZOrbit runs, its icon sits in the notification area. Windows may keep it behind the **^** arrow; drag it out to keep it in view.
 
-**The browser.** **Alt+B** opens a window with every brush, alpha, material and texture ZBrush can load. Search, filter by tag, star favourites and pick with Enter. See [Browser window](browser.md).
+**The browser.** **Alt+B** opens a window with every brush, alpha, material and texture ZBrush can load. Search, filter by tag, star favourites and pick with Enter. Your favourites can also sit in a small strip over ZBrush, where one click picks. See [Browser window](browser.md).
 
 ## First steps
 

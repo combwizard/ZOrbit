@@ -9,7 +9,7 @@ While Studio is open you can drag an item from the browser onto a menu in Studio
 
 ## Opening it
 
-- Press the browser hotkey (`browser.hotkey`; **Alt+B** on new installs). It works while ZBrush **or the browser** is in front. If the browser is hidden it appears; if it is open behind other windows it comes to the front; if it is already in front, the keyboard goes back to ZBrush and the window stays where it is.
+- Press the browser hotkey (`browser.hotkey`; **Alt+B** on new installs). It works while ZBrush **or the browser** is in front. If the browser is hidden it appears; if it is open behind other windows it comes to the front; if it is already in front, the keyboard goes back to ZBrush and the window stays where it is. While the [strip](#the-strip) is up, it opens the full browser.
 - Pick a **Browser** slot on a ring (new installs have one in **Tools**).
 - Pick **More...** in a tag's fan: the browser opens on that tag.
 - Choose **Browser** in the tray menu (the ZOrbit icon in the notification area).
@@ -18,7 +18,7 @@ While Studio is open you can drag an item from the browser onto a menu in Studio
 - From another program, `ZOrbit.exe --browser` asks the running app to open it. See [Commands from other programs](hotkeys.md#commands-from-other-programs).
 - Start it from the command line with `ZOrbit.exe --popout --show` (from a source checkout, `python zorbit\main.py --popout --show`). Add `--kind brush`, `--kind alpha`, `--kind material` or `--kind texture` to open it on that tab, and `--tag KEY` to filter it to one tag. Without `--show` it starts hidden and waits to be called.
 
-A browser that was hidden (it starts hidden, and **X** hides one that the app started) starts afresh when you open it: the search is empty, only the tag you asked for is on (none, for the hotkey), the folder is **All** (**Favourites** when you asked for it), the list is at the top and the first match is highlighted. The tab you were last on stays, unless you asked for another, and so do the thumbnail size, Keep on top, the folders column and the window's place. A browser that is already open just comes to the front, with its search and filters as they were, except that a tag or tab you asked for (from a **Browser** slot, say) is applied.
+A browser that was hidden (it starts hidden, and **X** hides one that the app started, unless the [strip](#the-strip) is on) starts afresh when you open it: the search is empty, only the tag you asked for is on (none, for the hotkey), the folder is **All** (**Favourites** when you asked for it), the list is at the top and the first match is highlighted. The tab you were last on stays, unless you asked for another, and so do the thumbnail size, Keep on top, the folders column and the window's place. A browser that is already open just comes to the front, with its search and filters as they were, except that a tag or tab you asked for (from a **Browser** slot, say) is applied.
 
 The Studio button and the Start menu shortcut work without ZBrush running, so you can browse and tag items on their own. The browser has its own icon in the taskbar, different from ZOrbit's. The first time it appears centred on a screen. After that it comes back where, and as large as, you left it, maximised or not. It resizes and moves between monitors like [Studio's window](studio.md#the-window).
 
@@ -128,28 +128,53 @@ slots (see [Files and logs](files.md#files-and-logs)).
 
 ## The strip
 
-The strip is a small bar of one tab's favourites that stays on top of ZBrush. It shows the items you starred as thumbnails, in your [Favourites](#favourites-and-recent) order. Click one and ZBrush selects it. ZBrush keeps the keyboard while you click, so your hotkeys keep working. The strip has no taskbar button.
+The strip is the browser in a second form: a small bar that stays on top of ZBrush and shows one tab's favourites as thumbnails, in your [Favourites](#favourites-and-recent) order. Click a thumbnail and ZBrush selects the item. The strip never takes the keyboard from ZBrush, so your hotkeys keep working. It has no taskbar button.
 
-Press the strip button in the browser's header (three small squares, **Show as a strip**) and the browser window becomes the strip. From then on the strip is where the window rests. Closing the full browser with **X** brings the strip back. The strip comes up by itself only when the browser starts hidden with the app, which the app does when your menus have a browser hotkey or a **Browser** slot (see [In the background](#in-the-background)). The Start menu shortcut and Studio open the full browser, and **X** then takes it to the strip. To open the full browser, press the browser button near the end of the strip, choose **Open browser** in its menu, or press the browser hotkey (**Alt+B** on new installs). The hotkey always opens the full browser while the strip is up. To turn the strip off, choose **Hide strip** in its menu.
+![The strip standing up at the left of a screen: a grip at the top, a star with Brushes under it, six brush thumbnails with green and purple tag bands and an orange rim on the third, a +6 button, then the browser button and a fold arrow](images/strip.png)
 
-The star at the start of the strip names the tab it shows, such as **Brushes**. Click it for the strip's menu, which takes the strip's place until you choose or click the star again (it also closes a moment after the mouse leaves it):
+### Turning it on and off
 
-- **Brushes**, **Alphas**, **Materials** and **Textures**, each with how many favourites it has. The strip shows the one you pick.
-- **Vertical** or **Horizontal**.
+- Press the strip button in the browser's header (three small squares, **Show as a strip**). The browser window becomes the strip.
+- While the strip is on, **X** on the full browser goes back to the strip instead of hiding the window.
+- **Hide strip** in the strip's menu turns it off.
+- The strip comes up by itself when the app starts the browser hidden, which it does when your menus have a browser hotkey or a **Browser** slot (see [In the background](#in-the-background)). Studio and the Start menu shortcut open the full browser, and **X** then takes it to the strip.
+
+### Opening the full browser
+
+Press the browser button near the end of the strip, choose **Open browser** in its menu, or press the browser hotkey (**Alt+B** on new installs). The hotkey opens the full browser while the strip is up.
+
+### The menu
+
+The star at the top (or the start of a horizontal strip) names the tab the strip shows, such as **Brushes**. Click it to open the strip's menu in place of the thumbnails.
+
+![The strip's menu: Brushes, Alphas, Materials and Textures each with a count of favourites, Vertical ticked and Horizontal, then Open browser and Hide strip](images/strip-menu.png)
+
+- **Brushes**, **Alphas**, **Materials** and **Textures**, each with its number of favourites. Choose one to show it in the strip.
+- **Vertical** and **Horizontal**.
 - **Open browser** and **Hide strip**.
 
-Using the strip:
+The menu closes when you choose something, when you click the star again, and a moment after the mouse leaves it.
 
-- A line holds up to ten thumbnails, fewer on a small screen. With more favourites a button such as **+6** shows the rest in a second column (a second row when horizontal), and then says **Less**.
+### Using the strip
+
+- A line holds up to ten thumbnails, fewer on a small screen. With more favourites a button such as **+6** wraps the rest into a second column, or a second row when the strip is horizontal. It then says **Less**.
 - Hover a thumbnail to see its name beside the strip.
-- The item you picked last through the strip has an orange rim. A tagged item has a band in its first tag's colour along its bottom, as on the browser's cards.
-- Drag a thumbnail to another place in the strip to change your Favourites order, as in the browser.
-- The arrow button at the end folds the strip down to its grip and star, and unfolds it again. The strip stays folded the next time it comes up.
-- With no favourites on its tab, the strip shows an empty star. Click it to open the browser on **Favourites**, then star some items.
-- Drag the strip by its grip (the six dots) to move it. It keeps its own place, apart from the browser's. The first time, it sits inside the left edge of the ZBrush window, centred top to bottom (at the top of the window, centred across, when horizontal), or at the left edge of the main screen when no ZBrush is running. It always stays on top of other windows, whatever **Keep on top** says, and it is kept on a screen.
-- The strip steps aside while another program is in front, and comes back when ZBrush is. It does not count as hidden for **Quit hidden browser after**. With no ZBrush running it stays up, so a strip you started by hand is always there.
-- It goes away with ZBrush. When the app quits, a strip the app started closes with it, and comes back the next time the app starts the browser. A strip you started yourself (from the Start menu, Studio or `--popout --show`) stays up.
-- A pick from the strip goes to the app at once, because ZBrush is still the front window. When it cannot, the message (such as **ZBrush is not running.** or **ZOrbit is not running.**) shows near the cursor.
+- The item you picked last through the strip has an orange rim. A tagged item has a band along its bottom in the colour of its first tag, as on the browser's cards.
+- Drag a thumbnail to another place in the strip to change your Favourites order. It is the same order as the browser's **Favourites** folder.
+- The arrow button at the end folds the strip down to its grip and star, and unfolds it again. The strip comes back folded the next time if you left it folded.
+- With no favourites on its tab, the strip shows an empty star. Click it to open the browser on **Favourites**, and star some items there.
+- Drag the grip (the six dots) to move the strip. It remembers its own place, apart from the browser's. The first time it sits against the left edge of the ZBrush window, centred top to bottom (against the top, centred across, when horizontal), or at the left edge of the main screen when no ZBrush is running. It stays on top of other windows whatever **Keep on top** says, and it is kept on a screen.
+
+![A horizontal strip with fourteen brush thumbnails in two rows, ten and four, after +4 was pressed so the button now says Less, then the browser button and a fold arrow at the right](images/strip-horizontal.png)
+
+### When it shows
+
+- The strip steps aside while another program is in front, and comes back when ZBrush is. With no ZBrush running it stays where it is.
+- It goes away with ZBrush. When the app quits, a strip the app started closes with it and comes back the next time the app starts the browser. A strip you started yourself (from the Start menu, Studio or `--popout --show`) stays up.
+- It does not count as hidden for **Quit hidden browser after**.
+- A click while no ZBrush is running shows **ZBrush is not running.** near the cursor. Other messages, such as **ZOrbit is not running.**, show there too.
+
+If the strip is not where you expect it, see [The strip is not there](troubleshooting.md#the-strip-is-not-there).
 
 The strip's settings are in `popout.json`: `strip_on` and, under `strip`, the orientation (`orient`), the tab (`kind`), its place (`window`), whether every favourite shows (`wrap`) and whether it is folded (`fold`). See [Files and logs](files.md#files-and-logs).
 
@@ -163,7 +188,7 @@ The browser's list is the same whichever ZBrush is in front. A pick in ZBrush 20
 
 ## In the background
 
-The browser takes a moment to start, so when your config has a browser hotkey or a **Browser** slot, the app starts it hidden a few seconds after it starts itself, and the first press is quick. It stays hidden until you call it and holds its web view in memory while it waits. Closing it with **X** hides it again, ready for the next press. Without a hotkey or a Browser slot it starts the first time you use **More...**, the tray menu, Studio or the Start menu. Started from Studio, the Start menu or the command line, it is on its own: the app is not waiting for it, so **X** ends it.
+The browser takes a moment to start, so when your config has a browser hotkey or a **Browser** slot, the app starts it hidden a few seconds after it starts itself, and the first press is quick. It stays hidden until you call it and holds its web view in memory while it waits. Closing it with **X** hides it again, ready for the next press, or goes back to the [strip](#the-strip) when the strip is on. Without a hotkey or a Browser slot it starts the first time you use **More...**, the tray menu, Studio or the Start menu. Started from Studio, the Start menu or the command line, it is on its own: the app is not waiting for it, so **X** ends it.
 
 A hidden browser that the app started can also quit after it has sat unused for a while, to give back the memory its web view holds. It is off by default. Set **Quit hidden browser after** in **Settings > Behaviour** (Full mode), or `browser.quit_after_minutes` in `radial.json` (see [Quit hidden browser after](appearance.md#quit-hidden-browser-after)). A window that is up never quits. One started from Studio or the Start menu when none was running never quits this way. If the app had already started one, Studio and the Start menu just show that one, and it still counts as the app's, so its count starts over when it is hidden again. The time counts from when it was last hidden, or from a hidden start, and showing it cancels the count. The next press starts it again, a moment slower. While the setting is on, it stays gone until something asks for it, including across a config reload. Turn the setting off, or switch to a profile where it is off, and the next config load starts it hidden again if your config has a browser hotkey or a **Browser** slot. Restarting the app starts it hidden again, as usual, but only with a browser hotkey or a **Browser** slot. `popout.log` says why it quit, and `radiald.log` has the line `browser: the popout quit after sitting unused`.
 

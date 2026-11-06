@@ -8,7 +8,7 @@ All notable changes to this project are listed here. The format follows
 
 ### Added
 
-- The browser can be a strip: a small bar of one tab's favourites that stays on top of ZBrush. One click picks an item, and the strip never takes the keyboard from ZBrush. Turn it on with the new strip button in the browser's header; its menu switches the tab, lays it vertical or horizontal, opens the full browser and hides it. Closing the full browser goes back to the strip, and the strip comes up by itself when the app starts the browser hidden (with a browser hotkey or a **Browser** slot). It steps aside while another program is in front and comes back with ZBrush, it closes with the app, and a fold is remembered. (#40)
+- The browser can be a strip: a small bar of one tab's favourites that stays on top of ZBrush and never takes the keyboard from it, so one click picks an item. Turn it on with the strip button in the browser's header. Its menu switches the tab, lays the strip vertical or horizontal, opens the full browser or hides the strip. **X** on the browser goes back to the strip, the strip comes up by itself when the app starts the browser hidden, it steps aside while another program is in front, and it closes with the app. (#40)
 
 ### Changed
 

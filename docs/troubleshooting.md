@@ -151,6 +151,15 @@ That is on purpose. When a file's name is already taken, it is listed with its p
 
 Click the search box once. If you have to do that every time, send `popout.log` and the `browser` lines of `radiald.log`.
 
+### The strip is not there
+
+- It steps aside while another program is in front and comes back when ZBrush is. Click ZBrush and look again.
+- It goes with ZBrush. When the app quits, a strip it started closes too.
+- It starts by itself only when the app starts the browser hidden, so your menus need a browser hotkey or a **Browser** slot. The Start menu shortcut and Studio open the full browser instead.
+- **Hide strip** turns it off. Open the browser and press **Show as a strip** in its header to turn it on again.
+
+`popout.log` says when the strip was hidden or shown again (lines with `strip` in them) and when a start-up strip was skipped. See [The strip](browser.md#the-strip).
+
 ### A pick in the browser does nothing
 
 After a pick, read the toast. A toast that says **Sent X to ZBrush** (X is the item's name) means the app took the pick, and `bridge.log` says what ZBrush did with it. **ZOrbit is not running. It starts and stops with ZBrush.** (followed by "Start ZBrush, or press Start app on Studio's Status screen.") means the browser found no app window: start ZBrush, and the app starts with it, or press **Start app** on Studio's **Status** screen. **ZOrbit did not answer. Try again in a moment.** means the app's window exists but did not answer within half a second. `popout.log` has a line `pick ... app window ..., result ...` for each pick.
