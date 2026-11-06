@@ -556,6 +556,7 @@
     Object.keys(ASSET_KIND).forEach(function (k) { if (!Array.isArray(all[k])) all[k] = []; });
     return all;
   }
+  var libForgotten = {};                                  // rows forgotten this session, so Undo brings back the name and count
   function libFoldersSave(all) { try { localStorage.setItem('rm_libfolders', JSON.stringify(all)); } catch (e) {} }
   var libCache = {};
   function libFor(kind) {
@@ -992,8 +993,16 @@
     },
     // The user's own library folders (state in localStorage rm_libfolders, {brush: [row], ...}; ?libfolders=two seeds an empty state).
     get_library_folders: function () { return sleep(80).then(function () { return { ok: true, folders: libFolders() }; }); },
-    add_library_folder: function (kind) {
+    add_library_folder: function (kind, path, index) {
       if (!ASSET_KIND[kind]) return Promise.resolve({ ok: false, message: 'That is not a kind of library.' });
+      if (path) return sleep(100).then(function () {       // Undo on a forgotten folder: back at its place, with its row
+        var all = libFolders(), at = Math.min(Math.max(index | 0, 0), all[kind].length), row = libForgotten[kind + '|' + path];
+        if (all[kind].some(function (f) { return f.path === path; })) return { ok: true, already: true, message: path + ' is already listed.', folders: all };
+        row = row || { path: path, name: path.split('\\').pop(), exists: true, count: 12, hidden: 0, error: null };
+        all[kind].splice(at, 0, row);
+        libFoldersSave(all);
+        return { ok: true, message: 'Put ' + row.name + ' back.', folders: all };
+      });
       if (q.has('libfolderbad')) return sleep(150).then(function () { return { ok: false, message: 'That is a network folder. ZOrbit cannot watch one for changes, so pick a folder on this PC.' }; });
       return sleep(150).then(function () {
         var all = libFolders(), word = kind.charAt(0).toUpperCase() + kind.slice(1), path = 'D:\\Art\\' + word + ' pack';
@@ -1007,9 +1016,12 @@
       return sleep(100).then(function () {
         var all = libFolders();
         if (!all[kind]) return { ok: false, message: 'That is not a kind of library.', folders: all };
-        all[kind] = all[kind].filter(function (f) { return f.path !== path; });
+        var at = all[kind].findIndex(function (f) { return f.path === path; });
+        if (at < 0) return { ok: false, message: 'That folder is not in the list.', folders: all };
+        libForgotten[kind + '|' + path] = all[kind][at];
+        all[kind].splice(at, 1);
         libFoldersSave(all);
-        return { ok: true, message: 'Forgot ' + path + '. The folder itself was not touched.', folders: all };
+        return { ok: true, message: 'Forgot ' + path + '. The folder itself was not touched.', removed: path, index: at, folders: all };
       });
     },
     get_library: function (refresh, kind, since) {

@@ -915,6 +915,80 @@ def test_a_library_folder_is_forgotten_and_the_others_keep_their_order(lib, tmp_
     assert lib.forget_library_folder("alpha", str(tmp_path / "mine" / "a"))["ok"] is False
 
 
+def _listed(lib, tmp_path, *names, kind="brush"):
+    for n in names:
+        (tmp_path / "mine" / n).mkdir(parents=True, exist_ok=True)
+        lib.pick(tmp_path / "mine" / n)
+        assert lib.add_library_folder(kind)["ok"]
+    return [str(tmp_path / "mine" / n) for n in names]
+
+
+def test_forgetting_a_folder_answers_with_its_path_and_place(lib, tmp_path):
+    a, b, c = _listed(lib, tmp_path, "a", "b", "c")
+    res = lib.forget_library_folder("brush", b.upper() + "\\")
+    assert res["ok"] and res["removed"] == b and res["index"] == 1
+    assert lib.forget_library_folder("brush", a)["index"] == 0
+    assert lib.forget_library_folder("brush", c)["index"] == 0       # the place it had in the list at that moment
+    assert "removed" not in lib.forget_library_folder("brush", c)
+
+
+def test_a_forgotten_folder_goes_back_at_its_place(lib, tmp_path):
+    a, b, c = _listed(lib, tmp_path, "a", "b", "c")
+    res = lib.forget_library_folder("brush", b)
+    lib.pick(None)                                                    # no dialog opens: the path is given
+    back = lib.add_library_folder("brush", res["removed"], res["index"])
+    assert back["ok"] and back["message"] == "Put b back."
+    assert [r["name"] for r in back["folders"]["brush"]] == ["a", "b", "c"]
+    assert _folders(tmp_path) == {"brush": [a, b, c]}
+    first = lib.forget_library_folder("brush", a)
+    assert lib.add_library_folder("brush", first["removed"], first["index"])["ok"]
+    assert _folders(tmp_path) == {"brush": [a, b, c]}
+
+
+def test_an_index_past_the_end_or_none_appends(lib, tmp_path):
+    a, b = _listed(lib, tmp_path, "a", "b")
+    lib.forget_library_folder("brush", a)
+    assert lib.add_library_folder("brush", a, 99)["ok"]
+    assert _folders(tmp_path) == {"brush": [b, a]}
+    lib.forget_library_folder("brush", b)
+    assert lib.add_library_folder("brush", b)["ok"]                   # appending stays the default
+    assert _folders(tmp_path) == {"brush": [a, b]}
+    lib.forget_library_folder("brush", a)
+    for bad in (-1, "0", None, True, 1.5):
+        assert lib.add_library_folder("brush", a, bad)["ok"]
+        assert _folders(tmp_path) == {"brush": [b, a]}, bad
+        lib.forget_library_folder("brush", a)
+
+
+def test_putting_back_a_folder_that_is_already_listed_changes_nothing(lib, tmp_path):
+    a, b = _listed(lib, tmp_path, "a", "b")
+    res = lib.forget_library_folder("brush", a)
+    assert lib.add_library_folder("brush", a, 1)["ok"]                # the user added it again by hand meanwhile
+    again = lib.add_library_folder("brush", res["removed"], res["index"])
+    assert again["ok"] and again["already"] is True and "already listed" in again["message"]
+    assert _folders(tmp_path) == {"brush": [b, a]}
+
+
+def test_a_folder_that_went_missing_is_put_back_too(lib, tmp_path):
+    (a,) = _listed(lib, tmp_path, "a")
+    res = lib.forget_library_folder("brush", a)
+    (tmp_path / "mine" / "a").rmdir()
+    back = lib.add_library_folder("brush", res["removed"], res["index"])
+    assert back["ok"] and back["folders"]["brush"][0]["exists"] is False
+    assert _folders(tmp_path) == {"brush": [a]}
+
+
+def test_putting_a_folder_back_still_refuses_what_a_pick_refuses(lib, tmp_path):
+    a, b = _listed(lib, tmp_path, "a", "b")
+    assert lib.add_library_folder("brush", "//server/share/x", 0)["ok"] is False
+    assert "inside it" in lib.add_library_folder("brush", str(tmp_path / "mine" / "a" / "sub"), 0)["message"]
+    assert lib.add_library_folder("brush", str(lib.install / "ZData"), 0)["ok"] is False
+    assert lib.add_library_folder("tool", a, 0) == {"ok": False, "message": "Unknown kind."}
+    for bad in ("", "  ", 5, ["x"], "foo", "C:foo", ".", "mine\\a"):     # a relative path is never listed
+        assert lib.add_library_folder("brush", bad, 0)["ok"] is False
+    assert _folders(tmp_path) == {"brush": [a, b]}
+
+
 def test_an_unknown_kind_is_refused_without_a_dialog(lib, tmp_path):
     lib.pick(tmp_path / "mine")
     for kind in ("tool", "", None, ["brush"]):

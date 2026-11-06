@@ -6,6 +6,10 @@ All notable changes to this project are listed here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- Forgetting a folder on **Settings > Library folders** now shows a toast with an **Undo** button for a few seconds. It puts the folder back in the same place in the list, with its name and file count. Before, the only way back was to add the folder again. (#179)
+
 ### Fixed
 
 - Studio's counts for a **More** slot ("4 items are in the More submenu" and "4 items in a submenu") included empty
