@@ -58,11 +58,11 @@ While the app runs, ZOrbit has an icon in the notification area. Left-click it t
 
 - **Browser** opens the [browser](browser.md).
 - **Open Studio** opens this window.
+- **Reload menus** reads `radial.json` again and shows the result as a balloon from the tray icon: **Menus reloaded**, or the reason the file cannot be read. It is also logged in `radiald.log`: "tray: menus reloaded", or "tray: reload failed" with the reason.
 - **Profile** lists your profiles, with a tick on the one in use. Pick one to switch; the ring follows within half a second, with no restart. A switch shows a balloon, "Profile: X". See [Profiles](profiles.md#switching).
 - **Manage profiles...** opens Studio.
-- **Reload menus** reads `radial.json` again and shows the result as a balloon from the tray icon: **Menus reloaded**, or the reason the file cannot be read. It is also logged in `radiald.log`: "tray: menus reloaded", or "tray: reload failed" with the reason.
 - **Open logs folder** opens `%LOCALAPPDATA%\ZOrbit`.
-- **Quit ZOrbit** stops the app. The ring stays off until ZBrush is restarted or **Start app** is pressed on **Status**.
+- **Quit ZOrbit** stops the app. It sits last, below a separator line. The ring stays off until ZBrush is restarted or **Start app** is pressed on **Status**.
 
 ## Setup
 
