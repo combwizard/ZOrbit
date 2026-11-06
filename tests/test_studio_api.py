@@ -984,7 +984,7 @@ def test_putting_a_folder_back_still_refuses_what_a_pick_refuses(lib, tmp_path):
     assert "inside it" in lib.add_library_folder("brush", str(tmp_path / "mine" / "a" / "sub"), 0)["message"]
     assert lib.add_library_folder("brush", str(lib.install / "ZData"), 0)["ok"] is False
     assert lib.add_library_folder("tool", a, 0) == {"ok": False, "message": "Unknown kind."}
-    for bad in ("", "  ", 5, ["x"]):
+    for bad in ("", "  ", 5, ["x"], "foo", "C:foo", ".", "mine\\a"):     # a relative path is never listed
         assert lib.add_library_folder("brush", bad, 0)["ok"] is False
     assert _folders(tmp_path) == {"brush": [a, b]}
 

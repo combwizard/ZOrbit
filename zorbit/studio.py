@@ -1553,7 +1553,7 @@ class Api(webapi.LibraryApi, webapi.TagApi):
         p = os.path.normpath(str(picked[0] if isinstance(picked, (list, tuple)) else picked))
         if p.startswith(("\\\\", "//")):
             return {"ok": False, "message": "That is a network folder. Add a folder on this PC."}
-        if not restore and not os.path.isdir(p):
+        if (not os.path.isdir(p)) if not restore else (not os.path.isabs(p)):   # a put-back may be missing, never relative
             return {"ok": False, "message": "That folder cannot be found."}
         zb_name = self._zbrush_folder_overlap(kind, p)
         if zb_name:
