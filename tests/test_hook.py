@@ -2,6 +2,7 @@
 hook thread's start, stop and failure paths with a fake SetWindowsHookExW."""
 import ctypes
 import json
+import os
 import time
 import types
 
@@ -436,3 +437,27 @@ def test_app_start_and_stop_hook(fake_hook):
     a.stop_hook()
     assert a._hook is None and not hook.is_alive()
     a.stop_hook()                                              # stopping twice is harmless
+
+
+def test_a_half_written_file_is_read_again_once_it_is_whole(tmp_path, monkeypatch):
+    """An editor that truncates and then writes can leave the whole file with the mtime the empty file had, when both
+    land in one clock tick. The app read the empty file, kept the previous menus, and must still read the whole one."""
+    path = tmp_path / "radial.json"
+    good = json.dumps({"menus": {"a": {"title": "A", "hotkey": "Q", "items": [{"brush": "Standard"}]}}})
+    path.write_text(good, encoding="utf-8")
+    monkeypatch.setenv("ZORBIT_TAGS_FILE", str(tmp_path / "tags.json"))
+    a = radiald.App(str(path))
+    monkeypatch.setattr(a, "_prefetch", lambda: None)
+    monkeypatch.setattr(a, "_schedule_prewarm", lambda: None)
+    a.load_config(force=True, balloon=False)
+    assert [m.title for m in a.slots] == ["A"]
+    path.write_text("", encoding="utf-8")                        # the truncate
+    stamp = path.stat().st_mtime
+    a.load_config(balloon=False)
+    assert a._config_error and [m.title for m in a.slots] == ["A"]
+    path.write_text(good.replace('"A"', '"B"'), encoding="utf-8")   # the write, in the same tick
+    os.utime(path, (stamp, stamp))
+    a.load_config(balloon=False)
+    assert not a._config_error and [m.title for m in a.slots] == ["B"]
+    a.load_config(balloon=False)                                 # and a whole file is not read on every poll
+    assert [m.title for m in a.slots] == ["B"]

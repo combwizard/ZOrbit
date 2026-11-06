@@ -621,3 +621,10 @@ def test_name_of_and_names_read_the_last_walk(tmp_path):
     assert assets.name_of("alpha", "10 (Other)") == "10 (Other)"
     assert assets.name_of("alpha", "10(other)") == "10 (Other)"            # any spelling
     assert assets.names("alpha") is walk.names
+
+
+def test_installs_are_still_looked_for_without_a_maxon_folder(tmp_path, monkeypatch):
+    monkeypatch.setenv("APPDATA", str(tmp_path / "roaming"))      # no Maxon folder at all: ZBrush 2022 to 2025 only
+    here = tmp_path / "ZBrush 2022"
+    monkeypatch.setattr(brushes._installs, "find_installs", lambda: [{"path": str(here)}])
+    assert brushes.zbrush_dirs()["install"] == here

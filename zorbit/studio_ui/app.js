@@ -1679,7 +1679,7 @@ function buildMenusScreen(root) {
         }
       }
       listEl._sig = null;                                       // the row holds the input: force a rebuild
-      R.menuList();
+      if (R.menuList) R.menuList();                             // gone when the blur comes from leaving the screen
     };
     // Only Enter and Escape are ours; everything else (Ctrl+S, Alt+1..6) still reaches the window, after the new title is taken in
     inp.addEventListener('keydown', e => {
@@ -5293,7 +5293,10 @@ function buildSetupScreen(root) {
   const menuNow = setupMenu();
   const finish = async withToast => {
     if (!await setPref('setup_done', true)) return;
-    if (withToast) toast('Setup done. Press ' + ((menuNow && menuNow.hotkey) || 'Q') + ' over ZBrush whenever you like.', { tone: 'ok', ms: 4500 });
+    if (withToast) {                             // the app runs once ZBrush has loaded the plugin; before that, Q does nothing yet
+      const key = (menuNow && menuNow.hotkey) || 'Q', live = !!(st.data && st.data.app && st.data.app.running);
+      toast(live ? `Setup done. Press ${key} over ZBrush whenever you like.` : `Setup done. Once ZBrush has started with the plugin, press ${key} over it.`, { tone: 'ok', ms: 4500 });
+    }
     showScreen('menus');
     offerTour().catch(() => {});
   };

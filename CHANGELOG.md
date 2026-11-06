@@ -9,11 +9,15 @@ All notable changes to this project are listed here. The format follows
 ### Changed
 
 - Forgetting a folder on **Settings > Library folders** now shows a toast with an **Undo** button for a few seconds. It puts the folder back in the same place in the list, with its name and file count. Before, the only way back was to add the folder again. (#179)
+- The message after **Finish** on Setup says to start ZBrush with the plugin first when the app is not running yet, instead of "Press Q over ZBrush whenever you like".
 
 ### Fixed
 
 - Studio's counts for a **More** slot ("4 items are in the More submenu" and "4 items in a submenu") included empty
   slots and items that cannot be used, which the submenu leaves out, so they could say more than **More** opens with.
+- Studio threw an error (nothing visible) when you left the **Menus** screen while a new menu's title box was still open.
+- The Library and the browser said "ZBrush was not found" on a PC with no `Maxon` folder under `%APPDATA%`, although Setup listed the installs: the search for ZBrush 2022 to 2025 installs was skipped.
+- When an editor saved `radial.json` by truncating the file and then writing it, and both landed with the same time stamp, the app read the empty file, kept the previous menus and did not read the whole file until the next save. It is read on the next check now.
 
 ## [0.20.0] - 2026-11-05
 

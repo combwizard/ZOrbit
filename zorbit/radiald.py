@@ -377,7 +377,7 @@ class App:
         self.no_tray = no_tray
         self.tray = None
         self.cfg = None
-        self._bad_mtime = None          # mtime of a radial.json that failed to load
+        self._bad_sig = None            # (mtime, size) of a radial.json that failed to load
         self._theme = "dark"            # the theme the config was last loaded under
         self._theme_sig = ("dark", "")  # theme.signature() of that load: the name, and for zbrush the scheme's digest
         self._lib_sig = None            # brushes.user_folders_signature() last seen; None before the first check
@@ -506,12 +506,13 @@ class App:
                 log(f"tags loaded: {len(self.tags.tags())} tags, {len(self.tags.tagged())} tagged items")
             force = True
         try:
-            mtime = os.stat(self.cfg_path).st_mtime
+            st = os.stat(self.cfg_path)
+            mtime, bad = st.st_mtime, (st.st_mtime, st.st_size)
         except OSError:
-            mtime = None                           # missing: reported once, by the load below
+            mtime = bad = None                     # missing: reported once, by the load below
         sig = theme.signature()                    # a change of theme (or a new stored ZBrush scheme) reloads the config
         eff = sig[0]
-        if not force and sig == self._theme_sig and ((self.cfg and mtime == self.cfg.mtime) or mtime == self._bad_mtime):
+        if not force and sig == self._theme_sig and ((self.cfg and mtime == self.cfg.mtime) or bad == self._bad_sig):
             return
         if sig != self._theme_sig:
             src = theme.source() if eff == "zbrush" else None
@@ -521,8 +522,10 @@ class App:
         except Exception as e:
             self._theme = eff                      # a broken file is not loaded again on every tick for the same theme
             self._theme_sig = sig
-            fresh = mtime != self._bad_mtime
-            self._bad_mtime = mtime                # logged once per broken version, not on every poll
+            fresh = bad != self._bad_sig
+            self._bad_sig = bad                    # logged once per broken version, not on every poll. The size is part
+            # of it: an editor that truncates and then writes can leave the whole file with the half-written file's
+            # mtime, and the next poll must still read it.
             self._config_error = str(e) or repr(e)
             if self._have_cfg:
                 log(f"config error, keeping previous config: {e!r}")
@@ -606,7 +609,7 @@ class App:
             self.cfg_path = profiles.config_file(name)
             self.tags = tags.TagStore(profiles.tags_file(name))
             self.usage = usage.Usage(profiles.usage_file(name))     # new: its cache and picks must not carry over
-            self._bad_mtime = None
+            self._bad_sig = None
             self._config_error = None
             self._have_cfg = False      # a broken file then runs with no menus, not the old profile's ring
             self._activity_menu = None
