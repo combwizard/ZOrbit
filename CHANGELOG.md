@@ -8,6 +8,7 @@ All notable changes to this project are listed here. The format follows
 
 ### Changed
 
+- With several ZBrush versions installed, the browser, the Library and the ring list the folders of the ZBrush that is running (the newest, when several run) instead of the newest installed, so a ZBrush 2026 session no longer lists a 2027 install's files, and a running ZBrush 2022 to 2025 lists its own installation's. With none running, the newest installed is used, as before. The app reads the library again a few seconds after another ZBrush starts; the browser follows on its next rescan. (#181)
 - Forgetting a folder on **Settings > Library folders** now shows a toast with an **Undo** button for a few seconds. It puts the folder back in the same place in the list, with its name and file count. Before, the only way back was to add the folder again. (#179)
 - The message after **Finish** on Setup says to start ZBrush with the plugin first when the app is not running yet, instead of "Press Q over ZBrush whenever you like".
 

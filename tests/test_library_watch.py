@@ -55,7 +55,7 @@ def test_first_check_only_stores(app, monkeypatch):
     monkeypatch.setattr(assets, "library", lambda kind: calls.append(kind))
     assets._index["alpha"] = {}
     app._check_library_folders()
-    assert app._lib_sig == brushes.user_folders_signature()
+    assert app._lib_sig == (brushes.user_folders_signature(), brushes.dirs_signature())
     assert app._lib_rebuild is None and not calls
 
 
@@ -121,3 +121,19 @@ def test_a_failed_read_logs_once(app, monkeypatch):
     for _ in range(3):
         app._check_library_folders()
     assert len(lines) == 1 and app._lib_sig is None
+
+
+def test_another_zbrush_starting_reads_the_library_again(app, monkeypatch):
+    """The folders are the running ZBrush's (#181), so the index is built again when that changes."""
+    calls, lines = [], []
+    monkeypatch.setattr(assets, "library", lambda kind: calls.append(kind))
+    monkeypatch.setattr(radiald, "log", lambda s: lines.append(s))
+    monkeypatch.setattr(radiald, "LIB_DIRS_EVERY", 0.0)         # look at the processes on every check
+    assets._index["alpha"] = {}
+    app._check_library_folders()
+    app._check_library_folders()
+    assert app._lib_rebuild is None and not calls                # the same ZBrush (none): nothing to do
+    monkeypatch.setattr(brushes, "zbrush_dirs", lambda: {"install": Path("C:/Programs/ZBrush 2026"), "user_assets": None})
+    app._check_library_folders()
+    wait_done(app)
+    assert calls == ["alpha"] and any(s.startswith("the ZBrush in use changed") for s in lines)

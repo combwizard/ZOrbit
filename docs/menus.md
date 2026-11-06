@@ -115,7 +115,7 @@ ZOrbit searches these folders, in order. The first folder that has the name wins
 
 For a pick in ZBrush 2022 to 2025, only the four folders of that ZBrush's own installation are searched, because an older ZBrush cannot always read a newer version's brushes. A brush that only a folder you added has is listed, but a pick there says it **could not be found in ZBrush**. Subfolders are searched too, except folders whose name starts with `_`. Two files whose names differ only by capitals or spaces count as one brush.
 
-In ZBrush 2026 and newer, with several versions installed, "the installation" is the newest one, whichever ZBrush is running. ZOrbit takes the newest install that recorded its path (ZBrush 2026 and newer write `installpath.txt` under `%APPDATA%\Maxon`), otherwise the newest it finds. So a session in ZBrush 2026 can load files from a ZBrush 2027 install. The theme is different: [Match ZBrush](appearance.md#match-zbrush) follows the running ZBrush.
+With several ZBrush versions installed, the folders are those of the ZBrush that is running (the newest, when several run), so the list holds what that ZBrush can load. A running ZBrush 2022 to 2025 gives its own installation's folders and no **My Brushes**. With none running, the folders are the newest installation's: the newest that recorded its path (ZBrush 2026 and newer write `installpath.txt` under `%APPDATA%\Maxon`), otherwise the newest the install scan finds. The app reads the library again a few seconds after another ZBrush starts; the browser and the Library follow on their next rescan. [Match ZBrush](appearance.md#match-zbrush) follows the running ZBrush in the same way.
 
 ### Alpha, material and texture
 
@@ -139,7 +139,7 @@ two folders hold a file with the same name (capitals and spaces in the name are 
   `ZData\...` folders, then its `ZAlphas`, `ZMaterials` and `ZTextures` folders. The folders you added are not searched:
   an item that only they have is listed, but a pick says it **could not be found in ZBrush**.
 
-In ZBrush 2026 and newer, with several versions installed, the installation is the newest one, whichever ZBrush is running, as for [brushes](#brush).
+With several ZBrush versions installed, the folders are those of the ZBrush that is running, or of the newest installed when none runs, as for [brushes](#brush).
 
 Alphas can be `.psd`, `.bmp`, `.jpg`, `.jpeg`, `.png`, `.tif` or `.tiff` files. Materials are `.zmt` files. Textures can be
 `.psd`, `.jpg`, `.jpeg`, `.png`, `.bmp`, `.tif`, `.tiff` or `.exr` files.
