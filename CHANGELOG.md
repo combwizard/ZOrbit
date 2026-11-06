@@ -4,6 +4,13 @@ All notable changes to this project are listed here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+
+- Studio's counts for a **More** slot ("4 items are in the More submenu" and "4 items in a submenu") included empty
+  slots and items that cannot be used, which the submenu leaves out, so they could say more than **More** opens with.
+
 ## [0.20.0] - 2026-11-05
 
 ZOrbit 0.20.0 finds brushes, alphas, materials and textures in folders of your own, in ZBrush 2026 and newer, so a

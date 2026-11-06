@@ -1981,7 +1981,7 @@ function ringNote(menuId) {
   const holds = 'At a radius of ' + Math.round(f.radius) + ' px this ring holds ' + f.capacity + (f.capacity === 1 ? ' item' : ' items') + '. ';
   let note = null;
   if (f.mode === 'rings') note = { text: 'This ring is full: ' + plural(Math.max(1, count - f.capacity), 'item') + (count - f.capacity === 1 ? ' goes' : ' go') + ' on a second ring.', tooBig: false };
-  else if (f.more_slot !== null && f.more_slot !== undefined) note = { text: 'This ring is full: ' + plural(Math.max(1, count - (f.n - 1)), 'item') + (count - (f.n - 1) === 1 ? ' is' : ' are') + ' in the More submenu.', tooBig: false };
+  else if (f.more_slot !== null && f.more_slot !== undefined) note = { text: 'This ring is full: ' + plural(f.more_items, 'item') + (f.more_items === 1 ? ' is' : ' are') + ' in the More submenu.', tooBig: false };
   else if (f.grown) {
     const slot = Math.max(...lay.slots.map(s => s.size)) / (lay.scale || 1);
     const tooBig = 2 * (f.needed + slot * 0.62 + 34) > Math.min(screen.availWidth || Infinity, screen.availHeight || Infinity);
@@ -2085,7 +2085,7 @@ function buildStage() {
     } else if (gap) {
       info.replaceChildren(h('b', null, gap.text)); info.classList.add('on');
     } else if (hoverRing !== null && view.isMore(hoverRing)) {
-      info.replaceChildren(h('b', null, 'More'), h('span', { class: 'mono' }, ' ' + plural(idxs.length - (nSlots() - 1), 'item') + ' in a submenu')); info.classList.add('on');
+      info.replaceChildren(h('b', null, 'More'), h('span', { class: 'mono' }, ' ' + plural(view.layout().full.more_items, 'item') + ' in a submenu')); info.classList.add('on');
     } else if (hoverRing !== null && m && m.items[itemOf(hoverRing)] && ZSlots.isEmpty(m.items[itemOf(hoverRing)])) {
       info.replaceChildren(h('b', null, 'Empty slot'), h('span', { class: 'mono' }, ' drop something here')); info.classList.add('on');
     } else if (hoverRing !== null && m && m.items[itemOf(hoverRing)] && !itemUsable(m.items[itemOf(hoverRing)])) {
