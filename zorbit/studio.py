@@ -1530,20 +1530,30 @@ class Api(webapi.LibraryApi, webapi.TagApi):
             out[kind] = rows
         return {"ok": True, "folders": out}
 
-    def add_library_folder(self, kind):
+    def add_library_folder(self, kind, path=None, index=None):
         """Folder picker for a folder of the user's own brushes, alphas, materials or textures; remembered per kind in
         studio.json. Refuses a network folder, one ZBrush's own folders already cover and one that overlaps a folder
-        already added (everything in it would be listed twice)."""
+        already added (everything in it would be listed twice). It goes at the end of the list, or at index when that
+        is given (an index past the end is the end).
+
+        With path no dialog opens: that is Undo on a forgotten folder, which puts it back where it was. A folder that
+        has gone missing since can be put back too, as the list may hold one."""
         import webview
         if kind not in brushes.LIBRARY_KINDS:
             return {"ok": False, "message": "Unknown kind."}
-        picked = self._window.create_file_dialog(webview.FileDialog.FOLDER)
-        if not picked:
-            return {"ok": False, "cancelled": True}
+        restore = path is not None
+        if restore:
+            if not isinstance(path, str) or not path.strip():
+                return {"ok": False, "message": "That folder cannot be found."}
+            picked = path
+        else:
+            picked = self._window.create_file_dialog(webview.FileDialog.FOLDER)
+            if not picked:
+                return {"ok": False, "cancelled": True}
         p = os.path.normpath(str(picked[0] if isinstance(picked, (list, tuple)) else picked))
         if p.startswith(("\\\\", "//")):
             return {"ok": False, "message": "That is a network folder. Add a folder on this PC."}
-        if not os.path.isdir(p):
+        if not restore and not os.path.isdir(p):
             return {"ok": False, "message": "That folder cannot be found."}
         zb_name = self._zbrush_folder_overlap(kind, p)
         if zb_name:
@@ -1569,12 +1579,13 @@ class Api(webapi.LibraryApi, webapi.TagApi):
                 lib = {}
             if not isinstance(lib.get(kind), list):
                 lib[kind] = []
-            lib[kind].append(p)
+            at = index if isinstance(index, int) and not isinstance(index, bool) and index >= 0 else len(lib[kind])
+            lib[kind].insert(min(at, len(lib[kind])), p)
             data["library_folders"] = lib
             _write_studio_file(data)
         folders = self.get_library_folders()["folders"]
         name = next((r["name"] for r in folders[kind] if os.path.normcase(r["path"]) == key), os.path.basename(p))
-        return {"ok": True, "message": f"Added {name}.", "folders": folders}
+        return {"ok": True, "message": f"Put {name} back." if restore else f"Added {name}.", "folders": folders}
 
     def _zbrush_folder_overlap(self, kind, p):
         """The name of the ZBrush folder that p is, is inside or contains; None when it overlaps none of them."""
@@ -1589,7 +1600,8 @@ class Api(webapi.LibraryApi, webapi.TagApi):
         return None
 
     def forget_library_folder(self, kind, path):
-        """Takes a folder out of the list of that kind. The folder itself is not touched."""
+        """Takes a folder out of the list of that kind. The folder itself is not touched. The answer has the path as
+        it was listed ("removed") and its place in the list ("index"), which add_library_folder takes to put it back."""
         if kind not in brushes.LIBRARY_KINDS:
             return {"ok": False, "message": "Unknown kind."}
         key = os.path.normcase(os.path.normpath(str(path)))
@@ -1600,9 +1612,10 @@ class Api(webapi.LibraryApi, webapi.TagApi):
             lib = data.get("library_folders")
             listed = lib.get(kind) if isinstance(lib, dict) else None
             listed = listed if isinstance(listed, list) else []
-            kept = [f for f in listed if not (isinstance(f, str) and os.path.normcase(os.path.normpath(f)) == key)]
-            if len(kept) == len(listed):
+            hit = [i for i, f in enumerate(listed) if isinstance(f, str) and os.path.normcase(os.path.normpath(f)) == key]
+            if not hit:
                 return {"ok": False, "message": "That folder is not in the list."}
+            kept = [f for i, f in enumerate(listed) if i not in hit]
             have = brushes.user_folders(kind)
             name = next((n for f, n in zip(have, brushes.display_names(have)) if os.path.normcase(str(f)) == key),
                         os.path.basename(key))
@@ -1610,7 +1623,7 @@ class Api(webapi.LibraryApi, webapi.TagApi):
             data["library_folders"] = lib
             _write_studio_file(data)
         return {"ok": True, "message": f"Forgot {name}. The folder itself was not touched.",
-                "folders": self.get_library_folders()["folders"]}
+                "removed": listed[hit[0]], "index": hit[0], "folders": self.get_library_folders()["folders"]}
 
     # --- import / export (menus, settings and tags in one file) -----------------------------------
     def _export_name(self):

@@ -48,7 +48,7 @@ If you keep brushes, alphas, materials or textures in folders of your own, such 
 
 ![The Library folders card on Settings: a Brushes folder that was found with its file count, a missing Alphas folder, and an Add a folder button under each of the four kinds](images/settings-library-folders.png)
 
-The card has a list for each of **Brushes**, **Alphas**, **Materials** and **Textures**. Press **Add a folder...** under a list and pick the folder. Each row shows the folder's name, its path and a tag: how many files ZOrbit found in it, **Missing** when the folder is not there, or **Cannot be read**. **X** on a row (**Forget this folder**) takes the folder out of the list. It does not touch the folder or its files. Both act straight away; there is no **Save**.
+The card has a list for each of **Brushes**, **Alphas**, **Materials** and **Textures**. Press **Add a folder...** under a list and pick the folder. Each row shows the folder's name, its path and a tag: how many files ZOrbit found in it, **Missing** when the folder is not there, or **Cannot be read**. **X** on a row (**Forget this folder**) takes the folder out of the list. It does not touch the folder or its files. The toast that follows has an **Undo** button for a few seconds: it puts the folder back in the same place in the list, with its name and file count. After that, **Add a folder...** is the way back. Both act straight away; there is no **Save**, and the undo and redo arrows at the top of Studio and **Revert** do not cover these lists.
 
 The lists belong to this PC. They are in `studio.json` under `library_folders`, not in a profile, so switching profile does not change them and [exporting a menu](menus.md#share-a-menu) does not carry them.
 

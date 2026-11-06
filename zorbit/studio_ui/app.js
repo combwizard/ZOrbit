@@ -4552,7 +4552,14 @@ function buildSettingsScreen(root) {
             try { r = await call('forget_library_folder', kind, f.path); }
             catch (e) { toast('Could not forget the folder: ' + e.message, { tone: 'warn' }); }
             forget.disabled = false;
-            lfAfter(kind, r, 'Forgot that folder.');
+            // Undo puts it back where it was; the answer has its path and place. Taking it out is saved at once, so this is the only way back.
+            const back = r && r.ok && typeof r.removed === 'string' ? { text: 'Undo', fn: async () => {
+              let r2 = null;
+              try { r2 = await call('add_library_folder', kind, r.removed, r.index); }
+              catch (e) { toast('Could not put the folder back: ' + e.message, { tone: 'warn', ms: 5000 }); }
+              lfAfter(kind, r2, 'Put it back.');
+            } } : null;
+            lfAfter(kind, r, 'Forgot that folder.', back && { ms: 7000, action: back });
           });
           return h('div', { class: 'zrow' }, h('div', { class: 'grow' }, h('div', { class: 'zname' }, f.name || f.path, ...tags), h('div', { class: 'zpath mono', title: f.path }, f.path)),
             h('div', { class: 'btn-row' }, forget));
@@ -4570,9 +4577,9 @@ function buildSettingsScreen(root) {
       }));
     };
     // What add and forget answer: say it, paint the lists they hand back, and when this page holds that kind's library, read it again so the Library screen and the dock follow.
-    const lfAfter = async (kind, r, fallback) => {
+    const lfAfter = async (kind, r, fallback, extra) => {
       if (!r || r.cancelled) return;
-      toast(r.message || (r.ok ? fallback : 'That did not work.'), !r.ok ? { tone: 'warn', ms: 5000 } : r.already ? { ms: 4000 } : { tone: 'ok', ms: 4000 });
+      toast(r.message || (r.ok ? fallback : 'That did not work.'), !r.ok ? { tone: 'warn', ms: 5000 } : r.already ? { ms: 4000 } : Object.assign({ tone: 'ok', ms: 4000 }, extra));
       if (r.folders) { ++lfGen; lfPaint(r.folders); }
       else if (!r.ok) { lfLook(); return; }                    // refused without a list (the file changed under the card): paint what is there now
       if (r.ok && !r.already) {
