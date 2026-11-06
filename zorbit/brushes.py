@@ -60,7 +60,7 @@ def zbrush_dirs() -> dict:
             if m and d.is_dir():
                 cands.append((int(m.group(1)), d.name, d))
     except OSError:
-        return res
+        pass                                    # no Maxon folder: the installs below are still looked for
     for _, _, d in sorted(cands, reverse=True):
         for key, fn in (("install", "installpath.txt"), ("user_assets", "userassets_path.txt")):
             if res[key] is None:
