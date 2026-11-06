@@ -378,6 +378,7 @@ def test_files_and_names_line_up_with_sources_and_index(tmp_path, two_folders):
 def maxon(tmp_path, monkeypatch):
     monkeypatch.setenv("APPDATA", str(tmp_path / "roaming"))
     monkeypatch.setattr(brushes._installs, "find_installs", lambda: [])
+    monkeypatch.setattr(brushes._installs, "running_installs", lambda: [])
     return tmp_path / "roaming" / "Maxon"
 
 
@@ -625,6 +626,79 @@ def test_name_of_and_names_read_the_last_walk(tmp_path):
 
 def test_installs_are_still_looked_for_without_a_maxon_folder(tmp_path, monkeypatch):
     monkeypatch.setenv("APPDATA", str(tmp_path / "roaming"))      # no Maxon folder at all: ZBrush 2022 to 2025 only
+    monkeypatch.setattr(brushes._installs, "running_installs", lambda: [])
     here = tmp_path / "ZBrush 2022"
     monkeypatch.setattr(brushes._installs, "find_installs", lambda: [{"path": str(here)}])
     assert brushes.zbrush_dirs()["install"] == here
+
+
+def _install(path, year, python=True):
+    return {"name": f"ZBrush {year}", "year": year, "path": str(path), "python": python, "supported": True}
+
+
+def _two_stamped(tmp_path, m):
+    """ZBrush 2026 and 2027 installed, each with its stamp folder; 2027's is the newer."""
+    out = {}
+    for year in (2026, 2027):
+        ins = tmp_path / f"ZBrush {year}"
+        touch(ins / "ZBrush.exe")
+        touch(m / f"ZBrush {year}_AAAA" / "installpath.txt").write_text(str(ins), encoding="utf-8")
+        touch(m / f"ZBrush {year}_AAAA" / "userassets_path.txt").write_text(str(tmp_path / f"assets{year}"), encoding="utf-8")
+        out[year] = ins
+    return out
+
+
+def test_the_running_zbrush_wins_over_a_newer_install(tmp_path, monkeypatch):
+    m = maxon(tmp_path, monkeypatch)
+    ins = _two_stamped(tmp_path, m)
+    monkeypatch.setattr(brushes._installs, "running_installs", lambda: [_install(ins[2026], 2026)])
+    d = brushes.zbrush_dirs()
+    assert d["install"] == ins[2026] and d["user_assets"] == tmp_path / "assets2026"
+
+
+def test_with_none_running_the_newest_install_is_used(tmp_path, monkeypatch):
+    m = maxon(tmp_path, monkeypatch)
+    ins = _two_stamped(tmp_path, m)
+    d = brushes.zbrush_dirs()
+    assert d["install"] == ins[2027] and d["user_assets"] == tmp_path / "assets2027"
+
+
+def test_the_newest_running_zbrush_wins_when_several_run(tmp_path, monkeypatch):
+    m = maxon(tmp_path, monkeypatch)
+    ins = _two_stamped(tmp_path, m)
+    old = tmp_path / "ZBrush 2022"
+    touch(old / "ZBrush.exe")
+    monkeypatch.setattr(brushes._installs, "running_installs",
+                        lambda: [_install(ins[2026], 2026), _install(old, 2022, python=False)])   # newest first
+    assert brushes.zbrush_dirs()["install"] == ins[2026]
+
+
+def test_a_running_older_zbrush_has_no_user_assets_folder(tmp_path, monkeypatch):
+    m = maxon(tmp_path, monkeypatch)
+    _two_stamped(tmp_path, m)
+    old = tmp_path / "ZBrush 2022"
+    touch(old / "ZBrush.exe")
+    monkeypatch.setattr(brushes._installs, "running_installs", lambda: [_install(old, 2022, python=False)])
+    d = brushes.zbrush_dirs()
+    assert d["install"] == old and d["user_assets"] is None     # 2022 keeps everything in the installation
+
+
+def test_a_running_zbrush_matched_by_year_or_by_the_newest_stamp(tmp_path, monkeypatch):
+    m = maxon(tmp_path, monkeypatch)
+    ins = _two_stamped(tmp_path, m)
+    moved = tmp_path / "Elsewhere" / "ZBrush 2026"               # installpath.txt names the old place
+    touch(moved / "ZBrush.exe")
+    monkeypatch.setattr(brushes._installs, "running_installs", lambda: [_install(moved, 2026)])
+    d = brushes.zbrush_dirs()
+    assert d["install"] == moved and d["user_assets"] == tmp_path / "assets2026"      # by year
+    monkeypatch.setattr(brushes._installs, "running_installs", lambda: [_install(moved, None)])
+    d = brushes.zbrush_dirs()
+    assert d["install"] == moved and d["user_assets"] == tmp_path / "assets2027"      # no year: the newest stamp
+
+
+def test_dirs_signature_follows_the_running_zbrush(tmp_path, monkeypatch):
+    m = maxon(tmp_path, monkeypatch)
+    ins = _two_stamped(tmp_path, m)
+    before = brushes.dirs_signature()
+    monkeypatch.setattr(brushes._installs, "running_installs", lambda: [_install(ins[2026], 2026)])
+    assert brushes.dirs_signature() != before

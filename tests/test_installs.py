@@ -105,3 +105,17 @@ def test_year_from_a_maxon_folder_hint_with_a_suffix(tmp_path):
 @pytest.mark.parametrize("hint", ["ZBrush 20260", "ZBrush 12026"])
 def test_year_is_not_taken_from_a_longer_number(tmp_path, hint):
     assert installs.entry(zbrush(tmp_path, "ZB"), hint)["year"] is None
+
+
+def test_running_installs_lists_each_running_zbrush_once_newest_first(tmp_path, monkeypatch):
+    import win32
+    new, old = tmp_path / "ZBrush 2026", tmp_path / "ZBrush 2022"
+    for d in (new, old):
+        d.mkdir()
+        (d / "ZBrush.exe").write_bytes(b"")
+    images = {1: str(old / "ZBrush.exe"), 2: str(new / "ZBrush.exe"), 3: str(new / "ZBrush.exe"),
+              4: "",                                                 # running as administrator: cannot be read
+              5: str(tmp_path / "NotZBrush" / "ZBrush.exe")}        # no such install
+    monkeypatch.setattr(win32, "pids_named", lambda name: sorted(images) if name == "zbrush.exe" else [])
+    monkeypatch.setattr(win32, "process_image", lambda pid: images[pid])
+    assert [e["path"] for e in installs.running_installs()] == [str(new), str(old)]

@@ -47,33 +47,68 @@ def _read_path(p: Path) -> Path | None:
     return Path(s) if s else None
 
 
-def zbrush_dirs() -> dict:
-    res = {"install": None, "user_assets": None}
+def _maxon_stamps() -> list[tuple[int, Path]]:
+    """The per-version folders ZBrush 2026 and newer keep under %APPDATA%\\Maxon (installpath.txt and
+    userassets_path.txt live there), newest year first. Empty without APPDATA or a Maxon folder."""
     appdata = os.environ.get("APPDATA")
     if not appdata:
-        return res
-    root = Path(appdata) / "Maxon"
+        return []
     cands = []
     try:
-        for d in root.iterdir():
+        for d in (Path(appdata) / "Maxon").iterdir():
             m = _DIR_RE.match(d.name)
             if m and d.is_dir():
                 cands.append((int(m.group(1)), d.name, d))
     except OSError:
-        pass                                    # no Maxon folder: the installs below are still looked for
-    for _, _, d in sorted(cands, reverse=True):
-        for key, fn in (("install", "installpath.txt"), ("user_assets", "userassets_path.txt")):
-            if res[key] is None:
-                p = _read_path(d / fn)
-                if p is None:
-                    continue
-                if key == "install":
-                    try:
-                        if not (p / "ZBrush.exe").is_file():
-                            continue                    # a ZBrush that was uninstalled or moved: look at the next one
-                    except OSError:
-                        continue
-                res[key] = p
+        pass                                    # no Maxon folder: ZBrush 2022 to 2025 only, or none at all
+    return [(year, d) for year, _, d in sorted(cands, reverse=True)]
+
+
+def _newest_user_assets(stamps) -> Path | None:
+    for _, d in stamps:
+        p = _read_path(d / "userassets_path.txt")
+        if p is not None:
+            return p
+    return None
+
+
+def zbrush_dirs() -> dict:
+    """The installation and the user-assets folder the library is read from. They are the ZBrush that is running
+    (the newest, when several run), so the list holds what that ZBrush can load; with none running, the newest
+    installed: the newest install that recorded its path (ZBrush 2026 and newer write installpath.txt), else the
+    newest the install scan finds. The user-assets folder is the running version's own; a running ZBrush 2022 to 2025
+    has none, since those keep everything in the installation."""
+    res = {"install": None, "user_assets": None}
+    stamps = _maxon_stamps()
+    try:
+        running = _installs.running_installs()
+    except Exception:
+        running = []
+    if running:
+        top = running[0]
+        ins = Path(top["path"])
+        res["install"] = ins
+        key = os.path.normcase(str(ins))
+        for _, d in stamps:                     # its own stamp folder: the one whose installpath.txt names it...
+            if (p := _read_path(d / "installpath.txt")) is not None and os.path.normcase(str(p)) == key:
+                res["user_assets"] = _read_path(d / "userassets_path.txt")
+                break
+        if res["user_assets"] is None and top.get("year"):      # ...else one of its year
+            res["user_assets"] = _newest_user_assets([s for s in stamps if s[0] == top["year"]])
+        if res["user_assets"] is None and top.get("python"):    # a 2026 or newer with no stamp of its own: as before
+            res["user_assets"] = _newest_user_assets(stamps)
+        return res
+    for _, d in stamps:
+        if res["install"] is None:
+            p = _read_path(d / "installpath.txt")
+            if p is not None:
+                try:
+                    if (p / "ZBrush.exe").is_file():
+                        res["install"] = p
+                except OSError:
+                    pass                        # a ZBrush that was uninstalled or moved: look at the next one
+        if res["user_assets"] is None:
+            res["user_assets"] = _read_path(d / "userassets_path.txt")
     if res["install"] is None:                  # ZBrush 2022-2025 write no installpath.txt
         try:
             found = _installs.find_installs()
@@ -82,6 +117,13 @@ def zbrush_dirs() -> dict:
         if found:
             res["install"] = Path(found[-1]["path"])
     return res
+
+
+def dirs_signature() -> tuple:
+    """What zbrush_dirs() answers, as a value to compare: the app reads the library again when it changes, as when
+    another ZBrush starts."""
+    d = zbrush_dirs()
+    return tuple(os.path.normcase(str(p)) if p else None for p in (d["install"], d["user_assets"]))
 
 
 LIBRARY_KINDS = ("brush", "alpha", "material", "texture")

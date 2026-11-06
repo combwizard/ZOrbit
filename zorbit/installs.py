@@ -121,6 +121,25 @@ def find_installs() -> list[dict]:
     return sorted(found.values(), key=lambda e: (e["year"] or 0, e["path"].lower()))
 
 
+def running_installs() -> list[dict]:
+    """The installations of the ZBrush.exe processes running now, newest year first, each once. A ZBrush running as
+    administrator cannot be asked for its exe path from a normal process, so it is left out."""
+    try:
+        from . import win32 as W
+    except ImportError:
+        import win32 as W
+    out, seen = [], set()
+    for pid in W.pids_named("zbrush.exe"):
+        try:
+            e = install_of(W.process_image(pid))
+        except Exception:
+            e = None
+        if e and _norm(e["path"]) not in seen:
+            seen.add(_norm(e["path"]))
+            out.append(e)
+    return sorted(out, key=lambda e: (e["year"] or 0, e["path"].lower()), reverse=True)
+
+
 def install_of(exe_path) -> dict | None:
     """The installation a running ZBrush.exe belongs to (year from the registry when the folder lacks one)."""
     if not exe_path:

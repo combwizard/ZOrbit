@@ -69,6 +69,7 @@ DATA_DIR = paths.DATA_DIR
 LOG_FILE = os.path.join(DATA_DIR, "radiald.log")
 REQUEST_FILE = os.path.join(DATA_DIR, "request.json")
 LISTENER_FILE = os.path.join(DATA_DIR, "listener.json")
+LIB_DIRS_EVERY = 5.0            # seconds between looks at which ZBrush is running, for the library folders
 BRIDGE_LOG = os.path.join(DATA_DIR, "bridge.log")      # written by the plugin inside ZBrush
 ZSCRIPT_LOG = os.path.join(DATA_DIR, "zscript_bridge.log")   # the ZScript plugin's last pick, rewritten each time
 MUTEX_NAME = "Local\\ZOrbit"
@@ -380,8 +381,10 @@ class App:
         self._bad_sig = None            # (mtime, size) of a radial.json that failed to load
         self._theme = "dark"            # the theme the config was last loaded under
         self._theme_sig = ("dark", "")  # theme.signature() of that load: the name, and for zbrush the scheme's digest
-        self._lib_sig = None            # brushes.user_folders_signature() last seen; None before the first check
+        self._lib_sig = None            # (user_folders_signature, dirs_signature) last seen; None before the first check
         self._lib_sig_failed = False    # reading it failed (logged once until it works again)
+        self._lib_dirs = None           # brushes.dirs_signature() from the last process scan, LIB_DIRS_EVERY apart
+        self._lib_dirs_t = -LIB_DIRS_EVERY
         self._lib_rebuild = None        # the thread reading the library again, or None
         self._lib_again = False         # the folders changed (again): the thread makes one more pass
         self._lib_lock = threading.Lock()   # guards _lib_rebuild and _lib_again, so a change is never lost
@@ -450,7 +453,11 @@ class App:
         if assets is None:
             return
         try:
-            sig = brushes.user_folders_signature()
+            now = time.monotonic()
+            if now - self._lib_dirs_t >= LIB_DIRS_EVERY:   # which ZBrush's folders: a process scan, so not every tick
+                self._lib_dirs_t = now
+                self._lib_dirs = brushes.dirs_signature()
+            sig = (brushes.user_folders_signature(), self._lib_dirs)
         except Exception as e:
             if not self._lib_sig_failed:
                 log(f"library folders: cannot read them: {e!r}")
@@ -462,8 +469,9 @@ class App:
             return
         if sig == self._lib_sig:
             return
+        why = "library folders changed" if sig[0] != self._lib_sig[0] else "the ZBrush in use changed"
         self._lib_sig = sig
-        log("library folders changed: reading the library again")
+        log(f"{why}: reading the library again")
         with self._lib_lock:
             self._lib_again = True
             if self._lib_rebuild is None:
