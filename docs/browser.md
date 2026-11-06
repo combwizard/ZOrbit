@@ -169,7 +169,7 @@ The menu closes when you choose something, when you click the star again, and a 
 
 ### When it shows
 
-- The strip steps aside while another program is in front, and comes back when ZBrush is. With no ZBrush running it stays where it is.
+- The strip steps aside once another program has been in front for about a second, and comes back when ZBrush is. With no ZBrush running it stays where it is.
 - It goes away with ZBrush. When the app quits, a strip the app started closes with it and comes back the next time the app starts the browser. A strip you started yourself (from the Start menu, Studio or `--popout --show`) stays up.
 - It does not count as hidden for **Quit hidden browser after**.
 - A click while no ZBrush is running shows **ZBrush is not running.** near the cursor. Other messages, such as **ZOrbit is not running.**, show there too.

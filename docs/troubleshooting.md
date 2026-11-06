@@ -153,7 +153,7 @@ Click the search box once. If you have to do that every time, send `popout.log` 
 
 ### The strip is not there
 
-- It steps aside while another program is in front and comes back when ZBrush is. Click ZBrush and look again.
+- It steps aside once another program has been in front for about a second, and comes back when ZBrush is. Click ZBrush and look again.
 - It goes with ZBrush. When the app quits, a strip it started closes too.
 - It starts by itself only when the app starts the browser hidden, so your menus need a browser hotkey or a **Browser** slot. The Start menu shortcut and Studio open the full browser instead.
 - **Hide strip** turns it off. Open the browser and press **Show as a strip** in its header to turn it on again.

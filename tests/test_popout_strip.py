@@ -169,6 +169,7 @@ class Clock:
 @pytest.fixture
 def pop(monkeypatch, tmp_path):
     monkeypatch.setattr(popout, "STATE_FILE", str(tmp_path / "popout.json"))
+    monkeypatch.setattr(popout, "STRIP_HIDE_AFTER_S", 0.0)     # one tick hides; the grace has its own test
     p = popout.Popout({"tag": None, "kind": None, "managed": True, "show": False, "zbrush": 0})
     p.calls, p.up, p.rect, p.fg = [], False, (500, 300, 1280, 860), 0x777
     p.zoomed, p.fg_pid, p.zbrush = False, 5000, [4242]          # the window is maximised; who owns the foreground; ZBrush's pids
@@ -748,3 +749,39 @@ def test_a_pick_from_the_browser_does_not_ask_for_zbrush(pop, app_window):
     pop.up = True
     pop.zbrush = []
     assert pop.pick("Anchors", "brush") == {"ok": True}
+
+
+def test_the_strip_waits_a_moment_before_stepping_aside(pop, monkeypatch):
+    """The taskbar, Alt+Tab or a glance at another window must not make the strip blink: it hides only once another
+    program has been in front for STRIP_HIDE_AFTER_S, and a return to ZBrush within that time cancels it."""
+    monkeypatch.setattr(popout, "STRIP_HIDE_AFTER_S", 1.0)
+    pop.strip_from_browser()
+    pop.fg_pid = 9999                                      # the taskbar
+    pop.strip_tick()
+    assert pop.up and not pop._fg_hidden                   # seen, not acted on
+    pop.fg_pid = 4242                                      # back in ZBrush before the grace ran out
+    pop.clock.after(0.5)
+    pop.strip_tick()
+    assert pop.up and pop._fg_away_since is None
+    pop.fg_pid = 9999                                      # away for good
+    pop.strip_tick()
+    pop.clock.after(0.5)
+    pop.strip_tick()
+    assert pop.up                                          # 0.5 s: still within the grace
+    pop.clock.after(0.6)
+    pop.strip_tick()
+    assert not pop.up and pop._fg_hidden                   # 1.1 s: hidden
+    pop.fg_pid = 4242
+    pop.strip_tick()
+    assert pop.up and not pop._fg_hidden                   # ZBrush back: shown at once, no grace on the way back
+
+
+def test_a_queued_strip_show_clears_a_stale_foreground_flag(pop):
+    pop.strip_from_browser()
+    pop.fg_pid = 9999
+    pop.strip_tick()
+    assert pop._fg_hidden
+    pop._leave_strip()
+    pop._fg_hidden = True                                  # a tick's flag left behind in some interleaving
+    pop._strip_up("again")
+    assert not pop._fg_hidden and pop.mode == "strip"

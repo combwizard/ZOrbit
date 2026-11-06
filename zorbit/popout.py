@@ -27,7 +27,7 @@ Talks to the app with WM_COPYDATA (ids in radiald.py):
   app -> ZOrbitPopoutCtl     10   SHOW {"tag": key|null, "kind": kind|null, "zbrush_hwnd": N, "toggle": bool}
                                       result 1 taken, 0 refused, 2 (radiald.SHOW_QUITTING) the popout is quitting after
                                       sitting unused: start another, which waits for it to end and then shows itself
-  app -> ZOrbitPopoutCtl     12   QUIT (ignored while the window is up)
+  app -> ZOrbitPopoutCtl     12   QUIT (ignored while the browser is up; a managed strip quits with the app)
   Studio -> ZOrbitPopoutCtl  13   THEME, no payload: look at the theme now (the poll still catches the other causes)
 
 SHOW: a hidden window appears (afresh: no search, this tag only, on the given tab); one that is visible comes to the front; one that
@@ -91,6 +91,7 @@ STRIP_ORIENTS = ("vertical", "horizontal")
 STRIP_START = (64, 420)            # logical pixels: a strip's size until the page has measured it
 STRIP_MARGIN = 8                   # logical pixels between a strip's first place and the edge of ZBrush's window
 ZBRUSH_PIDS_TTL_S = 3.0            # how long the list of ZBrush's process ids is kept while the strip watches the foreground
+STRIP_HIDE_AFTER_S = 1.0           # how long another program must have been in front before the strip steps aside
 FAV = "favourite"                  # the Favourites tag (tags.FAVOURITE)
 GWL_EXSTYLE, WS_EX_APPWINDOW = -20, 0x00040000
 
@@ -497,6 +498,7 @@ class Popout:
         self._pill_seq = 0                   # the newest hover call taken
         self._shows_taken = 0                # SHOWs taken from the app so far: _first_show sees one arrive while it waits
         self._fg_hidden = False              # the strip is up (mode "strip") but hidden because another program is in front
+        self._fg_away_since = None           # when the foreground was first seen away from ZBrush (strip_tick's grace)
         self._zb_pids = (None, [])           # (when read, ZBrush's process ids): the strip's foreground watch, see _zbrush_pids
 
     # --- control window: how the app reaches us -------------------------------------------------------
@@ -650,22 +652,26 @@ class Popout:
             with self._lock:
                 self.ready = True
                 pend, self._pending = self._pending, None
+                with self._idle_lock:
+                    taken = self._shows_taken      # read with ready: a SHOW from here on counts as "meanwhile"
             _log(f"ready; pending show: {pend}")
-            self._first_show(pend)
+            self._first_show(pend, taken)
             if self.managed:
                 threading.Thread(target=self._watch_app, daemon=True, name="popout-managed").start()
             threading.Thread(target=self._watch_theme, daemon=True, name="popout-theme").start()
         except Exception as e:
             _log(f"worker failed: {e!r}")
 
-    def _first_show(self, pend):
+    def _first_show(self, pend, taken=None):
         """Once ready: the browser that was asked for while starting (--show, or a SHOW), else the strip when it is the
-        resting state, up by itself and leaving the keyboard where it is; else nothing (a hidden pre-warm)."""
+        resting state, up by itself and leaving the keyboard where it is; else nothing (a hidden pre-warm). taken is
+        the SHOW count when ready was set; a SHOW after it means the browser is on its way."""
         if pend:
             self.request_show(pend[0], pend[1], False, pend[2])
         elif self.strip_on:
-            with self._idle_lock:
-                taken = self._shows_taken
+            if taken is None:
+                with self._idle_lock:
+                    taken = self._shows_taken
             self._wait_booted()                        # a SHOW (the browser hotkey) can arrive meanwhile: ready is true already
             with self._lock:
                 with self._idle_lock:
@@ -740,6 +746,13 @@ class Popout:
             want = strip_wanted(fg_pid, zpids, os.getpid())
         if want is None:
             return
+        if want:
+            self._fg_away_since = None
+        else:                                         # the taskbar, Alt+Tab and a quick glance elsewhere pass through
+            if self._fg_away_since is None:           # here without the strip blinking: it hides after a short grace
+                self._fg_away_since = self._now()
+            if self._now() - self._fg_away_since < STRIP_HIDE_AFTER_S:
+                return
         with self._lock:
             if self.mode != "strip" or self.quitting:
                 return
@@ -1130,6 +1143,7 @@ class Popout:
     def _strip_up(self, why):
         """The hidden window becomes the strip and appears (lock held)."""
         self.mode = "strip"
+        self._fg_hidden = False                # a stale flag from a tick that hid the strip must not keep it hidden
         self._strip_frame(True)
         self._sync_theme()
         ss = strip_state(_read_state())
