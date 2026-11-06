@@ -25,13 +25,13 @@ A key can step to the next profile too, with the **Next profile hotkey** in **Se
 Click the profile button and choose **New profile...**. Type a name, then pick where the new profile's menus, settings and tags come from:
 
 - **Starter menus**: the menus a fresh install has.
-- **Empty**: one menu called **Main**, with the first hotkey of the current profile and no items. The ring opens nothing until you add an item. It keeps the ring settings of the current profile and the looks you saved under `looks`, so the ring looks the same.
-- **Copy of** the current profile: its menus, tags and usage.
+- **Empty**: one menu called **Main**, with the first hotkey of the profile in use and no items. The ring opens nothing until you add an item. It keeps the ring settings of the profile in use and the looks you saved under `looks`, so the ring looks the same.
+- **Copy of** the profile in use: its menus, tags and usage.
 - **From a file...**: a settings file from **Export...** (see [Sharing a profile](#sharing-a-profile)), or a plain `radial.json`. Its tags come along. A menu file from **Export menu...** is refused.
 
 After you make a profile, Studio switches to it. **Duplicate** in the profile list makes a copy the same way.
 
-Every new profile takes the ZBrush bridge settings, the browser hotkey and the next-profile hotkey from the profile you are editing. The bridge key must match the hotkey bound to **Apply** inside ZBrush on this PC, so a settings file from another PC never brings its bridge key. The bridge settings (**Settings > ZBrush bridge**) apply to the profile you are editing, and each profile keeps its own. If you change the bridge key in one profile, change it in the others too.
+Every new profile takes the ZBrush bridge settings, the browser hotkey and the next-profile hotkey from the profile in use, as last saved: edits you have not saved yet are not copied. The bridge key must match the hotkey bound to **Apply** inside ZBrush on this PC, so a settings file from another PC never brings its bridge key. The bridge settings (**Settings > ZBrush bridge**) apply to the profile you are editing, and each profile keeps its own. If you change the bridge key in one profile, change it in the others too.
 
 A name can be up to 60 characters. It must work as a Windows folder name: no `\ / : * ? " < > |`, no leading dot, no trailing dot or space, and not a reserved name such as `CON` or `COM1`. Two profiles cannot differ only by capitals, so `Sculpt` and `sculpt` count as one name.
 

@@ -2,7 +2,7 @@
 
 ## Requirements
 
-- Windows 10 or 11
+- Windows 10 or 11, 64-bit
 - ZBrush 2022 or newer. ZBrush 2026 and newer load the Python plugin that the installer sets up. ZBrush 2022 to 2025 have no Python API, so they get a ZScript plugin, which you install from Studio (see [ZBrush 2022 to 2025](#zbrush-2022-to-2025)). ZBrush Core and ZBrushCore Mini are not supported, because they do not load plugins.
 - The Microsoft Edge WebView2 runtime, which Studio uses for its window. It is part of Windows 11 and of up-to-date Windows 10.
 
@@ -91,7 +91,7 @@ It removes:
 - the program folder (when nothing else is left in it, the folder goes too),
 - the **ZOrbit Studio** and **ZOrbit Browser** Start menu shortcuts, and the desktop icon if you made one,
 - the plugin folder's entry in your `ZBRUSH_PLUGIN_PATH` user variable,
-- `%APPDATA%\ZOrbit\launch.json`,
+- `%APPDATA%\ZOrbit\launch.json`, but only when it still points at the installation being removed,
 - the plugin from every ZBrush 2022 to 2025 that Studio's **Setup** lists: the ones Windows knows about, the ones ZBrush recorded and the ones you added by hand. A ZBrush folder your account cannot write to asks for administrator rights once. If a folder could not be cleaned, the uninstaller lists it, and you delete `ZOrbitBridge.zsc` and the `ZOrbitData` folder from that ZBrush's `ZStartup\ZPlugs64` yourself.
 
-It leaves your profiles (menus, settings, tags and learned auto slots, in `%APPDATA%\ZOrbit\profiles\`) and your logs. They are not part of the program. They live in `%APPDATA%\ZOrbit` and `%LOCALAPPDATA%\ZOrbit`; delete those folders if you want no trace.
+It leaves the two folders `%APPDATA%\ZOrbit` and `%LOCALAPPDATA%\ZOrbit` whole. They are not part of the program. They hold your profiles (menus, settings, tags and learned auto slots, in `%APPDATA%\ZOrbit\profiles\`), Studio's preferences (`studio.json`), the profile in use (`profile.json`), the browser's window (`popout.json`), your logs, the thumbnail cache (`thumbs\`) and the ZBrush 2022 to 2025 plugin work folder (`zscript_stage\`). [Files and folders](files.md) says what each one is. Deleting the two folders removes all of it, so do that only if you want no trace.

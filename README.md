@@ -65,7 +65,7 @@ A menu can open as a fan: hover its slot and its items spread out beyond it, wit
 
 ## Requirements
 
-- Windows 10 or 11
+- Windows 10 or 11, 64-bit
 - ZBrush 2022 or newer. ZBrush 2026 and newer load the Python plugin that the installer sets up. ZBrush 2022 to 2025 have no Python API, so they get a ZScript plugin, which you install from Studio (see [ZBrush 2022 to 2025](https://zorbit.lol/docs/install/#zbrush-2022-to-2025)). ZBrush Core and ZBrushCore Mini are not supported, because they do not load plugins.
 - The Microsoft Edge WebView2 runtime, which Studio uses for its window. It is part of Windows 11 and of up-to-date Windows 10.
 
@@ -120,7 +120,7 @@ pip install -r requirements-dev.txt
 
 The script's header lists what else it needs and where the installer ends up.
 
-To run straight from a checkout while you work on the code, use `tools\dev-install.ps1`. It registers the checkout's `bridge` folder in `ZBRUSH_PLUGIN_PATH` and adds the Start menu shortcut, and `-Uninstall` takes both away again. Add `-WhatIf` to see what it would do first.
+To run straight from a checkout while you work on the code, use `tools\dev-install.ps1`. It registers the checkout's `bridge` folder in `ZBRUSH_PLUGIN_PATH` and adds two Start menu shortcuts, **ZOrbit Studio (dev)** and **ZOrbit Browser (dev)**. `-Uninstall` takes all of it away again. Add `-WhatIf` to see what it would do first.
 
 ## Licence
 

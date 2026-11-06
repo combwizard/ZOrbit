@@ -29,6 +29,15 @@ python zorbit\main.py --selftest      # check the libraries, modules and bundled
 dist\ZOrbit\ZOrbit.exe --selftest     # the same checks on the built app
 ```
 
+`ZOrbit.exe` (or `python zorbit\main.py` from a checkout) takes these options of its own, besides `--check` and `--selftest`:
+
+- `--studio` opens Studio instead of starting the background app.
+- `--exit-with-zbrush` starts the background app and makes it quit when ZBrush closes.
+- `--no-tray` starts the background app without its [notification-area icon](studio.md#the-tray-icon).
+- `--config <file>` runs the background app on one menus file, as a pinned file: profiles are off, and the tags and usage still come from the profile in use. `--check` takes it too.
+
+The Start menu shortcut **ZOrbit Studio** runs `ZOrbit.exe --studio`. The plugin's `launch.json` (see [Files and folders](files.md)) tells ZBrush to start the app with `--exit-with-zbrush` and Studio with `--studio`. The browser has its own options (see [browser](browser.md#opening-it)), and the options that send a command to the running app are in [Hotkeys](hotkeys.md).
+
 The tests run in parallel, on every core, which takes about 15 seconds. `python -m pytest -q --lf` reruns only the tests that failed last time, and `-n 0` runs one file in this process, which is quicker than starting the workers for it. The tests import the Windows modules, so they run on Windows only. The ones that run the JavaScript in `tests\js` also need `node` on the `PATH`, and pytest skips them without it. `--selftest` imports pywebview, pythonnet, truststore and the app's modules, and looks for the Studio interface files, the icons, the default menus, the ZScript bridge and the WebView2 loader DLL. It prints one line per check and exits with 1 if any fails. Run it on the built exe to catch a file that PyInstaller left out.
 
 `tests\test_upgrade.py` runs the profile migration over data that real past releases wrote. The data is in `tests\fixtures\upgrade\<tag>\`: one folder each for v0.7.0, v0.7.1, v0.9.0 and v0.12.0, and a `downgrade` folder for 0.12.0 run again after the move. `python tools\make_upgrade_fixtures.py` makes them. It runs each release's own code from `git archive`, with a fresh `APPDATA` and `LOCALAPPDATA`. CI does not run the generator.
@@ -41,7 +50,7 @@ The tests run in parallel, on every core, which takes about 15 seconds. `python 
 
 GitHub Actions runs the tests on every push and pull request. A build only starts when they pass. After the build, the workflow runs `--check` and `--selftest` on the built exe, and `python tools\upgrade_check.py dist\ZOrbit\ZOrbit.exe`, which runs the exe's `--check` over each upgrade fixture. When you push a tag that starts with `v`, it also creates the release, and the release notes list the SHA256 hash of the installer and the portable zip. When `docs\blog\posts\` has a post whose `slug` is `zorbit-` and the version with dashes (`zorbit-0-13-0`), the notes also link to that [blog](blog/index.md) post.
 
-To run straight from a checkout while you work on the code, use `tools\dev-install.ps1`. It registers the checkout's `bridge` folder in `ZBRUSH_PLUGIN_PATH` and adds the Start menu shortcut, and `-Uninstall` takes both away again. Add `-WhatIf` to see what it would do first.
+To run straight from a checkout while you work on the code, use `tools\dev-install.ps1`. It registers the checkout's `bridge` folder in `ZBRUSH_PLUGIN_PATH` and adds two Start menu shortcuts, **ZOrbit Studio (dev)** and **ZOrbit Browser (dev)**. `-Uninstall` takes all of it away again. Add `-WhatIf` to see what it would do first.
 
 ## Reading ZBrush's colour schemes
 
