@@ -19,10 +19,8 @@ worked out.
 1. **Before 1.0:** nothing left to build. The 1.0 milestone is empty since 0.20.0, and the test pass of 6 Nov 2026
    (the suite, a test Studio and browser driven over the debug port, ZBrush 2026 and 2022 on this PC, a clean install
    and update on the VM, the docs against the code) found only small things, fixed since. 1.0.0 waits for 0.19 and
-   0.20 to be used for a while; it ships with no new feature. Two decisions go with it: whether the "experimental"
-   note on themes and the "under heavy development" note on the docs index stay, and whether
-   [#181](https://github.com/combwizard/ZOrbit/issues/181) (the library follows the running ZBrush, not the newest
-   install) goes in before or after.
+   0.20 to be used for a while; it ships with no new feature. One decision goes with it: whether the "experimental"
+   note on themes and the "under heavy development" note on the docs index stay.
 2. **Next:** [#39](https://github.com/combwizard/ZOrbit/issues/39), the drag to reorder. Tags may already cover its
    named lists, so settle that before building them. [#40](https://github.com/combwizard/ZOrbit/issues/40) waits for
    it, since the strip needs the favourites data settled.
