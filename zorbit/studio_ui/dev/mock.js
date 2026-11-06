@@ -526,7 +526,7 @@
     var s = {};
     try { s = JSON.parse(localStorage.getItem('rm_pop_strip') || '{}') || {}; } catch (e) { s = {}; }
     var orient = s.orient === 'horizontal' || (s.orient === undefined && q.get('strip') === 'horizontal') ? 'horizontal' : 'vertical';
-    return { on: s.on !== undefined ? !!s.on : q.has('strip'), orient: orient, kind: ASSET_KIND[s.kind] ? s.kind : 'brush', wrap: !!s.wrap };
+    return { on: s.on !== undefined ? !!s.on : q.has('strip'), orient: orient, kind: ASSET_KIND[s.kind] ? s.kind : 'brush', wrap: !!s.wrap, fold: !!s.fold };
   }
   function stripPut(changes) {
     var s = stripGet();
@@ -539,7 +539,7 @@
     setTimeout(function () {
       if (!window.__popoutShow) return;
       var s = stripGet();
-      if (mode === 'strip') window.__popoutShow({ mode: 'strip', kind: s.kind, orient: s.orient, wrap: s.wrap });
+      if (mode === 'strip') window.__popoutShow({ mode: 'strip', kind: s.kind, orient: s.orient, wrap: s.wrap, fold: s.fold });
       else window.__popoutShow({ mode: 'browser', tag: fav ? 'favourite' : null, kind: s.kind, reset: true });
     }, 0);
   }
@@ -1381,6 +1381,7 @@
       if (changes && (changes.orient === 'vertical' || changes.orient === 'horizontal')) c.orient = changes.orient;
       if (changes && ASSET_KIND[changes.kind]) c.kind = changes.kind;
       if (changes && typeof changes.wrap === 'boolean') c.wrap = changes.wrap;
+      if (changes && typeof changes.fold === 'boolean') c.fold = changes.fold;
       return Promise.resolve(stripPut(c));
     },
     popout_strip_size: function (w, h) {

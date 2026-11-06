@@ -1,12 +1,15 @@
 """The browser's strip (#40): its settings in popout.json, where it goes the first time, the switches between the strip
 and the browser, showing it without taking the foreground, the pick that hands nothing back, and fitting the window to
 the page. No window is opened: the Win32 calls the Popout makes are recorded instead."""
+import ctypes
 import ctypes.wintypes as w
 import json
+import os
 
 import pytest
 
 import popout
+import radiald
 import toast
 import win32 as W
 
@@ -16,17 +19,20 @@ WORK = (0, 0, 1920, 1040)
 
 # --- popout.json --------------------------------------------------------------------------------------
 def test_the_strip_is_off_and_vertical_on_brushes_until_set():
-    assert popout.strip_state({}) == {"on": False, "orient": "vertical", "kind": "brush", "window": None, "wrap": False}
+    assert popout.strip_state({}) == {"on": False, "orient": "vertical", "kind": "brush", "window": None, "wrap": False,
+                                      "fold": False}
     assert popout.strip_state(None)["on"] is False
 
 
 def test_the_strip_settings_are_read_back():
-    st = {"strip_on": True, "strip": {"orient": "horizontal", "kind": "alpha", "window": {"x": -1200, "y": 40}, "wrap": True}}
-    assert popout.strip_state(st) == {"on": True, "orient": "horizontal", "kind": "alpha", "window": (-1200, 40), "wrap": True}
+    st = {"strip_on": True, "strip": {"orient": "horizontal", "kind": "alpha", "window": {"x": -1200, "y": 40}, "wrap": True,
+                                      "fold": True}}
+    assert popout.strip_state(st) == {"on": True, "orient": "horizontal", "kind": "alpha", "window": (-1200, 40), "wrap": True,
+                                      "fold": True}
 
 
 @pytest.mark.parametrize("bad", [
-    {"strip_on": 1, "strip": {"orient": "diagonal", "kind": "tool", "window": {"x": "1", "y": 2}, "wrap": "yes"}},
+    {"strip_on": 1, "strip": {"orient": "diagonal", "kind": "tool", "window": {"x": "1", "y": 2}, "wrap": "yes", "fold": 1}},
     {"strip_on": "true", "strip": {"window": {"x": True, "y": 2}}},
     {"strip_on": None, "strip": {"window": [10, 20]}},
     {"strip": "vertical"},
@@ -43,14 +49,15 @@ def _state(tmp_path):
 def test_strip_set_saves_what_it_names_and_keeps_the_rest(pop, tmp_path):
     popout._update_state(window={"x": 1, "y": 2, "width": 800, "height": 600, "maximized": False}, size=120)
     popout._update_strip(window={"x": 5, "y": 6})
-    assert pop.strip_set({"orient": "horizontal"}) == {"on": False, "orient": "horizontal", "kind": "brush", "wrap": False}
-    pop.strip_set({"kind": "material", "wrap": True})
+    assert pop.strip_set({"orient": "horizontal"}) == {"on": False, "orient": "horizontal", "kind": "brush", "wrap": False,
+                                                       "fold": False}
+    pop.strip_set({"kind": "material", "wrap": True, "fold": True})
     st = _state(tmp_path)
-    assert st["strip"] == {"window": {"x": 5, "y": 6}, "orient": "horizontal", "kind": "material", "wrap": True}
+    assert st["strip"] == {"window": {"x": 5, "y": 6}, "orient": "horizontal", "kind": "material", "wrap": True, "fold": True}
     assert st["window"]["width"] == 800 and st["size"] == 120               # the browser's own keys stay
 
 
-@pytest.mark.parametrize("bad", [{"orient": "up"}, {"kind": "tool"}, {"wrap": 1}, None, "horizontal", {"window": {"x": 0, "y": 0}}])
+@pytest.mark.parametrize("bad", [{"orient": "up"}, {"kind": "tool"}, {"wrap": 1}, {"fold": "yes"}, None, "horizontal", {"window": {"x": 0, "y": 0}}])
 def test_strip_set_leaves_out_a_bad_value(pop, tmp_path, bad):
     pop.strip_set(bad)
     assert "strip" not in _state(tmp_path) if (tmp_path / "popout.json").exists() else True
@@ -60,7 +67,7 @@ def test_the_page_gets_the_strip_settings_and_the_mode(pop):
     pop.strip_set({"orient": "horizontal", "kind": "texture"})
     got = popout.PopoutApi(pop).popout_get_state()
     assert got["mode"] == "browser"
-    assert got["strip"] == {"on": False, "orient": "horizontal", "kind": "texture", "wrap": False}
+    assert got["strip"] == {"on": False, "orient": "horizontal", "kind": "texture", "wrap": False, "fold": False}
 
 
 # --- where it goes the first time ------------------------------------------------------------------------
@@ -148,11 +155,23 @@ class _User32:
         return 1
 
 
+class Clock:
+    def __init__(self):
+        self.t = 1000.0
+
+    def __call__(self):
+        return self.t
+
+    def after(self, seconds):
+        self.t += seconds
+
+
 @pytest.fixture
 def pop(monkeypatch, tmp_path):
     monkeypatch.setattr(popout, "STATE_FILE", str(tmp_path / "popout.json"))
     p = popout.Popout({"tag": None, "kind": None, "managed": True, "show": False, "zbrush": 0})
     p.calls, p.up, p.rect, p.fg = [], False, (500, 300, 1280, 860), 0x777
+    p.zoomed, p.fg_pid, p.zbrush = False, 5000, [4242]          # the window is maximised; who owns the foreground; ZBrush's pids
     p.window = _Window(p)
     p.hwnd, p.ctl, p.ready = 0x1234, 0, True
     u = _User32(p)
@@ -167,6 +186,12 @@ def pop(monkeypatch, tmp_path):
     monkeypatch.setattr(popout.winframe, "set_fitted", lambda hwnd, on: p.calls.append(("fitted", on)) or True)
     monkeypatch.setattr(popout.winframe, "force_foreground", lambda hwnd: p.calls.append(("force_foreground",)) or True)
     monkeypatch.setattr(popout.winframe, "placement_record", lambda hwnd: None)
+
+    def place_normal(hwnd, rect, show_cmd=4):               # clears the maximised state, shows, as SetWindowPlacement does
+        p.calls.append(("place_normal", rect, show_cmd))
+        p.zoomed, p.up, p.rect = False, True, rect
+        return True
+    monkeypatch.setattr(popout.winframe, "place_normal", place_normal)
     monkeypatch.setattr(popout.winframe, "bring_on_screen", lambda hwnd, near: False)
     monkeypatch.setattr(popout.winframe, "_work_of", lambda rect: WORK)
     monkeypatch.setattr(popout.winframe, "_primary_work_area", lambda: w.RECT(*WORK))
@@ -174,14 +199,21 @@ def pop(monkeypatch, tmp_path):
     def show_window(hwnd, cmd):
         p.calls.append(("ShowWindow", cmd))
         p.up = cmd != popout.SW_HIDE
+        if cmd == popout.SW_MAXIMIZE:
+            p.zoomed = True
         return 1
     monkeypatch.setattr(popout.user32, "ShowWindow", show_window, raising=False)
     monkeypatch.setattr(popout.user32, "IsIconic", lambda hwnd: 0, raising=False)
-    monkeypatch.setattr(popout.user32, "IsZoomed", lambda hwnd: 0, raising=False)
+    monkeypatch.setattr(popout.user32, "IsZoomed", lambda hwnd: int(p.zoomed), raising=False)
     monkeypatch.setattr(popout.user32, "SetForegroundWindow", lambda hwnd: p.calls.append(("SetForegroundWindow", hwnd)), raising=False)
     monkeypatch.setattr(popout.W, "send_keys", lambda keys: p.calls.append(("send_keys",)))
     monkeypatch.setattr(popout.W, "nudge_mouse", lambda: p.calls.append(("nudge",)))
     monkeypatch.setattr(popout.W, "GetForegroundWindow", lambda: p.fg)
+    monkeypatch.setattr(popout.W, "window_pid", lambda hwnd: p.fg_pid)
+    monkeypatch.setattr(popout.W, "pids_named", lambda name: list(p.zbrush))
+    p.clock = Clock()
+    p._now = p.clock
+    p._hidden_at = p.clock.t
     monkeypatch.setattr(popout, "_is_target", lambda hwnd: False)
     monkeypatch.setattr(popout, "_find_target", lambda: 0)
     return p
@@ -410,3 +442,309 @@ def test_set_fitted_does_nothing_to_a_window_without_the_frame():
 def test_a_fitted_window_has_no_resize_border():
     # install_frame passes border 0 to hit_test while the window is fitted: all of it is the page
     assert popout.winframe.hit_test(1, 1, (0, 0, 64, 400), False, 0) == popout.winframe.HTCLIENT
+
+
+# --- the strip in the window: fold is remembered -----------------------------------------------------------
+def test_the_fold_is_saved_and_given_to_the_page(pop, tmp_path):
+    assert popout.PopoutApi(pop).popout_strip_set({"fold": True})["fold"] is True
+    assert _state(tmp_path)["strip"]["fold"] is True
+    assert popout.PopoutApi(pop).popout_get_state()["strip"]["fold"] is True
+    pop.show_strip("test")
+    assert any('"mode": "strip"' in js and '"fold": true' in js for js in pop.window.js)
+
+
+# --- a SHOW that arrives while the start-up strip waits for the page ---------------------------------------
+def _show_message(payload=None, dw=radiald.COPYDATA_SHOW):
+    data = json.dumps(payload or {"tag": None, "kind": None, "zbrush_hwnd": 0, "toggle": False}).encode()
+    buf = ctypes.create_string_buffer(data, len(data))
+    return buf, W.COPYDATASTRUCT(dw, len(data), ctypes.cast(buf, ctypes.c_void_p))
+
+
+def test_a_show_taken_from_the_app_is_counted(pop):
+    buf, cds = _show_message()
+    assert pop._on_copydata(ctypes.addressof(cds)) == 1
+    assert pop._shows_taken == 1
+
+
+def test_the_start_up_strip_gives_way_to_a_show_that_has_shown_the_browser(pop, monkeypatch):
+    def booted(timeout_s=5.0):                             # the hotkey is pressed while the page is still drawing itself
+        pop._shows_taken += 1
+        pop.request_show(None, 0, False, None)
+        return True
+    monkeypatch.setattr(pop, "_wait_booted", booted)
+    pop.strip_on = True
+    pop._first_show(None)
+    assert pop.mode == "browser" and pop.up and pop.strip_on
+    assert "hide" not in names(pop) and ("fitted", True) not in pop.calls          # never hidden in favour of the strip
+
+
+def test_the_start_up_strip_gives_way_to_a_show_not_yet_carried_out(pop, monkeypatch):
+    monkeypatch.setattr(pop, "_wait_booted", lambda timeout_s=5.0: setattr(pop, "_shows_taken", 1) or True)
+    pop.strip_on = True
+    pop._first_show(None)
+    assert pop.mode == "browser" and not pop.up and pop.calls == []        # the SHOW on the work thread shows the browser
+    pop.request_show(None, 0, False, None)
+    assert pop.mode == "browser" and pop.up
+
+
+def test_the_start_up_strip_gives_way_to_a_window_that_is_up(pop, monkeypatch):
+    monkeypatch.setattr(pop, "_wait_booted", lambda timeout_s=5.0: setattr(pop, "up", True) or True)
+    pop.strip_on = True
+    pop._first_show(None)
+    assert pop.mode == "browser" and pop.calls == []
+
+
+# --- a maximised browser before the strip ---------------------------------------------------------------------
+def test_a_maximised_browser_is_made_normal_at_the_strips_place_before_it_shows(pop):
+    pop.up, pop.zoomed = True, True
+    pop.window.fit = {"w": 64, "h": 420}
+    pop.show_strip("strip button")
+    placed = [c for c in pop.calls if c[0] == "place_normal"]
+    assert placed == [("place_normal", (8, 310, 72, 730), W.SW_SHOWNOACTIVATE)]
+    assert not pop.zoomed and pop.mode == "strip" and pop.rect == (8, 310, 72, 730)
+    assert names(pop).index("hide") < names(pop).index("place_normal")             # while the window is hidden
+    assert "force_foreground" not in names(pop)
+
+
+def test_a_browser_that_is_not_maximised_is_not_given_a_placement(pop):
+    pop.up = True
+    pop.show_strip("strip button")
+    assert "place_normal" not in names(pop)
+
+
+def test_leaving_the_strip_gives_the_browser_back_its_maximised_state(pop):
+    pop.up, pop.zoomed = True, True
+    pop.show_strip("strip button")
+    pop.calls.clear()
+    pop.open_browser(None, 0, None, True, "Open browser")
+    assert pop.mode == "browser" and pop.zoomed
+    assert ("ShowWindow", popout.SW_MAXIMIZE) in pop.calls and "place_normal" not in names(pop)
+
+
+def test_a_browser_that_was_normal_comes_back_normal(pop):
+    pop.up = True
+    pop.show_strip("strip button")
+    pop.calls.clear()
+    pop.open_browser(None, 0, None, True, "Open browser")
+    assert not pop.zoomed and ("ShowWindow", popout.SW_MAXIMIZE) not in pop.calls
+
+
+# --- the strip goes with the app ------------------------------------------------------------------------------
+@pytest.fixture
+def quits(pop, monkeypatch):
+    calls = []
+    monkeypatch.setattr(pop, "quit", lambda why="", idle=False: calls.append(why))
+    return calls
+
+
+def test_a_managed_strip_hides_and_quits_when_the_app_is_gone_and_stays_on_for_next_time(pop, quits, tmp_path):
+    pop.strip_from_browser()
+    pop.app_gone("the app is gone")
+    assert quits == ["the app is gone"]
+    assert _state(tmp_path)["strip_on"] is True and pop.strip_on        # the next pre-warm brings it back
+
+
+def test_a_managed_strip_quits_when_the_app_says_quit(pop, quits):
+    pop.strip_from_browser()
+    buf, cds = _show_message(dw=radiald.COPYDATA_QUIT)
+    assert pop._on_copydata(ctypes.addressof(cds)) == 1
+    fn, args = pop._work.get_nowait()
+    fn(*args)
+    assert quits == ["the app asked"]
+
+
+def test_a_managed_strip_hidden_by_the_foreground_quits_too(pop, quits):
+    pop.strip_from_browser()
+    pop.fg_pid = 9999
+    pop.strip_tick()
+    assert not pop.up and pop._fg_hidden
+    pop.app_gone("the app is gone")
+    assert quits == ["the app is gone"]
+
+
+def test_a_strip_started_by_hand_stays_when_the_app_goes(pop, quits):
+    pop.managed = False                                    # the Start menu, --popout --show
+    pop.strip_from_browser()
+    pop.app_gone("the app asked")
+    assert quits == [] and pop.mode == "strip" and pop.up and pop.managed is False
+
+
+def test_a_strip_started_by_hand_and_hidden_by_the_foreground_stays_too(pop, quits):
+    pop.managed = False
+    pop.strip_from_browser()
+    pop.fg_pid = 9999
+    pop.strip_tick()
+    pop.app_gone("the app asked")
+    assert quits == [] and pop._fg_hidden
+
+
+def test_a_managed_browser_that_is_up_still_stays_when_the_app_goes(pop, quits):
+    pop.up = True
+    pop.app_gone("the app is gone")
+    assert quits == [] and pop.managed is False
+
+
+# --- the strip steps aside while another program is in front -----------------------------------------------------
+@pytest.mark.parametrize("fg_pid, zbrush, own, want", [
+    (4242, [4242], 1, True),                               # ZBrush in front
+    (4242, [4000, 4242], 1, True),                         # one of two ZBrushes
+    (9999, [4242], 1, False),                              # another program
+    (1, [4242], 1, True),                                  # the popout's own windows: the pill, the strip
+    (9999, [], 1, True),                                   # no ZBrush running: nothing to follow
+    (0, [], 1, True),
+    (0, [4242], 1, None),                                  # no foreground window just now: leave it
+])
+def test_strip_wanted(fg_pid, zbrush, own, want):
+    assert popout.strip_wanted(fg_pid, zbrush, own) is want
+
+
+def hidden_calls(p):
+    return [c for c in p.calls if c == ("ShowWindow", popout.SW_HIDE)]
+
+
+def test_another_program_in_front_hides_the_strip_and_zbrush_brings_it_back(pop):
+    pop.strip_from_browser()
+    pop.fg_pid = 4242
+    pop.strip_tick()
+    assert pop.up and not pop._fg_hidden
+    pop.fg_pid = 9999
+    pop.calls.clear()
+    pop.strip_tick()
+    assert not pop.up and pop._fg_hidden
+    assert pop.mode == "strip" and pop.strip_on                       # still the resting state; only the window is out of sight
+    assert hidden_calls(pop) == [("ShowWindow", popout.SW_HIDE)] and "hide" not in names(pop)
+    pop.calls.clear()
+    pop.strip_tick()
+    assert pop.calls == []                                            # nothing to repeat while it stays hidden
+    pop.fg_pid = 4242
+    pop.strip_tick()
+    assert pop.up and not pop._fg_hidden
+    assert ("ShowWindow", W.SW_SHOWNOACTIVATE) in pop.calls
+    assert any(c[0] == "pos" and c[1] == popout.winframe.HWND_TOPMOST and c[6] & W.SWP_NOACTIVATE for c in pop.calls)
+    assert not {"force_foreground", "send_keys", "SetForegroundWindow", "show"} & set(names(pop))
+
+
+def test_the_strip_stays_when_no_zbrush_runs(pop):
+    pop.strip_from_browser()
+    pop.zbrush = []
+    pop.fg_pid = 9999
+    pop.strip_tick()
+    assert pop.up and not pop._fg_hidden
+
+
+def test_a_strip_hidden_by_the_foreground_returns_when_zbrush_has_quit(pop):
+    pop.strip_from_browser()
+    pop.fg_pid = 9999
+    pop.strip_tick()
+    assert not pop.up
+    pop.zbrush = []
+    pop.clock.after(popout.ZBRUSH_PIDS_TTL_S)
+    pop.strip_tick()
+    assert pop.up and not pop._fg_hidden
+
+
+def test_the_popouts_own_windows_in_front_do_not_hide_the_strip(pop):
+    pop.strip_from_browser()
+    pop.fg_pid = os.getpid()                               # the name pill, the strip's menu
+    pop.strip_tick()
+    assert pop.up
+
+
+def test_no_foreground_window_changes_nothing(pop):
+    pop.strip_from_browser()
+    pop.fg, pop.fg_pid = 0, 0
+    pop.strip_tick()
+    assert pop.up and not pop._fg_hidden
+
+
+def test_the_browser_is_never_hidden_by_the_foreground(pop):
+    pop.up = True
+    pop.fg_pid = 9999
+    pop.strip_tick()
+    assert pop.up and pop.calls == []
+
+
+def test_the_process_list_is_kept_for_a_few_seconds(pop, monkeypatch):
+    reads = []
+    monkeypatch.setattr(popout.W, "pids_named", lambda name: reads.append(name) or [4242])
+    pop.strip_from_browser()
+    pop.fg_pid = 4242
+    for _ in range(5):
+        pop.strip_tick()
+        pop.clock.after(0.5)
+    assert len(reads) == 1 and reads == [popout.TARGET_EXE]
+    pop.clock.after(popout.ZBRUSH_PIDS_TTL_S)
+    pop.strip_tick()
+    assert len(reads) == 2
+
+
+def test_a_zbrush_started_since_the_list_was_read_does_not_hide_the_strip(pop, monkeypatch):
+    pop.strip_from_browser()
+    pop.fg_pid = 4242
+    pop.strip_tick()                                       # the list: [4242]
+    pop.zbrush = [7777]                                    # ZBrush restarted: the front window is a new process
+    pop.fg_pid = 7777
+    pop.clock.after(1)
+    pop.strip_tick()
+    assert pop.up and not pop._fg_hidden
+
+
+def test_hide_strip_while_the_foreground_has_it_hidden_ends_the_hiding(pop, monkeypatch):
+    monkeypatch.setattr(pop, "quit", lambda why="", idle=False: None)
+    pop.strip_from_browser()
+    pop.fg_pid = 9999
+    pop.strip_tick()
+    pop.hide_strip()
+    assert pop.mode == "browser" and not pop._fg_hidden and not pop.up
+    pop.calls.clear()
+    pop.fg_pid = 4242
+    pop.strip_tick()
+    assert pop.calls == [] and not pop.up                  # the user's Hide strip stays: nothing brings it back
+
+
+def test_a_show_while_the_foreground_has_the_strip_hidden_opens_the_browser(pop):
+    pop.strip_from_browser()
+    pop.fg_pid = 9999
+    pop.strip_tick()
+    pop.request_show(None, 0, False, None)
+    assert pop.mode == "browser" and pop.up and not pop._fg_hidden and pop.strip_on
+
+
+def test_idle_quit_does_not_count_a_strip_the_foreground_hid(pop, monkeypatch, quits):
+    monkeypatch.setattr(pop, "_read_idle_minutes", lambda: 5)
+    pop.strip_from_browser()
+    pop.fg_pid = 9999
+    pop.strip_tick()
+    assert not pop.up
+    pop.clock.after(3600)
+    pop.idle_tick()
+    assert quits == [] and not pop._idle_closing
+
+
+def test_idle_quit_counts_from_the_moment_the_user_hides_the_strip(pop, monkeypatch, quits):
+    monkeypatch.setattr(pop, "_read_idle_minutes", lambda: 5)
+    pop.strip_from_browser()
+    pop.fg_pid = 9999
+    pop.strip_tick()
+    pop.clock.after(3600)
+    pop.hide_strip()
+    pop.clock.after(299)
+    pop.idle_tick()
+    assert quits == []
+    pop.clock.after(2)
+    pop.idle_tick()
+    assert quits == ["unused for 5 minutes (browser.quit_after_minutes)"]
+
+
+# --- a pick with no ZBrush ------------------------------------------------------------------------------------
+def test_a_pick_from_the_strip_with_no_zbrush_running_says_so_and_sends_nothing(pop, app_window):
+    pop.show_strip("test")
+    pop.zbrush = []
+    assert pop.pick("Anchors", "brush") == {"ok": False, "error": "ZBrush is not running."}
+    assert app_window == []
+
+
+def test_a_pick_from_the_browser_does_not_ask_for_zbrush(pop, app_window):
+    pop.up = True
+    pop.zbrush = []
+    assert pop.pick("Anchors", "brush") == {"ok": True}

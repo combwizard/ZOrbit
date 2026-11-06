@@ -7190,7 +7190,7 @@ window.__popoutFocus = () => { if (popBrowser) popBrowser.focusSearch(false); re
 /* ---------- the strip (popout.py, popout.json "strip"): one tab's favourites in your order, in a small window that stays on top and never
    takes the keyboard. A click picks at once. The window is the size of .strip: the page measures it and popout.py fits the window (fitNow,
    popout_strip_size). A window cannot show a menu outside itself, so the menu takes the strip's place while it is open. S.strip: kind, orient
-   and wrap come from popout.json through __popoutShow; folded and the last pick (the accent rim) are the page's own. No keys are handled here. */
+   wrap and fold (folded here) come from popout.json through __popoutShow; the last pick (the accent rim) is the page's own. No keys are handled here. */
 S.strip = { kind: 'brush', orient: 'vertical', wrap: false, folded: false, last: '' };
 let popStrip = null;
 const STRIP_CELL = 48, STRIP_GAP = 4, STRIP_LINE = 10;          // px, and how many favourites one line holds before the +N button
@@ -7206,11 +7206,12 @@ function setPopMode(mode) {
   } else if (popStrip) popStrip.closeMenu(false);
 }
 
-/* __popoutShow({mode: 'strip', kind, orient, wrap}): draws the strip and answers its size, which popout.py gives the window before it shows. */
+/* __popoutShow({mode: 'strip', kind, orient, wrap, fold}): draws the strip and answers its size, which popout.py gives the window before it shows. */
 function showStrip(o) {
   if (isLib(o.kind)) S.strip.kind = o.kind;
   S.strip.orient = o.orient === 'horizontal' ? 'horizontal' : 'vertical';
   S.strip.wrap = !!o.wrap;
+  S.strip.folded = !!o.fold;
   if (!popStrip) { popWant = o; return null; }                   // still booting: it sends its size once it is drawn
   setPopMode('strip');
   popStrip.closeMenu(false);
@@ -7227,7 +7228,10 @@ function buildStrip() {
     icon('star', 16), label);
   const more = h('button', { class: 'strip-more', type: 'button', onclick: () => set({ wrap: !st.wrap }) });
   const openBtn = iconBtn('k_browser', 'Open the browser', () => { call('popout_open_browser', false).catch(() => {}); }, 'strip-open');
-  const fold = iconBtn('chev_u', 'Fold the strip', () => { st.folded = !st.folded; paint(); }, 'strip-fold');
+  const fold = iconBtn('chev_u', 'Fold the strip', () => {
+    st.folded = !st.folded; paint();
+    call('popout_strip_set', { fold: st.folded }).catch(() => {});     // remembered: the strip comes back folded
+  }, 'strip-fold');
   const root = h('div', { class: 'strip', role: 'toolbar', 'aria-label': 'Favourites strip' },
     h('div', { class: 'strip-grip', title: 'Drag to move the strip' }, icon('grip', 14)),
     menuBtn, h('div', { class: 'strip-sep' }), cells, more, h('div', { class: 'strip-sep after' }), openBtn, fold);
@@ -7437,12 +7441,14 @@ async function bootPopout() {
     if (isLib(sp.kind)) S.strip.kind = sp.kind;
     S.strip.orient = sp.orient === 'horizontal' ? 'horizontal' : 'vertical';
     S.strip.wrap = !!sp.wrap;
+    S.strip.folded = !!sp.fold;
   }
   buildPopout($('#app'));                            // makeBrowser loads the library of the starting tab
   popStrip = buildStrip();                           // drawn when __popoutShow asks for the strip
   const tags = loadTags();
   if (state && state.strip && state.strip.on) {      // the strip comes up by itself: measured with its favourites in, not as an empty frame
-    const k = S.strip.kind, libDone = (async () => { ensureLib(k); while (lib(k).busy || !lib(k).loaded) await sleep(50); })();
+    const k = S.strip.kind, t0 = Date.now();           // 4 s at most: a library that never loads must not keep this polling, nor the strip waiting
+    const libDone = (async () => { ensureLib(k); while ((lib(k).busy || !lib(k).loaded) && Date.now() - t0 < 4000) await sleep(50); })();
     await Promise.race([Promise.all([tags, loadUsage(k), libDone]), sleep(4000)]);
   }
   S.ready = true;

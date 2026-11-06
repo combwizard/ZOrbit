@@ -130,7 +130,7 @@ slots (see [Files and logs](files.md#files-and-logs)).
 
 The strip is a small bar of one tab's favourites that stays on top of ZBrush. It shows the items you starred as thumbnails, in your [Favourites](#favourites-and-recent) order. Click one and ZBrush selects it. ZBrush keeps the keyboard while you click, so your hotkeys keep working. The strip has no taskbar button.
 
-Press the strip button in the browser's header (three small squares, **Show as a strip**) and the browser window becomes the strip. From then on the strip is where the window rests. Closing the full browser with **X** brings the strip back, and when the browser starts (hidden with the app, or from the Start menu) the strip appears by itself. To open the full browser, press the browser button near the end of the strip, choose **Open browser** in its menu, or press the browser hotkey (**Alt+B** on new installs). The hotkey always opens the full browser while the strip is up. To turn the strip off, choose **Hide strip** in its menu.
+Press the strip button in the browser's header (three small squares, **Show as a strip**) and the browser window becomes the strip. From then on the strip is where the window rests. Closing the full browser with **X** brings the strip back. The strip comes up by itself only when the browser starts hidden with the app, which the app does when your menus have a browser hotkey or a **Browser** slot (see [In the background](#in-the-background)). The Start menu shortcut and Studio open the full browser, and **X** then takes it to the strip. To open the full browser, press the browser button near the end of the strip, choose **Open browser** in its menu, or press the browser hotkey (**Alt+B** on new installs). The hotkey always opens the full browser while the strip is up. To turn the strip off, choose **Hide strip** in its menu.
 
 The star at the start of the strip names the tab it shows, such as **Brushes**. Click it for the strip's menu, which takes the strip's place until you choose or click the star again (it also closes a moment after the mouse leaves it):
 
@@ -144,12 +144,14 @@ Using the strip:
 - Hover a thumbnail to see its name beside the strip.
 - The item you picked last through the strip has an orange rim. A tagged item has a band in its first tag's colour along its bottom, as on the browser's cards.
 - Drag a thumbnail to another place in the strip to change your Favourites order, as in the browser.
-- The arrow button at the end folds the strip down to its grip and star, and unfolds it again.
+- The arrow button at the end folds the strip down to its grip and star, and unfolds it again. The strip stays folded the next time it comes up.
 - With no favourites on its tab, the strip shows an empty star. Click it to open the browser on **Favourites**, then star some items.
 - Drag the strip by its grip (the six dots) to move it. It keeps its own place, apart from the browser's. The first time, it sits inside the left edge of the ZBrush window, centred top to bottom (at the top of the window, centred across, when horizontal), or at the left edge of the main screen when no ZBrush is running. It always stays on top of other windows, whatever **Keep on top** says, and it is kept on a screen.
-- A pick from the strip goes to the app at once, because ZBrush is still the front window. When it cannot, the message (such as **ZOrbit is not running.**) shows near the cursor.
+- The strip steps aside while another program is in front, and comes back when ZBrush is. It does not count as hidden for **Quit hidden browser after**. With no ZBrush running it stays up, so a strip you started by hand is always there.
+- It goes away with ZBrush. When the app quits, a strip the app started closes with it, and comes back the next time the app starts the browser. A strip you started yourself (from the Start menu, Studio or `--popout --show`) stays up.
+- A pick from the strip goes to the app at once, because ZBrush is still the front window. When it cannot, the message (such as **ZBrush is not running.** or **ZOrbit is not running.**) shows near the cursor.
 
-The strip's settings are in `popout.json`: `strip_on` and, under `strip`, the orientation (`orient`), the tab (`kind`), its place (`window`) and whether every favourite shows (`wrap`). See [Files and logs](files.md#files-and-logs).
+The strip's settings are in `popout.json`: `strip_on` and, under `strip`, the orientation (`orient`), the tab (`kind`), its place (`window`), whether every favourite shows (`wrap`) and whether it is folded (`fold`). See [Files and logs](files.md#files-and-logs).
 
 ## Picks, focus and ZBrush 2022 to 2025
 

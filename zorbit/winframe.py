@@ -500,6 +500,24 @@ def set_fitted(hwnd, fitted, wait_s=1.0) -> bool:
     return ok
 
 
+def place_normal(hwnd, rect, show_cmd=4):
+    """SetWindowPlacement: the window's normal (restored) rectangle becomes rect (screen pixels), and its show state
+    show_cmd (default SW_SHOWNOACTIVATE). That is the way to take a hidden window out of the maximised state: a hidden
+    maximised window keeps WS_MAXIMIZE through SetWindowPos, and showing it would bring back its old normal rectangle.
+    It also shows the window. True when Windows took it."""
+    user32.GetWindowPlacement.argtypes = [w.HWND, ctypes.POINTER(WINDOWPLACEMENT)]
+    user32.SetWindowPlacement.argtypes = [w.HWND, ctypes.POINTER(WINDOWPLACEMENT)]
+    wp = WINDOWPLACEMENT()
+    wp.length = ctypes.sizeof(wp)
+    if not user32.GetWindowPlacement(hwnd, ctypes.byref(wp)):
+        return False
+    wp.flags = 0                                       # not WPF_RESTORETOMAXIMIZED
+    wp.showCmd = show_cmd
+    n = wp.rcNormalPosition
+    n.left, n.top, n.right, n.bottom = to_workspace(rect, _workspace_origin(hwnd))
+    return bool(user32.SetWindowPlacement(hwnd, ctypes.byref(wp)))
+
+
 def _read_placement(hwnd):
     """(showCmd, flags, rcNormalPosition) from GetWindowPlacement, the rectangle in workspace coordinates; None if
     Windows does not say."""

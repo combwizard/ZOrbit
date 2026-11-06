@@ -41,6 +41,9 @@ mode, and in strip mode answers the strip's size, which the window is fitted to 
 again through popout_strip_size when its content changes). A SHOW always means the browser. A click in the strip picks
 at once: ZBrush still has the foreground, so nothing is handed back. The name of the thumbnail under the mouse is a
 toast.show_beside pill on the control window's thread, which can draw outside the window.
+While a ZBrush runs and another program has the foreground the strip is hidden (strip_tick, every THEME_POLL_S; ShowWindow
+only, strip_on and the mode stay), and comes back with ZBrush; with none running it stays. A managed popout's strip goes with
+the app (QUIT, or the app's window gone) and strip_on stays, so the next pre-warm brings it back; one started by hand keeps it.
 One instance at a time (Local\\ZOrbitPopout); a second launch passes its arguments on and exits.
 Everything done to the window from other threads is plain Win32 or evaluate_js: touching window.native
 (a .NET Form) off the UI thread deadlocks, and so does hiding or showing the window, or calling into the page,
@@ -87,6 +90,7 @@ WM_APP_PILL = W.WM_APP + 2         # control window: put up or take down the str
 STRIP_ORIENTS = ("vertical", "horizontal")
 STRIP_START = (64, 420)            # logical pixels: a strip's size until the page has measured it
 STRIP_MARGIN = 8                   # logical pixels between a strip's first place and the edge of ZBrush's window
+ZBRUSH_PIDS_TTL_S = 3.0            # how long the list of ZBrush's process ids is kept while the strip watches the foreground
 FAV = "favourite"                  # the Favourites tag (tags.FAVOURITE)
 GWL_EXSTYLE, WS_EX_APPWINDOW = -20, 0x00040000
 
@@ -166,8 +170,8 @@ def strip_state(st) -> dict:
     """The strip's settings in popout.json, read as the other keys are (a value that is not what it should be
     counts as missing): "strip_on" (bool, the strip is the window's resting state) and "strip": {"orient":
     "vertical" or "horizontal", "kind": its own tab, "window": {"x", "y"} where its corner was last (screen
-    pixels), "wrap": bool, every favourite on show instead of the first ones and a +N button}. Returns {"on",
-    "orient", "kind", "window": (x, y) or None, "wrap"}."""
+    pixels), "wrap": bool, every favourite on show instead of the first ones and a +N button, "fold": bool, folded
+    to its grip and buttons}. Returns {"on", "orient", "kind", "window": (x, y) or None, "wrap", "fold"}."""
     st = st if isinstance(st, dict) else {}
     s = st.get("strip") if isinstance(st.get("strip"), dict) else {}
     win, place = s.get("window"), None
@@ -178,7 +182,20 @@ def strip_state(st) -> dict:
     return {"on": st.get("strip_on") is True,
             "orient": s.get("orient") if s.get("orient") in STRIP_ORIENTS else "vertical",
             "kind": s.get("kind") if s.get("kind") in C.ASSET_KINDS else "brush",
-            "window": place, "wrap": s.get("wrap") is True}
+            "window": place, "wrap": s.get("wrap") is True, "fold": s.get("fold") is True}
+
+
+def strip_wanted(fg_pid, zbrush_pids, own_pid):
+    """Should the strip be on show, given the process that owns the foreground window? True: yes. False: another program
+    is in front while ZBrush runs, so the strip steps aside. None: no foreground window at this moment (a switch is under
+    way), leave it as it is. With no ZBrush running at all it is True: a strip started by hand has nothing to follow.
+    Compared by process id only, since a ZBrush running as administrator cannot be looked into. The popout's own
+    process counts as ZBrush's: the strip's name pill and menu are its windows."""
+    if not zbrush_pids:
+        return True
+    if not fg_pid:
+        return None
+    return fg_pid == own_pid or fg_pid in zbrush_pids
 
 
 def _update_strip(**changes):
@@ -324,7 +341,8 @@ class PopoutApi(webapi.LibraryApi, webapi.TagApi):
         ss = strip_state(st)
         return {"on_top": self._pop.on_top, "size": size if isinstance(size, int) else None, "side": side,
                 "column": st.get("column") != "hidden", "mode": self._pop.mode,
-                "strip": {"on": self._pop.strip_on, "orient": ss["orient"], "kind": ss["kind"], "wrap": ss["wrap"]},
+                "strip": {"on": self._pop.strip_on, "orient": ss["orient"], "kind": ss["kind"], "wrap": ss["wrap"],
+                          "fold": ss["fold"]},
                 "tag": self._pop.start_tag,
                 "kind": kind if kind in C.ASSET_KINDS else "brush", "tags_path": profiles.tags_file(),
                 "profile": profiles.active(), "theme": setting, "theme_effective": effective,
@@ -408,7 +426,7 @@ class PopoutApi(webapi.LibraryApi, webapi.TagApi):
         return True
 
     def popout_strip_set(self, changes):
-        """The strip's orient, kind (its tab) and wrap (all favourites on show), any of them, saved. The page
+        """The strip's orient, kind (its tab), wrap (all favourites on show) and fold, any of them, saved. The page
         draws the change itself and then asks for the new size. The strip's settings as strip_state reads them."""
         return self._pop.strip_set(changes)
 
@@ -477,6 +495,9 @@ class Popout:
         self._pill_lock = threading.Lock()
         self._pill = None                    # what the control window shows next: ("name", text, rect, side), ("note", text), ("off",)
         self._pill_seq = 0                   # the newest hover call taken
+        self._shows_taken = 0                # SHOWs taken from the app so far: _first_show sees one arrive while it waits
+        self._fg_hidden = False              # the strip is up (mode "strip") but hidden because another program is in front
+        self._zb_pids = (None, [])           # (when read, ZBrush's process ids): the strip's foreground watch, see _zbrush_pids
 
     # --- control window: how the app reaches us -------------------------------------------------------
     def start_ctl(self):
@@ -556,6 +577,7 @@ class Popout:
                 _log("SHOW while quitting unused: answered 'quitting'")
                 return radiald.SHOW_QUITTING
             self._hidden_at = None                     # asked for: no idle quit before it is hidden again
+            self._shows_taken += 1
         self._work.put((self.request_show, (tag, zb, toggle, kind)))
         return 1
 
@@ -642,8 +664,16 @@ class Popout:
         if pend:
             self.request_show(pend[0], pend[1], False, pend[2])
         elif self.strip_on:
-            self._wait_booted()
-            self.show_strip("start")
+            with self._idle_lock:
+                taken = self._shows_taken
+            self._wait_booted()                        # a SHOW (the browser hotkey) can arrive meanwhile: ready is true already
+            with self._lock:
+                with self._idle_lock:
+                    asked = self._shows_taken != taken
+                if self.visible() or asked:            # the browser is up or on its way: the strip must not take its place
+                    _log(f"the start-up strip is skipped: {'a SHOW was taken' if asked else 'the window is up'}")
+                    return
+                self.show_strip("start")
 
     def _wait_booted(self, timeout_s=5.0):
         """Waits (up to timeout_s) for the page to have drawn itself, so the strip can be measured before it shows."""
@@ -669,6 +699,10 @@ class Popout:
                 self.theme_tick()
             except Exception as e:                 # never let a bad read end the watch
                 _log(f"theme check failed: {e!r}")
+            try:
+                self.strip_tick()
+            except Exception as e:
+                _log(f"strip foreground check failed: {e!r}")
 
     def theme_tick(self):
         """One look at the theme: the same sync show() does, for a visible window only (a hidden one is synced when
@@ -676,6 +710,50 @@ class Popout:
         with self._lock:
             if self.ready and not self.quitting and self.visible():
                 self._sync_theme()
+
+    def _zbrush_pids(self, fresh=False) -> list:
+        """Process ids of the running ZBrushes, kept ZBRUSH_PIDS_TTL_S (a snapshot of every process each half second is
+        wasteful); fresh: read now."""
+        now = self._now()
+        at, pids = self._zb_pids
+        if fresh or at is None or now - at >= ZBRUSH_PIDS_TTL_S:
+            try:
+                pids = W.pids_named(TARGET_EXE)
+            except Exception as e:
+                _log(f"could not list ZBrush's processes: {e!r}")
+                pids = []
+            self._zb_pids = (now, pids)
+        return pids
+
+    def strip_tick(self):
+        """One look at the foreground, for the strip: while another program is in front and a ZBrush runs, the strip is
+        hidden (ShowWindow, nothing else changes: strip_on stays, and the mode is still the strip); when ZBrush has the
+        foreground again it comes back, without taking it. Not the user's Hide strip: that turns the strip off."""
+        if not self.ready or self.quitting or self.mode != "strip":
+            return
+        fg = W.GetForegroundWindow()
+        fg_pid = W.window_pid(fg) if fg else 0
+        zpids = self._zbrush_pids()
+        want = strip_wanted(fg_pid, zpids, os.getpid())
+        if want is False and not self._fg_hidden:
+            zpids = self._zbrush_pids(fresh=True)      # a ZBrush started since the list was read is not "another program"
+            want = strip_wanted(fg_pid, zpids, os.getpid())
+        if want is None:
+            return
+        with self._lock:
+            if self.mode != "strip" or self.quitting:
+                return
+            if not want and not self._fg_hidden and self.visible():
+                self._fg_hidden = True
+                self._pill_off()
+                user32.ShowWindow(self.hwnd, SW_HIDE)
+                _log(f"strip hidden: the foreground is process {fg_pid}, not ZBrush")
+            elif want and self._fg_hidden:
+                self._fg_hidden = False
+                user32.ShowWindow(self.hwnd, W.SW_SHOWNOACTIVATE)
+                winframe.user32.SetWindowPos(self.hwnd, winframe.HWND_TOPMOST, 0, 0, 0, 0,
+                                             W.SWP_NOMOVE | W.SWP_NOSIZE | W.SWP_NOACTIVATE)
+                _log("strip shown again: ZBrush has the foreground" if zpids else "strip shown again: no ZBrush is running")
 
     def _watch_app(self):
         """--managed: the app owns us; when its control window has been gone for two looks in a row it has quit."""
@@ -721,10 +799,11 @@ class Popout:
     def idle_tick(self):
         """--managed: one look at whether a hidden window has sat unused for browser.quit_after_minutes (off unless the
         setting is on). Unused is the time since it was last hidden, or since a hidden start; being shown ends the
-        count and hiding starts it again. A window that is up, or one nobody started (not managed), never quits."""
+        count and hiding starts it again. A window that is up, or one nobody started (not managed), never quits. A
+        strip that steps aside while another program is in front is up all the same."""
         if not self.managed or not self.ready or self.quitting or self.session_ending or self._idle_closing:
             return
-        if self.visible():
+        if self.visible() or self._fg_hidden:
             self._note_shown()
             return
         minutes = self._read_idle_minutes()
@@ -740,9 +819,12 @@ class Popout:
 
     def app_gone(self, why):
         """The app quit (or told us to). A hidden window has no reason to stay; one that is up does not depend
-        on the app, so it stays, no longer managed: closing it then ends the process."""
+        on the app, so it stays, no longer managed: closing it then ends the process. The strip of a managed
+        popout goes with the app (strip_on stays, so the next pre-warm brings it back); one started by hand
+        (the Start menu, --show) is not managed and stays, as the browser does."""
         with self._lock:
-            if self.visible() and not self.quitting:
+            up = self.visible() or (self.mode == "strip" and self._fg_hidden)
+            if up and not self.quitting and not (self.managed and self.mode == "strip"):
                 _log("app gone; staying open (the window is up)")
                 self.managed = False
                 return
@@ -770,7 +852,8 @@ class Popout:
             r = self._rect()
             if not r:
                 return
-            rec = {"x": r.left, "y": r.top, "width": r.right - r.left, "height": r.bottom - r.top, "maximized": False}
+            rec = {"x": r.left, "y": r.top, "width": r.right - r.left, "height": r.bottom - r.top,
+                   "maximized": bool(user32.IsZoomed(self.hwnd))}
         if rec["width"] > 100 and rec["height"] > 100:
             _update_state(window=rec)
 
@@ -900,6 +983,7 @@ class Popout:
                 maxed = self._was_max                  # web view inside stays "hidden" and paints nothing
                 if not self._placed:                   # the first time: where it was last session. After that it keeps its place
                     x, y, wd, ht, maxed = self._place(zb)
+                    maxed = maxed or self._was_max     # the browser the strip took the place of was maximised
                     winframe.user32.SetWindowPos(self.hwnd, self._z_order(), x, y, wd, ht, W.SWP_NOACTIVATE)
                     self._placed = True
                 else:
@@ -1014,7 +1098,7 @@ class Popout:
         self.close(why="hide strip")
 
     def strip_set(self, changes) -> dict:
-        """Saves the strip's orient, kind and wrap that changes names (the others stay); a bad value is left out.
+        """Saves the strip's orient, kind, wrap and fold that changes names (the others stay); a bad value is left out.
         Returns the strip's settings as strip_state reads them back."""
         good = {}
         if isinstance(changes, dict):
@@ -1022,13 +1106,14 @@ class Popout:
                 good["orient"] = changes["orient"]
             if changes.get("kind") in C.ASSET_KINDS:
                 good["kind"] = changes["kind"]
-            if isinstance(changes.get("wrap"), bool):
-                good["wrap"] = changes["wrap"]
+            for key in ("wrap", "fold"):
+                if isinstance(changes.get(key), bool):
+                    good[key] = changes[key]
         if good:
             _update_strip(**good)
             _log(f"strip: {good}")
         ss = strip_state(_read_state())
-        return {"on": self.strip_on, "orient": ss["orient"], "kind": ss["kind"], "wrap": ss["wrap"]}
+        return {"on": self.strip_on, "orient": ss["orient"], "kind": ss["kind"], "wrap": ss["wrap"], "fold": ss["fold"]}
 
     def show_strip(self, why=""):
         """Puts the strip up in the window's place: a browser that is up is hidden first (its place kept, ZBrush given
@@ -1050,13 +1135,18 @@ class Popout:
         ss = strip_state(_read_state())
         fit = None
         try:
-            arg = json.dumps({"mode": "strip", "kind": ss["kind"], "orient": ss["orient"], "wrap": ss["wrap"]})
+            arg = json.dumps({"mode": "strip", "kind": ss["kind"], "orient": ss["orient"], "wrap": ss["wrap"],
+                              "fold": ss["fold"]})
             fit = self.window.evaluate_js("window.__popoutShow ? __popoutShow(" + arg + ") : null")
             self._page_strip = True
         except Exception as e:
             _log(f"__popoutShow (strip) failed: {e!r}")
         wd, ht = fit_size(fit, self._scale())
         x, y = self._strip_home = self._strip_place(ss, (wd, ht))
+        if user32.IsZoomed(self.hwnd):                 # a maximised browser keeps WS_MAXIMIZE while hidden: SetWindowPos would leave it
+            #                                            zoomed, and the show below would restore its old normal rectangle
+            if not winframe.place_normal(self.hwnd, (x, y, x + wd, y + ht)):
+                _log("the maximised state could not be cleared for the strip")
         winframe.user32.SetWindowPos(self.hwnd, winframe.HWND_TOPMOST, x, y, wd, ht, W.SWP_NOACTIVATE)
         user32.ShowWindow(self.hwnd, W.SW_SHOWNOACTIVATE)
         winframe.user32.SetWindowPos(self.hwnd, winframe.HWND_TOPMOST, 0, 0, 0, 0,
@@ -1066,10 +1156,14 @@ class Popout:
              f"foreground {W.GetForegroundWindow()})")
 
     def _leave_strip(self):
-        """The hidden window is the browser again: its styles, its size limits and its own place (lock held)."""
+        """The hidden window is the browser again: its styles, its size limits and its own place (lock held). A browser
+        that was maximised when the strip took its place is maximised again by show() (_was_max)."""
         if self.mode != "strip":
             return
         self._pill_off()
+        if self._fg_hidden:                            # hidden by the foreground watch: that ends with the strip
+            self._fg_hidden = False
+            self._note_hidden()
         self.mode = "browser"
         self._strip_frame(False)
         self._placed = False                           # the browser comes back where it was, not where the strip is
@@ -1243,8 +1337,12 @@ class Popout:
         if not name:
             return {"ok": False, "error": f"No {kind} to select."}
         with self._lock:
-            if self.mode != "strip":
+            strip = self.mode == "strip"
+            if not strip:
                 self._back_to_target()
+        if strip and not self._zbrush_pids(fresh=True):    # a strip started by hand with no ZBrush: the pick has nowhere to go
+            _log(f"pick {kind} {name!r} from the strip: no ZBrush is running")
+            return {"ok": False, "error": "ZBrush is not running."}       # the page shows it as the strip's note
         app = W.find_message_window(APP_CLASS)
         payload = json.dumps({"v": 1, "op": "pick", "kind": kind, "name": name}).encode("utf-8")
         r = W.send_copydata(app, radiald.COPYDATA_PICK, payload) if app else None
