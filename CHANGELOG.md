@@ -17,6 +17,7 @@ All notable changes to this project are listed here. The format follows
 - Studio's counts for a **More** slot ("4 items are in the More submenu" and "4 items in a submenu") included empty
   slots and items that cannot be used, which the submenu leaves out, so they could say more than **More** opens with.
 - Studio threw an error (nothing visible) when you left the **Menus** screen while a new menu's title box was still open.
+- The **Skip to content** link could still show at the top left of Studio when it opened, because focus that reached it before the page was ready stayed there. That focus is now moved off the link too.
 - The Library and the browser said "ZBrush was not found" on a PC with no `Maxon` folder under `%APPDATA%`, although Setup listed the installs: the search for ZBrush 2022 to 2025 installs was skipped.
 - When an editor saved `radial.json` by truncating the file and then writing it, and both landed with the same time stamp, the app read the empty file, kept the previous menus and did not read the whole file until the next save. It is read on the next check now.
 

@@ -39,6 +39,7 @@ def _files() -> list[tuple[str, str]]:
         ("ui/favorder.js", os.path.join(paths.UI_DIR, "favorder.js")),
         ("ui/gridwindow.js", os.path.join(paths.UI_DIR, "gridwindow.js")),
         ("ui/slots.js", os.path.join(paths.UI_DIR, "slots.js")),
+        ("ui/skiplink.js", os.path.join(paths.UI_DIR, "skiplink.js")),
         ("ui/styles.css", os.path.join(paths.UI_DIR, "styles.css")),
         ("ui/popout.html", os.path.join(paths.UI_DIR, "popout.html")),
         ("default menus", paths.DEFAULT_MENUS),
