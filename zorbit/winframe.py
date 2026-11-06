@@ -9,7 +9,10 @@ pywebview is told the window is frameless, so WinForms also thinks the frame is 
 from maximised by turning the client size it kept into a window size, and the two only agree when the frame is
 nothing. WebView2 would cover the whole client area, and its windows belong to another process, so a resize
 border has to be a strip of the form that the control does not cover: the form's Padding (set on the UI thread,
-see _set_layout) leaves it, and WM_NCHITTEST answers the resize codes there (see hit_test)."""
+see _set_layout) leaves it, and WM_NCHITTEST answers the resize codes there (see hit_test).
+
+A window can also be made to fit its content (set_fitted, the browser's strip): no resize strip, no thick frame or
+maximise box (so a drag to a screen edge does not snap it), and no minimum size, so the caller sizes it exactly."""
 import ctypes
 import ctypes.wintypes as w
 import time
@@ -264,6 +267,7 @@ _LRESULT = ctypes.c_ssize_t
 _WNDPROC = ctypes.WINFUNCTYPE(_LRESULT, w.HWND, w.UINT, w.WPARAM, w.LPARAM)
 _subclass = {}                     # keeps the callback and the original proc alive for the window's life
 _WM_LAYOUT = 0x8000 + 0x5A         # WM_APP + n, to the window itself: set its Padding and BackColor on the UI thread
+_WM_FIT = 0x8000 + 0x5B            # ... and this one: fit the content or not (set_fitted), wparam 1 or 0
 
 
 def _work_of(rect):
@@ -322,7 +326,33 @@ def _set_layout(hwnd, border, color):
         form.BackColor = Color.FromArgb(255, color & 255, (color >> 8) & 255, (color >> 16) & 255)
 
 
-def install_frame(hwnd, on_query_end=None, on_end=None):
+class _MINMAXINFO(ctypes.Structure):
+    _fields_ = [("ptReserved", w.POINT), ("ptMaxSize", w.POINT), ("ptMaxPosition", w.POINT),
+                ("ptMinTrackSize", w.POINT), ("ptMaxTrackSize", w.POINT)]
+
+
+def _set_fit(hwnd, st, fitted):
+    """On the UI thread (the window procedure): a fitted window has no Padding (no resize strip) and no MinimumSize,
+    which WinForms would otherwise hold it to; leaving fitted puts back the ones it had."""
+    import System
+    import System.Windows.Forms as WinForms
+    from System.Drawing import Size
+    form = WinForms.Control.FromHandle(System.IntPtr(hwnd))
+    if form is None:
+        raise RuntimeError("no form for the window")
+    if fitted:
+        if st["min"] is None:
+            st["min"] = (form.MinimumSize.Width, form.MinimumSize.Height)
+        form.MinimumSize = Size(0, 0)
+        form.Padding = WinForms.Padding(0)
+    else:
+        if st["min"] is not None:
+            form.MinimumSize = Size(*st["min"])
+            st["min"] = None
+        form.Padding = WinForms.Padding(st["border"])
+
+
+def install_frame(hwnd, on_query_end=None, on_end=None, on_moved=None):
     """Subclasses the window to draw without Windows' frame. WM_NCCALCSIZE makes the client area the whole window
     (a maximised one is cut back to the work area, see client_rect); WM_NCHITTEST answers the resize codes in the
     strip around the page (see hit_test); WinForms is kept from undoing where Windows restored the window (see
@@ -330,7 +360,8 @@ def install_frame(hwnd, on_query_end=None, on_end=None):
     behaviour is Windows' own. A message from _post_layout sets the strip up.
     Windows shutting down, restarting or signing out: on_query_end() is called on WM_QUERYENDSESSION, before the
     window is asked to close, and the answer is always "yes, go ahead"; on_end(ending) on WM_ENDSESSION (ending is
-    false when something else cancelled it). Both run on the UI thread: keep them short. Nothing in the procedure
+    false when something else cancelled it). on_moved() is called when the user has finished moving or sizing the
+    window (WM_EXITSIZEMOVE). All run on the UI thread: keep them short. Nothing in the procedure
     may raise into Windows, so each part guards itself and falls back to the window's own procedure."""
     user32.GetWindowLongPtrW.restype = ctypes.c_void_p
     user32.GetWindowLongPtrW.argtypes = [w.HWND, ctypes.c_int]
@@ -343,13 +374,29 @@ def install_frame(hwnd, on_query_end=None, on_end=None):
     GWLP_WNDPROC, WM_NCCALCSIZE, WM_NCHITTEST = -4, 0x0083, 0x0084
     WM_QUERYENDSESSION, WM_ENDSESSION = 0x0011, 0x0016
     WM_WINDOWPOSCHANGING, WM_WINDOWPOSCHANGED = 0x0046, 0x0047
+    WM_GETMINMAXINFO, WM_EXITSIZEMOVE = 0x0024, 0x0232
     if hwnd in _subclass:
         return
     original = user32.GetWindowLongPtrW(hwnd, GWLP_WNDPROC)
     st = {"border": 0, "error": None,          # border: the strip's width once the form has it, else nothing is claimed
-          "plain": True, "hold": None}         # plain: neither maximised nor minimised; hold: see WM_WINDOWPOSCHANGED
+          "plain": True, "hold": None,         # plain: neither maximised nor minimised; hold: see WM_WINDOWPOSCHANGED
+          "fit": False, "min": None,           # fit: set_fitted; min: the form's MinimumSize while it is off
+          "fit_done": None}                    # an Event set_fitted waits on
 
     def proc(h, msg, wp, lp):
+        if msg == WM_GETMINMAXINFO and st["fit"]:
+            r = user32.CallWindowProcW(original, h, msg, wp, lp)
+            try:                                       # no smallest size: the caller makes it as small as its content
+                mmi = _MINMAXINFO.from_address(lp)
+                mmi.ptMinTrackSize.x = mmi.ptMinTrackSize.y = 1
+            except Exception:
+                pass
+            return r
+        if msg == WM_EXITSIZEMOVE and on_moved:
+            try:
+                on_moved()
+            except Exception:
+                pass
         if msg == WM_QUERYENDSESSION or msg == WM_ENDSESSION:
             try:
                 if msg == WM_QUERYENDSESSION and on_query_end:
@@ -391,18 +438,28 @@ def install_frame(hwnd, on_query_end=None, on_end=None):
                 user32.GetWindowRect(h, ctypes.byref(rc))
                 x, y = ctypes.c_short(lp & 0xFFFF).value, ctypes.c_short((lp >> 16) & 0xFFFF).value
                 code = hit_test(x, y, (rc.left, rc.top, rc.right, rc.bottom),
-                                bool(user32.IsZoomed(h)) or bool(user32.IsIconic(h)), st["border"])
+                                bool(user32.IsZoomed(h)) or bool(user32.IsIconic(h)), 0 if st["fit"] else st["border"])
                 if code not in (HTCLIENT, HTNOWHERE):
                     return code
             elif msg == _WM_LAYOUT:
                 border, color = wp & 0xFFFFFFFF, lp & 0xFFFFFFFF if lp >= 0 else -1
                 try:
-                    _set_layout(h, -1 if border == 0xFFFFFFFF else border, color)
+                    _set_layout(h, -1 if border == 0xFFFFFFFF or st["fit"] else border, color)   # fitted: no strip until it is not
                     if border != 0xFFFFFFFF:
                         st["border"] = border
                         user32.SetWindowPos(h, None, 0, 0, 0, 0, 0x0001 | 0x0002 | 0x0004 | 0x0010 | 0x0020)
                 except Exception as e:                             # the strip is then missing: say so (frame_problem)
                     st["error"] = repr(e)
+                return 0
+            elif msg == _WM_FIT:
+                try:
+                    st["fit"] = bool(wp)
+                    _set_fit(h, st, st["fit"])
+                except Exception as e:
+                    st["error"] = repr(e)
+                finally:
+                    if st["fit_done"]:
+                        st["fit_done"].set()
                 return 0
         except Exception:
             pass
@@ -417,6 +474,30 @@ def frame_problem(hwnd):
     been tried yet."""
     st = _subclass.get(hwnd, (None, None, None))[2]
     return st["error"] if st else None
+
+
+def set_fitted(hwnd, fitted, wait_s=1.0) -> bool:
+    """Makes a window that install_frame has been given fit its content (fitted) or be an ordinary resizable one
+    again. Fitted: no resize strip or resize codes, no thick frame or maximise box (a drag to a screen edge must not
+    snap it, nor a double-click on its drag area maximise it), and no minimum size, WinForms' or Windows', so
+    SetWindowPos can make it as small as its content. Not fitted: what it had before. Change it while the window is
+    hidden. The form's part runs on the UI thread; this waits up to wait_s for it, so a SetWindowPos after it is
+    not held to the old minimum. True when the UI thread did it in time. Never from the UI thread itself."""
+    import threading
+    sub = _subclass.get(hwnd)
+    if not sub:
+        return False
+    st = sub[2]
+    GWL_STYLE, BITS = -16, 0x00040000 | 0x00010000                  # WS_THICKFRAME WS_MAXIMIZEBOX
+    style = user32.GetWindowLongW(hwnd, GWL_STYLE)
+    user32.SetWindowLongW(hwnd, GWL_STYLE, (style & ~BITS) if fitted else (style | BITS))
+    done = threading.Event()
+    st["fit_done"] = done
+    user32.PostMessageW.argtypes = [w.HWND, w.UINT, w.WPARAM, w.LPARAM]
+    user32.PostMessageW(hwnd, _WM_FIT, 1 if fitted else 0, 0)
+    ok = done.wait(wait_s)
+    user32.SetWindowPos(hwnd, None, 0, 0, 0, 0, 0x0001 | 0x0002 | 0x0004 | 0x0010 | 0x0020)   # FRAMECHANGED
+    return ok
 
 
 def _read_placement(hwnd):

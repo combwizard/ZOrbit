@@ -40,6 +40,9 @@
    The popout page (popout.html?mock): ?nopick (a pick is refused as "ZOrbit is not running"), ?tag=blocking (opens filtered, as --tag does),
    ?kind=alpha (opens on that tab, else the last one, kept in localStorage rm_pop_kind);
    Keep on top is kept in localStorage rm_pop_on_top (on until switched off), and the popout_* calls only log.
+   The strip: ?strip starts popout.html?mock as the strip (?strip=horizontal lies it down); its settings are kept in localStorage rm_pop_strip.
+   Show as a strip, Open browser, Hide strip and the close button switch the page as popout.py switches the window; popout_strip_size only
+   logs, and keeps the last size it was given in window.__mockStripSize (a page in a browser tab cannot size its window).
    ?kinds adds a Tag item ({"tag": "blocking"}) and a Browser item ({"browser": ""}) to the end of the Tools menu, so the two newer
    kinds can be seen (the recorded config has none). The default stays the faithful recording.
    Profiles (the picker after the brand in the top bar): ?profiles=3 (three profiles, Creatures, Default and Hard surface, each with its own menus: the first menu's title carries the
@@ -518,6 +521,28 @@
   // No library, no usage: ?nozbrush, ?nolib and ?liberr leave the Recent folder empty and unsaved
   function usageOff() { return q.has('nozbrush') || q.has('nolib') || q.has('liberr'); }
   function usageEmpty(kind) { return { ok: true, kind: kind, recent: [], scores: {}, mtime_ns: usageMtime }; }
+  /* The strip's settings (popout.json "strip" in the real window), in localStorage rm_pop_strip; ?strip=horizontal starts it lying down. */
+  function stripGet() {
+    var s = {};
+    try { s = JSON.parse(localStorage.getItem('rm_pop_strip') || '{}') || {}; } catch (e) { s = {}; }
+    var orient = s.orient === 'horizontal' || (s.orient === undefined && q.get('strip') === 'horizontal') ? 'horizontal' : 'vertical';
+    return { on: s.on !== undefined ? !!s.on : q.has('strip'), orient: orient, kind: ASSET_KIND[s.kind] ? s.kind : 'brush', wrap: !!s.wrap };
+  }
+  function stripPut(changes) {
+    var s = stripGet();
+    for (var k in changes) s[k] = changes[k];
+    try { localStorage.setItem('rm_pop_strip', JSON.stringify(s)); } catch (e) {}
+    return s;
+  }
+  /* What popout.py does to the page when it switches the window. */
+  function mockShow(mode, fav) {
+    setTimeout(function () {
+      if (!window.__popoutShow) return;
+      var s = stripGet();
+      if (mode === 'strip') window.__popoutShow({ mode: 'strip', kind: s.kind, orient: s.orient, wrap: s.wrap });
+      else window.__popoutShow({ mode: 'browser', tag: fav ? 'favourite' : null, kind: s.kind, reset: true });
+    }, 0);
+  }
   function usagePick(kind, name) {                    // a pick in the popout: to the front of Recent, and a better score
     var st = usageStore(kind), key = name.replace(/\s+/g, '').toLowerCase(), old = st.recent.filter(function (r) { return r.name.replace(/\s+/g, '').toLowerCase() === key; })[0];
     st.recent = [{ name: name, t: Math.floor(Date.now() / 1000), count: (old ? old.count : 0) + 1 }].concat(st.recent.filter(function (r) { return r !== old; })).slice(0, 24);
@@ -1342,7 +1367,29 @@
         return { ok: true };
       });
     },
-    popout_hide: function () { console.log('[mock] popout_hide'); return Promise.resolve(true); },
+    popout_hide: function () {
+      console.log('[mock] popout_hide');
+      if (stripGet().on) mockShow('strip');                // the close button goes back to the strip while it is on
+      return Promise.resolve(true);
+    },
+    popout_strip_show: function () { console.log('[mock] popout_strip_show'); stripPut({ on: true }); mockShow('strip'); return Promise.resolve(true); },
+    popout_strip_hide: function () { console.log('[mock] popout_strip_hide'); stripPut({ on: false }); mockShow('browser'); return Promise.resolve(true); },
+    popout_open_browser: function (fav) { console.log('[mock] popout_open_browser', fav); mockShow('browser', fav); return Promise.resolve(true); },
+    popout_strip_set: function (changes) {
+      console.log('[mock] popout_strip_set', changes);
+      var c = {};
+      if (changes && (changes.orient === 'vertical' || changes.orient === 'horizontal')) c.orient = changes.orient;
+      if (changes && ASSET_KIND[changes.kind]) c.kind = changes.kind;
+      if (changes && typeof changes.wrap === 'boolean') c.wrap = changes.wrap;
+      return Promise.resolve(stripPut(c));
+    },
+    popout_strip_size: function (w, h) {
+      console.log('[mock] popout_strip_size', w, h);
+      window.__mockStripSize = { w: w, h: h };
+      return Promise.resolve(true);
+    },
+    popout_strip_hover: function (seq, name) { if (name) console.log('[mock] popout_strip_hover', name); return Promise.resolve(true); },
+    popout_strip_note: function (text) { console.log('[mock] popout_strip_note', text); return Promise.resolve(true); },
     popout_release_focus: function () { console.log('[mock] popout_release_focus'); return Promise.resolve(true); },
     popout_set_on_top: function (flag) {
       console.log('[mock] popout_set_on_top', flag);
@@ -1370,10 +1417,14 @@
     popout_get_state: function () {
       var onTop = true, kind = null, side = 'left', column = true;
       try { onTop = localStorage.getItem('rm_pop_on_top') !== '0'; kind = localStorage.getItem('rm_pop_kind'); side = localStorage.getItem('rm_pop_side') || 'left'; column = localStorage.getItem('rm_pop_column') !== '0'; } catch (e) {}
-      return Promise.resolve({ on_top: onTop, size: 96, side: side, column: column, tag: q.get('tag') || null, kind: q.get('kind') || kind || 'brush', tags_path: '', profile: profiles.editing, theme: themeSetting(), theme_effective: themeEff(), theme_base: themeBase(), theme_tokens: themeEff() === 'zbrush' ? clone(ZB_TOKENS) : {} });
+      return Promise.resolve({ on_top: onTop, size: 96, side: side, column: column, tag: q.get('tag') || null, kind: q.get('kind') || kind || 'brush', tags_path: '', profile: profiles.editing,
+        mode: q.has('strip') ? 'strip' : 'browser', strip: stripGet(), theme: themeSetting(), theme_effective: themeEff(), theme_base: themeBase(), theme_tokens: themeEff() === 'zbrush' ? clone(ZB_TOKENS) : {} });
     },
     popout_log: function (msg) { console.log('[mock] popout_log', msg); return Promise.resolve(true); },
   };
   window.pywebview = { api: api };
   setTimeout(function () { window.dispatchEvent(new Event('pywebviewready')); }, 0);
+  if (window.__ZORBIT_MODE__ === 'popout' && q.has('strip')) {           // as popout.py does at a start with the strip on: once the page has drawn itself
+    var boot = setInterval(function () { if (window.__popoutBooted) { clearInterval(boot); mockShow('strip'); } }, 50);
+  }
 })();

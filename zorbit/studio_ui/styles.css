@@ -1219,7 +1219,7 @@ body.dragging .irow:hover { background: transparent; }
 /* Folders and tags on the right (popout.json "side"): the columns swap and the divider moves with them. */
 .pop.side-right .browser.full { grid-template-columns: minmax(0, 1fr) 190px; }
 .pop.side-right .lib-side { order: 2; border-right: 0; border-left: 1px solid var(--line); }
-.pop-head .side-btn, .pop-head .col-btn { width: 30px; height: 30px; }
+.pop-head .side-btn, .pop-head .col-btn, .pop-head .strip-btn { width: 30px; height: 30px; }
 .pop-head .col-btn[aria-pressed="true"] { color: var(--accent); }
 /* Folders and tags collapsed (popout.json "column"): the grid takes the whole width. */
 .pop.col-hidden .browser.full { grid-template-columns: minmax(0, 1fr); }
@@ -1241,3 +1241,60 @@ body.dragging .irow:hover { background: transparent; }
 .pop .bgrid { gap: 8px; }
 .pop .bcard { cursor: pointer; }
 .pop .add-strip { padding: 8px 14px; }
+
+/* ------------------------------------------------------------ the browser's strip (popout.json "strip_on")
+   The window is the strip's own size (popout.py fits it to .strip), so the page is the pill: Windows rounds its corners and draws the rim.
+   Vertical by default; .horiz lays it out in a row. The thumbnails are a grid of --per a line: +N shows the rest in more lines. */
+body.strip-mode { background: var(--bg1); overflow: hidden; user-select: none; }
+body.strip-mode #app, body.strip-mode #toasts { display: none; }
+body:not(.strip-mode) .strip { display: none; }
+.strip { position: fixed; left: 0; top: 0; width: max-content; height: max-content; display: flex; flex-direction: column; align-items: center; gap: 4px;
+  padding: 6px; background: var(--bg1); --cell: 48px; }
+.strip.horiz { flex-direction: row; }
+.strip-grip { display: grid; place-items: center; width: 48px; height: 14px; color: var(--faint); cursor: grab; -webkit-app-region: drag; app-region: drag; }
+.strip-grip .ico { transform: rotate(90deg); }
+.strip.horiz .strip-grip { width: 14px; height: 48px; }
+.strip.horiz .strip-grip .ico { transform: none; }
+.strip-menu { display: flex; flex-direction: column; align-items: center; gap: 1px; width: 52px; padding: 4px 0 3px; border: 0; border-radius: 6px; background: none; color: var(--sub);
+  font: 600 10px/1.2 var(--font); letter-spacing: .01em; }
+.strip-menu:hover, .strip-menu[aria-expanded="true"] { background: color-mix(in srgb, var(--ink) 7%, transparent); color: var(--text); }
+.strip-menu .ico { color: var(--fav, var(--fav-default)); }
+.strip-menu .ico svg { fill: currentColor; }
+.strip-sep { flex: none; width: 36px; height: 1px; margin: 2px 0; background: var(--line2); }
+.strip.horiz .strip-sep { width: 1px; height: 36px; margin: 0 2px; }
+.strip-cells { position: relative; display: grid; gap: 4px; grid-auto-flow: column; grid-template-rows: repeat(var(--per, 10), var(--cell)); grid-auto-columns: var(--cell); }
+.strip-cells.short { grid-template-rows: none; grid-auto-flow: row; grid-auto-rows: var(--cell); }
+.strip.horiz .strip-cells { grid-auto-flow: row; grid-template-rows: none; grid-template-columns: repeat(var(--per, 10), var(--cell)); grid-auto-rows: var(--cell); }
+.strip.horiz .strip-cells.short { grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: var(--cell); }
+.strip-cell { position: relative; width: var(--cell); height: var(--cell); padding: 0; border: 0; border-radius: 6px; background: var(--well); overflow: hidden; cursor: pointer; }
+.strip-cell .thumb { width: 100%; height: 100%; border-radius: 6px; }
+.strip-cell .thumb img { object-fit: contain; }
+.strip-cell:hover { box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 55%, transparent); }
+.strip-cell.last { box-shadow: 0 0 0 2px var(--accent); }
+.strip-cell.tagged::after { content: ""; position: absolute; left: 6px; right: 6px; bottom: 0; height: 3px; border-radius: 3px 3px 0 0; background: var(--tag); pointer-events: none; }
+.strip-cell.reordering { opacity: .4; }
+.strip-cell.skel { cursor: default; }
+.strip-empty { display: grid; place-items: center; width: var(--cell); height: var(--cell); border: 1px dashed var(--line2); border-radius: 6px; background: none; color: var(--faint); }
+.strip-empty:hover { color: var(--text); border-color: var(--accent); }
+.strip-drop { position: absolute; z-index: 2; background: var(--accent); border-radius: 2px; pointer-events: none; }
+.strip-more { width: 48px; height: 26px; border: 1px solid var(--line2); border-radius: 6px; background: none; color: var(--sub); font: 600 11px var(--font); }
+.strip.horiz .strip-more { width: 40px; height: 48px; }
+.strip-more:hover { color: var(--text); border-color: var(--accent); }
+.strip .ibtn { width: 32px; height: 28px; }
+.strip.horiz .ibtn { width: 28px; height: 32px; }
+.strip-fold .ico { transition: transform .12s; }
+.strip.horiz .strip-fold .ico { transform: rotate(-90deg); }
+.strip.folded .strip-fold .ico { transform: rotate(180deg); }
+.strip.horiz.folded .strip-fold .ico { transform: rotate(90deg); }
+.strip.folded .strip-cells, .strip.folded .strip-more, .strip.folded .strip-sep.after, .strip.folded .strip-open { display: none; }
+/* The strip's menu takes the strip's place under the grip and the menu button while it is open (the window cannot draw outside itself). */
+.strip.menu-open { flex-direction: column; align-items: stretch; }
+.strip.menu-open > :not(.strip-grip):not(.strip-menu):not(.strip-pop) { display: none; }
+.strip.menu-open .strip-grip { width: auto; height: 14px; }
+.strip.menu-open .strip-grip .ico { transform: rotate(90deg); }
+.strip.menu-open .strip-menu { flex-direction: row; justify-content: center; gap: 6px; width: auto; padding: 6px 0; }
+.strip-pop { width: max-content; min-width: 168px; padding: 2px 0 0; border-top: 1px solid var(--line2); }
+.strip-pop .pop-item { padding: 6px 10px; gap: 10px; }
+.strip-pop .pop-item.on b { color: var(--accent); }
+.strip-pop .pi-count { margin-left: auto; padding-left: 12px; color: var(--sub); font: 11px var(--mono); }
+.strip-pop .pop-tick { width: 15px; margin-right: 0; }
