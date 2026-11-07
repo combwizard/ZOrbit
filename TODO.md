@@ -13,7 +13,7 @@ The issues themselves, where people can comment and add a thumbs-up:
 
 ## Order of work
 
-Worked out on 6 Nov 2026. A new issue goes on the board straight away and joins this order the next time it is
+Worked out on 6 Nov 2026, extended on 7 Nov 2026. A new issue goes on the board straight away and joins this order the next time it is
 worked out.
 
 1. **Before 1.0:** nothing left to build. The 1.0 milestone is empty since 0.20.0, and the test pass of 6 Nov 2026
@@ -21,14 +21,20 @@ worked out.
    and update on the VM, the docs against the code) found only small things, fixed since. 1.0.0 waits for 0.19 and
    0.20 to be used for a while; it ships with no new feature. One decision goes with it: whether the "experimental"
    note on themes and the "under heavy development" note on the docs index stay.
-2. **Next:** [#39](https://github.com/combwizard/ZOrbit/issues/39), the drag to reorder. Tags may already cover its
+2. **From the brainstorm of 6 Nov 2026** (issues #188 to #193): [#189](https://github.com/combwizard/ZOrbit/issues/189),
+   the Recent slot, is built. Next is [#188](https://github.com/combwizard/ZOrbit/issues/188), the state channel: the
+   design and its six phases are on the issue, and [#193](https://github.com/combwizard/ZOrbit/issues/193), the subtools
+   fan, follows it. [#190](https://github.com/combwizard/ZOrbit/issues/190),
+   [#191](https://github.com/combwizard/ZOrbit/issues/191) and [#192](https://github.com/combwizard/ZOrbit/issues/192)
+   wait for votes.
+3. **Then:** [#39](https://github.com/combwizard/ZOrbit/issues/39), the drag to reorder. Tags may already cover its
    named lists, so settle that before building them. [#40](https://github.com/combwizard/ZOrbit/issues/40) waits for
    it, since the strip needs the favourites data settled.
-3. **Ring look, back to back, if wanted:** [#35](https://github.com/combwizard/ZOrbit/issues/35) (`Item.colors`; slots
+4. **Ring look, back to back, if wanted:** [#35](https://github.com/combwizard/ZOrbit/issues/35) (`Item.colors`; slots
    that are not round are the hard part), then [#37](https://github.com/combwizard/ZOrbit/issues/37) (a large fan has
    two staggered rows, so no one arc runs through its slots) and
    [#36](https://github.com/combwizard/ZOrbit/issues/36), the least useful. Retake the ring pictures once at the end.
-4. **When someone asks:** [#98](https://github.com/combwizard/ZOrbit/issues/98) (design first) and
+5. **When someone asks:** [#98](https://github.com/combwizard/ZOrbit/issues/98) (design first) and
    [#26](https://github.com/combwizard/ZOrbit/issues/26). Keep new IPC code out of `win32.py` and `radiald.py`.
 
 Parked for now: [#29](https://github.com/combwizard/ZOrbit/issues/29) (Keep, Remove and Hide need more

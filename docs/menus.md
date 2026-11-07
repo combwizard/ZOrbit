@@ -377,7 +377,7 @@ The list is that of the ZBrush in front when the ring opens. Otherwise it is the
 
 The fan works like a [tag](#tag) fan. The slot is a disc in the ring's accent colour with a clock symbol and the fan badge, and moving onto it or releasing over it opens the fan. Each item of the fan is the file's name without its extension, with the Project or Tool icon. A file named twice in the list shows once, and a file that is no longer there, a folder and a network path are left out. The fan holds as many files as **Tag fan slots** allows (12 unless you set it, see [Tag fans](tags.md#tag-fans)), and the older files are not shown: there is no **More...** slot.
 
-Picking a file works as a [Project](#project) or [Tool](#tool) slot with that file does. A project goes through ZBrush's own check for unsaved work, so with unsaved changes ZBrush asks **Project has been changed. Would you like to save changes?** first. A pick from the fan does not count in **Recent** or for auto slots.
+Picking a file works as a [Project](#project) or [Tool](#tool) slot with that file does. A project goes through ZBrush's own check for unsaved work, so with unsaved changes ZBrush asks **Project has been changed. Would you like to save changes?** first. A pick from the fan does not count in the browser's **Recent** list or for auto slots.
 
 When the list has no file for the slot, or ZOrbit cannot find or read the list, the slot is a faint clock. Picking it sends nothing and says **This slot is empty** near the cursor. A list that cannot be found or read is noted once in `radiald.log`, in a line that starts `recent files:`. A `recent` item cannot be a step of a `steps` item.
 
