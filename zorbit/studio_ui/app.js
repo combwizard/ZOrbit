@@ -6197,7 +6197,7 @@ function describeChanges() {
   const after = S.cfg || {};
   const groups = [];
   const q = s => '\u201c' + s + '\u201d';
-  const itemName = it => it.empty === true ? 'Empty slot' : it.label || it.brush || it.alpha || it.material || it.texture || it.press || it.toggle || it.set || ('capture' in it ? 'Capture' : '') || ('tool' in it ? 'Tool' : '') || ('project' in it ? 'Project' : '') || ('layout' in it ? 'Layout' : '') ||(it.menu ? 'Submenu ' + it.menu : it.steps ? 'Steps' : it.tag ? 'Tag ' + it.tag : 'browser' in it ? 'Browser' + (it.browser ? ' ' + it.browser : '') : 'item');
+  const itemName = it => it.empty === true ? 'Empty slot' : it.label || it.brush || it.alpha || it.material || it.texture || it.press || it.toggle || it.set || ('capture' in it ? 'Capture' : '') || ('tool' in it ? 'Tool' : '') || ('project' in it ? 'Project' : '') || ('layout' in it ? 'Layout' : '') ||(it.menu ? 'Submenu ' + it.menu : it.steps ? 'Steps' : it.tag ? 'Tag ' + it.tag : 'browser' in it ? 'Browser' + (it.browser ? ' ' + it.browser : '') : 'recent' in it ? (own(RECENT, it.recent) ? RECENT[it.recent].label : 'Recent') : 'item');
   const bm = before.menus || {}, am = after.menus || {};
   for (const id of Object.keys(am)) {
     const a = am[id] || {}, b = own(bm, id) ? bm[id] : undefined;

@@ -101,64 +101,56 @@ def test_a_fan_item_is_named_after_the_file_and_is_a_project_or_a_tool():
 
 
 # --- the files on disk -----------------------------------------------------------------------------
+def read(kind, limit, install=None, log=None):
+    """What a slot shows once the worker has read the list: a refresh done here, then the open path's answer."""
+    recent.refresh(kind, limit, install, log)
+    return recent.entries(kind, limit, install, log)
+
+
 def test_files_that_are_not_there_drop_out(listed, tmp_path):
     a, b = make(tmp_path / "A.zpr"), make(tmp_path / "B.zpr")
     listed(a, tmp_path / "Gone.zpr", b)
-    assert recent.entries("project", 12) == [str(a), str(b)]
+    assert read("project", 12) == [str(a), str(b)]
 
 
 def test_a_folder_named_like_a_project_drops_out(listed, tmp_path):
     (tmp_path / "Odd.zpr").mkdir()
     a = make(tmp_path / "A.zpr")
     listed(tmp_path / "Odd.zpr", a)
-    assert recent.entries("project", 12) == [str(a)]
+    assert read("project", 12) == [str(a)]
 
 
 def test_the_list_stops_at_the_limit_newest_first(listed, tmp_path):
     files = [make(tmp_path / f"P{i:02}.zpr") for i in range(30)]
     listed(*files)
-    assert recent.entries("project", 12) == [str(f) for f in files[:12]]
-    assert recent.entries("project", 4) == [str(f) for f in files[:4]]
+    assert read("project", 12) == [str(f) for f in files[:12]]
+    assert read("project", 4) == [str(f) for f in files[:4]]
 
 
 def test_the_limit_counts_files_that_are_there(listed, tmp_path):
     a, b = make(tmp_path / "A.ztl"), make(tmp_path / "B.ztl")
     listed(*[tmp_path / f"Gone{i}.ztl" for i in range(5)], a, tmp_path / "Gone.ztl", b)
-    assert recent.entries("tool", 2) == [str(a), str(b)]
+    assert read("tool", 2) == [str(a), str(b)]
 
 
 def test_any_mixes_both_in_the_list_order(listed, tmp_path):
     p, t, q = make(tmp_path / "Head.zpr"), make(tmp_path / "Dog.ztl"), make(tmp_path / "Body.zpr")
     listed(p, t, q)
-    assert recent.entries("any", 12) == [str(p), str(t), str(q)]
-    assert recent.entries("tool", 12) == [str(t)]
+    assert read("any", 12) == [str(p), str(t), str(q)]
+    assert read("tool", 12) == [str(t)]
 
 
 def test_an_unknown_kind_or_no_room_gives_nothing(listed, tmp_path):
     listed(make(tmp_path / "A.zpr"))
-    assert recent.entries("brush", 12) == [] and recent.entries("project", 0) == []
-
-
-def test_the_answer_is_kept_until_the_file_changes(listed, tmp_path, monkeypatch):
-    a, b = make(tmp_path / "A.zpr"), make(tmp_path / "B.zpr")
-    cfg = listed(a)
-    now = [100.0]
-    monkeypatch.setattr(recent, "clock", lambda: now[0])
-    assert recent.entries("project", 12) == [str(a)]
-    cfg.write_bytes(cfg_bytes(b, a))                    # longer: the size moves, so it is read again at once
-    assert recent.entries("project", 12) == [str(b), str(a)]
-    a.unlink()                                          # a file gone without the list changing...
-    assert recent.entries("project", 12) == [str(b), str(a)]
-    now[0] += recent.CACHE_S                            # ...drops out once the answer is old
-    assert recent.entries("project", 12) == [str(b)]
+    assert read("brush", 12) == [] and read("project", 0) == []
 
 
 def test_a_missing_list_gives_nothing_and_is_logged_once(listed, tmp_path):
     cfg = listed()
     cfg.unlink()
     said = []
-    assert recent.entries("project", 12, log=said.append) == []
-    assert recent.entries("tool", 12, log=said.append) == []
+    assert read("project", 12, log=said.append) == []
+    assert read("tool", 12, log=said.append) == []
     assert len(said) == 1 and "is not there" in said[0] and recent.FILE_NAME in said[0]
 
 
@@ -169,16 +161,16 @@ def test_a_list_that_cannot_be_read_gives_nothing_and_is_logged_once(listed, tmp
         raise PermissionError("locked")
     monkeypatch.setattr(recent.Path, "read_bytes", refuse)
     said = []
-    assert recent.entries("project", 12, log=said.append) == []
-    assert recent.entries("project", 12, log=said.append) == []
+    assert read("project", 12, log=said.append) == []
+    assert read("project", 12, log=said.append) == []
     assert len(said) == 1 and "cannot be read" in said[0]
 
 
 def test_no_zbrush_gives_nothing_and_is_logged_once(monkeypatch):
     monkeypatch.setattr(recent, "list_file", lambda install=None: (None, "no ZBrush installation found"))
     said = []
-    assert recent.entries("any", 12, log=said.append) == []
-    assert recent.entries("any", 12, log=said.append) == []
+    assert read("any", 12, log=said.append) == []
+    assert read("any", 12, log=said.append) == []
     assert said == ["recent files: no ZBrush installation found; the recent slot stays empty"]
 
 
@@ -291,9 +283,11 @@ class _Tags:
         return ""
 
 
-def expander(load_menus, item, front=None, **ring):
+def expander(load_menus, item, front=None, wait=True, **ring):
+    """An expander of a menu with this item. wait: it waits for the worker, as Studio's previews do, so a test sees
+    the fresh answer at the first open (the ring's own expander never waits)."""
     cfg = load_menus({"main": one_item_menu(item, {"brush": "A"})}, ring=ring)
-    return cfg, expand.Expander(cfg, _Usage(), _Tags(), front=front)
+    return cfg, expand.Expander(cfg, _Usage(), _Tags(), front=front, wait_recent=wait)
 
 
 def test_a_recent_slot_with_files_opens_a_fan_of_project_and_tool_items(load_menus, listed, tmp_path):
@@ -335,9 +329,9 @@ def test_the_fan_follows_the_zbrush_in_front(load_menus, monkeypatch, tmp_path):
         return [str(make(tmp_path / "A.zpr"))]
     monkeypatch.setattr(recent, "entries", entries)
     front = {"path": r"C:\Programs\ZBrush 2024", "year": 2024, "python": False}
-    cfg, ex = expander(load_menus, {"recent": "project"}, front=lambda: front)
+    cfg, ex = expander(load_menus, {"recent": "project"}, front=lambda: front, wait=False)
     ex.resolve("recent:project")
-    cfg, ex = expander(load_menus, {"recent": "project"})
+    cfg, ex = expander(load_menus, {"recent": "project"}, wait=False)
     ex.resolve("recent:project")
     assert asked == [front, None]
 
@@ -363,3 +357,154 @@ def test_a_pick_from_the_fan_opens_the_project_and_counts_nowhere(app, tmp_path,
     req = json.loads((app.tmpdata / "request.json").read_text(encoding="utf-8"))
     assert req["actions"] == [{"filepress": "File:Open", "file": str(p).replace("\\", "/")}]
     assert recorded == [] and app.toasts == []
+
+
+# --- the open path reads only what the worker found ------------------------------------------------
+def test_the_open_path_never_touches_the_disk(listed, tmp_path, monkeypatch):
+    a = make(tmp_path / "A.zpr")
+    listed(a)
+    assert read("project", 12) == [str(a)]
+
+    def refuse(*args, **kw):
+        raise AssertionError("the open path touched the disk")
+    monkeypatch.setattr(os, "stat", refuse)
+    monkeypatch.setattr(os.path, "isfile", refuse)
+    monkeypatch.setattr(recent.Path, "read_bytes", refuse)
+    monkeypatch.setattr(recent, "list_file", refuse)
+    asked = []
+    monkeypatch.setattr(recent, "refresh_later", lambda *args: asked.append(args))
+    now = [recent.clock() + 1000.0]
+    monkeypatch.setattr(recent, "clock", lambda: now[0])
+    assert recent.entries("project", 12) == [str(a)]      # old, but still shown...
+    assert asked                                          # ...and a fresh one asked of the worker
+
+
+def test_a_fresh_answer_asks_the_worker_for_nothing(listed, tmp_path, monkeypatch):
+    listed(make(tmp_path / "A.zpr"))
+    read("project", 12)
+    asked = []
+    monkeypatch.setattr(recent, "refresh_later", lambda *args: asked.append(args))
+    recent.entries("project", 12)
+    assert asked == []
+
+
+def test_with_no_answer_yet_the_slot_is_empty_and_the_worker_fills_it(listed, tmp_path):
+    a = make(tmp_path / "A.zpr")
+    listed(a)
+    assert recent.entries("project", 12) == []
+    assert recent.wait()
+    assert recent.entries("project", 12) == [str(a)]
+
+
+def test_the_background_refresh_brings_the_new_list_at_the_next_open(listed, tmp_path, monkeypatch):
+    a, b = make(tmp_path / "A.zpr"), make(tmp_path / "B.zpr")
+    cfg = listed(a)
+    now = [1000.0]
+    monkeypatch.setattr(recent, "clock", lambda: now[0])
+    assert read("project", 12) == [str(a)]
+    cfg.write_bytes(cfg_bytes(b, a))
+    assert recent.entries("project", 12) == [str(a)]      # still the last answer: it is fresh
+    now[0] += recent.REFRESH_S
+    assert recent.entries("project", 12) == [str(a)]      # old: shown once more, and refreshed meanwhile
+    assert recent.wait()
+    assert recent.entries("project", 12) == [str(b), str(a)]
+
+
+def test_the_worker_runs_one_at_a_time_and_each_request_once(monkeypatch):
+    import threading
+    import time
+    running, most, done = [0], [0], []
+    lock = threading.Lock()
+
+    def slow(kind, limit, install=None, log=None):
+        with lock:
+            running[0] += 1
+            most[0] = max(most[0], running[0])
+        time.sleep(0.05)
+        with lock:
+            running[0] -= 1
+            done.append((kind, limit))
+    monkeypatch.setattr(recent, "refresh", slow)
+    for _ in range(5):
+        recent.refresh_later("project", 12)
+        recent.refresh_later("tool", 12)
+    assert recent.wait()
+    assert most[0] == 1
+    assert sorted(set(done)) == [("project", 12), ("tool", 12)] and len(done) <= 4
+
+
+def test_an_error_in_the_worker_is_logged_once_and_keeps_the_old_answer(listed, tmp_path, monkeypatch):
+    a = make(tmp_path / "A.zpr")
+    listed(a)
+    assert read("project", 12) == [str(a)]
+
+    def broken(data, kind):
+        raise ValueError("bad list")
+    monkeypatch.setattr(recent, "parse", broken)
+    said = []
+    recent.refresh("project", 12, log=said.append)
+    recent.refresh("project", 12, log=said.append)
+    assert recent.entries("project", 12) == [str(a)]
+    assert len([s for s in said if "bad list" in s and "Traceback" not in s]) == 1
+    assert len([s for s in said if "Traceback" in s]) == 1
+
+
+def test_prefetch_warms_the_answers_the_menus_need(load_menus, listed, tmp_path):
+    a = make(tmp_path / "A.zpr")
+    listed(a)
+    cfg, ex = expander(load_menus, {"recent": "project"}, wait=False)
+    ex.prefetch_recent()
+    assert recent.wait()
+    assert ex.menu(cfg.menus["main"]).items[0].data == {"menu": "recent:project"}
+
+
+def test_the_ring_never_waits_for_the_worker(load_menus, listed, tmp_path):
+    listed(make(tmp_path / "A.zpr"))
+    cfg, ex = expander(load_menus, {"recent": "project"}, wait=False)
+    assert ex.menu(cfg.menus["main"]).items[0].kind == "recent"      # no answer yet: faint this once
+
+
+# --- odd names, the text encoding, the version ------------------------------------------------------
+def test_a_file_named_only_dot_zpr_is_a_project_with_its_whole_name(listed, tmp_path, load_menus):
+    odd = make(tmp_path / ".zpr")
+    assert recent.parse(cfg_bytes(odd), "any") == [str(odd)]
+    assert recent.item_kind(odd) == "project" and recent.label(odd) == ".zpr"
+    assert recent.item_kind(r"C:\A\.ZTL") == "tool" and recent.label(r"C:\A\.ZTL") == ".ZTL"
+    listed(odd)
+    cfg, ex = expander(load_menus, {"recent": "any"})
+    fan = ex.resolve("recent:any")
+    assert [(i.kind, i.label) for i in fan.items] == [("project", ".zpr")]
+
+
+def test_an_error_while_building_the_fan_leaves_the_slot_empty_and_is_logged_once(load_menus, monkeypatch):
+    def broken(*args, **kw):
+        raise KeyError("odd")
+    monkeypatch.setattr(recent, "entries", broken)
+    said = []
+    cfg = load_menus({"main": one_item_menu({"recent": "any"}, {"brush": "A"})})
+    ex = expand.Expander(cfg, _Usage(), _Tags(), log=said.append)
+    assert ex.menu(cfg.menus["main"]).items[0].kind == "recent"
+    assert ex.resolve("recent:any") is None
+    assert len(said) == 1 and "could not be built" in said[0]
+
+
+def test_a_list_in_utf_8_is_read_as_utf_8():
+    data = "C:\\Users\\you\\Mod\u00e8les\\H\u00e9ro.ztl".encode("utf-8") + b"\0"
+    assert recent.parse(data, "tool") == ["C:\\Users\\you\\Mod\u00e8les\\H\u00e9ro.ztl"]
+
+
+def test_a_list_that_is_not_utf_8_is_read_in_the_ansi_code_page():
+    data = "C:\\Mod\u00e8les\\H\u00e9ro.ztl".encode("cp1252") + b"\0"     # \xe8 and \xe9 alone are not UTF-8
+    assert recent.decode(data) == data.decode("mbcs", errors="replace")
+
+
+def test_the_librarys_older_zbrush_gets_its_year_from_the_install_scan(monkeypatch, tmp_path):
+    import brushes
+    import installs
+    exe = make(tmp_path / "ZBrush" / "ZBrush.exe")                     # a folder name with no year in it
+    monkeypatch.setattr(brushes, "zbrush_dirs", lambda: {"install": exe.parent, "user_assets": None})
+    monkeypatch.setattr(installs, "find_installs", lambda: [
+        {"name": "ZBrush 2024", "year": 2024, "path": str(exe.parent), "python": False, "supported": True}])
+    monkeypatch.setattr(recent, "public_documents", lambda: str(tmp_path / "Docs"))
+    path, why = recent.list_file()
+    assert path == tmp_path / "Docs" / "ZBrushData2024" / "ZStartup" / "ConfigFiles" / "LightboxRecentFiles.cfg"

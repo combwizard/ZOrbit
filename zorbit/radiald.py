@@ -561,6 +561,7 @@ class App:
             + f"; bridge mode={cfg.bridge_mode} key={cfg.bridge_key.text}"
             + f"; browser hotkey={cfg.browser_key.text if cfg.browser_key else None}"
             + f"; next profile hotkey={cfg.profile_key.text if cfg.profile_key else None}")
+        self.expander.prefetch_recent()            # on recent.py's worker: the first ring finds the recent lists
         self._prefetch()
         self._prune_icons()
         self._schedule_prewarm()

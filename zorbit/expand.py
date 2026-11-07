@@ -23,8 +23,9 @@ The tag menus are cached until a pick, a usage.json change, a tags.json change o
 app builds a new Expander whenever it reloads radial.json or tags.json.
 
 A recent fan holds the newest ring.tag_limit files of ZBrush's list that are on disk, with no More slot. Its items
-are made fresh from the list, so a pick goes through the Project or Tool action and counts nowhere. recent.py keeps the
-list for a few seconds.
+are made fresh from the list, so a pick goes through the Project or Tool action and counts nowhere. The list comes from
+recent.py's last answer, never from the disk, so the ring opens at once; a worker thread keeps the answers fresh, and
+prefetch_recent() asks for them when the menus load.
 """
 import dataclasses
 import math
@@ -63,15 +64,18 @@ def needed_radius(count, slot) -> int:
 
 
 class Expander:
-    def __init__(self, cfg, usage, tags, front=None, log=None):
+    def __init__(self, cfg, usage, tags, front=None, log=None, wait_recent=False):
         """front: a callable giving the ZBrush installation in front (installs.entry), or None, for the recent files
         of that ZBrush; without it they are the library's ZBrush's. log: told once of a recent list that cannot be
-        read."""
+        read. wait_recent: wait (briefly) for a fresh recent answer instead of showing the last one (Studio's
+        previews, which are not on the ring's open path)."""
         self.cfg = cfg
         self.usage = usage
         self.tags = tags
         self.front = front
         self.log = log
+        self.wait_recent = wait_recent
+        self._recent_said = False      # a recent fan that could not be built was logged
         self._cache = {}               # tag key -> ((usage.version, tags.mtime, assets.generation, limit, orders), Menu or None)
         self._rescanning = set()       # kinds whose index a worker thread is building again
         self._asked = {}               # kind -> when a rescan was last asked for (time.monotonic)
@@ -196,13 +200,31 @@ class Expander:
             return None
         try:
             install = self.front() if self.front is not None else None
+            paths = recent.entries(kind, self._tag_limit(), install, self.log)
+            if self.wait_recent and recent.wait(2.0):
+                paths = recent.entries(kind, self._tag_limit(), install, self.log)
+            if not paths:
+                return None
+            items = [C.Item(label=recent.label(p), kind=recent.item_kind(p), data={recent.item_kind(p): p})
+                     for p in paths]
+            return C.Menu(id=RECENT_PREFIX + kind, title=C.RECENT_LABELS[kind], items=items, fan=True)
+        except Exception as e:                           # never stops a ring from opening: the slot stays empty
+            if self.log is not None and not self._recent_said:
+                self._recent_said = True
+                self.log(f"recent fan {kind!r} could not be built: {e!r}; the slot stays empty")
+            return None
+
+    def prefetch_recent(self):
+        """Asks recent.py for the answers the menus' recent slots need, so the first ring finds them. Returns at
+        once: the work is done on recent.py's worker thread."""
+        kinds = {it.data.get("recent") for m in self.cfg.menus.values() for it in m.items if it.kind == "recent"}
+        if not kinds:
+            return
+        try:
+            install = self.front() if self.front is not None else None
         except Exception:
             install = None
-        paths = recent.entries(kind, self._tag_limit(), install, self.log)
-        if not paths:
-            return None
-        items = [C.Item(label=recent.label(p), kind=recent.item_kind(p), data={recent.item_kind(p): p}) for p in paths]
-        return C.Menu(id=RECENT_PREFIX + kind, title=C.RECENT_LABELS[kind], items=items, fan=True)
+        recent.prefetch(sorted(k for k in kinds if isinstance(k, str)), self._tag_limit(), install, self.log)
 
     def _rescan_later(self, kind):
         """Builds the index of a kind again on a worker thread (assets.rescan allows it once in a few seconds), so a

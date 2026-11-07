@@ -820,7 +820,7 @@ class Api(webapi.LibraryApi, webapi.TagApi):
         from ring import Ring
         app = self._preview_app()
         app.cfg = loaded
-        ex = expand.Expander(loaded, app.usage, app.tags.load())
+        ex = expand.Expander(loaded, app.usage, app.tags.load(), wait_recent=True)   # not the open path: wait for it
         menu = ex.resolve(menu_id) if paged else ex.menu(loaded.menus[menu_id])   # as the app would fill it now
         if menu is None:
             return {"image": None, "problems": problems or [f"menu {menu_id!r} has no usable items"]}
@@ -1030,7 +1030,7 @@ class Api(webapi.LibraryApi, webapi.TagApi):
         from ring import Ring
         app = self._preview_app()
         app.cfg = loaded
-        ex = expand.Expander(loaded, app.usage, app.tags.load())
+        ex = expand.Expander(loaded, app.usage, app.tags.load(), wait_recent=True)   # not the open path: wait for it
         menu = ex.menu(loaded.menus[menu_id])
         if ring_anim:
             menu = dataclasses.replace(menu, animation="")
