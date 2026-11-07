@@ -53,6 +53,7 @@ import fsutil               # noqa: E402
 import installs             # noqa: E402
 import paths                # noqa: E402
 import profiles             # noqa: E402
+import recent               # noqa: E402
 import tags                 # noqa: E402
 import theme                # noqa: E402
 import usage                # noqa: E402
@@ -541,7 +542,7 @@ class App:
                 log(f"cannot load radial.json: {self._config_error}; open Studio to fix it "
                     f"(the file is re-read as soon as it changes)")
                 self.cfg = C.Config(path=self.cfg_path, mtime=0.0)
-                self.expander = expand.Expander(self.cfg, self.usage, self.tags)
+                self.expander = expand.Expander(self.cfg, self.usage, self.tags, front=self.target_install, log=log)
                 self._set_slots([], None)
             self._menus_problem(announce=fresh and balloon)
             return
@@ -551,7 +552,7 @@ class App:
         self._theme = eff
         self._theme_sig = sig
         self.cfg = cfg
-        self.expander = expand.Expander(cfg, self.usage, self.tags)
+        self.expander = expand.Expander(cfg, self.usage, self.tags, front=self.target_install, log=log)
         self._set_slots([m for m in cfg.menus.values() if m.hotkey], cfg.browser_key, cfg.profile_key)
         for err in cfg.errors:
             log(f"config: {err}")
@@ -1161,7 +1162,7 @@ class App:
         if item.kind == "empty":                    # the ring cannot pick one; a guard
             log("empty slot picked; nothing sent")
             return
-        if item.kind in ("auto", "tag"):
+        if item.kind in ("auto", "tag", "recent"):
             log(f"empty {item.kind} slot picked; nothing sent")
             self._toast(MSG_EMPTY_SLOT)
             return
@@ -2055,6 +2056,9 @@ def check(cfg_path) -> int:
                          else f"  (tag {key!r} does not exist)")
             elif it.kind == "browser":
                 extra = f"  (opens on {it.data.get('kind', 'brush')})"
+            elif it.kind == "recent":
+                where, why = recent.list_file()
+                extra = f"  (reads {where})" if where else f"  ({why})"
             elif it.kind == "capture":
                 extra = f"  (saves into {it.data['capture'].strip() or capture.default_folder()})"
             elif it.kind in C.FILE_EXTS:

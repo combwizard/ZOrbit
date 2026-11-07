@@ -75,13 +75,16 @@ Schema (all keys optional except menus):
                                                  (Favourites can follow your own order, see expand.py)
   {"browser": "", "kind": "alpha"}               open the browser (tabs: brush alpha material texture) on that
                                                  tab (default brush); a tag key filters it ("" = everything)
+  {"recent": "project"}                          a fan of ZBrush's recent projects ("tool": tools, "any": both), each a
+                                                 Project or Tool item (recent.py, expand.py)
   {"empty": true}                                a slot that holds nothing: drawn as a faint outline, never picked
 
 An item that cannot be used (no target yet, a submenu that is gone) is reported and drawn as an empty slot, so the slots
 after it stay where they are. A menu with nothing but such items is dropped.
 
-Menu ids starting with "tag:" are reserved for the submenus a tag slot opens, and ids starting with "more:" for the
-More submenu of a full ring. Ids that are names a JavaScript object already has (__proto__, constructor, toString and the like) are reserved too.
+Menu ids starting with "tag:" are reserved for the submenus a tag slot opens, ids starting with "recent:" for the fan
+of a recent slot, and ids starting with "more:" for the More submenu of a full ring.
+Ids that are names a JavaScript object already has (__proto__, constructor, toString and the like) are reserved too.
 """
 import json
 import os
@@ -92,11 +95,14 @@ import looks as L
 import theme as T
 
 ACTION_KEYS = ("brush", "alpha", "material", "texture", "press", "set", "toggle", "capture", "tool", "project", "layout",
-               "steps", "menu", "auto", "tag", "browser", "empty")
+               "steps", "menu", "auto", "tag", "browser", "recent", "empty")
 FILE_EXTS = {"tool": ".ztl", "project": ".zpr", "layout": ".cfg"}     # what a Tool, a Project and a Layout item must end with (a project may be a folder)
 _FILE_EXAMPLES = {"tool": "C:\\Models\\Hero.ztl", "project": "C:\\Projects\\Hero.zpr", "layout": "C:\\Layouts\\Sculpt.cfg"}
 ASSET_KINDS = ("brush", "alpha", "material", "texture")     # the kinds of the browser and of tags
 AUTO_KINDS = ("brush",)
+RECENT_KINDS = ("project", "tool", "any")                   # what a recent slot lists: projects, tools, or both
+RECENT_LABELS = {"project": "Recent projects", "tool": "Recent tools", "any": "Recent"}   # its label when it has none
+NO_STEP = ("menu", "steps", "auto", "tag", "browser", "recent", "empty")   # the kinds a step of steps cannot be
 ANIMATIONS = L.ANIMATIONS
 LABEL_MODES = L.LABEL_MODES
 TAG_COLOR_MODES = L.TAG_COLOR_MODES
@@ -382,12 +388,15 @@ def _check_action(a, errors, where, allow_nested=True) -> bool:
         for i, s in enumerate(a["steps"]):
             if not _check_action(s, errors, f"{where} step {i + 1}", allow_nested=False):
                 return False
-            if any(x in s for x in ("menu", "steps", "auto", "tag", "browser", "empty")):
+            if any(x in s for x in NO_STEP):
                 errors.append(f"{where} step {i + 1}: steps cannot open menus, nest steps, be auto slots, "
-                              f"be empty slots or open tags or the browser")
+                              f"be empty slots or open tags, the browser or recent files")
                 return False
     elif k == "auto" and a["auto"] not in AUTO_KINDS:
         errors.append(f"{where}: 'auto' must be one of {', '.join(AUTO_KINDS)}")
+        return False
+    elif k == "recent" and (not isinstance(a[k], str) or a[k] not in RECENT_KINDS):
+        errors.append(f"{where}: 'recent' must be project, tool or any")
         return False
     elif k == "empty":
         if a[k] is not True:
@@ -429,6 +438,8 @@ def _default_label(a: dict, menus_raw: dict, tags=None) -> str:
         return "Steps"
     if "auto" in a:
         return "Auto"
+    if "recent" in a:
+        return RECENT_LABELS.get(a["recent"], "Recent")
     if "tag" in a:
         return (tags.label(a["tag"]) if tags is not None and tags.has(a["tag"]) else "") or a["tag"]
     if "browser" in a:
@@ -543,6 +554,9 @@ def load(path: str, tags=None, theme: str = "dark") -> Config:
             continue
         if mid.startswith("more:"):
             errors.append(f"menu {mid}: ids starting with 'more:' are reserved for the More submenu")
+            continue
+        if mid.startswith("recent:"):
+            errors.append(f"menu {mid}: ids starting with 'recent:' are reserved for the fans of recent slots")
             continue
         if mid in RESERVED_MENU_IDS:
             errors.append(f"menu {mid}: that id is reserved, give the menu another")

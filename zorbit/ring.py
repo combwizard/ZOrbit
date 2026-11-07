@@ -7,7 +7,8 @@ Tag colours: an item that carries a colour (config.Item.color, from its first ta
 tinted (ring.tag_tint_*), a soft halo (ring.tag_glow_opacity), or both, as ring.tag_colors says; its hover
 border, spoke and label take the colour too. A band through the slot centres (ring.tag_band) shows each slot's
 colour, faint for one without; it is left out when no slot has a colour. A tag slot is a solid disc in the tag colour with a tag glyph whatever ring.tag_colors says; one with no
-brushes is a faint tag glyph and nothing else of it is coloured.
+brushes is a faint tag glyph and nothing else of it is coloured. A recent slot is drawn the same way with a clock glyph,
+in the accent colour: a solid disc while ZBrush's list has files for it, a faint clock when it has none.
 Looks: what is drawn comes from a _Look (the ring's settings with the menu's look over them), what is picked and
 how the ring behaves from ring_cfg. A slot can take a shape (shapes.py), a style of its own (item.style) and a
 glow colour; a fan with a look of its own is drawn in it; the hub is a dot, disc, ring or the menu's icon.
@@ -380,7 +381,7 @@ def _merged(ring_cfg, over):
 def _item_sig(it):
     """What an item's sprites are drawn from, apart from its icon."""
     return (it.kind, it.label, it.color, it.tag, getattr(it, "glow", ""), tuple(sorted(_style(it).items())),
-            _is_more(it))
+            _is_more(it), _is_recent(it))
 
 
 def _style(it):
@@ -398,6 +399,11 @@ def _glyph_more(draw, cx, cy, size, fill):
 def _is_more(it):
     """A slot that opens a paged-out part of its menu: a submenu whose id starts with "more:"."""
     return it.kind == "menu" and str(it.data.get("menu", "")).startswith("more:")
+
+
+def _is_recent(it):
+    """A recent slot whose list has files: a submenu whose id starts with "recent:" (expand.py)."""
+    return it.kind == "menu" and str(it.data.get("menu", "")).startswith("recent:")
 
 
 def _tint_icon(icon, col, amount, style, blend):
@@ -447,6 +453,16 @@ def _glyph_star(draw, cx, cy, size, fill):
         r = size * (0.55 if i % 2 == 0 else 0.23)
         pts.append((cx + math.cos(a) * r, cy + 0.05 * size + math.sin(a) * r))
     draw.polygon(pts, outline=fill, width=max(1, int(size * 0.07)))
+
+
+def _glyph_clock(draw, cx, cy, size, fill):
+    """A clock (outline: a round face, a long hand straight up and a short one down to the right), size across: the
+    glyph of a recent slot. Line widths as the luggage tag's."""
+    r, w = size * 0.48, max(1, int(size * 0.1))
+    draw.ellipse((cx - r, cy - r, cx + r, cy + r), outline=fill, width=w)
+    draw.line([(cx, cy - r * 0.62), (cx, cy), (cx + r * 0.42, cy + r * 0.3)], fill=fill, width=w, joint="curve")
+    d = w * 0.6
+    draw.ellipse((cx - d, cy - d, cx + d, cy + d), fill=fill)       # the hub the hands turn on, so the corner is round
 
 
 def _glyph_grid(draw, cx, cy, size, fill):
@@ -1174,7 +1190,7 @@ class Ring:
             if (flick or hover_sub) and tuple(self.open[:len(path)]) != path:
                 self._set_open(path, time.time())
             return False
-        if not flick or self._item(path).kind in ("auto", "tag", "empty"):   # empty slots: nothing to pick
+        if not flick or self._item(path).kind in ("auto", "tag", "recent", "empty"):   # empty slots: nothing to pick
             return False
         self._finish(self._item(path), "flick", self._node_screen(path))
         return True
@@ -1272,8 +1288,10 @@ class Ring:
             if col and mode in ("tint", "both") and amount > 0:
                 icon = _tint_icon(icon, col, amount, L.tag_tint_style, L.tag_tint_blend)
         solid = bool(col) and bool(it.tag) and sub and icon is None   # a tag slot: solid disc in the tag colour
+        clock = _is_recent(it) and icon is None                      # a recent slot: the same, in the accent colour
         fill = _mix(base, col, 0.6) + (255,) if solid else (
-            _mix(base, col, 0.45) + (235,) if tint else _rgba(base, 0.92))
+            _mix(base, L.accent, 0.6) + (255,) if clock else (
+                _mix(base, col, 0.45) + (235,) if tint else _rgba(base, 0.92)))
 
         def disc(hover):
             im = Image.new("RGBA", (C, C), (0, 0, 0, 0))
@@ -1308,6 +1326,10 @@ class Ring:
             elif solid:                            # tag slot: the disc is the tag colour
                 glyph = _glyph_star if it.tag == tags.FAVOURITE else _glyph_tag
                 glyph(ImageDraw.Draw(im), c, c, ins * 0.46, _rgba(text, 0.9))
+            elif it.kind == "recent":              # a recent slot whose list has nothing: faint, no disc colour
+                _glyph_clock(ImageDraw.Draw(im), c, c, ins * 0.42, _rgba(L.accent, 0.35))
+            elif clock:                            # recent slot: the disc is the accent colour
+                _glyph_clock(ImageDraw.Draw(im), c, c, ins * 0.46, _rgba(text, 0.9))
             else:                                  # placeholder disc with a short glyph
                 self._placeholder(im, shape, corner, c, ins / 2, L)
                 gd = ImageDraw.Draw(im)
