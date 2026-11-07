@@ -123,8 +123,14 @@ function setRoving(rows, cur) { const stop = rows.includes(cur) ? cur : rows[0];
 function noTab(btn) { btn.tabIndex = -1; return btn; }
 
 /* ================================================================== state */
-const ACTIONS = ['brush', 'alpha', 'material', 'texture', 'press', 'set', 'toggle', 'capture', 'tool', 'project', 'layout', 'steps', 'menu', 'auto', 'tag', 'browser', 'empty'];
+const ACTIONS = ['brush', 'alpha', 'material', 'texture', 'press', 'set', 'toggle', 'capture', 'tool', 'project', 'layout', 'steps', 'menu', 'auto', 'tag', 'browser', 'recent', 'empty'];
 const FILE_KINDS = ['tool', 'project', 'layout'];                  // the items that name a file on this PC (FILE_EXTS in config.py)
+/* What a Recent item lists (RECENT_KINDS and RECENT_LABELS in config.py): its Shows choice, its label when it has none, and its line in the item list. */
+const RECENT = {
+  project: { shows: 'Projects', label: 'Recent projects', sub: 'recent projects', what: 'projects' },
+  tool: { shows: 'Tools', label: 'Recent tools', sub: 'recent tools', what: 'tools' },
+  any: { shows: 'Both', label: 'Recent', sub: 'recent projects and tools', what: 'projects and tools' },
+};
 const KIND = {
   brush: { label: 'Brush', icon: 'k_brush', hint: 'Select a brush' },
   alpha: { label: 'Alpha', icon: 'k_alpha', hint: 'Select an alpha' },
@@ -142,6 +148,7 @@ const KIND = {
   auto: { label: 'Auto', icon: 'k_auto', hint: 'A slot filled with a brush you pick often' },
   tag: { label: 'Tag', icon: 'tag', hint: 'Every item with a tag: brushes first, most used first (or your own order on Favourites), then alphas, materials and textures' },
   browser: { label: 'Browser', icon: 'k_browser', hint: 'Open the browser' },
+  recent: { label: 'Recent', icon: 'clock', hint: 'A fan of the projects and tools ZBrush opened last' },
   empty: { label: 'Empty slot', icon: 'k_empty', hint: 'Holds its place in the ring and does nothing' },
 };
 /* The kinds of asset the library holds (brushes, alphas, materials, textures) and their wording; every "brush/brushes" string reads from here. */
@@ -232,7 +239,7 @@ S.usage = Object.fromEntries(LIB_KINDS.map(k => [k, emptyUsage()]));
 const usageOf = kind => (isLib(kind) ? S.usage[kind] : S.usage.brush);
 
 const kindOf = it => ACTIONS.find(k => it && k in it) || 'brush';
-const targetOf = it => { const k = kindOf(it); return k === 'steps' || k === 'empty' ? '' : String(it[k] ?? ''); };
+const targetOf = it => { const k = kindOf(it); return k === 'steps' || k === 'empty' || k === 'recent' ? '' : String(it[k] ?? ''); };      // a Recent item's value is a choice, not a target
 const isPath = s => /[\\/]/.test(s) || /\.(png|zbp|zmt|psd|jpg|jpeg|bmp|tif|tiff)$/i.test(s);
 const ring = () => S.cfg.ring || {};
 const ringNum = k => { const v = ring()[k]; return typeof v === 'number' ? v : S.defaults[k]; };
@@ -268,7 +275,7 @@ function fileLabel(k, path) {
 /* One line saying what an item targets; the item rows and the read-only line in Simple share it. */
 function itemSub(it) {
   const k = kindOf(it);
-  return k === 'empty' ? 'nothing here' : k === 'auto' ? 'filled from your picks' : k === 'tag' ? (it.tag ? 'all items tagged ' + tagName(it.tag) : '(not set)') : k === 'browser' ? 'opens the ' + K(it.kind).one + ' browser' + (it.browser ? ' for ' + tagName(it.browser) : '') : k === 'steps' ? plural((it.steps || []).length, 'step') : k === 'capture' ? captureFolder(it) : (k === 'set' ? `${targetOf(it)} = ${it.value}` : targetOf(it) || '(not set)');
+  return k === 'empty' ? 'nothing here' : k === 'auto' ? 'filled from your picks' : k === 'recent' ? (own(RECENT, it.recent) ? RECENT[it.recent].sub : '(not set)') : k === 'tag' ? (it.tag ? 'all items tagged ' + tagName(it.tag) : '(not set)') : k === 'browser' ? 'opens the ' + K(it.kind).one + ' browser' + (it.browser ? ' for ' + tagName(it.browser) : '') : k === 'steps' ? plural((it.steps || []).length, 'step') : k === 'capture' ? captureFolder(it) : (k === 'set' ? `${targetOf(it)} = ${it.value}` : targetOf(it) || '(not set)');
 }
 
 function defaultLabel(it) {
@@ -277,6 +284,7 @@ function defaultLabel(it) {
   if (k === 'menu') { const m = menuOf(it.menu); return (m && m.title) || String(it.menu || ''); }
   if (k === 'steps') return 'Steps';
   if (k === 'auto') return 'Auto';
+  if (k === 'recent') return own(RECENT, it.recent) ? RECENT[it.recent].label : 'Recent';
   if (k === 'empty') return 'Empty slot';
   if (k === 'tag') return tagName(it.tag);
   if (k === 'capture') return 'Capture';
@@ -297,9 +305,10 @@ function actionValid(a, nested) {
   if (k === 'set' && !(typeof a.value === 'number' && Number.isFinite(a.value))) return false;   // a number, as config.py demands
   if (k === 'steps') {
     if (nested || !Array.isArray(a.steps) || !a.steps.length) return false;
-    return a.steps.every(s => actionValid(s, true) && !('menu' in s) && !('steps' in s) && !('auto' in s) && !('tag' in s) && !('browser' in s) && !('empty' in s));   // steps cannot open menus, nest steps, be auto slots, open tags or the browser, or be an empty slot
+    return a.steps.every(s => actionValid(s, true) && !('menu' in s) && !('steps' in s) && !('auto' in s) && !('tag' in s) && !('browser' in s) && !('recent' in s) && !('empty' in s));   // steps cannot open menus, nest steps, be auto slots, open tags, the browser or recent files, or be an empty slot
   }
   if (k === 'auto') return a.auto === 'brush';
+  if (k === 'recent') return own(RECENT, a.recent);
   if (k === 'empty') return a.empty === true;                                      // always usable: the slot only holds its place
   if (k === 'browser') return typeof a.browser === 'string' && (a.kind === undefined || isLib(a.kind));          // '' = every item; kind: which tab it opens on
   if (typeof a[k] !== 'string') return false;                                       // null or a number from a hand edit: unusable, never a crash
@@ -337,6 +346,7 @@ function makeItem(kind, target, extra = {}) {
   if (kind === 'empty') return { empty: true };
   if (kind === 'steps') it.steps = extra.steps || [];
   else if (kind === 'auto') it.auto = 'brush';
+  else if (kind === 'recent') it.recent = own(RECENT, target) ? target : 'any';
   else it[kind] = target || '';
   if (kind === 'browser' && isLib(extra.kind) && extra.kind !== 'brush') it.kind = extra.kind;
   if (kind === 'set') it.value = extra.value !== undefined ? extra.value : '';
@@ -346,7 +356,7 @@ function makeItem(kind, target, extra = {}) {
 }
 /* A target lives in one of these namespaces: each library kind's names, ZBrush item paths (press, set, toggle), menu ids and tags.
    Switching kind keeps a target only inside its own namespace, so a brush name never lands in a path field. */
-const nsOf = k => (isLib(k) ? k : k === 'menu' ? 'menu' : k === 'tag' || k === 'browser' ? 'tag' : k === 'capture' ? 'folder' : FILE_KINDS.includes(k) ? k : 'path');
+const nsOf = k => (isLib(k) ? k : k === 'menu' ? 'menu' : k === 'tag' || k === 'browser' ? 'tag' : k === 'capture' ? 'folder' : k === 'recent' ? 'recent' : FILE_KINDS.includes(k) ? k : 'path');
 const TARGET_NOUN = { brush: 'brush', alpha: 'alpha', material: 'material', texture: 'texture', press: 'button path', set: 'value path', toggle: 'switch path', capture: 'folder', tool: 'tool file', project: 'project file or folder', layout: 'layout file', menu: 'submenu', tag: 'tag', browser: 'tag filter' };
 /* Brush names are compared ignoring case and spaces (the guide says neither matters). */
 const nameKey = s => String(s === undefined || s === null ? '' : s).toLowerCase().replace(/\s+/g, '');
@@ -358,7 +368,7 @@ const libOpts = kind => lib(kind).sorted.map(b => ({ value: b.name, sub: b.categ
 const hasText = v => String(v === undefined || v === null ? '' : v).trim() !== '';
 const joinList = a => (a.length < 2 ? a.join('') : a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1]);
 /* Kinds that cannot be a step (and so are dropped when an item becomes Steps). */
-const NO_STEP = ['menu', 'tag', 'browser', 'empty'];
+const NO_STEP = ['menu', 'tag', 'browser', 'recent', 'empty'];
 /* Returns { item, lost }: lost lists, in words, what the switch could not carry over (empty when nothing was lost). */
 function convertItem(it, kind) {
   const old = kindOf(it);
@@ -2092,7 +2102,7 @@ function buildStage() {
       info.replaceChildren(h('b', null, itemLabel(m.items[itemOf(hoverRing)])), h('span', { class: 'mono' }, ' incomplete')); info.classList.add('on');
     } else if (hoverRing !== null && m && m.items[itemOf(hoverRing)]) {
       const it = m.items[itemOf(hoverRing)];
-      info.replaceChildren(h('b', null, itemLabel(it)), h('span', { class: 'mono' }, ' ' + KIND[kindOf(it)].label.toLowerCase() + (['steps', 'auto'].includes(kindOf(it)) ? '' : kindOf(it) === 'tag' ? ' / ' + tagName(it.tag) : kindOf(it) === 'browser' ? ' / ' + (it.browser ? tagName(it.browser) : 'all ' + K(it.kind).many) : ' / ' + targetOf(it))));
+      info.replaceChildren(h('b', null, itemLabel(it)), h('span', { class: 'mono' }, ' ' + KIND[kindOf(it)].label.toLowerCase() + (['steps', 'auto'].includes(kindOf(it)) ? '' : kindOf(it) === 'recent' ? ' / ' + itemSub(it) : kindOf(it) === 'tag' ? ' / ' + tagName(it.tag) : kindOf(it) === 'browser' ? ' / ' + (it.browser ? tagName(it.browser) : 'all ' + K(it.kind).many) : ' / ' + targetOf(it))));
       info.classList.add('on');
     } else info.classList.remove('on');
   }
@@ -2333,6 +2343,8 @@ function buildItemInspector() {
     return box;
   } else if (k === 'tag' || k === 'browser') {
     box.append(tagTargetField(it, k, updateHead));
+  } else if (k === 'recent') {
+    box.append(recentField(it, updateHead));
   } else if (k !== 'steps') {
     const placeholders = { ...Object.fromEntries(LIB_KINDS.map(lk => [lk, 'Search ' + K(lk).many + ', e.g. ' + K(lk).eg])), press: 'Item path, e.g. Tool:Masking:Clear', set: 'Item path, e.g. Draw:Draw Size', toggle: 'Item path, e.g. Transform:Activate Symmetry', capture: 'The ZBrush folder in your Pictures folder', tool: 'D:\\Models\\Hero.ztl', project: 'D:\\Projects\\Hero.zpr, or a folder', layout: 'D:\\Layouts\\Sculpt.cfg', menu: 'Pick a menu' };
     let touched = false;                                   // "required" hints wait until the field has been edited or left once
@@ -2814,6 +2826,23 @@ function tagTargetField(it, k, updateHead) {
   const frag = document.createDocumentFragment();
   frag.append(tagRow, field('Shows', kindSel, 'Which tab the browser opens on.'));
   return frag;
+}
+
+/* The Shows select of a Recent item: projects, tools or both (item.recent). A value the loader does not know is kept and shown as unknown. */
+function recentField(it, updateHead) {
+  const cur = String(it.recent ?? '');
+  const hint = h('div', { class: 'fhint' });
+  const paintHint = () => {
+    hint.className = 'fhint'; hint.replaceChildren();
+    if (!own(RECENT, it.recent)) { hint.classList.add('bad'); hint.append('Pick what the fan shows. '); return; }
+    hint.append('Opens a fan of the ' + RECENT[it.recent].what + ' ZBrush opened last, newest first, from its own list of recent files. The fan holds at most ' + ringNum('tag_limit') + ' slots (Tag fan slots). A pick opens the file as a Project or Tool item does.');
+  };
+  const sel = h('select', { class: 'inp sel', 'aria-label': 'Shows', dataset: { focus: 'target' }, onchange: () => { it.recent = sel.value; commit(); paintHint(); updateHead(); } },
+    !own(RECENT, cur) ? h('option', { value: cur }, `Unknown '${cur}'`) : null,
+    Object.keys(RECENT).map(v => h('option', { value: v }, RECENT[v].shows)));
+  sel.value = cur;
+  paintHint();
+  return field('Shows', sel, hint);
 }
 
 /* How many installed items of one kind each tag is on, and how many carry none (the sidebar's counts). */
@@ -5373,7 +5402,7 @@ function describeProblem(raw) {
   const itemReason = t => {
     let r;
     if ((r = /^ step (\d+)(: .*)$/s.exec(t))) {                      // a step inside a Steps item: the same reasons, led by the step number
-      if (r[2].startsWith(': steps cannot open menus')) return `step ${r[1]} cannot be a submenu, more steps, an auto slot, a tag or the browser`;
+      if (r[2].startsWith(': steps cannot open menus')) return `step ${r[1]} cannot be a submenu, more steps, an auto slot, a tag, the browser or a Recent item`;
       const inner = itemReason(r[2]);
       return inner ? `step ${r[1]} ${inner}` : null;
     }
@@ -5383,6 +5412,7 @@ function describeProblem(raw) {
     if (t === ": 'set' value must be a number") return 'has a value that is not a number';
     if (t.startsWith(": 'steps' must be a non-empty list")) return 'needs at least one step, and steps cannot hold other steps';
     if (t.startsWith(": 'auto' must be one of ")) return 'has an auto slot that is not supported (only brushes can be auto)';
+    if (t.startsWith(": 'recent' must be ")) return 'is a Recent item that does not say what it shows (projects, tools or both)';
     if (t.startsWith(": 'browser' must be a string")) return 'has a browser filter that is not a tag';
     if (t.startsWith(": browser 'kind' must be one of ")) return 'opens a browser tab that does not exist';
     if (t.startsWith(': capture folder ')) return 'has a capture folder that cannot be used: ' + t.slice(': capture folder '.length);
@@ -5425,7 +5455,7 @@ function describeProblem(raw) {
       return out(`${titleOf(mid)} and ${titleOf(other)} both use the hotkey ${unq(m[1])}; only ${titleOf(other)} (the first) will open it`, tgt('hotkey'));
     }
     if (rest.startsWith(': that id is reserved')) return out(`The id of ${titleOf(mid)} is reserved. Give it another in the Id field`, tgt('id'));
-    if (rest.startsWith(': ids starting with')) return out(`The id of ${titleOf(mid)} cannot start with “tag:”; those ids are reserved for tag submenus`, tgt('id'));
+    if ((m = /^: ids starting with '(\w+:)'/.exec(rest))) return out(`The id of ${titleOf(mid)} cannot start with “${m[1]}”; those ids are reserved for the menus ZOrbit makes itself`, tgt('id'));
     if ((m = /^: hotkey (.+) not understood$/s.exec(rest))) return out(`The hotkey ${unq(m[1])} on ${titleOf(mid)} is not understood`, tgt('hotkey'));
     if ((m = /^: animation (.+) unknown; using ring\.animation$/s.exec(rest))) return out(`${titleOf(mid)} has an unknown animation (${unq(m[1])}); the one for all menus is used instead`, known(mid) ? lookTarget('animation', { level: 'menu', menuId: mid }) : null);
     if ((m = /^: unknown setting (.+)$/s.exec(rest))) return out(`${titleOf(mid)} has an unknown setting ${m[1].replace(/\s*\(did you mean .*$/s, '')}.` + didYouMean(m[1]), tgt());
@@ -6167,7 +6197,7 @@ function describeChanges() {
   const after = S.cfg || {};
   const groups = [];
   const q = s => '\u201c' + s + '\u201d';
-  const itemName = it => it.empty === true ? 'Empty slot' : it.label || it.brush || it.alpha || it.material || it.texture || it.press || it.toggle || it.set || ('capture' in it ? 'Capture' : '') || ('tool' in it ? 'Tool' : '') || ('project' in it ? 'Project' : '') || ('layout' in it ? 'Layout' : '') ||(it.menu ? 'Submenu ' + it.menu : it.steps ? 'Steps' : it.tag ? 'Tag ' + it.tag : 'browser' in it ? 'Browser' + (it.browser ? ' ' + it.browser : '') : 'item');
+  const itemName = it => it.empty === true ? 'Empty slot' : it.label || it.brush || it.alpha || it.material || it.texture || it.press || it.toggle || it.set || ('capture' in it ? 'Capture' : '') || ('tool' in it ? 'Tool' : '') || ('project' in it ? 'Project' : '') || ('layout' in it ? 'Layout' : '') ||(it.menu ? 'Submenu ' + it.menu : it.steps ? 'Steps' : it.tag ? 'Tag ' + it.tag : 'browser' in it ? 'Browser' + (it.browser ? ' ' + it.browser : '') : 'recent' in it ? (own(RECENT, it.recent) ? RECENT[it.recent].label : 'Recent') : 'item');
   const bm = before.menus || {}, am = after.menus || {};
   for (const id of Object.keys(am)) {
     const a = am[id] || {}, b = own(bm, id) ? bm[id] : undefined;

@@ -6,6 +6,10 @@ All notable changes to this project are listed here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- A **Recent** slot opens a fan of the projects or tools ZBrush opened last (`{"recent": "project"}`, `"tool"` or `"any"`), read from ZBrush's own Lightbox list of recent files. A pick opens the file as a Project or Tool slot does, ZBrush's check for unsaved changes included. It is a Full mode type in Studio, with a **Shows** select for Projects, Tools or Both. (#189)
+
 ### Changed
 
 - With several ZBrush versions installed, the browser, the Library and the ring list the folders of the ZBrush that is running (the newest, when several run) instead of the newest installed, so a ZBrush 2026 session no longer lists a 2027 install's files, and a running ZBrush 2022 to 2025 lists its own installation's. With none running, the newest installed is used, as before. The app reads the library again a few seconds after another ZBrush starts; the browser follows on its next rescan. (#181)

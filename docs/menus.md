@@ -15,7 +15,7 @@ A menu has these fields, and no others (a name ZOrbit does not know is reported 
 
 | Field | What it is |
 |---|---|
-| id | The menu's key in the `menus` object. Any text works in the file except one that starts with `tag:`, which is kept for the fans that tag slots open, or `more:`, which is kept for the More submenu of a full ring. The names a JavaScript object already has (`__proto__`, `constructor`, `toString` and the like) are reserved too, because Studio keeps the menus in such an object. Studio takes letters, digits, `-` and `_`, not only digits, and each id once. |
+| id | The menu's key in the `menus` object. Any text works in the file except one that starts with `tag:` or `recent:`, which are kept for the fans that tag and recent slots open, or `more:`, which is kept for the More submenu of a full ring. The names a JavaScript object already has (`__proto__`, `constructor`, `toString` and the like) are reserved too, because Studio keeps the menus in such an object. Studio takes letters, digits, `-` and `_`, not only digits, and each id once. |
 | `title` | The name in the middle of the ring and in Studio's lists. Without one, the id is shown. |
 | `hotkey` | Optional. See [Hotkeys](hotkeys.md#hotkeys). |
 | `swallow` | `true` (the default) or `false`: whether the hotkey is hidden from ZBrush. |
@@ -94,9 +94,10 @@ Every item does exactly one thing. Besides the action, an item can have a `label
 | `auto` | A slot that holds a brush you pick often. ZOrbit fills it. |
 | `tag` | Opens a fan of every installed item that carries a tag, or the Favourites tag: brushes first, most used first, then alphas, materials and textures. Favourites can follow your own order instead. |
 | `browser` | Opens the [browser](browser.md) on one of its tabs, optionally on one tag. |
+| `recent` | Opens a fan of the projects or tools ZBrush opened last. See [Recent](#recent). |
 | `empty` | Holds a slot's place in the ring and does nothing. See [Empty](#empty). |
 
-Studio's [Simple mode](studio.md#simple-and-full-mode) offers `brush`, `alpha`, `material`, `texture`, `press`, `toggle`, `menu` and `empty` in **Add item**. The other types (`set`, `capture`, `tool`, `project`, `layout`, `steps`, `auto`, `tag` and `browser`) need Full mode. An existing item of one of those types still shows in the list and on the ring, and still works. Select it in Simple and the inspector shows its type and what it does on one line, with an **Edit in Full mode** link. Its label and icon can still be changed, except on an `auto` slot.
+Studio's [Simple mode](studio.md#simple-and-full-mode) offers `brush`, `alpha`, `material`, `texture`, `press`, `toggle`, `menu` and `empty` in **Add item**. The other types (`set`, `capture`, `tool`, `project`, `layout`, `steps`, `auto`, `tag`, `browser` and `recent`) need Full mode. An existing item of one of those types still shows in the list and on the ring, and still works. Select it in Simple and the inspector shows its type and what it does on one line, with an **Edit in Full mode** link. Its label and icon can still be changed, except on an `auto` slot.
 
 ### Brush
 
@@ -289,7 +290,7 @@ Some buttons only exist while a 3D model is in Edit mode, such as everything und
  "label": "Fresh Start", "icon": "Standard"}
 ```
 
-Steps run in order. Each step is a `brush`, `alpha`, `material`, `texture`, `press`, `set`, `toggle`, `capture`, `tool`, `project` or `layout`. Steps cannot open menus, cannot contain more steps, and cannot hold `auto`, `tag` or `browser` items. Without an `icon`, a `steps` item uses the thumbnail of its first brush, alpha, material or texture step, or a placeholder if it has none.
+Steps run in order. Each step is a `brush`, `alpha`, `material`, `texture`, `press`, `set`, `toggle`, `capture`, `tool`, `project` or `layout`. Steps cannot open menus, cannot contain more steps, and cannot hold `auto`, `tag`, `browser` or `recent` items. Without an `icon`, a `steps` item uses the thumbnail of its first brush, alpha, material or texture step, or a placeholder if it has none.
 
 A pick of a `steps` item does not count for auto slots or for **Recent**, even when a step is a brush. Only a brush, alpha, material or texture item picked on its own does (from a ring, a fan or the [browser](browser.md)).
 
@@ -356,6 +357,31 @@ New installs have one in the starter **Tools** menu.
 ```
 
 Opens the [browser window](browser.md). `kind` chooses the tab it opens on: `brush` (the default), `alpha`, `material` or `texture`. Nothing is sent to ZBrush until you pick an item in it. `""` shows every item of that kind; a tag key opens it on that tag. A key that is not in `tags.json` is listed as a problem and the browser opens unfiltered. Without a `label`, the slot is called **Browser**, or the tag's name when it filters. In Studio, the **Shows** select in the inspector sets `kind`, and the **Tag filter** field lists your tags.
+
+### Recent
+
+```json
+{"recent": "project"}
+{"recent": "tool"}
+{"recent": "any", "label": "Recent"}
+```
+
+A **Recent** slot opens a fan of the files ZBrush opened last, newest first. `project` shows `.zpr` projects, `tool` shows `.ztl` tools and `any` shows both, in one list. Any other value is listed as a problem ("'recent' must be project, tool or any") and the slot is drawn empty. Without a `label`, the slot is called **Recent projects**, **Recent tools** or **Recent**.
+
+The list is ZBrush's own, the one Lightbox keeps of recent files. ZBrush writes it to `ZStartup\ConfigFiles\LightboxRecentFiles.cfg`:
+
+- **ZBrush 2026 and newer:** in your user assets folder, the one ZBrush records in `userassets_path.txt` under `%APPDATA%\Maxon` (the same folder the [brush list](#brush) reads).
+- **ZBrush 2022 to 2025:** in `ZBrushData<year>` in the Public Documents folder, such as `%PUBLIC%\Documents\ZBrushData2024`.
+
+The list is that of the ZBrush in front when the ring opens. Otherwise it is the ZBrush the library follows: the one that is running, or the newest installed when none is (see [Brush](#brush)). ZOrbit never changes the list. It reads it in the background, so the ring never waits for a slow drive: when the menus load, every half minute while ZBrush is in front, and after you open a ring with the slot. The fan shows the last read, so a file you have just opened may only show at the next open, and one that has just gone may show once more. Picking a file that has gone sends nothing and the message says it is not there.
+
+The fan works like a [tag](#tag) fan. The slot is a disc in the ring's accent colour with a clock symbol and the fan badge, and moving onto it or releasing over it opens the fan. Each item of the fan is the file's name without its extension, with the Project or Tool icon. A file named twice in the list shows once, and a file that is no longer there, a folder and a network path are left out. The fan holds as many files as **Tag fan slots** allows (12 unless you set it, see [Tag fans](tags.md#tag-fans)), and the older files are not shown: there is no **More...** slot.
+
+Picking a file works as a [Project](#project) or [Tool](#tool) slot with that file does. A project goes through ZBrush's own check for unsaved work, so with unsaved changes ZBrush asks **Project has been changed. Would you like to save changes?** first. A pick from the fan does not count in the browser's **Recent** list or for auto slots.
+
+When the list has no file for the slot, or ZOrbit cannot find or read the list, the slot is a faint clock. Picking it sends nothing and says **This slot is empty** near the cursor. A list that cannot be found or read is noted once in `radiald.log`, in a line that starts `recent files:`. A `recent` item cannot be a step of a `steps` item.
+
+In Studio, **Recent** is a Full mode type. The **Shows** select in the inspector sets the value: **Projects**, **Tools** or **Both**.
 
 ### Empty
 

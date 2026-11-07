@@ -36,7 +36,7 @@ The **[roadmap board](https://github.com/users/combwizard/projects/2)** shows wh
 ## Features
 
 - **Fast picking.** Hold the hotkey and flick past a slot, or move toward it and release. Or tap the hotkey and click.
-- **More than brushes.** A slot can select a brush, load an alpha, material, texture or tool, load an interface layout, open a project, press any ZBrush button, set a slider, flip a switch, save the picture as a PNG, run several of those in a row, or open another ring.
+- **More than brushes.** A slot can select a brush, load an alpha, material, texture or tool, load an interface layout, open a project or one of the files ZBrush opened last, press any ZBrush button, set a slider, flip a switch, save the picture as a PNG, run several of those in a row, or open another ring.
 - **Submenus.** Rings can open other rings, so a handful of hotkeys can reach a lot. Hover a submenu and it opens on the spot, so one stroke can reach an item two rings deep.
 - **Fan-out submenus.** Switch a menu to fan out and it opens in place: its items spread in an arc beyond its slot while the ring you came from stays put. Fans can open fans, up to three deep.
 - **Tags and a browser.** Tag your brushes, alphas, materials and textures in Studio, colour their slots by tag (an icon tint, a glow, or a band through the ring), and give a slot a tag to open a fan of every item that carries it. A hotkey (Alt+B) opens a browser over ZBrush with four tabs (brushes, alphas, materials and textures), search, folders, tag chips and thumbnails; Enter picks the item. Add folders of your own brushes, alphas, materials and textures (ZBrush 2026 and newer) and they are listed beside ZBrush's. Star your favourites with one press, and a Recent list shows what you picked last.

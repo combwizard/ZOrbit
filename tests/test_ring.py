@@ -1598,3 +1598,50 @@ def test_a_slot_added_to_a_menu_draws_only_that_slot(monkeypatch):
     assert drawn == []                                   # the new slot is an empty one like the last: same picture
     ring.Ring.preview(menu_with_gaps("bbbeeb"), make_cfg(), lambda it: None)
     assert drawn == ["brush"]                            # Item 5 is new; Items 0 to 2 and the empty slots are not
+
+
+# --- recent slots ----------------------------------------------------------------------------------
+def recent_menu(slot):
+    m = make_menu(3)
+    m.items[0] = slot
+    return m
+
+
+RECENT_FULL = config.Item("Recent", "menu", {"menu": "recent:any"})
+RECENT_EMPTY = config.Item("Recent", "recent", {"recent": "any"})
+
+
+def test_the_clock_glyph_draws_a_face_and_two_hands():
+    im = Image.new("RGBA", (60, 60), (0, 0, 0, 0))
+    ring._glyph_clock(ImageDraw.Draw(im), 30, 30, 40, (255, 255, 255, 255))
+    assert im.getbbox() is not None
+    assert im.getpixel((30, 22))[3] > 0 and im.getpixel((35, 33))[3] > 0     # the long hand up, the short one right
+    assert im.getpixel((22, 38))[3] == 0                                     # nothing in the lower left of the face
+
+
+def test_a_recent_slot_is_told_from_other_submenus():
+    assert ring._is_recent(RECENT_FULL) and not ring._is_recent(RECENT_EMPTY)
+    assert not ring._is_recent(config.Item("More", "menu", {"menu": "more:m"}))
+    assert ring._item_sig(RECENT_FULL) != ring._item_sig(config.Item("Recent", "menu", {"menu": "other"}))
+
+
+def test_a_recent_slot_with_files_is_a_solid_disc_in_the_accent_colour():
+    r = prepared(recent_menu(RECENT_FULL))
+    full = r.sprites[0][0]
+    plain = prepared(recent_menu(config.Item("Recent", "menu", {"menu": "other"}))).sprites[0][0]
+    empty = prepared(recent_menu(RECENT_EMPTY)).sprites[0][0]
+    assert len({full.tobytes(), plain.tobytes(), empty.tobytes()}) == 3
+    n = full.size[0]
+    at = (n // 2 - n // 8, n // 2 + n // 8)                                        # on the disc, off the glyph
+    accent = ring._rgb(r.look.accent)
+
+    def off(im):
+        return sum(abs(a - b) for a, b in zip(im.getpixel(at)[:3], accent))
+    assert off(full) < off(plain) and off(full) < off(empty)
+
+
+def test_an_empty_recent_slot_cannot_be_flicked():
+    r = prepared(recent_menu(RECENT_EMPTY))
+    picked = []
+    r._finish = lambda *a: picked.append(a)
+    assert r._flicked((0,), True, False) is False and picked == []
