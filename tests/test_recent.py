@@ -508,3 +508,109 @@ def test_the_librarys_older_zbrush_gets_its_year_from_the_install_scan(monkeypat
     monkeypatch.setattr(recent, "public_documents", lambda: str(tmp_path / "Docs"))
     path, why = recent.list_file()
     assert path == tmp_path / "Docs" / "ZBrushData2024" / "ZStartup" / "ConfigFiles" / "LightboxRecentFiles.cfg"
+
+
+
+# --- the worker's own failures, a stuck worker, a byte-order mark -----------------------------------
+def test_an_exception_on_the_worker_thread_leaves_it_ready_for_the_next_request(listed, tmp_path, monkeypatch):
+    a = make(tmp_path / "A.zpr")
+    listed(a)
+
+    def broken(*args):
+        raise RuntimeError("worker broke")
+    real = recent._refresh
+    monkeypatch.setattr(recent, "_refresh", broken)
+    said = []
+    recent.refresh_later("project", 12, None, said.append)
+    assert recent.wait()
+    assert recent._worker is None and recent._pending == {}
+    assert any("worker broke" in s for s in said)
+    assert recent.entries("project", 12) == []
+    monkeypatch.setattr(recent, "_refresh", real)
+    recent.refresh_later("project", 12)
+    assert recent.wait()
+    assert recent.entries("project", 12) == [str(a)]
+
+
+def test_a_thread_that_cannot_start_does_not_block_later_requests(monkeypatch):
+    class NoThread:
+        def __init__(self, *args, **kw):
+            pass
+
+        def start(self):
+            raise RuntimeError("can't start new thread")
+    monkeypatch.setattr(recent.threading, "Thread", NoThread)
+    with pytest.raises(RuntimeError):
+        recent.refresh_later("project", 12)
+    assert recent._worker is None
+    recent._pending.clear()
+
+
+def test_a_stuck_worker_is_waited_for_once_per_expander(load_menus, monkeypatch):
+    waits = []
+    monkeypatch.setattr(recent, "wait", lambda timeout=5.0: waits.append(timeout) or False)
+    monkeypatch.setattr(recent, "refresh_later", lambda *args: None)          # nothing ever answers
+    cfg = load_menus({"main": one_item_menu({"recent": "project"}, {"recent": "tool"}, {"brush": "A"})})
+    ex = expand.Expander(cfg, _Usage(), _Tags(), wait_recent=True)
+    ex.menu(cfg.menus["main"])
+    ex.resolve("recent:project")
+    ex.menu(cfg.menus["main"])
+    assert waits == [2.0]
+    expand.Expander(cfg, _Usage(), _Tags(), wait_recent=True).menu(cfg.menus["main"])
+    assert waits == [2.0, 2.0]                          # a new preview may wait once more
+
+
+def test_a_stale_answer_is_shown_without_waiting(load_menus, listed, tmp_path, monkeypatch):
+    a = make(tmp_path / "A.zpr")
+    listed(a)
+    read("project", 12)
+    waits = []
+    monkeypatch.setattr(recent, "wait", lambda timeout=5.0: waits.append(timeout) or True)
+    monkeypatch.setattr(recent, "refresh_later", lambda *args: None)
+    now = [recent.clock() + 1000.0]
+    monkeypatch.setattr(recent, "clock", lambda: now[0])
+    cfg, ex = expander(load_menus, {"recent": "project"})
+    assert ex.menu(cfg.menus["main"]).items[0].data == {"menu": "recent:project"}
+    assert waits == []
+
+
+def test_a_byte_order_mark_does_not_drop_the_first_entry():
+    data = b"\xef\xbb\xbf" + cfg_bytes(r"C:\A\One.zpr", r"C:\A\Two.zpr", encoding="utf-8")
+    assert recent.parse(data, "project") == [r"C:\A\One.zpr", r"C:\A\Two.zpr"]
+
+
+# --- the app reads the lists again while ZBrush is in front -----------------------------------------
+class _Ex:
+    def __init__(self):
+        self.calls = 0
+
+    def prefetch_recent(self):
+        self.calls += 1
+
+
+def test_the_app_reads_the_lists_again_every_half_minute_while_zbrush_is_in_front(app, monkeypatch):
+    now = [1000.0]
+    monkeypatch.setattr(radiald.time, "monotonic", lambda: now[0])
+    front = [None]
+    monkeypatch.setattr(app, "target_install", lambda: front[0])
+    app.expander = ex = _Ex()
+    app._recent_tick()
+    assert ex.calls == 0                                # ZBrush is not in front
+    front[0] = {"path": r"C:\Programs\ZBrush 2026", "year": 2026, "python": True}
+    app._recent_tick()
+    assert ex.calls == 1
+    now[0] += radiald.RECENT_PREFETCH_S - 1
+    app._recent_tick()
+    assert ex.calls == 1                                # not yet
+    now[0] += 1
+    app._recent_tick()
+    assert ex.calls == 2
+
+
+def test_without_a_recent_slot_the_periodic_read_does_nothing(app, monkeypatch):
+    asked = []
+    monkeypatch.setattr(recent, "prefetch", lambda *args: asked.append(args))
+    monkeypatch.setattr(app, "target_install", lambda: {"path": r"C:\Programs\ZBrush 2026", "python": True})
+    app.expander = expand.Expander(app.cfg, _Usage(), _Tags())
+    app._recent_tick()
+    assert asked == []

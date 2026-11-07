@@ -17,7 +17,8 @@ The ring opens in a few milliseconds, so the open path never touches the disk: e
 answer kept for that list, and asks for a new one when it is older than REFRESH_S. The answers are worked out by one
 worker thread (refresh_later), which finds the file (kept for WHERE_S per ZBrush, as finding it may scan the
 running processes), reads it and checks each file on disk; a slow or unplugged drive only holds up the worker. The app
-asks for them when its menus load (prefetch), so the first open finds one. An exception in the worker is logged once
+asks for them when its menus load and every half minute while ZBrush is in front (prefetch), so an open finds one
+that is at most that old. An exception in the worker is logged once
 and leaves the old answer. A list that is missing or cannot be read gives an empty answer, also logged once.
 """
 import ctypes
@@ -94,7 +95,7 @@ def list_file(install=None):
 def decode(data: bytes) -> str:
     """The list's text: UTF-8 when it is that, else the ANSI code page ZBrush writes (as brushes._read_path does)."""
     try:
-        return data.decode("utf-8")
+        return data.decode("utf-8-sig")             # -sig: a byte-order mark would stick to the first path
     except UnicodeDecodeError:
         try:
             return data.decode("mbcs", errors="replace")
@@ -167,6 +168,17 @@ def entries(kind, limit, install=None, log=None) -> list:
     return list(hit[1]) if hit is not None else []
 
 
+def known(kind, limit, install=None) -> bool:
+    """Whether the worker has given any answer for this slot yet, old or new (an answer that there is no list
+    counts). Never reads the disk."""
+    where = _where.get(_ikey(install))
+    if where is None and install is not None:
+        where = _where.get(None)
+    if where is None:
+        return False
+    return where[1] is None or (os.path.normcase(str(where[1])), kind, limit) in _answers
+
+
 def prefetch(kinds, limit, install=None, log=None):
     """Asks the worker for the answers of these kinds now, so the first ring finds them (the app does this when its
     menus load). install: the ZBrush in front, if one is; the library's ZBrush is asked for too."""
@@ -186,7 +198,11 @@ def refresh_later(kind, limit, install=None, log=None):
         _pending[(_ikey(install), kind, limit)] = (kind, limit, install, log)
         if _worker is None:
             _worker = threading.Thread(target=_work, name="recent-files", daemon=True)
-            _worker.start()
+            try:
+                _worker.start()
+            except Exception:
+                _worker = None                      # no thread: the next request tries again
+                raise
 
 
 def _work():

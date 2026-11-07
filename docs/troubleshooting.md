@@ -167,7 +167,7 @@ No installed item carries that tag, or the tag no longer exists (the problems pi
 
 ### A Recent slot is faint and does nothing
 
-ZBrush's list of recent files has no project or tool for the slot that is still on disk, or ZOrbit could not find or read the list. The slot fills once ZBrush adds a project or tool to that list. ZOrbit reads the list in the background, so a ring opened in the first moment after the app starts, or straight after the list changed, can still show the last read; open it again. `radiald.log` has a line that starts `recent files:` when the list is not there or cannot be read, with the path it looked at. With several ZBrush versions installed, the list is that of the ZBrush in front, so another version's files do not show. See [Recent](menus.md#recent).
+ZBrush's list of recent files has no project or tool for the slot that is still on disk, or ZOrbit could not find or read the list. The slot fills once ZBrush adds a project or tool to that list. ZOrbit reads the list in the background (when the menus load, every half minute while ZBrush is in front, and after a ring with the slot opens), so a ring opened in the first moment after the app starts, or straight after the list changed, can still show the last read; open it again. `radiald.log` has a line that starts `recent files:` when the list is not there or cannot be read, with the path it looked at. With several ZBrush versions installed, the list is that of the ZBrush in front, so another version's files do not show. See [Recent](menus.md#recent).
 
 ### My slots are not coloured by tag
 

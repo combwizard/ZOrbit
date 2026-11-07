@@ -76,6 +76,7 @@ class Expander:
         self.log = log
         self.wait_recent = wait_recent
         self._recent_said = False      # a recent fan that could not be built was logged
+        self._recent_waited = False    # wait_recent has waited once: a stuck worker blocks a preview only once
         self._cache = {}               # tag key -> ((usage.version, tags.mtime, assets.generation, limit, orders), Menu or None)
         self._rescanning = set()       # kinds whose index a worker thread is building again
         self._asked = {}               # kind -> when a rescan was last asked for (time.monotonic)
@@ -200,9 +201,12 @@ class Expander:
             return None
         try:
             install = self.front() if self.front is not None else None
-            paths = recent.entries(kind, self._tag_limit(), install, self.log)
-            if self.wait_recent and recent.wait(2.0):
-                paths = recent.entries(kind, self._tag_limit(), install, self.log)
+            limit = self._tag_limit()
+            paths = recent.entries(kind, limit, install, self.log)
+            if self.wait_recent and not self._recent_waited and not recent.known(kind, limit, install):
+                self._recent_waited = True               # only the very first read is waited for, 2 s at most
+                if recent.wait(2.0):
+                    paths = recent.entries(kind, limit, install, self.log)
             if not paths:
                 return None
             items = [C.Item(label=recent.label(p), kind=recent.item_kind(p), data={recent.item_kind(p): p})
