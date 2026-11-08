@@ -3470,7 +3470,7 @@ function makeBrowser({ compact, st, host = STUDIO_HOST, kindUi = compact ? 'comp
     catSel = h('select', { class: 'inp sel', 'aria-label': 'Category', onchange: () => { setCat(catSel.value); renderGrid(); } });
     tools = h('div', { class: 'b-tools' }, searchBox, catSel);
     dockHint = h('div', { class: 'dock-hint' });
-    root.append(...[tabs && tabs.el, dockHint, tools, tagRow, orderBtn, count, scroll, strip].filter(Boolean));
+    root.append(...[tabs && tabs.el, dockHint, tools, tagRow, orderBtn, count, scrollHost, strip].filter(Boolean));
   } else {
     const size = h('input', { type: 'range', min: 84, max: 220, step: 4, value: st.size, 'aria-label': 'Thumbnail size' });
     const paint = () => size.style.setProperty('--pct', ((st.size - 84) / (220 - 84)) * 100 + '%');

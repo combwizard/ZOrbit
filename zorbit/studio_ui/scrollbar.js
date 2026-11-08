@@ -59,6 +59,7 @@
     let repeat = 0;
     const stopRepeat = () => { clearTimeout(repeat); repeat = 0; };
     const page = (y, first) => {                        // one page toward y; again while held, until the thumb reaches it
+      if (!bar.isConnected || bar.hidden) { stopRepeat(); return; }     // gone or nothing to scroll: no endless paging
       const r = thumb.getBoundingClientRect();
       const dir = y < r.top ? -1 : y > r.bottom ? 1 : 0;
       if (!dir) { stopRepeat(); return; }
@@ -67,7 +68,6 @@
     };
     bar.addEventListener('pointerdown', e => {
       if (e.button !== 0 || drag) return;
-      e.preventDefault();                               // no text selection, no focus change
       bar.setPointerCapture(e.pointerId);
       if (e.target === thumb) {
         drag = { id: e.pointerId, y: e.clientY, top: scroll.scrollTop };
@@ -86,6 +86,7 @@
       drag = null; stopRepeat();
       bar.classList.remove('dragging');
     };
+    bar.addEventListener('mousedown', e => e.preventDefault());   // keeps the focus where it is; not on pointerdown, which would hide this mousedown from the click-outside closers of popovers
     bar.addEventListener('pointerup', end);
     bar.addEventListener('pointercancel', end);
     bar.addEventListener('lostpointercapture', end);
@@ -94,6 +95,9 @@
       scroll.scrollBy({ top: e.deltaY * k, left: e.deltaX * k });
       e.preventDefault();
     }, { passive: false });
+    const through = on => { bar.style.pointerEvents = on ? 'none' : ''; };   // a card dragged (the browser's own drag) lands on the grid under the bar
+    d.addEventListener('dragstart', () => through(true), true);
+    for (const t of ['dragend', 'drop']) d.addEventListener(t, () => through(false), true);
     paint();
     return host;
   }
