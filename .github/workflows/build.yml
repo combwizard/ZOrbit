@@ -114,6 +114,21 @@ jobs:
           $zip = "dist\ZOrbit-$v-portable.zip"
           $tick = [string][char]96
           $fence = $tick * 3
+          # GitHub shows every newline of release notes as a line break, so the wrapped lines of a paragraph or a bullet
+          # are joined into one, as Studio's What's new does (changelog.py). Headings, new bullets, blank lines and
+          # anything inside a code fence stay as they are.
+          $joined = [System.Collections.Generic.List[string]]::new()
+          $inFence = $false
+          foreach ($l in $body) {
+            $isFence = $l.TrimStart().StartsWith($fence)
+            $prev = if ($joined.Count) { $joined[$joined.Count - 1] } else { '' }
+            $continues = -not $inFence -and -not $isFence -and $l.Trim() -and $prev.Trim() -and
+              $prev -notmatch '^\s*#' -and -not $prev.TrimStart().StartsWith($fence) -and
+              $l -notmatch '^\s*([-*+] |#|\d+\. |>|\|)'
+            if ($continues) { $joined[$joined.Count - 1] = $prev.TrimEnd() + ' ' + $l.Trim() } else { $joined.Add($l) }
+            if ($isFence) { $inFence = -not $inFence }
+          }
+          $body = $joined
           # Studio's Install update reads the "<sha256>  ZOrbitSetup-<v>.exe" line below (studio.py _setup_asset) and
           # checks it against GitHub's own digest of the file: keep the format.
           $head = @(
