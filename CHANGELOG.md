@@ -9,6 +9,7 @@ All notable changes to this project are listed here. The format follows
 ### Added
 
 - The browser can be a strip: a small bar of one tab's favourites that stays on top of ZBrush and never takes the keyboard from it, so one click picks an item. Turn it on with the strip button in the browser's header. Its menu switches the tab, lays the strip vertical or horizontal, opens the full browser or hides the strip. **X** on the browser goes back to the strip, the strip comes up by itself when the app starts the browser hidden, it steps aside while another program is in front, and it closes with the app. (#40)
+- You can open up to six browser windows. The new window button in the browser's header (or **Ctrl+N**) opens another one, which starts as a copy of the first (tab, **Keep on top**, folders column, thumbnail size) and then keeps its own, including its place and size. Windows still open when the browser ends come back the next time you open it. The hotkey and the other ways of opening the browser go to the window you used last.
 
 ### Fixed
 
