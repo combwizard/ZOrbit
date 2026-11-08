@@ -3362,6 +3362,7 @@ function makeBrowser({ compact, st, host = STUDIO_HOST, kindUi = compact ? 'comp
   const grid = h('div', { class: 'bgrid' });
   const libWarn = h('div', { class: 'fhint warn lib-warn', role: 'status', hidden: true, style: 'margin-bottom: 10px' });   // a folder that could not be read while the others were: its items are the ones it had
   const scroll = h('div', { class: 'b-scroll', tabindex: '-1' }, libWarn, grid);   // tabindex: it can hold the keyboard while the focused card has scrolled away (paintWindow)
+  const scrollHost = ZScrollBar.attach(scroll, document);        // its own scroll bar, which a pen can drag (scrollbar.js)
   const side = h('div', { class: 'lib-side' });
   const catsBox = h('div', { class: 'cats', role: 'listbox', 'aria-label': 'Folders' });
   const tagSec = h('div', { class: 'tag-sec', role: 'group', 'aria-label': 'Tags' });                     // full: the Tags section under Folders
@@ -3469,7 +3470,7 @@ function makeBrowser({ compact, st, host = STUDIO_HOST, kindUi = compact ? 'comp
     catSel = h('select', { class: 'inp sel', 'aria-label': 'Category', onchange: () => { setCat(catSel.value); renderGrid(); } });
     tools = h('div', { class: 'b-tools' }, searchBox, catSel);
     dockHint = h('div', { class: 'dock-hint' });
-    root.append(...[tabs && tabs.el, dockHint, tools, tagRow, orderBtn, count, scroll, strip].filter(Boolean));
+    root.append(...[tabs && tabs.el, dockHint, tools, tagRow, orderBtn, count, scrollHost, strip].filter(Boolean));
   } else {
     const size = h('input', { type: 'range', min: 84, max: 220, step: 4, value: st.size, 'aria-label': 'Thumbnail size' });
     const paint = () => size.style.setProperty('--pct', ((st.size - 84) / (220 - 84)) * 100 + '%');
@@ -3483,7 +3484,7 @@ function makeBrowser({ compact, st, host = STUDIO_HOST, kindUi = compact ? 'comp
     paint(); grid.style.setProperty('--card', st.size + 'px');
     rescan = rescanBtn(st.kind);
     tools = h('div', { class: 'b-tools' }, searchBox, h('div', { class: 'size-ctl' }, icon('library', 13), size), rescan, fchips, host.tools ? host.tools() : null);
-    root.append(side, h('div', { class: 'lib-main' }, tabs ? tabs.el : null, tools, h('div', { class: 'b-sub' }, hint, count, orderBtn), scroll, strip));
+    root.append(side, h('div', { class: 'lib-main' }, tabs ? tabs.el : null, tools, h('div', { class: 'b-sub' }, hint, count, orderBtn), scrollHost, strip));
   }
 
   /* --- tag filter: an item shows when it carries any chosen tag (or every one, with the Any / All switch on All); "Untagged" shows the items without a tag */
