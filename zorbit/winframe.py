@@ -352,7 +352,7 @@ def _set_fit(hwnd, st, fitted):
         form.Padding = WinForms.Padding(st["border"])
 
 
-def install_frame(hwnd, on_query_end=None, on_end=None, on_moved=None):
+def install_frame(hwnd, on_query_end=None, on_end=None, on_moved=None, on_activate=None):
     """Subclasses the window to draw without Windows' frame. WM_NCCALCSIZE makes the client area the whole window
     (a maximised one is cut back to the work area, see client_rect); WM_NCHITTEST answers the resize codes in the
     strip around the page (see hit_test); WinForms is kept from undoing where Windows restored the window (see
@@ -361,7 +361,8 @@ def install_frame(hwnd, on_query_end=None, on_end=None, on_moved=None):
     Windows shutting down, restarting or signing out: on_query_end() is called on WM_QUERYENDSESSION, before the
     window is asked to close, and the answer is always "yes, go ahead"; on_end(ending) on WM_ENDSESSION (ending is
     false when something else cancelled it). on_moved() is called when the user has finished moving or sizing the
-    window (WM_EXITSIZEMOVE). All run on the UI thread: keep them short. Nothing in the procedure
+    window (WM_EXITSIZEMOVE). on_activate() is called when the window is activated (WM_ACTIVATE, not when it is
+    deactivated). All run on the UI thread: keep them short. Nothing in the procedure
     may raise into Windows, so each part guards itself and falls back to the window's own procedure."""
     user32.GetWindowLongPtrW.restype = ctypes.c_void_p
     user32.GetWindowLongPtrW.argtypes = [w.HWND, ctypes.c_int]
@@ -374,7 +375,7 @@ def install_frame(hwnd, on_query_end=None, on_end=None, on_moved=None):
     GWLP_WNDPROC, WM_NCCALCSIZE, WM_NCHITTEST = -4, 0x0083, 0x0084
     WM_QUERYENDSESSION, WM_ENDSESSION = 0x0011, 0x0016
     WM_WINDOWPOSCHANGING, WM_WINDOWPOSCHANGED = 0x0046, 0x0047
-    WM_GETMINMAXINFO, WM_EXITSIZEMOVE = 0x0024, 0x0232
+    WM_GETMINMAXINFO, WM_EXITSIZEMOVE, WM_ACTIVATE = 0x0024, 0x0232, 0x0006
     if hwnd in _subclass:
         return
     original = user32.GetWindowLongPtrW(hwnd, GWLP_WNDPROC)
@@ -395,6 +396,11 @@ def install_frame(hwnd, on_query_end=None, on_end=None, on_moved=None):
         if msg == WM_EXITSIZEMOVE and on_moved:
             try:
                 on_moved()
+            except Exception:
+                pass
+        if msg == WM_ACTIVATE and on_activate and wp & 0xFFFF:       # WA_ACTIVE or WA_CLICKACTIVE
+            try:
+                on_activate()
             except Exception:
                 pass
         if msg == WM_QUERYENDSESSION or msg == WM_ENDSESSION:
