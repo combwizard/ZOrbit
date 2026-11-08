@@ -4,6 +4,12 @@ All notable changes to this project are listed here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- The browser can be a strip: a small bar of one tab's favourites that stays on top of ZBrush and never takes the keyboard from it, so one click picks an item. Turn it on with the strip button in the browser's header. Its menu switches the tab, lays the strip vertical or horizontal, opens the full browser or hides the strip. **X** on the browser goes back to the strip, the strip comes up by itself when the app starts the browser hidden, it steps aside while another program is in front, and it closes with the app. (#40)
+
 ## [0.21.0] - 2026-11-09
 
 ZOrbit 0.21.0 lists the folders of the ZBrush that is running, not the newest one installed, so a PC with several

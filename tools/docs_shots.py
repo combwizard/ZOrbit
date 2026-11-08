@@ -118,6 +118,15 @@ SHOTS = {
     "browser": dict(page="popout.html", q="kind=brush", size=(980, 680)),
     "browser-light": dict(page="popout.html", q="kind=brush&theme=light", size=(980, 680)),
     "library-tag": dict(q="screen=library", steps=["click('Blocking')"]),
+    # strip: the favourites strip, vertical, with 12 favourites (6 fit on this small screen, so a +6 button holds the rest), the third one picked just now (the accent rim).
+    # strip-horizontal: lying down, with +4 pressed so the rest of the favourites sit in a second row.
+    # strip-menu: the strip's menu, open in place of the thumbnails. A strip is cropped to its own box; the window around it is not drawn.
+    "strip": dict(page="popout.html", q="strip&favs=12", size=(400, 800), clip="document.querySelector('.strip')",
+                  steps=["document.querySelectorAll('.strip-cell')[2].click()"]),
+    "strip-horizontal": dict(page="popout.html", q="strip=horizontal&favs=14", size=(1000, 400), clip="document.querySelector('.strip')",
+                             steps=["click('+4')"]),
+    "strip-menu": dict(page="popout.html", q="strip&favs=12", size=(400, 800), clip="document.querySelector('.strip')",
+                       steps=["document.querySelector('.strip-menu').click()"]),
     # Details
     "settings-theme": dict(q="screen=settings&theme=zbrush", clip="card('Theme')"),
     # menu-look: the Look section of the Menu tab (under More, which the first step opens), with the Tiles look chosen for the menu.
