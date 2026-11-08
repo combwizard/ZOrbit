@@ -37,11 +37,13 @@ More windows: New window in the header (or Ctrl+N) opens another browser window,
 copy of the window it was opened from (its tab, Keep on top, the folders column shown or not and its side, the thumbnail
 size), NEW_OFFSET logical pixels down and right of it, with an empty search. From then on each window keeps its own: the
 first one ("main") in the top-level keys of popout.json as before, each other one in its entry under "extras" (see
-extras_state), and "last_used" names the window used last ("main" or an extra's id). A SHOW goes to the window used last
-(the first one when that one is gone); only the first window can be the strip, and only it is pre-warmed. The close button
-(or Alt+F4) on another window closes it for good and drops its entry; one still open when the process ends (the session
-ends, or it is stopped) keeps its entry and comes back, where it was, at the next SHOW, or the strip's Open browser; not
-when the strip comes up by itself, nor at a hidden pre-warm. A popout that is not managed ends once no window of it is up
+extras_state), and "last_used" names the window a SHOW goes to ("main" or an extra's id): the one used most recently
+(activated) that is still open (up, or the strip), else the first one. Only the first window can be the strip, and only
+it is pre-warmed. The close button (or Alt+F4) on another window closes it for good and drops its entry; one still open
+when the process ends (the session ends, or it is stopped) keeps its entry and comes back, where it was, at the next SHOW,
+or the strip's Open browser; not when the strip comes up by itself, nor at a hidden pre-warm. When "last_used" names one
+of them, that SHOW is answered by it once it is made (each is made on a thread of its own), and the first window stays
+hidden. A popout that is not managed ends once no window of it is up
 (the strip counts as up), and a managed one never quits unused while one is.
 The strip: the same window can instead be a small strip of one tab's favourites that stays on top of everything,
 has no taskbar button and never takes the keyboard (WS_EX_NOACTIVATE, shown with SW_SHOWNOACTIVATE). popout.json
@@ -466,7 +468,7 @@ class PopoutApi(webapi.LibraryApi, webapi.TagApi):
         return {"on_top": win.on_top, "size": mine["size"], "side": mine["side"],
                 "column": mine["column"], "mode": win.mode, "extra": win is not self._pop,
                 "windows": self._pop.window_count(), "max_windows": MAX_WINDOWS,
-                "strip": {"on": self._pop.strip_on, "orient": ss["orient"], "kind": ss["kind"], "wrap": ss["wrap"],
+                "strip": {"on": self._pop.strip_on and win is self._pop, "orient": ss["orient"], "kind": ss["kind"], "wrap": ss["wrap"],
                           "fold": ss["fold"]},
                 "tag": win.start_tag,
                 "kind": kind if kind in C.ASSET_KINDS else "brush", "tags_path": profiles.tags_file(),
@@ -692,8 +694,8 @@ class BrowserWindow:
     def show(self, tag=None, zb=0, reset=True, kind=None, activate=True):
         """Shows the window, takes the focus and puts the cursor in the search box. reset: also tell the page to
         start afresh (empty search, this tag only). Without it the page is left as it is, except that a tag
-        or tab (kind) given is applied. activate False: only shown (a window brought back beside the one asked for);
-        the caller hands the foreground back."""
+        or tab (kind) given is applied. activate False: only shown (a window brought back beside the one asked for),
+        and the foreground goes back to the window that had it (see _show_hidden)."""
         with self._lock:
             if not self.hwnd or self.pop.quitting:
                 return
@@ -715,26 +717,7 @@ class BrowserWindow:
                 winframe.user32.SetWindowPos(self.hwnd, self._z_order(), 0, 0, 0, 0,
                                              W.SWP_NOMOVE | W.SWP_NOSIZE | W.SWP_SHOWWINDOW)
             else:                                      # shown through pywebview: the form has to know it is visible, or the
-                maxed = self._was_max                  # web view inside stays "hidden" and paints nothing
-                if not self._placed:                   # the first time: where it was last session. After that it keeps its place
-                    x, y, wd, ht, maxed = self._place(zb)
-                    maxed = maxed or self._was_max     # the browser the strip took the place of was maximised
-                    winframe.user32.SetWindowPos(self.hwnd, self._z_order(), x, y, wd, ht, W.SWP_NOACTIVATE)
-                    self._placed = True
-                else:
-                    self._on_screen(zb)                # the screen it was on may be gone since it was hidden
-                    winframe.user32.SetWindowPos(self.hwnd, self._z_order(), 0, 0, 0, 0,
-                                                 W.SWP_NOMOVE | W.SWP_NOSIZE | W.SWP_NOACTIVATE)
-                self._quiet = not activate             # pywebview's show activates it: not the window used last
-                try:
-                    self.window.show()
-                finally:
-                    self._quiet = False
-                winframe.user32.SetWindowPos(self.hwnd, self._z_order(), 0, 0, 0, 0,       # Show() may re-apply a stale
-                                             W.SWP_NOMOVE | W.SWP_NOSIZE | W.SWP_NOACTIVATE)  # TopMost: ours wins
-                if maxed and not user32.IsZoomed(self.hwnd):
-                    user32.ShowWindow(self.hwnd, SW_MAXIMIZE)
-                self._on_screen(zb)                    # a maximised window could not be moved while it was hidden
+                self._show_hidden(zb, activate)        # web view inside stays "hidden" and paints nothing
             if not activate:
                 _log(f"shown without the focus{self.name()}")
                 return
@@ -746,6 +729,34 @@ class BrowserWindow:
             _log(f"shown{self.name()} (tag={tag}, kind={kind}, reset={reset}, prev_fg={self.pop.prev_fg}, "
                  f"was_visible={was_visible}, foreground={got})")
             self._focus_page()
+
+    def _show_hidden(self, zb, activate):
+        """show() for a hidden window: placed, shown through pywebview, maximised again when it was. pywebview's show
+        activates the form, and so does a maximise: without activate the window is not the one used last for all of
+        it (on_activate), and the foreground goes back to the window that had it."""
+        fg_before = 0 if activate else int(W.GetForegroundWindow() or 0)
+        self._quiet = not activate
+        try:
+            maxed = self._was_max
+            if not self._placed:                       # the first time: where it was last session; after that, its own place
+                x, y, wd, ht, maxed = self._place(zb)
+                maxed = maxed or self._was_max         # the browser the strip took the place of was maximised
+                winframe.user32.SetWindowPos(self.hwnd, self._z_order(), x, y, wd, ht, W.SWP_NOACTIVATE)
+                self._placed = True
+            else:
+                self._on_screen(zb)                    # the screen it was on may be gone since it was hidden
+                winframe.user32.SetWindowPos(self.hwnd, self._z_order(), 0, 0, 0, 0,
+                                             W.SWP_NOMOVE | W.SWP_NOSIZE | W.SWP_NOACTIVATE)
+            self.window.show()
+            winframe.user32.SetWindowPos(self.hwnd, self._z_order(), 0, 0, 0, 0,           # Show() may re-apply a stale
+                                         W.SWP_NOMOVE | W.SWP_NOSIZE | W.SWP_NOACTIVATE)      # TopMost: ours wins
+            if maxed and not user32.IsZoomed(self.hwnd):
+                user32.ShowWindow(self.hwnd, SW_MAXIMIZE)                                      # activates, too
+            self._on_screen(zb)                        # a maximised window could not be moved while it was hidden
+            if fg_before and int(W.GetForegroundWindow() or 0) != fg_before:
+                winframe.force_foreground(fg_before)
+        finally:
+            self._quiet = False
 
     def _focus_page(self):
         """The search box gets the cursor: the page does it, and when the web view itself has no focus yet (the
@@ -873,7 +884,7 @@ class Popout(BrowserWindow):
         self._fg_away_since = None           # when the foreground was first seen away from ZBrush (strip_tick's grace)
         self._zb_pids = (None, [])           # (when read, ZBrush's process ids): the strip's foreground watch, see _zbrush_pids
         self.extras = []                     # the other windows (ExtraWindow), open or on their way, in the order made
-        self.last_used = self                # the window a SHOW goes to (on_activate, show)
+        self._mru = [self]                   # the windows by their last use, most recent first (_used, _target)
         self._restored = False               # the windows popout.json "extras" lists have been brought back (once)
         self._ending = False                 # on_end_session has run
 
@@ -1250,22 +1261,31 @@ class Popout(BrowserWindow):
         return not any(o.hwnd and o.hwnd == fg for o in (self, *self.extras) if o is not win)
 
     def request_show(self, tag, zb, toggle, kind=None):
-        """The app asks for the browser (SHOW), or the first launch does (--show): the window used last answers, or
-        the first one when that one is gone. Never closes it: a window that is hidden appears, one that is up comes to
-        the front, and one that is already in front hands the keyboard back to ZBrush when asked to toggle (the
-        hotkey). The first SHOW also brings back the other windows that were open when the process last ended."""
+        """The app asks for the browser (SHOW), or the first launch does (--show): the window used most recently that
+        is still open answers, else the first one (see _target). Never closes it: a window that is hidden appears, one
+        that is up comes to the front, and one that is already in front hands the keyboard back to ZBrush when asked to
+        toggle (the hotkey). The first SHOW also brings back the other windows that were open when the process last
+        ended; when the one used last is among them, it answers once it is made, and the first window stays hidden.
+        On the work thread, which never waits for a window to be made."""
         with self._lock:
             if not self.ready:                         # still starting: it shows itself when it is up
                 self._pending = (tag, zb, kind)
                 _log(f"SHOW while starting: pending {self._pending}")
                 return
             first, others = self._restore_extras()
-        if first is not None and not self._open_extra(first):    # the one used last: up before it answers
-            first = None
-        if others:
-            self._bring_back_later(others)
+        if first is not None or others:
+            self._bring_back_later(first, others, (tag, zb, kind, time.monotonic()))
+            if first is not None:
+                _log(f"SHOW: the window used last{first.name()} answers once it is made")
+                return
+            self._answer(tag, zb, toggle, kind, win=self)     # the first window was the one used last
+            return
+        self._answer(tag, zb, toggle, kind)
+
+    def _answer(self, tag, zb, toggle, kind, win=None):
+        """A SHOW, for win (else the window _target names)."""
         with self._lock:
-            win = self._target()
+            win = win or self._target()
             if win is self and self.mode == "strip":   # the strip never has the keyboard: a SHOW always means the browser
                 self.open_browser(tag, zb, kind, True, "SHOW")
                 return
@@ -1299,24 +1319,50 @@ class Popout(BrowserWindow):
         if not self.managed and not self.quitting and not self.any_up():
             self.quit(why)
 
+    @property
+    def last_used(self):
+        """The window used most recently, open or not."""
+        mru = self._mru
+        return mru[0] if mru else self
+
+    def _is_open(self, win) -> bool:
+        """win is up (minimised counts), or is the strip."""
+        if win is self:
+            return self.visible() or self.mode == "strip"
+        return win in self.extras and not win.closing and win.ready and win.visible()
+
     def _target(self):
-        """The window a SHOW goes to: the one used last, while it is still there and ready; else the first."""
-        lu = self.last_used
-        if lu is not self and (lu not in self.extras or lu.closing or not lu.ready):
-            return self
-        return lu
+        """The window a SHOW goes to: the one used most recently that is still open, else the first."""
+        for win in self._mru:
+            if self._is_open(win):
+                return win
+        return self
 
     def _used(self, win):
-        """win is the window used last (activated, or shown with the focus). Any thread; popout.json "last_used" is
-        written on the work thread."""
-        if self.last_used is win:
+        """win was used (activated, or shown with the focus): first in the order. Any thread, the UI one included, so
+        no lock: the list is replaced, never changed in place. popout.json "last_used" is written on the work thread."""
+        mru = self._mru
+        if mru and mru[0] is win:
             return
-        self.last_used = win
+        self._mru = [win, *(o for o in mru if o is not win)]
+        self._work.put((self._save_last_used, ()))
+
+    def _forget(self, win):
+        """win is gone: out of the order of use."""
+        self._mru = [o for o in self._mru if o is not win]
+        self._work.put((self._save_last_used, ()))
+
+    def _closed_one(self):
+        """A window was hidden or closed: the window a SHOW goes to may be another one now."""
         self._work.put((self._save_last_used, ()))
 
     def _save_last_used(self):
-        lu = self.last_used
-        want = MAIN_ID if lu is self else lu.id
+        """popout.json "last_used": the window a SHOW would go to now, which is the one to bring back first. Left as it
+        is while the process ends: the windows closing one by one then must not move it."""
+        if self.quitting or self.session_ending:
+            return
+        target = self._target()
+        want = MAIN_ID if target is self else target.id
         if _read_state().get("last_used") != want:
             _update_state(last_used=want)
 
@@ -1340,29 +1386,36 @@ class Popout(BrowserWindow):
             else:
                 others.append(ext)
         if first is not None:
-            self.last_used = first
+            self._mru = [first, *(o for o in self._mru if o is not first)]
         if self.extras:
             _log(f"bringing back {len(self.extras)} other window(s){' (one used last)' if first else ''}")
         return first, others
 
-    def _bring_back_later(self, exts):
-        threading.Thread(target=self._bring_back, args=(list(exts),), daemon=True, name="popout-back").start()
+    def _bring_back_later(self, first, others, request=None):
+        """Makes the windows brought back, each on a thread of its own. first answers request (tag, zbrush hwnd, kind,
+        when it was asked for) once it is up; the others are shown where they were without taking the keyboard."""
+        for ext in ([first] if first is not None else []) + list(others):
+            threading.Thread(target=self._bring_back, args=(ext, request if ext is first else None), daemon=True,
+                             name="popout-back").start()
 
-    def _bring_back(self, exts):
-        """Opens the windows brought back and shows them where they were, without taking the keyboard from the window
-        used last."""
-        for ext in exts:
-            if self.quitting:
-                return
-            if not self._open_extra(ext):
-                continue
+    def _bring_back(self, ext, request=None):
+        made = self._open_extra(ext, end_if_none=request is None)
+        if request is not None:
+            tag, zb, kind, t0 = request
+            if made:
+                with self._lock:
+                    if not ext.closing and not self.quitting:
+                        ext.show(tag, zb, kind=kind)
+                        _log(f"SHOW answered by{ext.name()} {time.monotonic() - t0:.2f} s after it came")
+            elif not self.quitting:
+                _log("the window used last did not come back: the first window answers")
+                self._answer(tag, zb, False, kind, win=self)
+        elif made:
             with self._lock:
-                if ext.closing or self.quitting:
-                    continue
-                back = self._target()
-                ext.show(activate=False)
-                if back is not ext and back.visible() and self._holds_foreground():
-                    winframe.force_foreground(back.hwnd)     # pywebview's show activated it
+                if not ext.closing and not self.quitting:
+                    ext.show(activate=False)
+                    if ext not in self._mru:
+                        self._mru = [*self._mru, ext]      # open, but used before the others
         self._windows_changed()
 
     def new_window(self, opener, asked) -> dict:
@@ -1374,8 +1427,6 @@ class Popout(BrowserWindow):
                         "max_windows": MAX_WINDOWS}
             first, others = self._restore_extras()     # all paths to a window up have done it; this is the backstop
             back = ([first] if first else []) + others
-            if back:
-                self.last_used = opener
             n = self.window_count()
             ext = None
             if n < MAX_WINDOWS:
@@ -1389,7 +1440,7 @@ class Popout(BrowserWindow):
                 ext = ExtraWindow(self, eid, entry)
                 self.extras.append(ext)
         if back:
-            self._bring_back_later(back)
+            self._bring_back_later(None, back)
         if ext is None:
             _log(f"New window: {n} windows are open already")
             return {"ok": False, "error": CAP_MESSAGE, "windows": n, "max_windows": MAX_WINDOWS}
@@ -1422,9 +1473,10 @@ class Popout(BrowserWindow):
                     ext.show()                         # afresh, with the focus, at the place saved for it
         self._windows_changed()
 
-    def _open_extra(self, ext) -> bool:
+    def _open_extra(self, ext, end_if_none=True) -> bool:
         """Makes ext's window (hidden), sets its frame and waits for its page. Off the UI thread, with no lock held and
-        never inside a js_api call. False when it could not be made: it is dropped, entry and all."""
+        never inside a js_api call. False when it could not be made: it is dropped, entry and all (but for the process
+        quitting, when the entry stays for next time); end_if_none: then a popout not managed with no window up ends."""
         try:
             import webview
             title = f"{TITLE} {ext.id}"                # custom_frame finds the window by its title: this one only
@@ -1436,7 +1488,10 @@ class Popout(BrowserWindow):
                 raise RuntimeError("pywebview made no window")
             ext.window = win
             win.events.closing += ext.on_closing
+            win.events.closed += ext.on_closed
             win.events.loaded += ext.on_loaded
+            if win.events.loaded.is_set():             # loaded before the handler was there
+                ext._loaded.set()
             winframe.custom_frame(title, placement=None, pid=os.getpid(), topmost=ext.on_top, toolwindow=False,
                                   maximizable=True, include_hidden=True, on_hwnd=ext.on_hwnd,
                                   theme=theme.preset(theme.current())["window"])
@@ -1449,18 +1504,23 @@ class Popout(BrowserWindow):
             _log(f"window{ext.name()} made: {ext.hwnd}")
             return True
         except Exception as e:
-            _log(f"window{ext.name()} could not be made: {e!r}")
+            ending = self.quitting or self.session_ending
+            _log(f"window{ext.name()} could not be made{' (the process is ending)' if ending else ''}: {e!r}")
             with self._lock:
                 ext.closing = True
                 if ext in self.extras:
                     self.extras.remove(ext)
+                self._forget(ext)
+            if ending:                                 # quit destroyed what it was made on: it comes back next time
+                return False
             _remove_extra(ext.id)
             if ext.window is not None:
                 try:
                     ext.window.destroy()
                 except Exception:
                     pass
-            self._end_if_none_up("no window left")
+            if end_if_none:
+                self._end_if_none_up("no window left")
             return False
 
     def _windows_changed(self):
@@ -1513,6 +1573,7 @@ class Popout(BrowserWindow):
         self.hide(restore=True, why=why)
         with self._lock:
             self._leave_strip()                        # a hidden window is the browser, for the next SHOW
+        self._closed_one()
         self._end_if_none_up("closed by the user")    # another window up keeps the process
 
     # --- the strip ----------------------------------------------------------------------------------
@@ -1608,7 +1669,7 @@ class Popout(BrowserWindow):
                 return
             first, others = self._restore_extras()     # a user's request for the browser, as a SHOW is
             if first is not None or others:
-                self._bring_back_later(([first] if first else []) + others)
+                self._bring_back_later(None, ([first] if first else []) + others)
             if self.mode == "strip":
                 if self.visible():
                     self.hide(restore=False, why=why or "to the browser")    # the strip never had the keyboard
@@ -1827,7 +1888,8 @@ class ExtraWindow(BrowserWindow):
         self._init_window(pop, window_settings(entry)["on_top"])
         self.id = eid
         self.ready = False                   # made, framed and its page loaded (Popout._open_extra)
-        self.closing = False                 # closed for good (or never made): on its way out
+        self.closing = False                 # closed for good (or never made, or gone): on its way out
+        self._keep_entry = False             # it closes because the process quits or the session ends
 
     @property
     def _lock(self):
@@ -1876,8 +1938,7 @@ class ExtraWindow(BrowserWindow):
             _remove_extra(self.id)
             if self in pop.extras:
                 pop.extras.remove(self)
-            if pop.last_used is self:
-                pop._used(pop)
+            pop._forget(self)                          # a SHOW goes to the window used before it that is still open
             fg = W.GetForegroundWindow()
             if fg and int(fg) == self.hwnd and _is_target(pop.prev_fg):    # it had the keyboard: back to ZBrush
                 user32.SetForegroundWindow(pop.prev_fg)
@@ -1895,10 +1956,34 @@ class ExtraWindow(BrowserWindow):
     def on_closing(self):
         """pywebview 'closing' (UI thread; False cancels): Alt+F4 and the like close it for good, on another thread.
         When the process quits or the session ends it just goes, and keeps its entry."""
-        if self.closing or self.pop.quitting or self.pop.session_ending:
+        if self.closing:
+            return None
+        if self.pop.quitting or self.pop.session_ending:
+            self._keep_entry = True
             return None
         threading.Thread(target=self.close, kwargs={"why": "close requested"}, daemon=True).start()
         return False
+
+    def on_closed(self):
+        """pywebview 'closed' (a thread of its own): the form is gone, however it went. close() has dealt with one it
+        closed; one closed some other way (WinForms closes its forms as the session ends, which may then be
+        cancelled, or the process is quitting) leaves the list here, so a dead window neither counts toward the cap
+        nor answers a SHOW. Its entry stays when the process quits or the session ends."""
+        pop = self.pop
+        with self._lock:
+            if self.closing:
+                return
+            self.closing = True
+            if self in pop.extras:
+                pop.extras.remove(self)
+            pop._forget(self)
+            keep = self._keep_entry or pop.quitting or pop.session_ending
+        if not keep:
+            _remove_extra(self.id)
+        _log(f"window{self.name()} gone{' (kept for next time)' if keep else ''}")
+        if not pop.quitting:
+            pop._windows_changed()
+            pop._end_if_none_up("the last window closed")
 
 
 FORWARD_AGAIN = None                  # _forward: the running popout is quitting; start in its place once it has gone

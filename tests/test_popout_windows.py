@@ -5,6 +5,9 @@ and the Win32 calls are answered from a table kept by hwnd."""
 import ctypes.wintypes as w
 import json
 import os
+import threading
+import time
+import types
 
 import pytest
 
@@ -57,10 +60,16 @@ def test_a_new_window_goes_down_and_right_of_its_opener_and_stays_on_the_screen(
 
 
 # --- the process with fake windows ----------------------------------------------------------------------------
+REAL_THREAD = threading.Thread
+
+
 class FakeWin:
-    """A pywebview window: what its page is told, show, hide and destroy."""
-    def __init__(self, env, hwnd):
+    """A pywebview window: what its page is told, show, hide and destroy. Showing it activates it, as WinForms does:
+    the window it belongs to hears WM_ACTIVATE (on_activate)."""
+    def __init__(self, env, hwnd, owner=None):
         self.env, self.hwnd, self.js, self.destroyed, self.title = env, hwnd, [], 0, None
+        if owner is not None:
+            env.owners[hwnd] = owner
 
     def evaluate_js(self, code):
         self.js.append(code)
@@ -69,7 +78,7 @@ class FakeWin:
     def show(self):
         self.env.calls.append(("show", self.hwnd))
         self.env.up.add(self.hwnd)
-        self.env.fg = self.hwnd                         # pywebview's show activates it
+        self.env.activate(self.hwnd)                    # pywebview's show activates it
 
     def hide(self):
         self.env.calls.append(("hide", self.hwnd))
@@ -114,7 +123,13 @@ class SyncThread:
 class Env:
     def __init__(self):
         self.up, self.calls, self.topmost, self.rects, self.fg = set(), [], {}, {}, 0x999
-        self.next = 0x200
+        self.next, self.owners, self.zoomed = 0x200, {}, set()
+
+    def activate(self, hwnd):
+        """hwnd takes the foreground: its window hears WM_ACTIVATE."""
+        self.fg = hwnd
+        if hwnd in self.owners:
+            self.owners[hwnd].on_activate()
 
 
 @pytest.fixture
@@ -123,13 +138,20 @@ def env(monkeypatch, tmp_path):
     monkeypatch.setattr(popout, "STATE_FILE", str(tmp_path / "popout.json"))
     monkeypatch.setattr(popout.user32, "IsWindowVisible", lambda h: h in e.up, raising=False)
     monkeypatch.setattr(popout.user32, "IsIconic", lambda h: 0, raising=False)
-    monkeypatch.setattr(popout.user32, "IsZoomed", lambda h: 0, raising=False)
-    monkeypatch.setattr(popout.user32, "ShowWindow", lambda h, cmd: e.calls.append(("ShowWindow", h, cmd)) or 1,
-                        raising=False)
+    monkeypatch.setattr(popout.user32, "IsZoomed", lambda h: int(h in e.zoomed), raising=False)
+
+    def show_window(h, cmd):
+        e.calls.append(("ShowWindow", h, cmd))
+        if cmd == popout.SW_MAXIMIZE:                  # SW_SHOWMAXIMIZED: shows and activates
+            e.zoomed.add(h)
+            e.up.add(h)
+            e.activate(h)
+        return 1
+    monkeypatch.setattr(popout.user32, "ShowWindow", show_window, raising=False)
     monkeypatch.setattr(popout.user32, "SetForegroundWindow", lambda h: e.calls.append(("SetForegroundWindow", h)),
                         raising=False)
     monkeypatch.setattr(popout.winframe, "user32", FakeUser32(e))
-    monkeypatch.setattr(popout.winframe, "force_foreground", lambda h: setattr(e, "fg", h) or True)
+    monkeypatch.setattr(popout.winframe, "force_foreground", lambda h: e.activate(h) or True)
     monkeypatch.setattr(popout.winframe, "placement_record", lambda h: None)
     monkeypatch.setattr(popout.winframe, "normal_rect", lambda h: (*e.rects[h], False) if h in e.rects else None)
     monkeypatch.setattr(popout.winframe, "bring_on_screen", lambda h, near: False)
@@ -158,15 +180,15 @@ def env(monkeypatch, tmp_path):
 
 def _pop(env, managed=True, **opts):
     pop = popout.Popout({"tag": None, "kind": None, "managed": managed, "show": False, "zbrush": 0, **opts})
-    pop.window, pop.hwnd, pop.ready = FakeWin(env, MAIN), MAIN, True
+    pop.window, pop.hwnd, pop.ready = FakeWin(env, MAIN, pop), MAIN, True
     pop._loaded.set()
     env.rects[MAIN] = (100, 100, 880, 660)
     pop.quits = []
     pop.quit = lambda why="", idle=False: pop.quits.append(why)
 
-    def open_extra(ext):                                # what _open_extra does, without pywebview
+    def open_extra(ext, end_if_none=True):              # what _open_extra does, without pywebview
         ext.hwnd, env.next = env.next, env.next + 1
-        ext.window = FakeWin(env, ext.hwnd)
+        ext.window = FakeWin(env, ext.hwnd, ext)
         ext._loaded.set()
         ext.ready = True
         pop.opened.append(ext.id)
@@ -481,3 +503,205 @@ def test_the_theme_reaches_every_window_that_is_up(pop, env, monkeypatch):
     synced.clear()
     pop.theme_tick()
     assert synced == [pop.extras[0]]
+
+
+# --- after the review --------------------------------------------------------------------------------------
+def test_a_show_goes_to_the_most_recent_window_still_open(pop, env, tmp_path):
+    shown_main(pop, env)
+    api = popout.PopoutApi(pop)
+    api.popout_new_window({})
+    api.popout_new_window({})
+    a, b = pop.extras
+    env.activate(b.hwnd)
+    env.activate(MAIN)                                                 # used: the first window, then b, then a
+    pop.close("close button")                                          # the first window hidden, two others up
+    drain(pop)
+    assert state(tmp_path)["last_used"] == b.id
+    env.fg = 0x999
+    pop.request_show(None, 0, False)
+    assert env.fg == b.hwnd and MAIN not in env.up
+    b.close("close button")
+    drain(pop)
+    assert state(tmp_path)["last_used"] == a.id
+    a.close("close button")
+    drain(pop)
+    assert state(tmp_path)["last_used"] == "main"
+    pop.request_show(None, 0, False)
+    assert env.fg == MAIN
+
+
+def test_windows_brought_back_never_become_the_one_used_last_maximised_or_not(pop, env, tmp_path, monkeypatch):
+    popout._update_state(extras=[{"id": "e0", "window": {"x": 5, "y": 6, "width": 700, "height": 500, "maximized": True}},
+                                 {"id": "e1", "window": {"x": 9, "y": 9, "width": 700, "height": 500}}],
+                         last_used="main")
+    used = []
+    real = pop._used
+    monkeypatch.setattr(pop, "_used", lambda win: used.append(win) or real(win))
+    env.fg = 0x999                                                     # ZBrush has the keyboard when the hotkey comes
+    pop.request_show(None, 0, False)
+    e0 = next(e for e in pop.extras if e.id == "e0")
+    assert ("ShowWindow", e0.hwnd, popout.SW_MAXIMIZE) in env.calls    # maximised again, which activates it
+    assert used and all(u is pop for u in used) and pop.last_used is pop and env.fg == MAIN
+    assert [w.id if w is not pop else "main" for w in pop._mru] == ["main", "e0", "e1"]
+
+
+def test_a_quiet_window_hands_the_foreground_back(pop, env):
+    shown_main(pop, env)
+    env.activate(0x999)                                                # back in ZBrush
+    popout._update_state(extras=[{"id": "e0", "window": {"x": 5, "y": 6, "width": 700, "height": 500, "maximized": True}}])
+    pop._restored = False                                              # as at a start
+    pop._restore_extras()
+    ext = pop.extras[0]
+    pop._open_extra(ext)
+    ext.show(activate=False)
+    assert ext.hwnd in env.up and env.fg == 0x999 and pop.last_used is pop
+
+
+def test_bringing_back_only_the_window_used_last_updates_the_count(pop, env, tmp_path):
+    _with_extras(tmp_path, n=1, last="e0")
+    pop.request_show(None, 0, False)
+    assert any("__popoutWindows" in js and '"windows": 2' in js for js in pop.window.js)
+    assert any("__popoutWindows" in js for js in pop.extras[0].window.js)
+
+
+def test_the_window_used_last_failing_to_come_back_leaves_it_to_the_first(env, tmp_path):
+    pop = _pop(env, managed=False)
+    _with_extras(tmp_path, n=1, last="e0")
+    pop._open_extra = lambda ext, end_if_none=True: popout.Popout._open_extra(pop, ext, end_if_none)
+    monkey_webview(pop, frame=False)
+    pop.request_show(None, 0, False)
+    assert MAIN in env.up and env.fg == MAIN and pop.quits == []       # not ended on the way: the first window answers
+    assert state(tmp_path)["extras"] == []
+
+
+def test_bringing_windows_back_never_holds_up_the_work_thread(pop, env, tmp_path, monkeypatch):
+    monkeypatch.setattr(popout.threading, "Thread", REAL_THREAD)
+    _with_extras(tmp_path, n=2, last="e1")
+    release, made = threading.Event(), []
+
+    def slow_open(ext, end_if_none=True):                             # a cold window: made only when the test says
+        release.wait(5)
+        ext.hwnd = 0x250 + int(ext.id[1])
+        ext.window = FakeWin(env, ext.hwnd, ext)
+        ext._loaded.set()
+        ext.ready = True
+        made.append(ext.id)
+        return True
+    pop._open_extra = slow_open
+    t0 = time.monotonic()
+    pop.request_show("blocking", 0, False)                            # on the work thread
+    assert time.monotonic() - t0 < 1.0 and made == []
+    pop.theme_tick()                                                   # the next job runs at once
+    assert MAIN not in env.up                                          # the first window stays hidden
+    release.set()
+    deadline = time.monotonic() + 5
+    while len(made) < 2 or env.fg != 0x251:
+        assert time.monotonic() < deadline, (made, env.fg)
+        time.sleep(0.02)
+    time.sleep(0.1)
+    target = next(e for e in pop.extras if e.id == "e1")
+    assert env.fg == target.hwnd and any('"tag": "blocking"' in js for js in target.window.js)
+
+
+class FakeEvent:
+    def __init__(self, done=False):
+        self.items, self.done = [], done
+
+    def __iadd__(self, fn):
+        self.items.append(fn)
+        return self
+
+    def is_set(self):
+        return self.done
+
+
+def monkey_webview(pop, frame=True, loaded=True):
+    """A webview module whose create_window gives a fake window; custom_frame finds it (frame) or not."""
+    made = []
+
+    def create_window(title, **kw):
+        win = FakeWin(pop.env_ref, 0x2F0, None)
+        win.events = types.SimpleNamespace(closing=FakeEvent(), closed=FakeEvent(), loaded=FakeEvent(loaded))
+        made.append((title, kw, win))
+        return win
+    fake = types.SimpleNamespace(create_window=create_window)
+    pop._mp.setitem(popout.sys.modules, "webview", fake)
+
+    def custom_frame(title, on_hwnd=None, **kw):
+        if frame:
+            on_hwnd(0x2F0)
+            return 0x2F0
+        return None
+    pop._mp.setattr(popout.winframe, "custom_frame", custom_frame)
+    pop._mp.setattr(popout.winframe, "install_frame", lambda *a, **k: None)
+    return made
+
+
+@pytest.fixture(autouse=True)
+def _keep_monkeypatch(monkeypatch, request):
+    """monkey_webview needs the test's monkeypatch and env: hung on every Popout the test makes."""
+    real_init = popout.Popout.__init__
+
+    def init(self, opts):
+        real_init(self, opts)
+        self._mp = monkeypatch
+        self.env_ref = request.getfixturevalue("env") if "env" in request.fixturenames else None
+    monkeypatch.setattr(popout.Popout, "__init__", init)
+
+
+def test_a_window_that_cannot_be_made_is_dropped_and_a_lone_popout_ends(env, tmp_path):
+    pop = _pop(env, managed=False)                                     # nothing up: the first window hidden
+    popout._add_extra({"id": "x1"})
+    ext = popout.ExtraWindow(pop, "x1", {})
+    pop.extras.append(ext)
+    monkey_webview(pop, frame=False)
+    assert popout.Popout._open_extra(pop, ext) is False
+    assert pop.extras == [] and state(tmp_path)["extras"] == [] and pop.quits == ["no window left"]
+
+
+def test_a_window_that_cannot_be_made_while_quitting_keeps_its_entry(env, tmp_path):
+    pop = _pop(env, managed=False)
+    popout._add_extra({"id": "x1"})
+    ext = popout.ExtraWindow(pop, "x1", {})
+    pop.extras.append(ext)
+    monkey_webview(pop, frame=False)
+    pop.quitting = True
+    assert popout.Popout._open_extra(pop, ext) is False
+    assert [e["id"] for e in state(tmp_path)["extras"]] == ["x1"] and pop.quits == []
+
+
+def test_a_page_loaded_before_its_handler_was_there_is_not_waited_for(env, tmp_path):
+    pop = _pop(env)
+    popout._add_extra({"id": "x1"})
+    ext = popout.ExtraWindow(pop, "x1", {})
+    made = monkey_webview(pop, loaded=True)
+    t0 = time.monotonic()
+    assert popout.Popout._open_extra(pop, ext) is True
+    assert time.monotonic() - t0 < 1.0 and ext.ready and ext.hwnd == 0x2F0
+    title, kw, win = made[0]
+    assert title == "ZOrbit Browser x1" and win.title == "ZOrbit Browser"
+    assert ext.on_closed in win.events.closed.items and ext.on_closing in win.events.closing.items
+
+
+@pytest.mark.parametrize("ending, kept", [(False, False), (True, True)])
+def test_a_window_whose_form_went_another_way_leaves_the_list(pop, env, tmp_path, ending, kept):
+    shown_main(pop, env)
+    popout.PopoutApi(pop).popout_new_window({})
+    ext = pop.extras[0]
+    drain(pop)
+    if ending:
+        pop.on_query_end()
+        assert ext.on_closing() is None
+    ext.on_closed()
+    drain(pop)
+    assert pop.extras == [] and pop._target() is pop and pop.window_count() == 1
+    assert bool(state(tmp_path)["extras"]) is kept
+    assert state(tmp_path)["last_used"] == (ext.id if ending else "main")    # the end of a session does not move it
+
+
+def test_another_window_never_takes_the_strip_start(pop, env):
+    shown_main(pop, env)
+    popout.PopoutApi(pop).popout_new_window({})
+    pop.strip_on = True
+    assert popout.PopoutApi(pop).popout_get_state()["strip"]["on"] is True
+    assert popout.PopoutApi(pop.extras[0]).popout_get_state()["strip"]["on"] is False

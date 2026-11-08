@@ -278,7 +278,7 @@ In Studio, opacities show as percentages (45%) but are 0 to 1 in the file. Contr
 "browser": {"hotkey": "Alt+B"}
 ```
 
-The hotkey that opens the [browser window](browser.md) and, pressed over it, hands the keyboard back to ZBrush. With [several browser windows](browser.md#several-windows) open it works on the one you used last. On Settings it is the **Browser hotkey** row in the **Behaviour** card, where you record it like a menu hotkey and Studio warns if a menu already uses it. New installs get **Alt+B**. An existing `radial.json` has no `browser` section until you add one, so the hotkey does nothing there. Leave it out for no hotkey. The browser then opens from a **Browser** slot, **More...** in a tag's fan, the tray menu, Studio's **Browser** buttons and the Start menu shortcut (see [Opening it](browser.md#opening-it)).
+The hotkey that opens the [browser window](browser.md) and, pressed over it, hands the keyboard back to ZBrush. With [several browser windows](browser.md#several-windows) open it works on the open one you used last. On Settings it is the **Browser hotkey** row in the **Behaviour** card, where you record it like a menu hotkey and Studio warns if a menu already uses it. New installs get **Alt+B**. An existing `radial.json` has no `browser` section until you add one, so the hotkey does nothing there. Leave it out for no hotkey. The browser then opens from a **Browser** slot, **More...** in a tag's fan, the tray menu, Studio's **Browser** buttons and the Start menu shortcut (see [Opening it](browser.md#opening-it)).
 
 ### Next profile hotkey
 

@@ -7488,7 +7488,7 @@ function initPopout() {
     if (!popBrowser || e.isComposing || inStrip()) return;
     if (e.key.toLowerCase() === 'n' && (e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey) {   // Ctrl+N: New window
       e.preventDefault();
-      if (!e.repeat && !$('#overlay-root').firstElementChild) popNewWindow();
+      if (!e.repeat && !$('#overlay-root').firstElementChild && !$('.popover')) popNewWindow();   // not while a dialog, menu or popover is open
       return;
     }
     if ($('#overlay-root').firstElementChild || $('.popover')) return;       // a dialog or a popover has the keys
