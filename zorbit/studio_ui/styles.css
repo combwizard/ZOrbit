@@ -132,6 +132,15 @@ h1, h2, h3, p { margin: 0; }
 ::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--accent) 35%, transparent); border-radius: 99px; border: 3px solid transparent; background-clip: padding-box; }
 ::-webkit-scrollbar-thumb:hover { background: var(--accent); border-width: 2px; background-clip: padding-box; }
 ::-webkit-scrollbar-corner { background: transparent; }
+/* The grids' own scroll bar (scrollbar.js), drawn like the native one above and laid over it: the native thumb is hidden, its
+   10 px stay so the layout does not move. A pen cannot drag the native thumb (it gets two positions at once). */
+.sbar-host { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.sbar-own::-webkit-scrollbar-thumb, .sbar-own::-webkit-scrollbar-thumb:hover { background: transparent; }
+.sbar { position: absolute; top: 0; right: 0; bottom: 0; width: 10px; touch-action: none; user-select: none; z-index: 2; }
+.sbar[hidden] { display: none; }
+body.dragging .sbar { pointer-events: none; }   /* a drag of Studio's own (DnD) lands on the grid under the bar */
+.sbar-thumb { position: absolute; top: 0; left: 0; right: 0; box-sizing: border-box; background: color-mix(in srgb, var(--accent) 35%, transparent); border-radius: 99px; border: 3px solid transparent; background-clip: padding-box; }
+.sbar-thumb:hover, .sbar.dragging .sbar-thumb { background: var(--accent); border-width: 2px; background-clip: padding-box; }
 
 .ico { display: inline-flex; flex: none; width: var(--sz, 16px); height: var(--sz, 16px); }
 .ico svg { display: block; }

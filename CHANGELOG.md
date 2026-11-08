@@ -4,7 +4,11 @@ All notable changes to this project are listed here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.21.0] - 2026-11-09
+
+ZOrbit 0.21.0 lists the folders of the ZBrush that is running, not the newest one installed, so a PC with several
+versions shows that version's files. You can undo forgetting a library folder from the toast that appears. A pen can
+now drag the scroll bar of the browser and Library grids; before, the list flickered and stopped anywhere.
 
 ### Added
 
@@ -21,6 +25,8 @@ All notable changes to this project are listed here. The format follows
 - Studio's counts for a **More** slot ("4 items are in the More submenu" and "4 items in a submenu") included empty
   slots and items that cannot be used, which the submenu leaves out, so they could say more than **More** opens with.
 - Studio threw an error (nothing visible) when you left the **Menus** screen while a new menu's title box was still open.
+- Dragging the scroll bar of the browser's or the Library's grid with a pen (Windows Ink) made the list flicker between where the pen was and where it pressed, and it stopped at either. WebView2 gives its own scroll bar both positions at once, so the grids now have a scroll bar of their own that follows only the pen. It looks and works as before with a mouse and the wheel.
+- The **Skip to content** link could still show at the top left of Studio when it opened, because focus that reached it before the page was ready stayed there. That focus is now moved off the link too.
 - The Library and the browser said "ZBrush was not found" on a PC with no `Maxon` folder under `%APPDATA%`, although Setup listed the installs: the search for ZBrush 2022 to 2025 installs was skipped.
 - When an editor saved `radial.json` by truncating the file and then writing it, and both landed with the same time stamp, the app read the empty file, kept the previous menus and did not read the whole file until the next save. It is read on the next check now.
 
@@ -1013,6 +1019,7 @@ First public release.
   only brushes included with ZBrush.
 - Documentation: README, user guide, third-party notices and contributing guide.
 
+[0.21.0]: https://github.com/combwizard/zorbit/releases/tag/v0.21.0
 [0.20.0]: https://github.com/combwizard/zorbit/releases/tag/v0.20.0
 [0.19.0]: https://github.com/combwizard/zorbit/releases/tag/v0.19.0
 [0.18.1]: https://github.com/combwizard/zorbit/releases/tag/v0.18.1
