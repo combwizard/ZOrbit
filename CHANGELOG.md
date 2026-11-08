@@ -12,6 +12,7 @@ All notable changes to this project are listed here. The format follows
 
 ### Fixed
 
+- Setup no longer says **ZBrush found** when it found none, or **Plugin loaded in ZBrush** when the plugin is not loaded. The titles now read **No ZBrush found**, **ZBrush found, plugin not set up** and **Plugin not loaded in ZBrush** until the step is done.
 - The release notes on GitHub broke the summary and some longer items into short lines, where `CHANGELOG.md` wraps them. The lines of each paragraph and item are joined now.
 
 ## [0.21.0] - 2026-11-09
