@@ -37,9 +37,11 @@ def test_the_raw_mouse_report_is_read_at_the_right_offsets():
 class _Window:
     def __init__(self):
         self.js = []
+        self.answer = True                                # what __popoutPen gives back; a page still loading has none
 
     def evaluate_js(self, js):
         self.js.append(js)
+        return self.answer
 
 
 @pytest.fixture
@@ -66,7 +68,7 @@ def run_work(p):
 
 
 def told(p):
-    return [js.split("__popoutPen(")[1].rstrip(")") for js in p.window.js]
+    return [js.split("__popoutPen(")[1].split(")")[0] for js in p.window.js]
 
 
 MOUSE = (0, 2, 1, 0, MOUSE_DEV)
@@ -104,6 +106,18 @@ def test_a_new_page_is_told_again(pop):
     assert told(pop) == ["true", "true"]
 
 
+def test_a_page_that_is_not_ready_is_told_on_the_next_report(pop):
+    pop.window.answer = None                              # no __popoutPen yet
+    feed(pop, PEN)
+    run_work(pop)
+    pop.window.answer = True
+    feed(pop, PEN)                                        # the same device: told again, since the page never had it
+    run_work(pop)
+    assert told(pop) == ["true", "true"]
+    feed(pop, PEN)
+    assert pop._work.empty()
+
+
 def test_raw_input_is_watched_only_while_the_browser_is_up(pop):
     pop._pen_check()
     pop._pen_check()
@@ -111,13 +125,29 @@ def test_raw_input_is_watched_only_while_the_browser_is_up(pop):
     pop.up = False
     pop._pen_check()
     assert pop.posted[-1] == (popout.WM_APP_PEN, 0)
-    pop.up, pop.mode = True, "strip"                      # the strip leaves ZBrush the pen: nothing to scroll there
+    pop.up = True
     pop._pen_check()
-    assert pop.posted == [(popout.WM_APP_PEN, 1), (popout.WM_APP_PEN, 0)]
+    pop.mode = "strip"                                    # the strip leaves ZBrush the pen: nothing to scroll there
+    pop._pen_check()
+    assert pop.posted == [(popout.WM_APP_PEN, 1), (popout.WM_APP_PEN, 0), (popout.WM_APP_PEN, 1), (popout.WM_APP_PEN, 0)]
 
 
-def test_turning_the_watch_on_forgets_the_last_device(pop, monkeypatch):
+def test_turning_the_watch_on_starts_the_page_again_from_a_mouse(pop, monkeypatch):
     monkeypatch.setattr(popout.W, "watch_raw_mouse", lambda hwnd, on: True)
     feed(pop, PEN)
+    run_work(pop)                                         # the page has the pen; then the window goes, and comes back
     pop._pen_watch(True)
-    assert pop._pen_last is None
+    run_work(pop)
+    assert told(pop) == ["true", "false"]                 # the mouse may have moved while nobody watched
+    feed(pop, PEN)
+    run_work(pop)
+    assert told(pop) == ["true", "false", "true"]
+
+
+def test_a_report_that_cannot_be_read_still_frees_the_input(pop, monkeypatch):
+    freed = []
+    monkeypatch.setattr(popout.W, "DefWindowProcW", lambda *a: freed.append(a[1]) or 0)
+    monkeypatch.setattr(pop, "_on_raw_mouse", lambda lparam: 1 / 0)
+    pop._ctl_proc(pop.ctl, W.WM_INPUT, 0, 0)
+    pop._ctl_proc(pop.ctl, W.WM_INPUT, 0, 0)
+    assert freed == [W.WM_INPUT, W.WM_INPUT] and pop._raw_failed

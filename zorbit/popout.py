@@ -528,6 +528,8 @@ class Popout:
         self._pen_told = None                # what the page was last told (__popoutPen); None: nothing yet, or a new page
         self._pen_queued = False             # a _tell_pen is waiting in the work queue
         self._pen_logged = False             # popout.log has said once that a pen was seen
+        self._raw_failed = False             # ... and once that a raw report could not be read
+        self._pen_lock = threading.Lock()    # _pen_check's decision and its post
 
     # --- control window: how the app reaches us -------------------------------------------------------
     def start_ctl(self):
@@ -572,8 +574,14 @@ class Popout:
                 self._show_pill()
                 return 0
             if msg == W.WM_INPUT:
-                self._on_raw_mouse(lparam)             # and DefWindowProc below, which frees the input
-            elif msg == WM_APP_PEN:
+                try:
+                    self._on_raw_mouse(lparam)
+                except Exception as e:                 # every move of the mouse: said once, not each time
+                    if not self._raw_failed:
+                        self._raw_failed = True
+                        _log(f"raw mouse input could not be read: {e!r}")
+                return W.DefWindowProcW(hwnd, msg, wparam, lparam)   # frees the input
+            if msg == WM_APP_PEN:
                 self._pen_watch(bool(wparam))
                 return 0
             if msg == W.WM_DESTROY:
@@ -632,16 +640,19 @@ class Popout:
     def _pen_check(self):
         """Watch raw mouse input while the browser is up, and only then: every move anywhere is a message to this
         process. Asked after a show and at each theme poll; the control window's thread does the (un)registering."""
-        want = bool(self.ready and not self.quitting and self.mode == "browser" and self.visible())
-        if want != self._pen_wanted and self.ctl:
-            self._pen_wanted = want
-            W.PostMessageW(self.ctl, WM_APP_PEN, 1 if want else 0, 0)
+        with self._pen_lock:                           # show() and the theme poll both ask: the posts keep their order
+            want = bool(self.ready and not self.quitting and self.mode == "browser" and self.visible())
+            if want != self._pen_wanted and self.ctl:
+                self._pen_wanted = want
+                W.PostMessageW(self.ctl, WM_APP_PEN, 1 if want else 0, 0)
 
     def _pen_watch(self, on):
-        """Control window thread: raw mouse input on or off."""
+        """Control window thread: raw mouse input on or off. Turned on, the page starts again from a mouse (moves were
+        not watched while the window was away), and the next move that says otherwise tells it."""
         ok = W.watch_raw_mouse(self.ctl, on)
         if on:
-            self._pen_last = None                      # the first move after this is told again, whatever it is
+            self._pen_last = self._pen_told = None
+            self._queue_tell()
         if not ok:
             _log(f"raw mouse input could not be turned {'on' if on else 'off'}: {ctypes.get_last_error()}")
 
@@ -654,25 +665,30 @@ class Popout:
         src = pointer_source(flags, dx, dy, extra, device, self._pen_devices)
         if flags & W.MOUSE_MOVE_ABSOLUTE and device:
             self._pen_devices.add(device)
-        if src is None or src == self._pen_last:
+        if src is None:
             return
         self._pen_last = src
+        if (src == "pen") is not self._pen_told:       # compared with what the page has, so a page not yet ready is told later
+            self._queue_tell()
+
+    def _queue_tell(self):
         if not self._pen_queued:
             self._pen_queued = True
             self._work.put((self._tell_pen, ()))
 
     def _tell_pen(self):
-        """Work thread: the page learns whether the pen moved the cursor last (window.__popoutPen)."""
+        """Work thread: the page learns whether the pen moved the cursor last (window.__popoutPen). Only an answer of
+        true counts as told: a page still loading has no __popoutPen yet, and the next report tries again."""
         self._pen_queued = False
         pen = self._pen_last == "pen"
-        if pen == self._pen_told or not self.window:
+        if pen is self._pen_told or not self.window:
             return
         if pen and not self._pen_logged:
             self._pen_logged = True
             _log("a pen moved the cursor: a press it makes while another program is in front scrolls the grid")
         try:
-            self.window.evaluate_js(f"window.__popoutPen && __popoutPen({'true' if pen else 'false'})")
-            self._pen_told = pen
+            if self.window.evaluate_js(f"window.__popoutPen ? __popoutPen({'true' if pen else 'false'}) : false") is True:
+                self._pen_told = pen
         except Exception as e:
             _log(f"__popoutPen failed: {e!r}")
 
