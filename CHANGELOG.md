@@ -4,7 +4,11 @@ All notable changes to this project are listed here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.21.0] - 2026-11-09
+
+ZOrbit 0.21.0 lists the folders of the ZBrush that is running, not the newest one installed, so a PC with several
+versions shows that version's files. You can undo forgetting a library folder from the toast that appears. A pen can
+now drag the scroll bar of the browser and Library grids; before, the list flickered and stopped anywhere.
 
 ### Changed
 
@@ -1011,6 +1015,7 @@ First public release.
   only brushes included with ZBrush.
 - Documentation: README, user guide, third-party notices and contributing guide.
 
+[0.21.0]: https://github.com/combwizard/zorbit/releases/tag/v0.21.0
 [0.20.0]: https://github.com/combwizard/zorbit/releases/tag/v0.20.0
 [0.19.0]: https://github.com/combwizard/zorbit/releases/tag/v0.19.0
 [0.18.1]: https://github.com/combwizard/zorbit/releases/tag/v0.18.1
