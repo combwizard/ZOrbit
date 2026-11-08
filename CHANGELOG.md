@@ -4,6 +4,12 @@ All notable changes to this project are listed here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+
+- The release notes on GitHub broke the summary and some longer items into short lines, where `CHANGELOG.md` wraps them. The lines of each paragraph and item are joined now.
+
 ## [0.21.0] - 2026-11-09
 
 ZOrbit 0.21.0 lists the folders of the ZBrush that is running, not the newest one installed, so a PC with several
