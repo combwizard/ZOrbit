@@ -104,6 +104,7 @@ const ICONS = {
   k_browser: '<rect x="4.500" y="4.500" width="6" height="6" rx="1.300"/><rect x="13.500" y="4.500" width="6" height="6" rx="1.300"/><rect x="4.500" y="13.500" width="6" height="6" rx="1.300"/><rect x="13.500" y="13.500" width="6" height="6" rx="1.300"/>',
   tag: '<path d="M20.600 13.400l-7.200 7.200a2 2 0 0 1-2.800 0L3 13V3h10l7.600 7.600a2 2 0 0 1 0 2.800z"/><circle cx="7.500" cy="7.500" r="1.300" fill="currentColor" stroke="none"/>',
   pin: '<path d="M9 4h6l-.8 5.500L17 13H7l2.800-3.500z"/><path d="M12 13v7"/>',
+  newwin: '<rect x="2.500" y="4.500" width="14" height="11" rx="1.800"/><path d="M2.500 8h14M18.500 14v7M15 17.500h7"/>',
   strip: '<rect x="2.500" y="9" width="5" height="6" rx="1.200"/><rect x="9.500" y="9" width="5" height="6" rx="1.200"/><rect x="16.500" y="9" width="5" height="6" rx="1.200"/>',
   chev_u: '<path d="M6 15l6-6 6 6"/>',
   star: '<path d="M12 2.800l2.900 5.900 6.500.9-4.700 4.600 1.100 6.500L12 17.600l-5.800 3.100 1.100-6.500L2.600 9.600l6.500-.9z"/>',
@@ -209,6 +210,7 @@ const S = {
   lib: { kind: 'brush', cat: 'All', q: '', size: 112 },
   dock: { kind: 'brush', cat: 'All', q: '' },
   pop: { kind: 'brush', cat: 'All', q: '', size: 96 }, popOnTop: true, popSide: 'left', popColumn: true,   // the popout's browser state, whether its window stays above others, and the side of its folders column
+  popExtra: false, popWins: 1, popWinsMax: 6,       // the popout: not its first window (no strip button); browser windows open, and at most
   status: null,
   prefs: { setup_done: true, mode: '', theme: 'dark', theme_effective: 'dark' },   // setup_done: boot tests === false, so a failed get_prefs never sends anyone to Setup
   ready: false, fatal: false,                 // ready after the first screen is up; fatal when the recovery screen is showing
@@ -7072,6 +7074,22 @@ function popRescanIfOld(kind) {
   if (L.loaded && !L.busy && Date.now() - (popScanned[kind] || 0) > POP_RESCAN_MS) loadLibrary(kind, true);
 }
 const popHide = () => { call('popout_hide').catch(() => {}); };
+/* New window (the header button, Ctrl+N): another browser window, a copy of this one (its tab, Keep on top, the folders column and its side, the
+   thumbnail size). popout.py makes it and tells every page how many windows there are (__popoutWindows); POP_WIN_CAP is what the button and
+   Ctrl+N say at the limit. */
+const POP_WIN_CAP = 'Six browser windows are open. Close one to open another.';
+let popPaintNewWin = () => {};
+async function popNewWindow() {
+  if (S.popWins >= S.popWinsMax) { toast(POP_WIN_CAP, { tone: 'warn', ms: 3200 }); return; }
+  let r;
+  try {
+    r = await call('popout_new_window', { kind: popBrowser ? popBrowser.kind() : S.pop.kind, on_top: S.popOnTop, column: S.popColumn,
+      side: S.popSide, size: S.pop.size });
+  } catch (e) { r = { ok: false, error: 'Could not open a new window.' }; }
+  if (r && +r.windows > 0) { S.popWins = +r.windows; popPaintNewWin(); }
+  if (!r || !r.ok) toast((r && r.error) || 'Could not open a new window.', { tone: 'warn', ms: 3200 });
+}
+window.__popoutWindows = o => { if (o && +o.windows > 0) { S.popWins = +o.windows; if (+o.max_windows > 0) S.popWinsMax = +o.max_windows; popPaintNewWin(); } };
 const POP_HOST = {
   dnd: false,
   nativeDrag: true,                                  // cards drag out to the Studio window, the OS way
@@ -7145,9 +7163,16 @@ function buildPopout(root) {
   paintSide();
   const toStrip = h('button', { class: 'ibtn strip-btn', type: 'button', title: 'Show as a strip', 'aria-label': 'Show as a strip',
     onclick: () => { call('popout_strip_show').catch(() => toast('Could not show the strip.', { tone: 'warn' })); } }, icon('strip', 15));
+  toStrip.hidden = S.popExtra;                       // only the first window becomes the strip
+  const newWin = h('button', { class: 'ibtn newwin-btn', type: 'button', onclick: () => popNewWindow() }, icon('newwin', 15));
+  popPaintNewWin = () => {
+    const full = S.popWins >= S.popWinsMax, label = full ? POP_WIN_CAP : 'New window (Ctrl+N)';
+    newWin.disabled = full; newWin.title = label; newWin.setAttribute('aria-label', label);
+  };
+  popPaintNewWin();
   const head = h('header', { class: 'pop-head' },
     popLogo(), (popTabs = kindTabs(() => S.pop.kind, k => popBrowser.setKind(k), 'pop')).el,
-    h('div', { class: 'spacer' }), side, col, toStrip, pin,
+    h('div', { class: 'spacer' }), side, col, newWin, toStrip, pin,
     h('div', { class: 'winctl' }, h('button', { class: 'winbtn close', type: 'button', title: 'Close', 'aria-label': 'Close', onclick: popHide }, icon('x', 14))));
   popBrowser = makeBrowser({ compact: false, st: S.pop, host: POP_HOST, kindUi: 'none' });   // the tabs live in the header
   root.replaceChildren(head, h('div', { class: 'pop-body' }, popBrowser.el));
@@ -7425,6 +7450,9 @@ async function bootPopout() {
     if (+state.size >= 84) S.pop.size = clamp(+state.size, 84, 220);
     S.popSide = state.side === 'right' ? 'right' : 'left';
     S.popColumn = state.column !== false;
+    S.popExtra = !!state.extra;
+    if (+state.windows > 0) S.popWins = +state.windows;
+    if (+state.max_windows > 0) S.popWinsMax = +state.max_windows;
     if (state.profile) S.profile = String(state.profile);
     if (state.tag === FAV) S.pop.cat = '@fav';           // Favourites is a folder, not a chip
     else if (state.tag) S.pop.tags = new Set([String(state.tag)]);
@@ -7458,6 +7486,11 @@ function initPopout() {
   installMouseNav(d => { if (popBrowser && !inStrip()) popBrowser.navStep(d); });
   window.addEventListener('keydown', e => {
     if (!popBrowser || e.isComposing || inStrip()) return;
+    if (e.key.toLowerCase() === 'n' && (e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey) {   // Ctrl+N: New window
+      e.preventDefault();
+      if (!e.repeat && !$('#overlay-root').firstElementChild) popNewWindow();
+      return;
+    }
     if ($('#overlay-root').firstElementChild || $('.popover')) return;       // a dialog or a popover has the keys
     if (e.key === 'Escape') {                                                // the search box and the selection take theirs first (they stop or prevent it)
       if (e.defaultPrevented) return;
