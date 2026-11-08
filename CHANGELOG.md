@@ -13,6 +13,7 @@ All notable changes to this project are listed here. The format follows
 ### Fixed
 
 - The release notes on GitHub broke the summary and some longer items into short lines, where `CHANGELOG.md` wraps them. The lines of each paragraph and item are joined now.
+- The first pen drag in the browser while ZBrush was in front picked up the card under the pen instead of scrolling the grid; only the next drag scrolled. While a Wintab program like ZBrush has the foreground, a Wacom pen moves the cursor as a mouse, so the browser now watches which device moved the cursor last (raw input, only while it is open) and scrolls when it was the pen. A tap still selects, and a mouse drag still picks the card up.
 
 ## [0.21.0] - 2026-11-09
 

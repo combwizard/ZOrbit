@@ -87,6 +87,23 @@ class MONITORINFO(ctypes.Structure):
     _fields_ = [("cbSize", w.DWORD), ("rcMonitor", w.RECT), ("rcWork", w.RECT), ("dwFlags", w.DWORD)]
 
 
+class RAWINPUTDEVICE(ctypes.Structure):
+    _fields_ = [("usUsagePage", w.USHORT), ("usUsage", w.USHORT), ("dwFlags", w.DWORD), ("hwndTarget", w.HWND)]
+
+
+class RAWINPUTHEADER(ctypes.Structure):
+    _fields_ = [("dwType", w.DWORD), ("dwSize", w.DWORD), ("hDevice", w.HANDLE), ("wParam", w.WPARAM)]
+
+
+class RAWMOUSE(ctypes.Structure):          # the button fields are a union with a ULONG, hence the padding after usFlags
+    _fields_ = [("usFlags", w.USHORT), ("_pad", w.USHORT), ("usButtonFlags", w.USHORT), ("usButtonData", w.USHORT),
+                ("ulRawButtons", w.ULONG), ("lLastX", w.LONG), ("lLastY", w.LONG), ("ulExtraInformation", w.ULONG)]
+
+
+class RAWINPUTMOUSE(ctypes.Structure):     # RAWINPUT for a mouse; the keyboard and HID members are not read
+    _fields_ = [("header", RAWINPUTHEADER), ("mouse", RAWMOUSE)]
+
+
 class PROCESSENTRY32W(ctypes.Structure):
     _fields_ = [("dwSize", w.DWORD), ("cntUsage", w.DWORD), ("th32ProcessID", w.DWORD),
                 ("th32DefaultHeapID", ULONG_PTR), ("th32ModuleID", w.DWORD), ("cntThreads", w.DWORD),
@@ -138,6 +155,9 @@ SendInput = _sig(user32, "SendInput", w.UINT, w.UINT, ctypes.POINTER(INPUT), cty
 GetDC = _sig(user32, "GetDC", w.HDC, w.HWND)
 ReleaseDC = _sig(user32, "ReleaseDC", ctypes.c_int, w.HWND, w.HDC)
 LoadCursorW = _sig(user32, "LoadCursorW", w.HANDLE, w.HINSTANCE, ctypes.c_void_p)
+RegisterRawInputDevices = _sig(user32, "RegisterRawInputDevices", w.BOOL, ctypes.POINTER(RAWINPUTDEVICE), w.UINT, w.UINT)
+GetRawInputData = _sig(user32, "GetRawInputData", w.UINT, w.HANDLE, w.UINT, ctypes.c_void_p, ctypes.POINTER(w.UINT),
+                       w.UINT)
 MonitorFromPoint = _sig(user32, "MonitorFromPoint", w.HMONITOR, w.POINT, w.DWORD)
 GetMonitorInfoW = _sig(user32, "GetMonitorInfoW", w.BOOL, w.HMONITOR, ctypes.POINTER(MONITORINFO))
 try:
@@ -193,6 +213,11 @@ WM_LBUTTONDOWN, WM_LBUTTONUP, WM_RBUTTONDOWN, WM_MOUSEACTIVATE = 0x201, 0x202, 0
 WM_APP = 0x8000
 WM_COPYDATA = 0x004A
 WM_SETTINGCHANGE = 0x001A
+WM_INPUT = 0x00FF
+RIDEV_REMOVE, RIDEV_INPUTSINK = 0x1, 0x100
+RID_INPUT, RIM_TYPEMOUSE = 0x10000003, 0
+MOUSE_MOVE_ABSOLUTE = 0x1
+PEN_SIGNATURE_MASK, PEN_SIGNATURE = 0xFFFFFF00, 0xFF515700   # MI_WP_SIGNATURE: Windows' mouse made from pen or touch
 HWND_BROADCAST = w.HWND(0xFFFF)
 SMTO_BLOCK, SMTO_ABORTIFHUNG = 0x1, 0x2
 MA_NOACTIVATE = 3
@@ -264,6 +289,25 @@ def nudge_mouse() -> None:
     arr[0].type = INPUT_MOUSE
     arr[0].u.mi = MOUSEINPUT(0, 0, 0, MOUSEEVENTF_MOVE, 0, OWN_INPUT_MARKER)
     SendInput(1, arr, ctypes.sizeof(INPUT))
+
+
+def watch_raw_mouse(hwnd, on: bool) -> bool:
+    """Raw mouse input to hwnd (WM_INPUT), also while another program has the foreground; on=False stops it. Call it on
+    the thread that owns hwnd. One window per process gets a device class's raw input, so this is the process's only one."""
+    dev = RAWINPUTDEVICE(1, 2, RIDEV_INPUTSINK if on else RIDEV_REMOVE, hwnd if on else None)   # generic desktop, mouse
+    return bool(RegisterRawInputDevices(ctypes.byref(dev), 1, ctypes.sizeof(RAWINPUTDEVICE)))
+
+
+def read_raw_mouse(lparam):
+    """A WM_INPUT's mouse report as (usFlags, lLastX, lLastY, ulExtraInformation, hDevice as int), or None for anything
+    else or a read that failed."""
+    ri = RAWINPUTMOUSE()
+    size = w.UINT(ctypes.sizeof(ri))
+    got = GetRawInputData(w.HANDLE(lparam), RID_INPUT, ctypes.byref(ri), ctypes.byref(size), ctypes.sizeof(RAWINPUTHEADER))
+    if got in (0, 0xFFFFFFFF) or ri.header.dwType != RIM_TYPEMOUSE:
+        return None
+    m = ri.mouse
+    return m.usFlags, m.lLastX, m.lLastY, m.ulExtraInformation, int(ri.header.hDevice or 0)
 
 
 def process_image(pid: int) -> str:

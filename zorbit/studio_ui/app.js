@@ -7453,6 +7453,49 @@ async function bootPopout() {
   window.__popoutBooted = true;                      // popout.py waits for this before it puts the strip up at a start
 }
 
+/* A pen stroke that reaches the page as a mouse scrolls the grid, as a pen's stroke does once the window is in front. While a Wintab
+   program (ZBrush) has the foreground, the Wacom driver moves the cursor as a mouse, so the press that brings this window to the front
+   arrives as a mouse and would pick up the card under it. The page cannot tell that from a mouse: popout.py reads the raw input and says
+   whether a pen moved the cursor last (__popoutPen). Only that press, the one that brought the window to the front: from then on the
+   pen arrives as a pen and scrolls by itself, and a mouse press always drags. A tap still picks. */
+const PEN_PAN = { SLOP: 4, FOCUS_MS: 400 };           // px before a press becomes a scroll; how soon after the window took the focus its press counts
+function installPenPan() {
+  let penLast = false, focusAt = -1e9, pan = null;
+  window.__popoutPen = on => { penLast = !!on; return true; };
+  window.addEventListener('focus', e => { if (e.target === window) focusAt = performance.now(); });
+  window.addEventListener('pointerdown', e => {
+    pan = null;
+    if (e.pointerType !== 'mouse' || e.button !== 0 || !penLast) return;
+    if (document.hasFocus() && performance.now() - focusAt > PEN_PAN.FOCUS_MS) return;    // the window was in front already
+    const sc = e.target && e.target.closest && e.target.closest('.b-scroll');
+    if (sc) pan = { id: e.pointerId, sc, x: e.clientX, y: e.clientY, top: sc.scrollTop, moved: false };
+  }, true);
+  // Before anything else sees it (window, capture): the card's own drag and the scroll bar's look at dragstart.
+  window.addEventListener('dragstart', e => { if (pan) { e.preventDefault(); e.stopPropagation(); } }, true);
+  window.addEventListener('pointermove', e => {
+    if (!pan || e.pointerId !== pan.id) return;
+    if (!(e.buttons & 1)) { pan = null; return; }
+    const dy = e.clientY - pan.y;
+    if (!pan.moved) {
+      if (Math.abs(dy) < PEN_PAN.SLOP && Math.abs(e.clientX - pan.x) < PEN_PAN.SLOP) return;
+      pan.moved = true;
+      try { pan.sc.setPointerCapture(e.pointerId); } catch (err) { /* the pointer is gone: the moves stop by themselves */ }
+    }
+    pan.sc.scrollTop = pan.top - dy;                  // the list follows the pen, as a pen's own scroll does
+  }, true);
+  const end = e => {
+    if (!pan || e.pointerId !== pan.id) return;
+    const moved = pan.moved;
+    pan = null;
+    if (!moved) return;                               // a tap: its click picks, as always
+    const eat = ev => { ev.stopPropagation(); ev.preventDefault(); };
+    window.addEventListener('click', eat, { capture: true, once: true });
+    setTimeout(() => window.removeEventListener('click', eat, { capture: true }), 0);
+  };
+  window.addEventListener('pointerup', end, true);
+  window.addEventListener('pointercancel', end, true);
+}
+
 function initPopout() {
   const inStrip = () => S.popMode === 'strip';                               // the strip never has the keyboard: none of this runs there
   installMouseNav(d => { if (popBrowser && !inStrip()) popBrowser.navStep(d); });
@@ -7507,6 +7550,7 @@ function initPopout() {
   window.addEventListener('contextmenu', e => {                              // the web view's own menu is a window of another
     if (inStrip() || !(e.target && e.target.closest && e.target.closest('.bcard'))) e.preventDefault();   // process and would read as leaving
   });
+  installPenPan();
   window.addEventListener('focus', debounce(() => { if (S.ready) { loadTags(); reloadUsage(); } }, 300));      // tags.json may have changed (the Studio), and picks add to Recent
   // The window stays on top beside the Studio, so it may never get focus while a tag changes there. get_tags answers "unchanged" from a
   // file time check, so asking every 5 s costs next to nothing; a hidden window does not ask.
