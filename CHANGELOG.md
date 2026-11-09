@@ -10,6 +10,10 @@ All notable changes to this project are listed here. The format follows
 
 - A **Recent** slot opens a fan of the projects or tools ZBrush opened last (`{"recent": "project"}`, `"tool"` or `"any"`), read from ZBrush's own Lightbox list of recent files. A pick opens the file as a Project or Tool slot does, ZBrush's check for unsaved changes included. It is a Full mode type in Studio, with a **Shows** select for Projects, Tools or Both. (#189)
 
+### Fixed
+
+- Setup no longer says **ZBrush found** when it found none, or **Plugin loaded in ZBrush** when the plugin is not loaded. The titles now read **No ZBrush found**, **ZBrush found, plugin not set up** and **Plugin not loaded in ZBrush** until the step is done.
+
 ## [0.22.0] - 2026-11-09
 
 ZOrbit 0.22.0 adds a strip: a small bar of one tab's favourites that stays on top of ZBrush and never takes the

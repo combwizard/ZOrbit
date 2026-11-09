@@ -5051,7 +5051,8 @@ function deriveSteps(d, tryFrom, ctx) {
 
   /* 1. ZBrush found */
   const ready = installs.filter(i => i.ready), unready = installs.filter(i => !i.ready);
-  const s1 = { id: 'found', title: 'ZBrush found',
+  // The title says what is true: a step that is not done must not read as a done one.
+  const s1 = { id: 'found', title: ready.length ? 'ZBrush found' : (installs.length ? 'ZBrush found, plugin not set up' : 'No ZBrush found'),
     state: ready.length ? 'ok' : (installs.length ? 'warn' : 'off'),
     modern: installs.filter(i => i.kind === 'modern').map(i => {
       const st = plugin(i).state;
@@ -5079,7 +5080,7 @@ function deriveSteps(d, tryFrom, ctx) {
   for (const u of adminProcs) if (u.loaded) procs.push({ name: 'ZBrush', ready: true, state: 'loaded', why: '' });
   const worst = PROC_PRIORITY.slice(1).map(s => procs.find(p => p.state === s)).find(Boolean);
   const loaded = procs.filter(p => p.state === 'loaded');
-  const s2 = { id: 'loaded', title: 'Plugin loaded in ZBrush', locked: false,
+  const s2 = { id: 'loaded', title: loaded.length ? 'Plugin loaded in ZBrush' : 'Plugin not loaded in ZBrush', locked: false,
     rows: procs.map(p => ({ name: p.name, state: p.state, why: p.why })),
     elevated,
     app: { running: !!(d.app && d.app.running), zbrush: !!zb.running, checkOk: zb.check_ok !== false },
