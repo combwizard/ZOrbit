@@ -100,6 +100,8 @@ POLL_S = 3.0                       # --managed: how often to look for the app, a
 POLL_MISSES = 2                    # ... how many misses in a row mean it has quit
 WM_APP_STOP = W.WM_APP + 1         # control window: leave the message loop
 WM_APP_PILL = W.WM_APP + 2         # control window: put up or take down the strip's name pill, or a note (see _pill)
+WM_APP_PEN = W.WM_APP + 3          # control window: start (wParam 1) or stop (0) watching which device moves the cursor,
+PEN_TELL = 2                       # ... or (wParam PEN_TELL) tell the pages that do not know yet (a window just shown)
 STRIP_ORIENTS = ("vertical", "horizontal")
 STRIP_START = (64, 420)            # logical pixels: a strip's size until the page has measured it
 STRIP_MARGIN = 8                   # logical pixels between a strip's first place and the edge of ZBrush's window
@@ -214,6 +216,27 @@ def strip_wanted(fg_pid, zbrush_pids, own_pid):
     if not fg_pid:
         return None
     return fg_pid == own_pid or fg_pid in zbrush_pids
+
+
+def pointer_source(flags, dx, dy, extra, device, pen_devices):
+    """Which kind of device moved the cursor, from one raw mouse report: "pen", "mouse", or None when the report says
+    nothing (a button alone, a move of nothing, ZOrbit's own nudge, an absolute move no device made).
+
+    Why: while a Wintab program (ZBrush) has the foreground, a Wacom pen moves the cursor as a mouse, so the press that
+    brings the browser to the front reaches the page as a mouse and picks up a card instead of scrolling. The page cannot
+    tell it from a mouse; this can. Windows' own mouse made from pen or touch carries PEN_SIGNATURE in its extra
+    information. A tablet driver that moves the cursor itself sends absolute moves, from its own device (and its buttons
+    come from that device too: pen_devices, the devices seen moving absolutely). A mouse moves relatively. An absolute
+    move with no device was sent by a program (remote desktop, automation), not a pen."""
+    if (extra & W.PEN_SIGNATURE_MASK) == W.PEN_SIGNATURE:
+        return "pen"
+    if extra == W.OWN_INPUT_MARKER:
+        return None
+    if flags & W.MOUSE_MOVE_ABSOLUTE:
+        return "pen" if device else None
+    if device and device in pen_devices:
+        return "pen"
+    return "mouse" if dx or dy else None
 
 
 def _update_strip(**changes):
@@ -599,6 +622,7 @@ class BrowserWindow:
         self._was_max = False                # it was maximised when it was last hidden
         self._theme_seen = None              # (setting, theme.signature()) the page was last given
         self._page_strip = False             # the page was last told to draw the strip: show() must tell it otherwise
+        self._pen_told = None                # what its page was last told (__popoutPen); None: nothing yet, or a new page
         self._loaded = threading.Event()
         self._quiet = False                  # being shown without being the window used last (see show)
 
@@ -718,6 +742,7 @@ class BrowserWindow:
                                              W.SWP_NOMOVE | W.SWP_NOSIZE | W.SWP_SHOWWINDOW)
             else:                                      # shown through pywebview: the form has to know it is visible, or the
                 self._show_hidden(zb, activate)        # web view inside stays "hidden" and paints nothing
+            self.pop._pen_check(tell=True)             # raw input on, or this page told what the others know
             if not activate:
                 _log(f"shown without the focus{self.name()}")
                 return
@@ -814,6 +839,7 @@ class BrowserWindow:
             if self.visible():                         # shown with Win32 (the strip): the form may not know it was up
                 user32.ShowWindow(self.hwnd, SW_HIDE)
             self.pop._note_hidden()
+            self.pop._pen_check()                      # the last browser window up: raw input off
             W.nudge_mouse()
             _log(f"hidden ({why})")
             return True
@@ -887,6 +913,13 @@ class Popout(BrowserWindow):
         self._mru = [self]                   # the windows by their last use, most recent first (_used, _target)
         self._restored = False               # the windows popout.json "extras" lists have been brought back (once)
         self._ending = False                 # on_end_session has run
+        self._pen_wanted = False             # a browser window is up: the control window watches raw mouse input (_pen_check)
+        self._pen_devices = set()            # raw input devices seen moving the cursor absolutely: a tablet's (pointer_source)
+        self._pen_last = None                # "pen" or "mouse": what moved the cursor last (control window thread)
+        self._pen_queued = False             # a _tell_pen is waiting in the work queue
+        self._pen_logged = False             # popout.log has said once that a pen was seen
+        self._raw_failed = False             # ... and once that a raw report could not be read
+        self._pen_lock = threading.Lock()    # _pen_check's decision and its post (each page's _pen_told is its own)
 
     # --- control window: how the app reaches us -------------------------------------------------------
     def start_ctl(self):
@@ -929,6 +962,21 @@ class Popout(BrowserWindow):
                 return 0
             if msg == WM_APP_PILL:
                 self._show_pill()
+                return 0
+            if msg == W.WM_INPUT:
+                try:
+                    self._on_raw_mouse(lparam)
+                except Exception as e:                 # every move of the mouse: said once, not each time
+                    if not self._raw_failed:
+                        self._raw_failed = True
+                        _log(f"raw mouse input could not be read: {e!r}")
+                return W.DefWindowProcW(hwnd, msg, wparam, lparam)   # frees the input
+            if msg == WM_APP_PEN:
+                if wparam == PEN_TELL:
+                    if self._pen_wanted:
+                        self._queue_tell()
+                else:
+                    self._pen_watch(bool(wparam))
                 return 0
             if msg == W.WM_DESTROY:
                 W.PostQuitMessage(0)
@@ -982,6 +1030,91 @@ class Popout(BrowserWindow):
         if self.ctl:
             W.PostMessageW(self.ctl, WM_APP_STOP, 0, 0)
 
+    # --- pen or mouse: which moved the cursor last (see pointer_source) ---------------------------------
+    # One watch per process, on the control window (Windows gives a process's raw mouse input to one window); each
+    # browser window's page has its own idea of what it was told (BrowserWindow._pen_told).
+    def _browser_up(self) -> bool:
+        """A browser window is up: the first one (as the browser, not the strip) or another one."""
+        if self.mode == "browser" and self.visible():
+            return True
+        return any(e.ready and not e.closing and e.visible() for e in list(self.extras))
+
+    def _pen_pages(self) -> list:
+        """The windows whose page hears __popoutPen: loaded, not closing, and the browser (not the strip); hidden ones
+        too, so a window that comes back already knows."""
+        return [win for win in (self, *list(self.extras)) if win.window is not None and win._loaded.is_set()
+                and win.mode == "browser" and not getattr(win, "closing", False)]
+
+    def _pen_untold(self, pen) -> list:
+        return [win for win in self._pen_pages() if win._pen_told is not pen]
+
+    def _pen_check(self, tell=False):
+        """Watch raw mouse input while a browser window is up, and only then: every move anywhere is a message to this
+        process. Asked after each show and hide, as a window closes, and at each theme poll; the control window's thread
+        does the (un)registering. tell (a show): when the watch stays on, a page that does not know yet (a new window,
+        a reloaded page) is told now, not at the next move."""
+        with self._pen_lock:                           # shows, hides and the theme poll all ask: the posts keep their order
+            want = bool(self.ready and not self.quitting and self._browser_up())
+            if not self.ctl:
+                return
+            if want != self._pen_wanted:
+                self._pen_wanted = want
+                W.PostMessageW(self.ctl, WM_APP_PEN, 1 if want else 0, 0)
+            elif want and tell and self._pen_untold(self._pen_last == "pen"):
+                W.PostMessageW(self.ctl, WM_APP_PEN, PEN_TELL, 0)
+
+    def _pen_watch(self, on):
+        """Control window thread: raw mouse input on or off. Turned on, every page starts again from a mouse (moves
+        were not watched while no window was up), and the next move that says otherwise tells them."""
+        ok = W.watch_raw_mouse(self.ctl, on)
+        if on:
+            self._pen_last = None
+            for win in (self, *list(self.extras)):
+                win._pen_told = None
+            self._queue_tell()
+        if not ok:
+            _log(f"raw mouse input could not be turned {'on' if on else 'off'}: {ctypes.get_last_error()}")
+
+    def _on_raw_mouse(self, lparam):
+        """Control window thread, for every mouse report while a browser window is up: kept short."""
+        r = W.read_raw_mouse(lparam)
+        if not r:
+            return
+        flags, dx, dy, extra, device = r
+        src = pointer_source(flags, dx, dy, extra, device, self._pen_devices)
+        if flags & W.MOUSE_MOVE_ABSOLUTE and device:
+            self._pen_devices.add(device)
+        if src is None:
+            return
+        self._pen_last = src
+        if self._pen_untold(src == "pen"):             # compared with what each page has, so a page not yet ready is told later
+            self._queue_tell()
+
+    def _queue_tell(self):
+        """Control window thread: one _tell_pen at a time waits in the work queue."""
+        if not self._pen_queued:
+            self._pen_queued = True
+            self._work.put((self._tell_pen, ()))
+
+    def _tell_pen(self):
+        """Work thread: each page that does not know yet learns whether the pen moved the cursor last
+        (window.__popoutPen). Only an answer of true counts as told: a page still loading has no __popoutPen yet, and the
+        next report tries again."""
+        self._pen_queued = False
+        pen = self._pen_last == "pen"
+        pages = self._pen_untold(pen)
+        if not pages:
+            return
+        if pen and not self._pen_logged:
+            self._pen_logged = True
+            _log("a pen moved the cursor: a press it makes while another program is in front scrolls the grid")
+        for win in pages:
+            try:
+                if win.window.evaluate_js(f"window.__popoutPen ? __popoutPen({'true' if pen else 'false'}) : false") is True:
+                    win._pen_told = pen
+            except Exception as e:
+                _log(f"__popoutPen{win.name()} failed: {e!r}")
+
     # --- the window ---------------------------------------------------------------------------------
     def on_hwnd(self, hwnd):
         """From custom_frame, on the worker thread, before the frame is changed."""
@@ -1025,6 +1158,7 @@ class Popout(BrowserWindow):
 
     def on_loaded(self):
         _log("page loaded")
+        self._pen_told = None                          # a new page knows nothing yet: the next move tells it
         self._loaded.set()
 
     def worker(self):
@@ -1102,6 +1236,10 @@ class Popout(BrowserWindow):
                 self.strip_tick()
             except Exception as e:
                 _log(f"strip foreground check failed: {e!r}")
+            try:
+                self._pen_check()
+            except Exception as e:
+                _log(f"pen watch check failed: {e!r}")
 
     def theme_tick(self):
         """One look at the theme: the same sync show() does, for each visible window (a hidden one is synced when
@@ -1916,6 +2054,7 @@ class ExtraWindow(BrowserWindow):
 
     def on_loaded(self):
         _log(f"page loaded{self.name()}")
+        self._pen_told = None                          # a new page knows nothing yet: the next move tells it
         self._loaded.set()
 
     def on_moved(self):
@@ -1950,6 +2089,7 @@ class ExtraWindow(BrowserWindow):
             _log(f"destroy{self.name()} failed: {e!r}")
         if not pop.any_up():
             pop._note_hidden()
+        pop._pen_check()                               # it was the last browser window up: raw input off
         pop._windows_changed()
         pop._end_if_none_up("closed by the user")
 
@@ -1982,6 +2122,7 @@ class ExtraWindow(BrowserWindow):
             _remove_extra(self.id)
         _log(f"window{self.name()} gone{' (kept for next time)' if keep else ''}")
         if not pop.quitting:
+            pop._pen_check()
             pop._windows_changed()
             pop._end_if_none_up("the last window closed")
 

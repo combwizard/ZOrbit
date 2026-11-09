@@ -705,3 +705,35 @@ def test_another_window_never_takes_the_strip_start(pop, env):
     pop.strip_on = True
     assert popout.PopoutApi(pop).popout_get_state()["strip"]["on"] is True
     assert popout.PopoutApi(pop.extras[0]).popout_get_state()["strip"]["on"] is False
+
+
+def test_the_pen_watch_is_on_while_any_browser_window_is_up(pop, env, monkeypatch):
+    """One raw-input watch for the process (see test_popout_pen): on with the first browser window shown, kept while
+    another is up, off when the last one hides or closes; a window shown while it is on asks for its page to be told."""
+    posted = []
+    monkeypatch.setattr(popout.W, "PostMessageW", lambda h, msg, wp, lp: posted.append((msg, wp)) or True)
+    pens = lambda: [wp for msg, wp in posted if msg == popout.WM_APP_PEN]
+    pop.ctl = 0x77
+    shown_main(pop, env)
+    assert pens() == [1]
+    popout.PopoutApi(pop).popout_new_window({})
+    ext = pop.extras[0]
+    assert pens() == [1, popout.PEN_TELL]                              # its page does not know yet
+    pop.close("close button")                                          # the first one hidden: the other is still up
+    assert pens() == [1, popout.PEN_TELL]
+    ext.close("close button")                                          # closed for good: the last one gone
+    assert pens() == [1, popout.PEN_TELL, 0]
+    pop.request_show(None, 0, False)
+    pop.close("close button")                                          # the last one hidden
+    assert pens()[-2:] == [1, 0]
+
+
+def test_the_pen_watch_is_off_while_the_first_window_is_the_strip(pop, env, monkeypatch):
+    posted = []
+    monkeypatch.setattr(popout.W, "PostMessageW", lambda h, msg, wp, lp: posted.append((msg, wp)) or True)
+    monkeypatch.setattr(popout.winframe, "set_fitted", lambda h, on: True)
+    monkeypatch.setattr(pop, "_strip_place", lambda ss, size: (0, 0))
+    pop.ctl = 0x77
+    shown_main(pop, env)
+    pop.strip_from_browser()
+    assert [wp for msg, wp in posted if msg == popout.WM_APP_PEN] == [1, 0]

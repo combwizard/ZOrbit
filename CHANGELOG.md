@@ -8,12 +8,22 @@ All notable changes to this project are listed here. The format follows
 
 ### Added
 
-- The browser can be a strip: a small bar of one tab's favourites that stays on top of ZBrush and never takes the keyboard from it, so one click picks an item. Turn it on with the strip button in the browser's header. Its menu switches the tab, lays the strip vertical or horizontal, opens the full browser or hides the strip. **X** on the browser goes back to the strip, the strip comes up by itself when the app starts the browser hidden, it steps aside while another program is in front, and it closes with the app. (#40)
 - You can open up to six browser windows. The new window button in the browser's header (or **Ctrl+N**) opens another one, which starts as a copy of the window you opened it from (tab, **Keep on top**, folders column, thumbnail size) and then keeps its own, including its place and size. Windows still open when the browser ends come back the next time you open it. The hotkey and the other ways of opening the browser go to the open window you used last.
+
+## [0.22.0] - 2026-11-09
+
+ZOrbit 0.22.0 adds a strip: a small bar of one tab's favourites that stays on top of ZBrush and never takes the
+keyboard from it, so one click picks an item. The first pen drag in the browser now scrolls the grid when ZBrush is
+in front, instead of picking up the card under the pen. The GitHub release notes keep their paragraphs in one piece.
+
+### Added
+
+- The browser can be a strip: a small bar of one tab's favourites that stays on top of ZBrush and never takes the keyboard from it, so one click picks an item. Turn it on with the strip button in the browser's header. Its menu switches the tab, lays the strip vertical or horizontal, opens the full browser or hides the strip. **X** on the browser goes back to the strip, the strip comes up by itself when the app starts the browser hidden, it steps aside while another program is in front, and it closes with the app. (#40)
 
 ### Fixed
 
 - The release notes on GitHub broke the summary and some longer items into short lines, where `CHANGELOG.md` wraps them. The lines of each paragraph and item are joined now.
+- The first pen drag in the browser while ZBrush was in front picked up the card under the pen instead of scrolling the grid; only the next drag scrolled. While a Wintab program like ZBrush has the foreground, a Wacom pen moves the cursor as a mouse, so the browser now watches which device moved the cursor last (raw input, only while it is open) and scrolls when it was the pen. A tap still selects, and a mouse drag still picks the card up.
 
 ## [0.21.0] - 2026-11-09
 
@@ -1026,6 +1036,7 @@ First public release.
   only brushes included with ZBrush.
 - Documentation: README, user guide, third-party notices and contributing guide.
 
+[0.22.0]: https://github.com/combwizard/zorbit/releases/tag/v0.22.0
 [0.21.0]: https://github.com/combwizard/zorbit/releases/tag/v0.21.0
 [0.20.0]: https://github.com/combwizard/zorbit/releases/tag/v0.20.0
 [0.19.0]: https://github.com/combwizard/zorbit/releases/tag/v0.19.0
