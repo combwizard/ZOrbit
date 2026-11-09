@@ -3,7 +3,8 @@
 render() draws the pill (Pillow only, so tests can run it), in the theme's colour when the caller passes one and
 dark otherwise; show() puts it in a layered, topmost tool window that never takes focus and ignores the mouse, and
 destroys it after a while through a WM_TIMER on that window. One toast at a time: a new one replaces the old.
-Everything runs on the app's message-loop thread. show() never raises.
+show_beside() puts the same pill next to a rectangle until close(): the browser's strip names a thumbnail with it.
+Everything runs on one message-loop thread (the app's, or the browser's control window's). Neither ever raises.
 """
 import ctypes
 import traceback
@@ -110,9 +111,66 @@ def close():
         W.DestroyWindow(hwnd)
 
 
+def _open(im, left, top, ms):
+    """Puts im up at (left, top), replacing the toast on show; ms None keeps it up until close()."""
+    global _hwnd
+    wd, ht = im.size
+    _register_class()
+    close()
+    ex = W.WS_EX_NOACTIVATE | W.WS_EX_TOPMOST | W.WS_EX_TOOLWINDOW | W.WS_EX_LAYERED | WS_EX_TRANSPARENT
+    hwnd = W.CreateWindowExW(ex, CLASS_NAME, "ZOrbit toast", W.WS_POPUP, left, top, wd, ht,
+                             None, None, W.GetModuleHandleW(None), None)
+    if not hwnd:
+        raise ctypes.WinError(ctypes.get_last_error())
+    _hwnd = hwnd
+    try:
+        _paint(hwnd, im, left, top)
+        W.ShowWindow(hwnd, W.SW_SHOWNOACTIVATE)
+        W.SetWindowPos(hwnd, W.HWND_TOPMOST, 0, 0, 0, 0,
+                       W.SWP_NOMOVE | W.SWP_NOSIZE | W.SWP_NOACTIVATE | W.SWP_SHOWWINDOW)
+        if ms is not None:
+            W.SetTimer(hwnd, TIMER_CLOSE, max(200, int(ms)), None)
+    except Exception:
+        close()
+        raise
+
+
+def beside(rect, size, side, work, gap):
+    """Where a pill of size (w, h) goes next to rect (left, top, right, bottom): to its right, centred top to
+    bottom (side "right"), or below it, centred across ("below"). It goes to the other side when there is no room,
+    and is kept inside work. Screen pixels; (left, top)."""
+    l, t, r, b = rect
+    wd, ht = size
+    wl, wt, wr, wb = work
+    if side == "below":
+        x, y = (l + r - wd) // 2, b + gap
+        if y + ht > wb:
+            y = t - gap - ht
+    else:
+        x, y = r + gap, (t + b - ht) // 2
+        if x + wd > wr:
+            x = l - gap - wd
+    return max(wl, min(x, wr - wd)), max(wt, min(y, wb - ht))
+
+
+def show_beside(text, rect, side, log, colour=TEXT, pill=PILL):
+    """Shows text next to rect (screen pixels) until close() or the next toast: the name of a thumbnail in the
+    browser's strip. Never raises, never takes the focus."""
+    try:
+        cx, cy = (rect[0] + rect[2]) // 2, (rect[1] + rect[3]) // 2
+        work, scale = W.monitor_for_point(cx, cy)
+        im = render(text, scale, colour, pill)
+        left, top = beside(rect, im.size, side, (work.left, work.top, work.right, work.bottom), int(8 * scale))
+        _open(im, left, top, None)
+    except Exception:
+        try:
+            log(f"toast failed ({text!r}):\n" + traceback.format_exc())
+        except Exception:
+            pass
+
+
 def show(text, log, ms=1800, colour=TEXT, pill=PILL):
     """Shows text just below the cursor for ms milliseconds. Never raises, never takes the focus."""
-    global _hwnd
     try:
         x, y = W.cursor_pos()
         work, scale = W.monitor_for_point(x, y)
@@ -123,23 +181,7 @@ def show(text, log, ms=1800, colour=TEXT, pill=PILL):
         if top + ht > work.bottom:
             top = y - ht - int(10 * scale)
         top = max(work.top, min(top, work.bottom - ht))
-        _register_class()
-        close()
-        ex = W.WS_EX_NOACTIVATE | W.WS_EX_TOPMOST | W.WS_EX_TOOLWINDOW | W.WS_EX_LAYERED | WS_EX_TRANSPARENT
-        hwnd = W.CreateWindowExW(ex, CLASS_NAME, "ZOrbit toast", W.WS_POPUP, left, top, wd, ht,
-                                 None, None, W.GetModuleHandleW(None), None)
-        if not hwnd:
-            raise ctypes.WinError(ctypes.get_last_error())
-        _hwnd = hwnd
-        try:
-            _paint(hwnd, im, left, top)
-            W.ShowWindow(hwnd, W.SW_SHOWNOACTIVATE)
-            W.SetWindowPos(hwnd, W.HWND_TOPMOST, 0, 0, 0, 0,
-                           W.SWP_NOMOVE | W.SWP_NOSIZE | W.SWP_NOACTIVATE | W.SWP_SHOWWINDOW)
-            W.SetTimer(hwnd, TIMER_CLOSE, max(200, int(ms)), None)
-        except Exception:
-            close()
-            raise
+        _open(im, left, top, ms)
     except Exception:
         try:
             log(f"toast failed ({text!r}):\n" + traceback.format_exc())

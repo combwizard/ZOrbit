@@ -10,6 +10,27 @@ All notable changes to this project are listed here. The format follows
 
 - A **Recent** slot opens a fan of the projects or tools ZBrush opened last (`{"recent": "project"}`, `"tool"` or `"any"`), read from ZBrush's own Lightbox list of recent files. A pick opens the file as a Project or Tool slot does, ZBrush's check for unsaved changes included. It is a Full mode type in Studio, with a **Shows** select for Projects, Tools or Both. (#189)
 
+## [0.22.0] - 2026-11-09
+
+ZOrbit 0.22.0 adds a strip: a small bar of one tab's favourites that stays on top of ZBrush and never takes the
+keyboard from it, so one click picks an item. The first pen drag in the browser now scrolls the grid when ZBrush is
+in front, instead of picking up the card under the pen. The GitHub release notes keep their paragraphs in one piece.
+
+### Added
+
+- The browser can be a strip: a small bar of one tab's favourites that stays on top of ZBrush and never takes the keyboard from it, so one click picks an item. Turn it on with the strip button in the browser's header. Its menu switches the tab, lays the strip vertical or horizontal, opens the full browser or hides the strip. **X** on the browser goes back to the strip, the strip comes up by itself when the app starts the browser hidden, it steps aside while another program is in front, and it closes with the app. (#40)
+
+### Fixed
+
+- The release notes on GitHub broke the summary and some longer items into short lines, where `CHANGELOG.md` wraps them. The lines of each paragraph and item are joined now.
+- The first pen drag in the browser while ZBrush was in front picked up the card under the pen instead of scrolling the grid; only the next drag scrolled. While a Wintab program like ZBrush has the foreground, a Wacom pen moves the cursor as a mouse, so the browser now watches which device moved the cursor last (raw input, only while it is open) and scrolls when it was the pen. A tap still selects, and a mouse drag still picks the card up.
+
+## [0.21.0] - 2026-11-09
+
+ZOrbit 0.21.0 lists the folders of the ZBrush that is running, not the newest one installed, so a PC with several
+versions shows that version's files. You can undo forgetting a library folder from the toast that appears. A pen can
+now drag the scroll bar of the browser and Library grids; before, the list flickered and stopped anywhere.
+
 ### Changed
 
 - With several ZBrush versions installed, the browser, the Library and the ring list the folders of the ZBrush that is running (the newest, when several run) instead of the newest installed, so a ZBrush 2026 session no longer lists a 2027 install's files, and a running ZBrush 2022 to 2025 lists its own installation's. With none running, the newest installed is used, as before. The app reads the library again a few seconds after another ZBrush starts; the browser follows on its next rescan. (#181)
@@ -21,6 +42,7 @@ All notable changes to this project are listed here. The format follows
 - Studio's counts for a **More** slot ("4 items are in the More submenu" and "4 items in a submenu") included empty
   slots and items that cannot be used, which the submenu leaves out, so they could say more than **More** opens with.
 - Studio threw an error (nothing visible) when you left the **Menus** screen while a new menu's title box was still open.
+- Dragging the scroll bar of the browser's or the Library's grid with a pen (Windows Ink) made the list flicker between where the pen was and where it pressed, and it stopped at either. WebView2 gives its own scroll bar both positions at once, so the grids now have a scroll bar of their own that follows only the pen. It looks and works as before with a mouse and the wheel.
 - The **Skip to content** link could still show at the top left of Studio when it opened, because focus that reached it before the page was ready stayed there. That focus is now moved off the link too.
 - The Library and the browser said "ZBrush was not found" on a PC with no `Maxon` folder under `%APPDATA%`, although Setup listed the installs: the search for ZBrush 2022 to 2025 installs was skipped.
 - When an editor saved `radial.json` by truncating the file and then writing it, and both landed with the same time stamp, the app read the empty file, kept the previous menus and did not read the whole file until the next save. It is read on the next check now.
@@ -1014,6 +1036,8 @@ First public release.
   only brushes included with ZBrush.
 - Documentation: README, user guide, third-party notices and contributing guide.
 
+[0.22.0]: https://github.com/combwizard/zorbit/releases/tag/v0.22.0
+[0.21.0]: https://github.com/combwizard/zorbit/releases/tag/v0.21.0
 [0.20.0]: https://github.com/combwizard/zorbit/releases/tag/v0.20.0
 [0.19.0]: https://github.com/combwizard/zorbit/releases/tag/v0.19.0
 [0.18.1]: https://github.com/combwizard/zorbit/releases/tag/v0.18.1

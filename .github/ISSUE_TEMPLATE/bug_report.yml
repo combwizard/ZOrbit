@@ -19,7 +19,7 @@ body:
     attributes:
       label: ZOrbit version
       description: Shown at the top of Studio.
-      placeholder: "0.20.0"
+      placeholder: "0.22.0"
     validations:
       required: true
   - type: input

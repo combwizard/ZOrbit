@@ -151,6 +151,21 @@ That is on purpose. When a file's name is already taken, it is listed with its p
 
 Click the search box once. If you have to do that every time, send `popout.log` and the `browser` lines of `radiald.log`.
 
+### The strip is not there
+
+- It steps aside once another program has been in front for about a second, and comes back when ZBrush is. Click ZBrush and look again.
+- It goes with ZBrush. When the app quits, a strip it started closes too.
+- It starts by itself only when the app starts the browser hidden, so your menus need a browser hotkey or a **Browser** slot. The Start menu shortcut and Studio open the full browser instead.
+- **Hide strip** turns it off. Open the browser and press **Show as a strip** in its header to turn it on again.
+
+`popout.log` says when the strip was hidden or shown again (lines with `strip` in them) and when a start-up strip was skipped. See [The strip](browser.md#the-strip).
+
+### A pen drag in the browser picks up a card instead of scrolling
+
+While ZBrush is in front, a Wacom pen moves the cursor as a mouse, so the browser cannot tell your first stroke in it from a mouse drag. ZOrbit watches which device moved the cursor last, and scrolls the grid when it was the pen. The first time it sees a pen, `popout.log` says `a pen moved the cursor`.
+
+If a pen drag still picks up a card, and that line is missing, your tablet probably moves the cursor like a mouse, without saying it is a pen. That happens with the pen set to **Mouse mode** in the tablet's settings. Switch the pen to **Pen mode**, or drag the scroll bar at the side of the grid. Once the browser is in front, the pen normally reaches it as a pen and scrolls as usual.
+
 ### A pick in the browser does nothing
 
 After a pick, read the toast. A toast that says **Sent X to ZBrush** (X is the item's name) means the app took the pick, and `bridge.log` says what ZBrush did with it. **ZOrbit is not running. It starts and stops with ZBrush.** (followed by "Start ZBrush, or press Start app on Studio's Status screen.") means the browser found no app window: start ZBrush, and the app starts with it, or press **Start app** on Studio's **Status** screen. **ZOrbit did not answer. Try again in a moment.** means the app's window exists but did not answer within half a second. `popout.log` has a line `pick ... app window ..., result ...` for each pick.
