@@ -74,7 +74,7 @@ When the app knows why a pick went nowhere, it shows a short message near the cu
 - **There is no menu called**, **There is no tag called** or **There is no profile called**, followed by a name. A command from another program named something that does not exist. A menu's name here is its id in `radial.json`, and a tag's is its key.
 - **This ZOrbit runs on one menus file, so it has no profiles**, or **Your files were changed by a newer ZOrbit, so the profile stays**. A `--profile` command or the next-profile hotkey was refused.
 - **ZOrbit has no menus loaded**. A command from another program arrived before ZOrbit had read a menus file.
-- **This slot is empty**. You picked an auto slot nothing has filled yet, or a tag slot whose tag has no items.
+- **This slot is empty**. You picked an auto slot nothing has filled yet, a tag slot whose tag has no items, or a [Recent](menus.md#recent) slot with no files to show.
 - **That menu has nothing usable in it**. The menu had no slots to show when it came to open, for example because the menus file was being read again at that moment. A submenu slot whose menu is gone stays an empty slot and cannot be picked.
 - **A name followed by "could not be found in ZBrush"** or **"is not a ZBrush button"**, or **ZBrush could not carry out that pick. See bridge.log.** The plugin picked the request up and reported a problem: the brush, alpha, material or texture is not installed, the `press`, `set` or `toggle` path does not exist, or ZBrush raised an error. `bridge.log` has the details (see [The pick is logged as selected, but nothing changes](#the-pick-is-logged-as-selected-but-nothing-changes)). In ZBrush 2022 to 2025 they are in `zscript_bridge.log` and `radiald.log`. A pick there only searches [that ZBrush's own folders](menus.md#brush), so an item the browser lists can still be missing. That includes an item that only a [folder you added](browser.md#your-own-folders) has: folders added on **Settings > Library folders** are searched in ZBrush 2026 and newer only.
 - **The capture folder cannot be used, nothing sent. See radiald.log.** A [Capture](menus.md#capture) item's folder is not a full path to a folder on this PC, or ZOrbit cannot make the folder or write a file into it. The picture's full path, folder and file name, is also refused when it is longer than 259 characters, or in ZBrush 2022 to 2025 when it is longer than 255 bytes in the ANSI code page. `radiald.log` gives the reason.
@@ -179,6 +179,10 @@ In `radiald.log`, look for `pick from browser`. If it says the pick was dropped 
 ### A tag slot is faint and does nothing
 
 No installed item carries that tag, or the tag no longer exists (the problems pill says which). Tag some items in the Library, or point the slot at another tag.
+
+### A Recent slot is faint and does nothing
+
+ZBrush's list of recent files has no project or tool for the slot that is still on disk, or ZOrbit could not find or read the list. The slot fills once ZBrush adds a project or tool to that list. ZOrbit reads the list in the background (when the menus load, every half minute while ZBrush is in front, and after a ring with the slot opens), so a ring opened in the first moment after the app starts, or straight after the list changed, can still show the last read; open it again. `radiald.log` has a line that starts `recent files:` when the list is not there or cannot be read, with the path it looked at. With several ZBrush versions installed, the list is that of the ZBrush in front, so another version's files do not show. See [Recent](menus.md#recent).
 
 ### My slots are not coloured by tag
 

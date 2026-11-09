@@ -72,6 +72,24 @@ def _newest_user_assets(stamps) -> Path | None:
     return None
 
 
+def user_assets_of(ins, stamps=None) -> Path | None:
+    """The user-assets folder of one ZBrush installation (an installs.entry dict): the folder its own stamp folder under
+    %APPDATA%\\Maxon names (the one whose installpath.txt is this installation), else one of its year, else for a
+    2026 or newer with no stamp of its own the newest. None for ZBrush 2022 to 2025, which keep everything in the
+    installation. stamps: _maxon_stamps(), when the caller has them already."""
+    stamps = _maxon_stamps() if stamps is None else stamps
+    key = os.path.normcase(str(Path(ins["path"])))
+    for _, d in stamps:                     # its own stamp folder: the one whose installpath.txt names it...
+        if (p := _read_path(d / "installpath.txt")) is not None and os.path.normcase(str(p)) == key:
+            return _read_path(d / "userassets_path.txt")
+    found = None
+    if ins.get("year"):                     # ...else one of its year
+        found = _newest_user_assets([s for s in stamps if s[0] == ins["year"]])
+    if found is None and ins.get("python"):     # a 2026 or newer with no stamp of its own: as before
+        found = _newest_user_assets(stamps)
+    return found
+
+
 def zbrush_dirs() -> dict:
     """The installation and the user-assets folder the library is read from. They are the ZBrush that is running
     (the newest, when several run), so the list holds what that ZBrush can load; with none running, the newest
@@ -86,17 +104,8 @@ def zbrush_dirs() -> dict:
         running = []
     if running:
         top = running[0]
-        ins = Path(top["path"])
-        res["install"] = ins
-        key = os.path.normcase(str(ins))
-        for _, d in stamps:                     # its own stamp folder: the one whose installpath.txt names it...
-            if (p := _read_path(d / "installpath.txt")) is not None and os.path.normcase(str(p)) == key:
-                res["user_assets"] = _read_path(d / "userassets_path.txt")
-                break
-        if res["user_assets"] is None and top.get("year"):      # ...else one of its year
-            res["user_assets"] = _newest_user_assets([s for s in stamps if s[0] == top["year"]])
-        if res["user_assets"] is None and top.get("python"):    # a 2026 or newer with no stamp of its own: as before
-            res["user_assets"] = _newest_user_assets(stamps)
+        res["install"] = Path(top["path"])
+        res["user_assets"] = user_assets_of(top, stamps)
         return res
     for _, d in stamps:
         if res["install"] is None:

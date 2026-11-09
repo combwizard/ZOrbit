@@ -81,7 +81,7 @@ def test_the_options_hold_roles_built_ins_reserved_names_and_the_name_rule(api):
     assert len(lk["builtin"]) == 7
     assert all(set(b) == {"id", "label", "blurb", "look"} for b in lk["builtin"])
     assert next(b for b in lk["builtin"] if b["id"] == "classic")["look"] == {}
-    assert "__proto__" in lk["reserved"] and lk["menu_prefixes"] == ["tag:", "more:"]
+    assert "__proto__" in lk["reserved"] and lk["menu_prefixes"] == ["tag:", "more:", "recent:"]
     assert lk["name"]["max"] == 32 and lk["name"]["pattern"]
     assert len(opts["slot_shapes"]) == 6 and opts["hub_styles"] == ["dot", "disc", "ring", "icon"]
     assert opts["when_full"] == ["grow", "rings", "more"]

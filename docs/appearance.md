@@ -17,7 +17,7 @@ In Full mode the groups on the Look screen fold. **Slots** starts open, and a cl
 | `hub_style` (**Hub style**: **Dot**, **Disc**, **Ring**, **Menu icon**) | `dot` | `dot`, `disc`, `ring`, `icon` | How the hub is drawn. See [Hub styles](#hub-styles). |
 | `hub_color` (**Hub colour**) | `accent` | a theme colour or `#rrggbb` | The colour of the hub and its glow. See [Colour values](#colour-values). |
 | `hub_glow` (**Hub glow**) | 1 | 0 to 1 | How strong the halo around the hub is. 0 turns it off. Studio shows it as a percentage. |
-| `tag_limit` (**Tag fan slots**) | 12 | 4 to 24, whole numbers | How many slots a [tag fan](menus.md#tag) holds. A tag with more items than that ends in a **More...** slot. Only [Full mode](studio.md#simple-and-full-mode) shows it. |
+| `tag_limit` (**Tag fan slots**) | 12 | 4 to 24, whole numbers | How many slots a [tag fan](menus.md#tag) holds. A tag with more items than that ends in a **More...** slot. A [Recent](menus.md#recent) fan shows that many files. Only [Full mode](studio.md#simple-and-full-mode) shows it. |
 | `tap_ms` (**Tap time**) | 250 | 0 to 1000 | A hotkey press shorter than this is a tap. |
 | `timeout_s` (**Auto-close**) | 20 | 2 to 120 | An open ring closes itself after this many seconds. |
 | `animation` (**Open animation**) | `smooth` | see [Opening](#opening) | The open animation. |
