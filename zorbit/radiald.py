@@ -53,6 +53,7 @@ import fsutil               # noqa: E402
 import installs             # noqa: E402
 import paths                # noqa: E402
 import profiles             # noqa: E402
+import recent               # noqa: E402
 import tags                 # noqa: E402
 import theme                # noqa: E402
 import usage                # noqa: E402
@@ -103,6 +104,7 @@ TIMER_WATCH, TIMER_ACK, TIMER_REHOOK, TIMER_CONFIG, TIMER_BROWSER_PICK, TIMER_PR
     TIMER_ZS_RESULT, TIMER_COMMAND, TIMER_APPLY = range(1, 11)
 COMMAND_WAIT_S = 2                    # how long a command's pick waits for the one before it to be taken
 ZS_RESULT_S = 15                      # how long to look for the ZScript plugin's line about a pick (a stroke delays it)
+RECENT_PREFETCH_S = 30                # while ZBrush is in front, the recent slots' lists are read again this often
 APPLY_KEY_WAIT_S = 1.0                # a ZBrush 2022-2025 pick still in request.txt this long after the key: run the script
 APPLY_SCRIPT_WAIT_S = 6.0             # ... and still there this long after that (4 s measured): drop it
 APPLY_BUSY_MAX_S = 300                # a ZBrush Windows calls not responding is waited for this long at most
@@ -431,6 +433,7 @@ class App:
         self._activity_menu = None      # id of the root ring last opened, so a pick can say which ring it came from
         self.tags = tags.TagStore(tags_path() if cfg_path is not None else profiles.tags_file(self.profile))
         self.expander = None            # expand.Expander of the current config, tags and usage
+        self._recent_at = 0.0           # time.monotonic() of the last periodic recent prefetch (_recent_tick)
         self._browser_vk = None         # the browser hotkey while it is down (its repeats and key-up are ours); hook thread writes
         self._profile_vk = None         # the same for the next-profile hotkey; hook thread writes
         self._popout_proc = None        # subprocess.Popen of the popout we last started
@@ -541,7 +544,7 @@ class App:
                 log(f"cannot load radial.json: {self._config_error}; open Studio to fix it "
                     f"(the file is re-read as soon as it changes)")
                 self.cfg = C.Config(path=self.cfg_path, mtime=0.0)
-                self.expander = expand.Expander(self.cfg, self.usage, self.tags)
+                self.expander = expand.Expander(self.cfg, self.usage, self.tags, front=self.target_install, log=log)
                 self._set_slots([], None)
             self._menus_problem(announce=fresh and balloon)
             return
@@ -551,7 +554,7 @@ class App:
         self._theme = eff
         self._theme_sig = sig
         self.cfg = cfg
-        self.expander = expand.Expander(cfg, self.usage, self.tags)
+        self.expander = expand.Expander(cfg, self.usage, self.tags, front=self.target_install, log=log)
         self._set_slots([m for m in cfg.menus.values() if m.hotkey], cfg.browser_key, cfg.profile_key)
         for err in cfg.errors:
             log(f"config: {err}")
@@ -560,6 +563,7 @@ class App:
             + f"; bridge mode={cfg.bridge_mode} key={cfg.bridge_key.text}"
             + f"; browser hotkey={cfg.browser_key.text if cfg.browser_key else None}"
             + f"; next profile hotkey={cfg.profile_key.text if cfg.profile_key else None}")
+        self.expander.prefetch_recent()            # on recent.py's worker: the first ring finds the recent lists
         self._prefetch()
         self._prune_icons()
         self._schedule_prewarm()
@@ -979,6 +983,7 @@ class App:
             if msg == W.WM_TIMER:
                 if wparam == TIMER_WATCH:
                     self._watch_target()
+                    self._recent_tick()
                 elif wparam == TIMER_ACK:
                     self._check_ack()
                 elif wparam == TIMER_REHOOK and self.ring is None and not self._held_down():
@@ -1161,7 +1166,7 @@ class App:
         if item.kind == "empty":                    # the ring cannot pick one; a guard
             log("empty slot picked; nothing sent")
             return
-        if item.kind in ("auto", "tag"):
+        if item.kind in ("auto", "tag", "recent"):
             log(f"empty {item.kind} slot picked; nothing sent")
             self._toast(MSG_EMPTY_SLOT)
             return
@@ -1896,6 +1901,15 @@ class App:
             del self._elevated[pid]
         self.activity.note_elevated(any(self._elevated.values()))
 
+    def _recent_tick(self):
+        """Every RECENT_PREFETCH_S while ZBrush is in front, has recent.py's worker read the recent slots' lists
+        again, so a fan is never older than that. Returns at once; nothing happens without a recent slot."""
+        now = time.monotonic()
+        if self.expander is None or now - self._recent_at < RECENT_PREFETCH_S or self.target_install() is None:
+            return
+        self._recent_at = now
+        self.expander.prefetch_recent()
+
     def _watch_target(self):
         _trim_log()                     # every 3 s, not only at start: a long session must not grow the log for ever
         self._check_elevated()
@@ -2055,6 +2069,9 @@ def check(cfg_path) -> int:
                          else f"  (tag {key!r} does not exist)")
             elif it.kind == "browser":
                 extra = f"  (opens on {it.data.get('kind', 'brush')})"
+            elif it.kind == "recent":
+                where, why = recent.list_file()
+                extra = f"  (reads {where})" if where else f"  ({why})"
             elif it.kind == "capture":
                 extra = f"  (saves into {it.data['capture'].strip() or capture.default_folder()})"
             elif it.kind in C.FILE_EXTS:

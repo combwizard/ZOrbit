@@ -820,7 +820,7 @@ class Api(webapi.LibraryApi, webapi.TagApi):
         from ring import Ring
         app = self._preview_app()
         app.cfg = loaded
-        ex = expand.Expander(loaded, app.usage, app.tags.load())
+        ex = expand.Expander(loaded, app.usage, app.tags.load(), wait_recent=True)   # not the open path: wait for it
         menu = ex.resolve(menu_id) if paged else ex.menu(loaded.menus[menu_id])   # as the app would fill it now
         if menu is None:
             return {"image": None, "problems": problems or [f"menu {menu_id!r} has no usable items"]}
@@ -1030,7 +1030,7 @@ class Api(webapi.LibraryApi, webapi.TagApi):
         from ring import Ring
         app = self._preview_app()
         app.cfg = loaded
-        ex = expand.Expander(loaded, app.usage, app.tags.load())
+        ex = expand.Expander(loaded, app.usage, app.tags.load(), wait_recent=True)   # not the open path: wait for it
         menu = ex.menu(loaded.menus[menu_id])
         if ring_anim:
             menu = dataclasses.replace(menu, animation="")
@@ -1081,7 +1081,7 @@ class Api(webapi.LibraryApi, webapi.TagApi):
         return {"schema": schema, "roles": list(L.ROLES),
                 "builtin": [{"id": k, "label": v["label"], "blurb": v["blurb"], "look": dict(v["look"])}
                             for k, v in L.BUILTIN.items()],
-                "reserved": sorted(L.RESERVED_MENU_IDS), "menu_prefixes": ["tag:", "more:"],
+                "reserved": sorted(L.RESERVED_MENU_IDS), "menu_prefixes": ["tag:", "more:", "recent:"],
                 "name": {"max": 32, "pattern": r"^[\p{L}\p{N}_](?:[\p{L}\p{N}_ -]{0,30}[\p{L}\p{N}_])?$",
                          "flags": "u"}}
 
@@ -1829,8 +1829,8 @@ class Api(webapi.LibraryApi, webapi.TagApi):
         place the user picks. See menushare.build for what the file holds."""
         import webview
         menus = cfg.get("menus") if isinstance(cfg, dict) else None
-        if not isinstance(menus, dict) or not isinstance(menu_id, str) or menu_id.startswith(("tag:", "more:")) \
-                or not isinstance(menus.get(menu_id), dict):
+        if not isinstance(menus, dict) or not isinstance(menu_id, str) \
+                or menu_id.startswith(("tag:", "more:", "recent:")) or not isinstance(menus.get(menu_id), dict):
             return {"ok": False, "message": "There is no such menu to export."}
         title = str(menus[menu_id].get("title") or menu_id)
         fname = re.sub(r'[\\/:*?"<>|]', "_", f"{title} menu.json")

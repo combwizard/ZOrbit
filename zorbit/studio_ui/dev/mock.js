@@ -45,8 +45,8 @@
    logs, and keeps the last size it was given in window.__mockStripSize (a page in a browser tab cannot size its window).
    More windows: ?extra draws the page as a window other than the first (no strip button), ?windows=6 starts with that many open (6: New
    window is greyed out); New window only counts up and logs (a browser tab cannot open the window).
-   ?kinds adds a Tag item ({"tag": "blocking"}) and a Browser item ({"browser": ""}) to the end of the Tools menu, so the two newer
-   kinds can be seen (the recorded config has none). The default stays the faithful recording.
+   ?kinds adds a Tag item ({"tag": "blocking"}), a Browser item ({"browser": ""}) and a Recent item ({"recent": "any"}) to the end of
+   the Tools menu, so the newer kinds can be seen (the recorded config has none). The default stays the faithful recording.
    Profiles (the picker after the brand in the top bar): ?profiles=3 (three profiles, Creatures, Default and Hard surface, each with its own menus: the first menu's title carries the
    profile's name; the default is the one profile Default), ?profilesoff (enabled: false, as when a menus file is pinned: no picker), ?profilegone (the first save finds its profile deleted:
    save_config answers profile_missing). pick_profile_file follows ?importcancel and ?importfail. Profiles live in this page only: a reload starts again from the defaults.
@@ -92,8 +92,8 @@
   var TAG_DEFAULTS = { radius: 145, slot: 72, dead_zone: 38, labels: 'name', slot_corner: 0.28, border_width: 2, icon_scale: 1, hub_style: 'dot', hub_color: 'accent', hub_glow: 1,
     glow_color: '', glow_opacity: 0.55, label_color: 'text', when_full: 'grow', look: undefined,
     hub: 10, slot_shape: 'circle', tag_colors: 'tint', tag_band: 'medium', tag_band_opacity: 0.45, tag_glow_opacity: 0.4, tag_tint_opacity: 0.3, tag_tint_style: 'gradient', tag_tint_blend: 'multiply' };
-  var KINDS = ['brush', 'alpha', 'material', 'texture', 'press', 'set', 'toggle', 'capture', 'tool', 'project', 'layout', 'steps', 'menu', 'auto', 'tag', 'browser', 'empty'];
-  if (q.has('kinds') && saved.menus && saved.menus.tools) saved.menus.tools.items.push({ tag: 'blocking' }, { browser: '' });
+  var KINDS = ['brush', 'alpha', 'material', 'texture', 'press', 'set', 'toggle', 'capture', 'tool', 'project', 'layout', 'steps', 'menu', 'auto', 'tag', 'browser', 'recent', 'empty'];
+  if (q.has('kinds') && saved.menus && saved.menus.tools) saved.menus.tools.items.push({ tag: 'blocking' }, { browser: '' }, { recent: 'any' });
   var mtime = 1700000000000000000, conflictDone = false;
   var FAV = 'favourite';
   var TAG_PALETTE = ['#A8DF23', '#C77DFF', '#FFD166', '#5EEAD4', '#F472B6', '#E8413C', '#F86B33', '#4DC8E9'];   // as tags.PALETTE in tags.py
@@ -142,7 +142,7 @@
       var ks = KINDS.filter(function (k) { return k in it; });
       if (ks.length !== 1) return;
       var k = ks[0];                       // config.py: every string target but a browser's must be non-empty; an empty slot (true) always counts, so the ring keeps its place
-      if (k === 'empty' ? it.empty === true : k === 'steps' || k === 'auto' || k === 'browser' || (typeof it[k] === 'string' && it[k].trim() !== '')) out.push(i);
+      if (k === 'empty' ? it.empty === true : k === 'recent' ? ['project', 'tool', 'any'].indexOf(it.recent) >= 0 : k === 'steps' || k === 'auto' || k === 'browser' || (typeof it[k] === 'string' && it[k].trim() !== '')) out.push(i);
     });
     return out.length ? (m.items || []).map(function (_, i) { return i; }) : out;
   }
@@ -156,10 +156,10 @@
     "ring.labels: 'all' unknown; one of name, none", "ring.tag_band: 'huge' unknown; one of none, hairline, narrow, medium, wide", 'ring.raduis: unknown setting (did you mean radius?)',
     'menus: must be a non-empty object of id -> menu',
     'menu odd: not an object', "menu tag:x: ids starting with 'tag:' are reserved for tag submenus", "menu brushes: unknown setting 'hotkye' (did you mean hotkey?)",
-    'menu brushes item 1: not an object', 'menu brushes item 2: needs exactly one of brush, alpha, material, texture, press, set, toggle, capture, tool, project, layout, steps, menu, auto, tag, browser',
+    'menu brushes item 1: not an object', 'menu brushes item 2: needs exactly one of brush, alpha, material, texture, press, set, toggle, capture, tool, project, layout, steps, menu, auto, tag, browser, recent, empty',
     "menu brushes item 3: 'set' needs a 'value'", "menu brushes item 3: 'set' value must be a number", "menu brushes item 4: 'steps' must be a non-empty list of brush/alpha/material/texture/press/set/toggle/capture/tool/project/layout actions",
-    'menu brushes item 4 step 2: not an object', "menu brushes item 4 step 1: 'brush' must be a non-empty string", 'menu brushes item 4 step 2: steps cannot open menus, nest steps, be auto slots, be empty slots or open tags or the browser',
-    "menu brushes item 5: 'auto' must be one of brush", "menu brushes item 5: 'browser' must be a string (a tag key, or \"\" for everything)", "menu brushes item 5: browser 'kind' must be one of brush, alpha, material, texture",
+    'menu brushes item 4 step 2: not an object', "menu brushes item 4 step 1: 'brush' must be a non-empty string", 'menu brushes item 4 step 2: steps cannot open menus, nest steps, be auto slots, be empty slots or open tags, the browser or recent files',
+    "menu brushes item 5: 'auto' must be one of brush", "menu brushes item 5: 'recent' must be project, tool or any", "menu brushes item 5: 'browser' must be a string (a tag key, or \"\" for everything)", "menu brushes item 5: browser 'kind' must be one of brush, alpha, material, texture",
     "menu brushes item 6: 'press' must be a non-empty string", "menu brushes item 6: brush name 'C:\\x\\Clay' must not contain \\ / : or ..", "menu brushes item 7: submenu 'nope' does not exist",
     "menu brushes item 7: unknown setting 'lable' (did you mean label?)", "menu brushes item 8: tag 'gone' does not exist; the slot stays empty", "menu brushes item 8: tag 'gone' does not exist; the browser opens unfiltered",
     "menu brushes item 9: icon '\\\\pc\\share\\a.png' must be a plain file path on this PC, not a network path", "menu brushes item 9: style.glow_color: 'orange' is not a #rrggbb colour or a theme colour (bg, accent, highlight, text, lines)", "menu brushes item 9: submenu 'tools' has no usable items",
@@ -227,13 +227,14 @@
           if (!Array.isArray(it.steps) || !it.steps.length) { out.push(where + ": 'steps' must be a non-empty list of brush/alpha/material/texture/press/set/toggle/capture/tool/project/layout actions"); return; }
           for (var j = 0; j < it.steps.length; j++) {
             var sk = KINDS.filter(function (x) { return it.steps[j] && x in it.steps[j]; });
-            if (sk.some(function (x) { return ['menu', 'steps', 'auto', 'tag', 'browser', 'empty'].indexOf(x) >= 0; })) {
-              out.push(where + ' step ' + (j + 1) + ': steps cannot open menus, nest steps, be auto slots, be empty slots or open tags or the browser'); return;
+            if (sk.some(function (x) { return ['menu', 'steps', 'auto', 'tag', 'browser', 'recent', 'empty'].indexOf(x) >= 0; })) {
+              out.push(where + ' step ' + (j + 1) + ': steps cannot open menus, nest steps, be auto slots, be empty slots or open tags, the browser or recent files'); return;
             }
           }
         }
         else if (k === 'empty') { if (it.empty !== true) { out.push(where + ": 'empty' must be true"); return; } }
         else if (k === 'browser') { if (typeof it.browser !== 'string') { out.push(where + ": 'browser' must be a string (a tag key, or \"\" for all brushes)"); return; } }
+        else if (k === 'recent') { if (['project', 'tool', 'any'].indexOf(it.recent) < 0) { out.push(where + ": 'recent' must be project, tool or any"); return; } }
         else if (k === 'set' && !('value' in it)) { out.push(where + ": 'set' needs a 'value'"); return; }
         else if (k === 'set' && typeof it.value !== 'number') { out.push(where + ": 'set' value must be a number"); return; }
         else if (k === 'capture') { if (typeof it.capture !== 'string') { out.push(where + ": 'capture' must be a folder path, or \"\" for the default folder"); return; } }
@@ -302,7 +303,7 @@
     return { schema: schema, roles: ROLES.slice(),
       builtin: BUILTIN.map(function (b) { return { id: b[0], label: b[1], blurb: b[2], look: clone(b[3]) }; }),
       reserved: ['__defineGetter__', '__defineSetter__', '__lookupGetter__', '__lookupSetter__', '__proto__', 'constructor', 'hasOwnProperty', 'isPrototypeOf', 'propertyIsEnumerable', 'toLocaleString', 'toString', 'valueOf'],
-      menu_prefixes: ['tag:', 'more:'], name: { max: 32, pattern: '^[\\p{L}\\p{N}_](?:[\\p{L}\\p{N}_ -]{0,30}[\\p{L}\\p{N}_])?$', flags: 'u' } };
+      menu_prefixes: ['tag:', 'more:', 'recent:'], name: { max: 32, pattern: '^[\\p{L}\\p{N}_](?:[\\p{L}\\p{N}_ -]{0,30}[\\p{L}\\p{N}_])?$', flags: 'u' } };
   }
   function mockOptions() {
     var o = clone(M.get_options);

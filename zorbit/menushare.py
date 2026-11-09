@@ -16,7 +16,7 @@ import tags as T
 
 MENU_FORMAT = 1              # the "zorbit_menu" number of a menu file
 _VALID_ID = re.compile(r"[A-Za-z0-9_-]+")
-_SYNTHETIC = ("tag:", "more:")        # menu ids the app makes up: never in a file
+_SYNTHETIC = ("tag:", "more:", "recent:")      # menu ids the app makes up: never in a file
 _PC_KEYS = ("hotkey", "swallow")      # belong to one PC's keyboard: never in a menu file, never imported
 # A Capture item's folder is cleared the same way, and Tool, Project and Layout items are left out: see _clean.
 _FILE_KEYS = tuple(C.FILE_EXTS)       # ("tool", "project", "layout"): a path of this PC that no other PC has, and an empty path is no item
