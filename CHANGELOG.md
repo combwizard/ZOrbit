@@ -4,7 +4,11 @@ All notable changes to this project are listed here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.22.0] - 2026-11-09
+
+ZOrbit 0.22.0 adds a strip: a small bar of one tab's favourites that stays on top of ZBrush and never takes the
+keyboard from it, so one click picks an item. The first pen drag in the browser now scrolls the grid when ZBrush is
+in front, instead of picking up the card under the pen. The GitHub release notes keep their paragraphs in one piece.
 
 ### Added
 
@@ -1026,6 +1030,7 @@ First public release.
   only brushes included with ZBrush.
 - Documentation: README, user guide, third-party notices and contributing guide.
 
+[0.22.0]: https://github.com/combwizard/zorbit/releases/tag/v0.22.0
 [0.21.0]: https://github.com/combwizard/zorbit/releases/tag/v0.21.0
 [0.20.0]: https://github.com/combwizard/zorbit/releases/tag/v0.20.0
 [0.19.0]: https://github.com/combwizard/zorbit/releases/tag/v0.19.0
