@@ -49,7 +49,7 @@ The palette was renamed, so a hotkey you bound by hand to the old **Apply** does
 
 1. Open Studio's **Setup** screen (Alt+6). It checks ZBrush, the plugin and the app, and says which step is missing. An amber dot on its button in the rail means no ZBrush that Studio found has the plugin set up, or a running ZBrush does not. It does not appear when Studio finds no ZBrush at all. When step 2 says ZBrush has not loaded the plugin, close ZBrush completely and start it from the Start menu: a ZBrush started from a program that was already open before the plugin was registered does not know where the plugin is. If that does not help, read `bridge.log` (ZBrush 2026 and newer) or `zscript_launch.log` (ZBrush 2022 to 2025) in `%LOCALAPPDATA%\ZOrbit`; `bridge.log` does not exist if the plugin never ran.
 
-    ![The Setup screen with ZBrush found ticked, and the Plugin loaded in ZBrush step waiting: ZBrush 2026 shows Restart ZBrush because it was started before the plugin was set up](images/setup-restart.png)
+    ![The Setup screen with ZBrush found ticked, and the Plugin not loaded in ZBrush step waiting: ZBrush 2026 shows Restart ZBrush because it was started before the plugin was set up](images/setup-restart.png)
 
 2. Is ZBrush the front window? The hotkey is ignored everywhere else.
 3. In ZBrush, open **Zplugin > ZOrbit**. If the palette is missing, ZBrush did not load the plugin. On Studio's **Setup** screen, press **Fix** next to your ZBrush if it shows that button, then restart ZBrush. If there is no **Fix**, or the palette is still missing, the next steps depend on your version:
