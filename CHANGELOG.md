@@ -4,6 +4,12 @@ All notable changes to this project are listed here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+
+- Setup no longer says **ZBrush found** when it found none, or **Plugin loaded in ZBrush** when the plugin is not loaded. The titles now read **No ZBrush found**, **ZBrush found, plugin not set up** and **Plugin not loaded in ZBrush** until the step is done.
+
 ## [0.22.0] - 2026-11-09
 
 ZOrbit 0.22.0 adds a strip: a small bar of one tab's favourites that stays on top of ZBrush and never takes the
@@ -16,7 +22,6 @@ in front, instead of picking up the card under the pen. The GitHub release notes
 
 ### Fixed
 
-- Setup no longer says **ZBrush found** when it found none, or **Plugin loaded in ZBrush** when the plugin is not loaded. The titles now read **No ZBrush found**, **ZBrush found, plugin not set up** and **Plugin not loaded in ZBrush** until the step is done.
 - The release notes on GitHub broke the summary and some longer items into short lines, where `CHANGELOG.md` wraps them. The lines of each paragraph and item are joined now.
 - The first pen drag in the browser while ZBrush was in front picked up the card under the pen instead of scrolling the grid; only the next drag scrolled. While a Wintab program like ZBrush has the foreground, a Wacom pen moves the cursor as a mouse, so the browser now watches which device moved the cursor last (raw input, only while it is open) and scrolls when it was the pen. A tap still selects, and a mouse drag still picks the card up.
 
