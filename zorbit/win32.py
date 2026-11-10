@@ -159,6 +159,7 @@ RegisterRawInputDevices = _sig(user32, "RegisterRawInputDevices", w.BOOL, ctypes
 GetRawInputData = _sig(user32, "GetRawInputData", w.UINT, w.HANDLE, w.UINT, ctypes.c_void_p, ctypes.POINTER(w.UINT),
                        w.UINT)
 MonitorFromPoint = _sig(user32, "MonitorFromPoint", w.HMONITOR, w.POINT, w.DWORD)
+MonitorFromWindow = _sig(user32, "MonitorFromWindow", w.HMONITOR, w.HWND, w.DWORD)
 GetMonitorInfoW = _sig(user32, "GetMonitorInfoW", w.BOOL, w.HMONITOR, ctypes.POINTER(MONITORINFO))
 try:
     SetProcessDpiAwarenessContext = _sig(user32, "SetProcessDpiAwarenessContext", w.BOOL, ctypes.c_void_p)
@@ -537,7 +538,15 @@ def launch_chain(depth: int = 2) -> str:
 
 def monitor_for_point(x: int, y: int) -> tuple[w.RECT, float]:
     """Work area of the monitor under (x, y) and its DPI scale (1.0 = 96 dpi)."""
-    hmon = MonitorFromPoint(w.POINT(x, y), MONITOR_DEFAULTTONEAREST)
+    return _monitor(MonitorFromPoint(w.POINT(x, y), MONITOR_DEFAULTTONEAREST))
+
+
+def monitor_for_window(hwnd) -> tuple[w.RECT, float]:
+    """The same for the monitor that holds most of the window hwnd."""
+    return _monitor(MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST))
+
+
+def _monitor(hmon) -> tuple[w.RECT, float]:
     mi = MONITORINFO()
     mi.cbSize = ctypes.sizeof(MONITORINFO)
     GetMonitorInfoW(hmon, ctypes.byref(mi))

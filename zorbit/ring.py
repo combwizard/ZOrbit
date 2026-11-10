@@ -257,6 +257,9 @@ class _ImageLRU:
     def __len__(self):
         return len(self._d)
 
+    def __contains__(self, key):           # does not count as a use
+        return key in self._d
+
     def get(self, key):
         with _sprite_lock:
             got = self._d.get(key)
@@ -801,11 +804,7 @@ class Ring:
     def show(self, x: int, y: int) -> None:
         _register_class()
         work, scale = W.monitor_for_point(x, y)
-        self._geometry(scale)
-        self.cs, self.work = (x, y), work
-        self._fit_centre()
-        self._armed = self.cs == (x, y)            # moved in from an edge: see _fit_centre
-        self._relayout()
+        self._place(x, y, work, scale)
         self._prepare()
         self.t0 = time.time()
         ex = W.WS_EX_NOACTIVATE | W.WS_EX_TOPMOST | W.WS_EX_TOOLWINDOW | W.WS_EX_LAYERED
@@ -865,6 +864,15 @@ class Ring:
         self._finish(None, reason)
 
     # --- geometry --------------------------------------------------------------------------------
+    def _place(self, x, y, work, scale):
+        """Sizes, layout and window for a ring centred on screen point (x, y) of a monitor with this work area
+        and scale: what show() does before it draws, and what warm-up does to find the same pictures."""
+        self._geometry(scale)
+        self.cs, self.work = (x, y), work
+        self._fit_centre()
+        self._armed = self.cs == (x, y)            # moved in from an edge: see _fit_centre
+        self._relayout()
+
     def _geometry(self, scale):
         c = self.look
         self.scale = scale
@@ -1211,6 +1219,89 @@ class Ring:
             return True
         return False
 
+    # --- warm-up: the app draws what the next open will look for before the hotkey is pressed ------------------
+    @classmethod
+    def for_warmup(cls, menu, ring_cfg, icon_for, submenus, work, scale, nested=False):
+        """A ring set up as show() sets it up in the middle of a monitor's work area, with no window and no log, for
+        warm_jobs. It is held, as a hotkey ring opens, so its first hint is the hold one."""
+        r = cls(menu, ring_cfg, icon_for, lambda *a: None, lambda m: None, held=True, nested=nested, submenus=submenus)
+        r._place((work.left + work.right) // 2, (work.top + work.bottom) // 2, work, scale)
+        r._ready()
+        return r
+
+    def ring_submenus(self):
+        """Ids of the submenus this ring's slots open as rings of their own (not as fans), in slot order."""
+        return [it.data["menu"] for i, it in enumerate(self.items)
+                if it.kind == "menu" and isinstance(it.data.get("menu"), str) and not self._fannable((i,))]
+
+    def warm_jobs(self, part):
+        """The pictures an open of this ring looks for, one job at a time: (cache, key, bytes, run). cache is where
+        the picture goes ("slot", "menu", "static" or "lines"), key its key there, bytes what it takes of a budget
+        in bytes (0 where only a count is bounded), and run() finds or draws it through the same code an open uses
+        and says whether it had to be drawn. A job is handed out only after the one before it has run, since a fan
+        is laid out from the fans it hangs from. part: "menu" (each slot, the menu's sprites, then the static layer
+        with the hint it opens with), "fans" (the slots and lines of each fan reachable from it), or "click" (the
+        static layer with the click hint, as a tap leaves it)."""
+        if part == "menu":
+            for i, it in enumerate(self.items):
+                key = self._slot_key(it, self.sizes[i])
+                yield "slot", key, 0, (lambda key=key, it=it, i=i: self._warm_slot(
+                    key, lambda: self._slot_parts(it, self.sizes[i])))
+            key = self._sprite_key()
+            yield "menu", key, 0, (lambda key=key: self._warm_sprites(key))
+            yield self._warm_static()
+        elif part == "click":
+            self.mode = "click"
+            self._static_cache = None
+            yield self._warm_static()
+        elif part == "fans":
+            todo = [(i,) for i in range(self.n)]
+            while todo:
+                path = todo.pop(0)
+                if not self._fannable(path):
+                    continue
+                menu = self._submenu(self._item(path).data["menu"])
+                sizes, look = self._fan_sizes(menu), self._look_for(menu)
+                for k, it in enumerate(menu.items):
+                    key = self._slot_key(it, sizes[k], look)
+                    yield "slot", key, 0, (lambda key=key, menu=menu, k=k: self._warm_fan_slot(key, menu, k))
+                anchor, pos = self._node_pos(path), self._layout(path)[3]
+                key = self._fan_lines_key(anchor, self._size_at(path) / 2, pos, sizes,
+                                          _chrome(self._item(path), self._look_at(path)), look)
+                w, h = self._fan_lines_box(anchor, pos)[2:]
+                yield "lines", key, w * h * 4, (lambda key=key, path=path: self._warm_fan(key, path))
+                todo += [path + (k,) for k in range(len(menu.items))]       # _fannable stops at FAN_DEPTH
+
+    def _warm_slot(self, key, make):
+        hit = key in _slot_cache
+        _slot_get(key, make)
+        return not hit
+
+    def _warm_fan_slot(self, key, menu, k):
+        hit = key in _slot_cache
+        self._fan_art(menu, upto=k + 1)            # slot k of the fan, the way an open of the fan asks for it
+        return not hit
+
+    def _warm_sprites(self, key):
+        hit = key in _sprite_cache
+        self._prepare()                            # finds the slots warm_jobs drew, and keeps the menu's sprites
+        return not hit
+
+    def _warm_static(self):
+        key = self._static_key()
+
+        def run():
+            hit = key in _static_layers
+            self._static_cache = None
+            self._static()
+            return not hit
+        return "static", key, self.rsize * self.rsize * 4, run
+
+    def _warm_fan(self, key, path):
+        hit = key in _fan_line_cache
+        self._fan(path)                            # its slots are drawn by then, so only the lines can be new
+        return not hit
+
     def _set_open(self, path, now):
         path, cur = tuple(path), tuple(self.open)
         if path == cur:
@@ -1277,20 +1368,26 @@ class Ring:
         return True
 
     # --- sprites ---------------------------------------------------------------------------------
-    def _prepare(self):
+    def _ready(self):
+        """The colours and the glyph font the sprites and the static layer are drawn with."""
         lk = self.look
         self.c_bg, self.c_accent, self.c_hi = lk.bg, lk.accent, lk.hi
         self.c_text, self.c_lines, self.c_hub = lk.text, lk.lines, lk.hub_color
         self.pre = lk.pre                                                  # the theme's pill, hint, badge, placeholder
         self.f_glyph = _font(int(15 * self.scale * SS))
+
+    def _slot_parts(self, it, size, look=None):
+        """One slot's (sprites, label sprites), for _slot_get."""
+        return self._slot_sprites(it, size, look), self._label_sprites(it, size, look)
+
+    def _prepare(self):
+        self._ready()
         t0 = time.perf_counter()
         key = self._sprite_key()
         cached = _sprite_get(key)
         hit = cached is not None
         if not hit:
-            per = [_slot_get(self._slot_key(it, self.sizes[i]),
-                             lambda it=it, i=i: (self._slot_sprites(it, self.sizes[i]),
-                                                 self._label_sprites(it, self.sizes[i])))
+            per = [_slot_get(self._slot_key(it, self.sizes[i]), lambda it=it, i=i: self._slot_parts(it, self.sizes[i]))
                    for i, it in enumerate(self.items)]
             cached = ([p[0] for p in per], [p[1] for p in per], self._dot_sprite())
             _sprite_put(key, cached)
@@ -1573,21 +1670,29 @@ class Ring:
         """Dashed lines from a fan's slot out to each of its slots (sizes: their widths), in color if it has one,
         else the lines colour of the fan's look: (image, top-left relative to the ring centre). Kept between opens
         (_fan_line_cache), keyed on everything they are drawn from; the image is shared, so it is only ever read."""
-        col = _rgba(color or (look or self.look).lines, 0.75)
-        key = (SS, self.scale, tuple(anchor), anchor_r, tuple(tuple(p) for p in pos), tuple(sizes), col)
+        key = self._fan_lines_key(anchor, anchor_r, pos, sizes, color, look)
         got = _fan_line_cache.get(key)
         if got is None:
-            got = self._draw_fan_lines(anchor, anchor_r, pos, sizes, col)
+            got = self._draw_fan_lines(anchor, anchor_r, pos, sizes, key[-1])
             _fan_line_cache.put(key, got, got[0].size[0] * got[0].size[1] * 4)
         return got
+
+    def _fan_lines_key(self, anchor, anchor_r, pos, sizes, color="", look=None):
+        """What _fan_lines draws from; its last part is the RGBA colour."""
+        col = _rgba(color or (look or self.look).lines, 0.75)
+        return SS, self.scale, tuple(anchor), anchor_r, tuple(tuple(p) for p in pos), tuple(sizes), col
+
+    def _fan_lines_box(self, anchor, pos):
+        """(left, top, width, height) of a fan's lines image, relative to the ring centre."""
+        m = 4 * self.scale
+        xs, ys = [anchor[0]] + [p[0] for p in pos], [anchor[1]] + [p[1] for p in pos]
+        x0, y0 = math.floor(min(xs) - m), math.floor(min(ys) - m)
+        return x0, y0, math.ceil(max(xs) + m) - x0, math.ceil(max(ys) + m) - y0
 
     def _draw_fan_lines(self, anchor, anchor_r, pos, sizes, col):
         """_fan_lines drawn anew, in the RGBA colour col."""
         s = SS
-        m = 4 * self.scale
-        xs, ys = [anchor[0]] + [p[0] for p in pos], [anchor[1]] + [p[1] for p in pos]
-        x0, y0 = math.floor(min(xs) - m), math.floor(min(ys) - m)
-        w, h = math.ceil(max(xs) + m) - x0, math.ceil(max(ys) + m) - y0
+        x0, y0, w, h = self._fan_lines_box(anchor, pos)
         im = Image.new("RGBA", (w * s, h * s), (0, 0, 0, 0))
         d = ImageDraw.Draw(im)
         lw = max(1, int(1.3 * self.scale * s))
@@ -1621,13 +1726,14 @@ class Ring:
 
     def _static_key(self):
         """Everything _draw_static, _band and _caption read, as a hashable value: the sizes and geometry, each slot's
-        kind and rim colour, the tag band settings, the hub, the colours, the title, the hint as it reads now (the
-        hint setting, flick, hold or click, armed) and the fonts folder."""
+        rim colour and whether it is empty, a submenu or a tag slot (the only kinds the layer tells apart, so an auto
+        slot that fills with a brush keeps its layer), the tag band settings, the hub, the colours, the title, the
+        hint as it reads now (the hint setting, flick, hold or click, armed) and the fonts folder."""
         lk = self.look
         return (SS, _fonts_dir(), self.rsize, self.scale, self.slot, self.R, self.hit_r,
                 tuple(self.seats), tuple(self.rad), tuple(self.sizes), tuple(s.ring for s in self.plan.seats),
                 tuple((rp.radius, rp.step, rp.n, rp.first, rp.offset) for rp in self.plan.rings),
-                tuple((it.kind, _chrome(it, lk)) for it in self.items),
+                tuple((it.kind if it.kind in ("empty", "menu", "tag") else "", _chrome(it, lk)) for it in self.items),
                 lk.tag_band, lk.tag_band_opacity, lk.hub_style, self._hub(),
                 self.c_text, self.c_lines, self.c_hi, self.c_accent, self.pre["hint"],
                 self.menu.title, tuple(self._hint_lines()))
