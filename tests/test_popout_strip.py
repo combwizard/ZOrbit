@@ -585,6 +585,24 @@ def test_a_managed_browser_that_is_up_still_stays_when_the_app_goes(pop, quits):
     assert quits == [] and pop.managed is False
 
 
+def test_after_the_app_is_gone_x_ends_the_browser_instead_of_bringing_back_the_strip(pop, quits):
+    """Found in the 0.23.0 release pass: with the strip on, the browser up and ZBrush closed, X put the strip back over
+    the desktop with no app and no ZBrush, and it stayed."""
+    pop.strip_on, pop.up = True, True
+    pop.app_gone("the app is gone")
+    pop.close("close button")
+    assert pop.mode == "browser" and not pop.up and quits == ["closed by the user"]
+    assert pop.strip_on                                    # still on: the next start of the app brings it back
+
+
+def test_a_browser_started_by_hand_still_goes_back_to_its_strip_after_the_app_goes(pop, quits):
+    pop.managed = False                                    # the Start menu, --popout --show
+    pop.strip_on, pop.up = True, True
+    pop.app_gone("the app asked")
+    pop.close("close button")
+    assert pop.mode == "strip" and quits == []
+
+
 # --- the strip steps aside while another program is in front -----------------------------------------------------
 @pytest.mark.parametrize("fg_pid, zbrush, own, want", [
     (4242, [4242], 1, True),                               # ZBrush in front

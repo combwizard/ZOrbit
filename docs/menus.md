@@ -370,7 +370,7 @@ A **Recent** slot opens a fan of the files ZBrush opened last, newest first. `pr
 
 The list is ZBrush's own, the one Lightbox keeps of recent files. ZBrush writes it to `ZStartup\ConfigFiles\LightboxRecentFiles.cfg`:
 
-- **ZBrush 2026 and newer:** in your user assets folder, the one ZBrush records in `userassets_path.txt` under `%APPDATA%\Maxon` (the same folder the [brush list](#brush) reads).
+- **ZBrush 2026 and newer:** in your user assets folder, the one ZBrush records in `userassets_path.txt` under `%APPDATA%\Maxon` (the same folder the [brush list](#brush) reads). Until a user assets folder is chosen there is no `userassets_path.txt`, and ZBrush keeps the list in its own folder under `%APPDATA%\Maxon`, such as `ZBrush 2026_<letters and digits>`. ZOrbit reads it there.
 - **ZBrush 2022 to 2025:** in `ZBrushData<year>` in the Public Documents folder, such as `%PUBLIC%\Documents\ZBrushData2024`.
 
 The list is that of the ZBrush in front when the ring opens. Otherwise it is the ZBrush the library follows: the one that is running, or the newest installed when none is (see [Brush](#brush)). ZOrbit never changes the list. It reads it in the background, so the ring never waits for a slow drive: when the menus load, every half minute while ZBrush is in front, and after you open a ring with the slot. The fan shows the last read, so a file you have just opened may only show at the next open, and one that has just gone may show once more. Picking a file that has gone sends nothing and the message says it is not there.

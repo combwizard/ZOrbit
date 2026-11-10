@@ -27,6 +27,12 @@ def make(path):
     return path
 
 
+def put(path, text):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8")
+    return path
+
+
 def cfg_bytes(*entries, encoding="mbcs"):
     """A LightboxRecentFiles.cfg as ZBrush writes it: the paths, each ended by a NUL, in the ANSI code page."""
     return b"".join(str(e).encode(encoding) + b"\0" for e in entries)
@@ -189,11 +195,38 @@ def test_zbrush_2026_and_newer_keep_the_list_in_the_user_assets_folder(monkeypat
     assert seen == [r"C:\Programs\ZBrush 2026"]
 
 
-def test_zbrush_2026_with_no_user_assets_folder_has_no_list(monkeypatch):
+def test_zbrush_2026_with_no_user_assets_folder_and_no_stamp_has_no_list(monkeypatch):
     import brushes
     monkeypatch.setattr(brushes, "user_assets_of", lambda i, stamps=None: None)
+    monkeypatch.setattr(brushes, "stamp_of", lambda i, stamps=None: None)
     path, why = recent.list_file(ins(2027))
     assert path is None and "no user assets folder" in why
+
+
+def test_zbrush_2026_before_a_user_assets_folder_is_chosen_keeps_the_list_in_its_stamp_folder(monkeypatch, tmp_path):
+    """A fresh ZBrush 2026 writes no userassets_path.txt until a folder is chosen, and keeps ZStartup (the recent list
+    included) in its own folder under %APPDATA%\\Maxon. Found on a clean install: the slot stayed empty."""
+    import brushes
+    appdata = tmp_path / "AppData"
+    own = appdata / "Maxon" / "Maxon ZBrush 2026_ABCD1234"
+    other = appdata / "Maxon" / "ZBrush 2027_0F0F0F0F"
+    put(own / "installpath.txt", r"C:\Programs\ZBrush 2026")
+    put(other / "installpath.txt", r"C:\Programs\ZBrush 2027")
+    put(other / "userassets_path.txt", str(tmp_path / "Assets 2027"))
+    monkeypatch.setenv("APPDATA", str(appdata))
+    path, why = recent.list_file(ins(2026))
+    assert path == own / "ZStartup" / "ConfigFiles" / "LightboxRecentFiles.cfg" and why == ""
+
+
+def test_the_stamp_folder_of_an_install_is_its_own_else_one_of_its_year(monkeypatch, tmp_path):
+    import brushes
+    maxon = tmp_path / "Maxon"
+    a = put(maxon / "ZBrush 2026_AAAA" / "installpath.txt", r"D:\Elsewhere\ZBrush 2026").parent
+    b = put(maxon / "ZBrush 2026_BBBB" / "installpath.txt", r"C:\Programs\ZBrush 2026").parent
+    monkeypatch.setenv("APPDATA", str(tmp_path))
+    assert brushes.stamp_of(ins(2026)) == b                      # its own, by installpath.txt
+    assert brushes.stamp_of(ins(2026, path=r"E:\Moved\ZBrush")) in (a, b)   # none names it: one of its year
+    assert brushes.stamp_of(ins(2028)) is None
 
 
 @pytest.mark.parametrize("year", [2022, 2023, 2024, 2025])

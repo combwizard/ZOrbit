@@ -2066,6 +2066,7 @@ function buildStage() {
     const at = hoverRing !== null ? itemOf(hoverRing) : S.itemIdx, j = at === null ? -1 : idxs.indexOf(at);
     const it = j >= 0 && itemUsable(m.items[at]) ? m.items[at] : null, t = it && 'menu' in it ? menuOf(it.menu) : null;      // an incomplete item is an empty slot on the ring: no fan
     if (it && 'tag' in it) return tagItemCount(it.tag) > 0 ? [j] : null;     // the expander turns it into a fan submenu of its items
+    if (it && 'recent' in it) return [j];          // a fan of ZBrush's recent files; with none it stays a slot, and the ring is drawn plain
     return t && t.fan === true && it.menu !== S.menuId ? [j] : null;
   }
   /* The marks again, for the picture and items now. */
