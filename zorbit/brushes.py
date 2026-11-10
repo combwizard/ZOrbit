@@ -72,6 +72,22 @@ def _newest_user_assets(stamps) -> Path | None:
     return None
 
 
+def stamp_of(ins, stamps=None) -> Path | None:
+    """The stamp folder under %APPDATA%\\Maxon of one ZBrush 2026 or newer installation (an installs.entry dict): the
+    one whose installpath.txt names it, else the newest of its year; None when there is none. Before a user assets
+    folder is chosen (no userassets_path.txt), ZBrush keeps its ZStartup files in this folder."""
+    stamps = _maxon_stamps() if stamps is None else stamps
+    key = os.path.normcase(str(Path(ins["path"])))
+    for _, d in stamps:
+        if (p := _read_path(d / "installpath.txt")) is not None and os.path.normcase(str(p)) == key:
+            return d
+    if ins.get("year"):
+        for year, d in stamps:
+            if year == ins["year"]:
+                return d
+    return None
+
+
 def user_assets_of(ins, stamps=None) -> Path | None:
     """The user-assets folder of one ZBrush installation (an installs.entry dict): the folder its own stamp folder under
     %APPDATA%\\Maxon names (the one whose installpath.txt is this installation), else one of its year, else for a
