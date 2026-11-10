@@ -129,15 +129,18 @@ jobs:
             if ($isFence) { $inFence = -not $inFence }
           }
           $body = $joined
-          # Studio's Install update reads the "<sha256>  ZOrbitSetup-<v>.exe" line below (studio.py _setup_asset) and
-          # checks it against GitHub's own digest of the file: keep the format.
+          # The SHA-256 of both files goes in ZOrbit-<v>-SHA256.txt, in sha256sum's "<hash>  <name>" format with LF line
+          # ends, so `sha256sum -c` reads it. Studio's Install update takes the hash from GitHub's own digest of the
+          # file (studio.py _setup_asset). Older Studios drop the line that starts "Download **ZOrbitSetup-" from the
+          # update dialog (changelog.py release_notes): keep that start.
+          $sums = "ZOrbit-$v-SHA256.txt"
+          $text = (@($setup, $zip) | ForEach-Object {
+            "$((Get-FileHash $_ -Algorithm SHA256).Hash.ToLower())  $(Split-Path $_ -Leaf)"
+          }) -join "`n"
+          [IO.File]::WriteAllText((Join-Path $PWD $sums), "$text`n", [Text.UTF8Encoding]::new($false))
+          Get-Content $sums
           $head = @(
-            "Download **ZOrbitSetup-$v.exe** and run it. $($tick)ZOrbit-$v-portable.zip$($tick) is the portable version (see the install page). SHA256:",
-            "",
-            $fence,
-            "$((Get-FileHash $setup -Algorithm SHA256).Hash.ToLower())  ZOrbitSetup-$v.exe",
-            "$((Get-FileHash $zip -Algorithm SHA256).Hash.ToLower())  ZOrbit-$v-portable.zip",
-            $fence,
+            "Download **ZOrbitSetup-$v.exe** and run it. $($tick)ZOrbit-$v-portable.zip$($tick) is the portable version (see the install page). $($tick)$sums$($tick) has the SHA-256 of both.",
             ""
           )
           # A blog post with the slug zorbit-<version, dots as dashes> gets a link above the changelog section.
@@ -155,7 +158,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           $v = "${{ steps.ver.outputs.version }}"
-          $assets = "packaging\Output\ZOrbitSetup-$v.exe", "dist\ZOrbit-$v-portable.zip"
+          $assets = "packaging\Output\ZOrbitSetup-$v.exe", "dist\ZOrbit-$v-portable.zip", "ZOrbit-$v-SHA256.txt"
           gh release view "$env:GITHUB_REF_NAME" --repo "$env:GITHUB_REPOSITORY" *> $null
           if ($LASTEXITCODE -eq 0) {
             # The tag was pushed again (for example after a history rewrite): refresh files and notes.

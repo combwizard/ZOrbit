@@ -136,7 +136,8 @@ def _file_sha256(path) -> str | None:
 def _setup_asset(release, version) -> dict | None:
     """The release's ZOrbitSetup-<version>.exe as {"name", "url", "size", "sha256", "version"}, or None when it has
     none, it is not on this project's releases, or its SHA-256 is not known. The hash comes from GitHub's own digest
-    of the file and from the "<sha256>  <name>" line the release notes carry; when both are there they must agree."""
+    of the file and from the "<sha256>  <name>" line the release notes carried up to 0.23.0 (later releases put it in
+    ZOrbit-<version>-SHA256.txt instead); when both are there they must agree."""
     if not isinstance(release, dict):
         return None
     name = f"ZOrbitSetup-{version}.exe"

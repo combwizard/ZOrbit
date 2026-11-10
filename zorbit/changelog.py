@@ -57,7 +57,7 @@ def sections(text: str) -> list[dict]:
 def release_notes(body, version: str) -> dict:
     """The notes of a GitHub release, for Studio's update dialog: {"summary": [paragraphs], "items": [bullets],
     "blog": url or ""}. The body is the release's CHANGELOG section with what the release workflow puts above it
-    (build.yml): the download line, the SHA-256 block and the blog link. Those are dropped; the blog link is kept as
+    (build.yml): the download line, the SHA-256 block (up to 0.23.0) and the blog link. Those are dropped; the blog link is kept as
     "blog". Every bullet is kept, up to NOTES_MAX_ITEMS."""
     lines, fenced, blog = [], False, ""
     for raw in (body if isinstance(body, str) else "")[:NOTES_MAX_CHARS].splitlines():
