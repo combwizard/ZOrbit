@@ -11,6 +11,10 @@ All notable changes to this project are listed here. The format follows
 - Each release has its SHA-256 hashes in a file you can download, `ZOrbit-<version>-SHA256.txt`, instead of in the release notes.
 - The ring shows up sooner, the first time after ZOrbit starts as well as every time after, and moving over its slots, opening its fans and tapping the hotkey are smoother. About a second after it starts, or after your menus change, ZOrbit draws the rings your hotkeys open, and the fans and rings they lead to, while it has nothing else to do. A large ring at high display scaling gains the most. It looks exactly as before.
 
+### Fixed
+
+- The auto slots of a submenu that opens as a ring of its own could change order when you opened it, while one of them was still empty. They now stay where they were, as in any other ring.
+
 ## [0.23.0] - 2026-11-10
 
 ZOrbit 0.23.0 adds a **Recent** slot: a fan of the projects and tools ZBrush opened last, read from ZBrush's own

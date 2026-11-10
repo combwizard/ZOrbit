@@ -5,6 +5,7 @@ open is played the way open_menu and Ring.show set a ring up, without the window
 """
 import ctypes.wintypes as w
 import json
+import time
 
 import pytest
 from PIL import Image
@@ -21,11 +22,13 @@ MENUS = {
     "a": {"title": "A", "hotkey": "Q", "items": [{"brush": "Move"}, {"brush": "Clay"}, {"auto": "brush"},
                                                   {"menu": "f", "label": "Fan"}, {"menu": "s", "label": "Sub"},
                                                   {"recent": "any", "label": "Recent"}]},
-    "b": {"title": "B", "hotkey": "W", "items": [{"brush": "Pinch"}, {"brush": "Flatten"}, {"menu": "f", "label": "Fan"}]},
+    "b": {"title": "B", "hotkey": "W", "items": [{"brush": "Pinch"}, {"brush": "Flatten"}, {"menu": "f", "label": "Fan"},
+                                                  {"menu": "t", "label": "Autos"}]},
     "f": {"title": "F", "fan": True, "items": [{"brush": "Layer"}, {"brush": "Standard"},
                                                {"menu": "g", "label": "Deeper"}]},
     "g": {"title": "G", "fan": True, "items": [{"brush": "Slash3"}, {"brush": "Inflat"}]},
     "s": {"title": "S", "items": [{"brush": "ClayTubes"}, {"brush": "SnakeHook"}, {"brush": "Move Topological"}]},
+    "t": {"title": "T", "items": [{"auto": "brush"}, {"auto": "brush"}, {"auto": "brush"}, {"brush": "Dam"}]},
 }
 
 
@@ -125,7 +128,7 @@ def open_everything(app):
         r = opened(app, m)
         open_fans(r)
         rings.append(r)
-    for mid in ("s",):
+    for mid in ("s", "t"):
         rings.append(opened(app, app.expander.resolve(mid), nested=True))
     for r in rings:
         tap(r)
@@ -266,7 +269,7 @@ def test_a_pick_that_fills_an_auto_slot_draws_only_that_slot(env):
     app._record_pick(radiald.C.Item(label="Smooth", kind="brush", data={"brush": "Smooth"}))
     assert timers[radiald.TIMER_RING_WARM] == radiald.RING_WARM_PICK_MS
     run_warm(app, timers)
-    assert counts.take() == {"slot": 1, "menu": 1, "static": 0, "lines": 0}     # the new slot and menu a's sprites
+    assert counts.take() == {"slot": 1, "menu": 2, "static": 0, "lines": 0}     # the new slot, a's and t's sprites
     open_everything(app)
     assert counts.take() == {"slot": 0, "menu": 0, "static": 0, "lines": 0}
 
@@ -313,3 +316,23 @@ def test_zbrush_on_a_monitor_of_another_scale_warms_again_and_focus_elsewhere_do
     timers.clear()
     app._check_warm_scale()
     assert timers == {}                                    # the same scale again: nothing
+
+
+def test_the_warm_up_leaves_a_submenus_auto_slots_where_they_are(env):
+    app, timers, lines, counts, *_ = env
+    run_warm(app, timers)
+    now = time.time()
+    # Saved in an order that is not the ranking (Beta scores higher, Alpha holds the first slot), with one slot empty.
+    raw = {"brushes": {"alpha": {"name": "Alpha", "score": 1.0, "t": now - 3600},
+                       "beta": {"name": "Beta", "score": 3.0, "t": now}},
+           "menus": {"t": {"slots": ["Alpha", "Beta", None], "pending": []}}}
+    with open(app.usage.path, "w", encoding="utf-8") as f:
+        json.dump(raw, f)
+    app.usage.load()
+    before = json.loads(json.dumps(app.usage.menus["t"]))
+    shown = [it.label for it in app.expander.resolve("t").items]
+    assert shown == ["Alpha", "Beta", "Auto", "Dam"]
+    app._warm_soon("menus loaded")
+    run_warm(app, timers)
+    assert app.usage.menus["t"] == before
+    assert [it.label for it in app.expander.resolve("t").items] == shown
