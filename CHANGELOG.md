@@ -4,7 +4,11 @@ All notable changes to this project are listed here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.23.0] - 2026-11-10
+
+ZOrbit 0.23.0 adds a **Recent** slot: a fan of the projects and tools ZBrush opened last, read from ZBrush's own
+Lightbox list, so a pick opens one again. You can open up to six browser windows, each with its own **Keep on top**.
+Setup's step titles no longer say ZBrush was found, or the plugin loaded, before that is true.
 
 ### Added
 
@@ -1041,6 +1045,7 @@ First public release.
   only brushes included with ZBrush.
 - Documentation: README, user guide, third-party notices and contributing guide.
 
+[0.23.0]: https://github.com/combwizard/zorbit/releases/tag/v0.23.0
 [0.22.0]: https://github.com/combwizard/zorbit/releases/tag/v0.22.0
 [0.21.0]: https://github.com/combwizard/zorbit/releases/tag/v0.21.0
 [0.20.0]: https://github.com/combwizard/zorbit/releases/tag/v0.20.0
