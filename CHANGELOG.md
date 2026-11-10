@@ -8,7 +8,8 @@ All notable changes to this project are listed here. The format follows
 
 ZOrbit 0.23.0 adds a **Recent** slot: a fan of the projects and tools ZBrush opened last, read from ZBrush's own
 Lightbox list, so a pick opens one again. You can open up to six browser windows, each with its own **Keep on top**.
-Setup's step titles no longer say ZBrush was found, or the plugin loaded, before that is true.
+Setup's step titles no longer say ZBrush was found, or the plugin loaded, before that is true, and the strip no
+longer comes back after ZBrush has closed.
 
 ### Added
 
