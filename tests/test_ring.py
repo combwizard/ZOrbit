@@ -1741,11 +1741,21 @@ def test_a_preview_follows_a_slider_drag_and_comes_back():
     assert len(set(pics[:3])) == 3 and pics[3] == pics[0]
 
 
+def static_bytes():
+    return sum(im.size[0] * im.size[1] * 4 for im, _n in ring._static_layers._d.values())
+
+
 def test_the_static_layers_stay_within_their_bound(monkeypatch):
     for k in range(ring.STATIC_LAYERS + 4):
         static_layer(menu=tinted_menu(title=f"T{k}"))
-    assert len(ring._static_layers) == ring.STATIC_LAYERS
-    assert ring._static_layers.bytes <= ring.STATIC_BYTES
+    cache = ring._static_layers
+    assert len(cache) < ring.STATIC_LAYERS            # at 100% the bytes run out before the count
+    one = next(iter(cache._d.values()))[1]
+    assert cache.bytes == static_bytes() <= ring.STATIC_BYTES < cache.bytes + one      # full: one more would not fit
+    monkeypatch.setattr(cache, "max_bytes", 2**40)     # with room to spare, the count stops it
+    for k in range(ring.STATIC_LAYERS + 4):
+        static_layer(menu=tinted_menu(title=f"U{k}"))
+    assert len(cache) == ring.STATIC_LAYERS and cache.bytes == static_bytes()
     monkeypatch.setattr(ring._static_layers, "max_bytes", 1)       # one layer is over the budget: only the newest stays
     newest = static_layer(menu=tinted_menu(title="newest"))
     assert len(ring._static_layers) == 1 and static_layer(menu=tinted_menu(title="newest")) is newest

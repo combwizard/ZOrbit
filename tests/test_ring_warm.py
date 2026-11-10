@@ -77,6 +77,7 @@ def env(tmp_path, monkeypatch):
     listed = list(RECENT)
     monkeypatch.setattr(recent, "entries", lambda kind, limit, install=None, log=None: listed[:limit])
     monkeypatch.setattr(recent, "prefetch", lambda *a, **k: None)     # never the real list
+    monkeypatch.setattr(recent, "known", lambda kind, limit, install=None: True)
     radial = tmp_path / "radial.json"
     radial.write_text(json.dumps({"menus": MENUS}), encoding="utf-8")
     app = radiald.App(str(radial))
@@ -259,7 +260,7 @@ def test_the_warm_up_stays_inside_every_cache_bound_and_keeps_what_it_drew(env, 
 def test_the_warm_up_uses_the_bounds_of_each_cache():
     limits = radiald.App._warm_limits()
     assert limits["slot"] == (int(ring.SLOT_SPRITES * 0.75), float("inf"))
-    assert limits["static"] == (12, 12 * 2**20) and limits["lines"] == (24, 3 * 2**20) and limits["menu"] == (6, float("inf"))
+    assert limits["static"] == (36, 24 * 2**20) and limits["lines"] == (24, 3 * 2**20) and limits["menu"] == (6, float("inf"))
 
 
 def test_a_pick_that_fills_an_auto_slot_draws_only_that_slot(env):
@@ -336,3 +337,126 @@ def test_the_warm_up_leaves_a_submenus_auto_slots_where_they_are(env):
     run_warm(app, timers)
     assert app.usage.menus["t"] == before
     assert [it.label for it in app.expander.resolve("t").items] == shown
+
+def warm_lines(lines):
+    return [ln for ln in lines if ln.startswith("ring warm-up")]
+
+
+def test_a_job_that_raises_is_said_once_and_the_plan_goes(env, monkeypatch):
+    app, timers, lines, counts, *_ = env
+
+    def boom():
+        raise RuntimeError("boom")
+    monkeypatch.setattr(ring.Ring, "warm_jobs", lambda self, part: iter([("slot", ("k",), 0, boom)]))
+    lines.clear()
+    assert run_warm(app, timers) == 1
+    said = warm_lines(lines)
+    assert len(said) == 1 and "error" in said[0] and "boom" in said[0]
+    assert radiald.TIMER_RING_WARM not in timers and app._warm is None
+
+
+def test_a_plan_that_raises_is_said_once_and_the_timer_goes(env, monkeypatch):
+    app, timers, lines, counts, *_ = env
+
+    def boom(self):
+        raise OSError("no monitor")
+    monkeypatch.setattr(radiald.App, "_warm_target", boom)
+    lines.clear()
+    assert run_warm(app, timers) == 1
+    said = warm_lines(lines)
+    assert len(said) == 1 and "no monitor" in said[0]
+    assert radiald.TIMER_RING_WARM not in timers and app._warm is None and sum(counts.take().values()) == 0
+
+
+def test_a_menus_file_that_cannot_be_read_at_start_leaves_nothing_to_warm(env, tmp_path):
+    app, timers, lines, counts, *_ = env
+    timers.clear()
+    bad = tmp_path / "bad.json"
+    bad.write_text("{ not json", encoding="utf-8")
+    other = radiald.App(str(bad))
+    other.ctrl = 1
+    other.load_config(force=True, balloon=False)            # nothing loaded yet: the app runs with no menus
+    assert other.slots == [] and timers[radiald.TIMER_RING_WARM] == radiald.RING_WARM_WAIT_MS
+    assert run_warm(other, timers) == 1 and radiald.TIMER_RING_WARM not in timers
+    assert sum(counts.take().values()) == 0 and warm_lines(lines) == []
+
+
+def test_before_the_control_window_there_is_no_timer_and_start_makes_one(env):
+    app, timers, lines, counts, *_ = env
+    timers.clear()
+    app.ctrl = None
+    gen = app._warm_gen
+    app.load_config(force=True, balloon=False)             # _serve loads the menus before the window exists
+    assert timers == {} and app._warm_gen == gen + 1
+    app.ctrl = 1
+    app._warm_soon("start")                                # ... and asks again once it does
+    assert timers[radiald.TIMER_RING_WARM] == radiald.RING_WARM_WAIT_MS
+    run_warm(app, timers)
+    counts.take()
+    open_everything(app)
+    assert counts.take() == {"slot": 0, "menu": 0, "static": 0, "lines": 0}
+
+
+def test_pictures_already_there_are_found_not_drawn_and_kept(env):
+    app, timers, lines, counts, *_ = env
+    r = opened(app, app.slots[0])                          # the user opened ring a before warm-up ran
+    open_fans(r)
+    by_hand = counts.take()
+    lines.clear()
+    run_warm(app, timers)
+    said = warm_lines(lines)[0]
+    found = int(said.split(" already there")[0].rsplit(", ", 1)[1])
+    assert found >= by_hand["slot"] + by_hand["static"] + by_hand["lines"]
+    counts.take()
+    open_everything(app)                                   # what was there before is still there
+    assert counts.take() == {"slot": 0, "menu": 0, "static": 0, "lines": 0}
+
+
+def test_zbrushs_monitor_is_kept_while_another_program_is_in_front(env, monkeypatch):
+    app, timers, lines, counts, *_ = env
+    timers.clear()
+    front = {"zbrush": True}
+    monkeypatch.setattr(W, "GetForegroundWindow", lambda: 7)
+    monkeypatch.setattr(radiald.App, "target_in_front", lambda self, on_hook=False: front["zbrush"])
+    app._check_warm_scale()                                # the config tick sees ZBrush in front, on a 150% monitor
+    front["zbrush"] = False                                # Studio comes to the front and saves
+    app._warm_soon("menus loaded")
+    run_warm(app, timers)
+    assert app._warm_scale == 1.5 and "at scale 1.50" in warm_lines(lines)[-1]
+    front["zbrush"] = True                                 # back in ZBrush: nothing to plan again
+    app._check_warm_scale()
+    assert radiald.TIMER_RING_WARM not in timers
+
+
+def test_before_zbrush_is_seen_the_primary_monitor_is_used(env):
+    app, timers, lines, counts, *_ = env
+    assert app._zb_monitor is None and app._warm_target() == (WORK, 1.0)
+
+
+def test_a_plan_with_recent_slots_waits_for_the_first_answer_until_its_deadline(env, monkeypatch):
+    app, timers, lines, counts, *_ = env
+    answered = {"yet": False}
+    monkeypatch.setattr(recent, "known", lambda kind, limit, install=None: answered["yet"])
+    app._warm_tick()                                       # planned, and waiting
+    for _ in range(3):
+        app._warm_tick()
+    assert sum(counts.take().values()) == 0 and timers[radiald.TIMER_RING_WARM] == radiald.RING_WARM_HOLD_MS
+    answered["yet"] = True                                 # the worker answered
+    app._warm_tick()
+    assert sum(counts.take().values()) == 1
+    app._warm_soon("menus loaded")
+    answered["yet"] = False
+    app._warm_tick()
+    app._warm["recent_until"] = 0.0                        # a read that never answers holds it only so long
+    run_warm(app, timers)
+    assert radiald.TIMER_RING_WARM not in timers and app._warm is None
+
+
+def test_a_plan_without_recent_slots_does_not_wait_for_them(env, monkeypatch):
+    app, timers, lines, counts, *_ = env
+    monkeypatch.setattr(recent, "known", lambda kind, limit, install=None: False)
+    for m in app.cfg.menus.values():
+        m.items = [it for it in m.items if it.kind != "recent"]
+    app._warm_soon("menus loaded")
+    app._warm_tick()
+    assert app._warm["recent"] == [] and sum(counts.take().values()) == 1

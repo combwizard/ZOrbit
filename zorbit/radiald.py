@@ -107,6 +107,7 @@ RING_WARM_PICK_MS = 2000              # ... and this long after a pick that chan
 RING_WARM_STEP_MS = 10                # one picture per tick while it runs
 RING_WARM_HOLD_MS = 100               # how often it looks again while something more urgent is going on
 RING_WARM_TICK_S = 0.004              # pictures already there are walked past in one tick for at most this long
+RING_WARM_RECENT_S = 4.0              # a plan with recent slots waits at most this long for the first recent-files answer
 RING_WARM_SHARE = 0.75                # warm-up fills at most this share of each ring cache, so it never pushes out
                                       # what it drew a moment ago, and leaves room for what is opened by hand
 COMMAND_WAIT_S = 2                    # how long a command's pick waits for the one before it to be taken
@@ -459,6 +460,7 @@ class App:
         self._warm_gen = 0              # moved by every change that makes a warm-up plan out of date
         self._warm_why = "start"        # what asked for the next warm-up
         self._warm_scale = None         # the display scale the last warm-up was planned for
+        self._zb_monitor = None         # (work area, scale) of ZBrush's monitor when it was last seen in front
 
     # --- library folders -------------------------------------------------------------------------
     def _check_library_folders(self) -> None:
@@ -1137,7 +1139,9 @@ class App:
         self.usage.record_pick(item.kind, item.data[item.kind])
         if item.kind == "brush":                  # the auto slots follow brushes only
             autos = [m for m in self.cfg.menus.values() if usage.auto_count(m)]
-            shown = [self.usage.slots(m) for m in autos]    # what the rings showed (and warm-up drew) before this pick
+            # What the rings last showed (and warm-up drew): a copy of the stored slots. Not slots(), which would fill
+            # an empty slot from the ranking before this pick is counted, and so change where the pick lands.
+            shown = [list(self.usage.menus.get(m.id, {}).get("slots", [])) for m in autos]
             self.usage.record(item.data["brush"])
             for m in autos:
                 before = self.usage.slots(m)
@@ -1219,33 +1223,55 @@ class App:
         if self.ctrl is not None:
             W.SetTimer(self.ctrl, TIMER_RING_WARM, wait_ms, None)
 
-    def _warm_target(self):
-        """(work area, scale) of the monitor the next ring most likely opens on: ZBrush's when it is in front, else
-        the primary one (which holds the point 0, 0)."""
-        fg = W.GetForegroundWindow()
-        if fg and self.target_in_front():
-            return W.monitor_for_window(fg)
-        return W.monitor_for_point(0, 0)
-
-    def _check_warm_scale(self):
-        """A display change: ZBrush in front on a monitor of another scale than the last warm-up's warms again."""
-        if self._warm_scale is None or self.ctrl is None:
-            return
+    def _zbrush_monitor(self):
+        """(work area, scale) of the monitor holding ZBrush's window when ZBrush is in front, else None. Each answer is
+        kept in _zb_monitor, so warm-up planned while another program is in front (Studio saving) still uses it."""
         fg = W.GetForegroundWindow()
         if not fg or not self.target_in_front():
-            return                                 # only ZBrush's own monitor counts, so focus moving elsewhere is no change
-        scale = W.monitor_for_window(fg)[1]
-        if scale != self._warm_scale:
-            self._warm_scale = scale
+            return None
+        self._zb_monitor = W.monitor_for_window(fg)
+        return self._zb_monitor
+
+    def _warm_target(self):
+        """(work area, scale) of the monitor the next ring most likely opens on: ZBrush's, in front now or where it
+        was last seen in front, else (ZBrush not seen yet) the primary one, which holds the point 0, 0."""
+        return self._zbrush_monitor() or self._zb_monitor or W.monitor_for_point(0, 0)
+
+    def _check_warm_scale(self):
+        """On the config tick: notes ZBrush's monitor while it is in front, and warms again when that monitor's scale
+        is not the one the last warm-up was planned for (ZBrush moved to another monitor, or the scale changed). Focus
+        moving to another program is no change."""
+        mon = self._zbrush_monitor()
+        if mon is None or self._warm_scale is None or self.ctrl is None:
+            return
+        if mon[1] != self._warm_scale:
+            self._warm_scale = mon[1]
             self._warm_soon("display scale changed")
 
-    def _warm_busy(self) -> bool:
-        """Something comes first: a ring is open or its hotkey is down, a pick is on its way to ZBrush, or the
-        menus' thumbnails are still being read."""
+    def _warm_busy(self, w=None) -> bool:
+        """Something comes first: a ring is open or its hotkey is down, a pick is on its way to ZBrush, the menus'
+        thumbnails are still being read, or (for a plan w with recent slots, until its deadline) the first answer about
+        ZBrush's recent files has not come yet, so the Recent fan is not planned empty."""
         t = self._prefetch_thread
-        return (self.ring is not None or self.held_vk is not None or self._ack is not None
+        if (self.ring is not None or self.held_vk is not None or self._ack is not None
                 or self._browser_pick is not None or bool(self._commands) or self._apply_watch is not None
-                or (t is not None and t.is_alive()))
+                or (t is not None and t.is_alive())):
+            return True
+        if w is None or not w["recent"] or time.monotonic() >= w["recent_until"]:
+            return False
+        limit = self.expander._tag_limit()
+        return not all(recent.known(kind, limit) for kind in w["recent"])
+
+    def _warm_plan(self):
+        """A new plan, as _warm_tick keeps it."""
+        work, scale = self._warm_target()
+        self._warm_scale = scale
+        kinds = {it.data.get("recent") for m in self.cfg.menus.values() for it in m.items if it.kind == "recent"}
+        now = time.monotonic()
+        return {"gen": self._warm_gen, "jobs": self._warm_jobs(work, scale), "limits": self._warm_limits(),
+                "want": {}, "drawn": 0, "found": 0, "ms": 0.0, "longest": 0.0, "steps": 0, "at": now, "scale": scale,
+                "full": False, "why": self._warm_why,
+                "recent": sorted(k for k in kinds if isinstance(k, str)), "recent_until": now + RING_WARM_RECENT_S}
 
     @staticmethod
     def _warm_limits():
@@ -1294,22 +1320,19 @@ class App:
         w = self._warm
         if w is not None and w["gen"] != self._warm_gen:      # made for menus that have changed since
             w = self._warm = None
-        if w is None:
-            if self.cfg is None or not self.slots or self.expander is None:
-                W.KillTimer(self.ctrl, TIMER_RING_WARM)
-                return
-            work, scale = self._warm_target()
-            self._warm_scale = scale
-            w = self._warm = {"gen": self._warm_gen, "jobs": self._warm_jobs(work, scale), "limits": self._warm_limits(),
-                              "want": {}, "drawn": 0, "found": 0, "ms": 0.0, "longest": 0.0, "steps": 0,
-                              "at": time.monotonic(), "scale": scale, "full": False, "why": self._warm_why}
-        if self._warm_busy():
-            W.SetTimer(self.ctrl, TIMER_RING_WARM, RING_WARM_HOLD_MS, None)
+        if w is None and (self.cfg is None or not self.slots or self.expander is None):
+            W.KillTimer(self.ctrl, TIMER_RING_WARM)
             return
-        W.SetTimer(self.ctrl, TIMER_RING_WARM, RING_WARM_STEP_MS, None)
         t0 = time.perf_counter()
         done = False
         try:
+            if w is None:
+                w = self._warm = self._warm_plan()
+            if self._warm_busy(w):
+                W.SetTimer(self.ctrl, TIMER_RING_WARM, RING_WARM_HOLD_MS, None)
+                return
+            W.SetTimer(self.ctrl, TIMER_RING_WARM, RING_WARM_STEP_MS, None)
+            t0 = time.perf_counter()
             while True:
                 job = next(w["jobs"], None)
                 if job is None:
@@ -1329,9 +1352,11 @@ class App:
                 w["found"] += 1
                 if time.perf_counter() - t0 > RING_WARM_TICK_S:
                     break
-        except Exception:
-            log("ring warm-up error:\n" + traceback.format_exc())
-            done = True
+        except Exception:                          # planning or a picture failed: said once, and the plan goes
+            log("ring warm-up error; the rest of this warm-up is dropped:\n" + traceback.format_exc())
+            W.KillTimer(self.ctrl, TIMER_RING_WARM)
+            self._warm = None
+            return
         ms = (time.perf_counter() - t0) * 1000
         w["ms"] += ms
         w["longest"] = max(w["longest"], ms)

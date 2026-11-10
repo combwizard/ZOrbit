@@ -83,3 +83,21 @@ def test_the_order_still_changes_by_the_top_of_the_list_twice_in_a_row(app):
     app._record_pick(delta)                         # the second time in a row: it takes the weakest slot
     assert state(app)["slots"] == ["Alpha", "Beta", "Delta"]
     assert open_sub(app) == ["Alpha", "Beta", "Delta"]
+
+
+def test_a_pick_lands_in_the_slot_the_ranking_gives_it(tmp_path, monkeypatch):
+    """Two empty auto slots and an older brush, Clay, that never filled one. Picking Smooth counts it first and then
+    fills the slots from the ranking, so Smooth (picked just now) comes before Clay (a week old)."""
+    for name in ("_prefetch", "_schedule_prewarm", "_prune_icons"):
+        monkeypatch.setattr(radiald.App, name, lambda self: None)
+    monkeypatch.setattr(radiald, "log", lambda m: None)
+    raw = {"brushes": {"clay": {"name": "Clay", "score": 1.0, "t": time.time() - 7 * 86400}}}
+    (tmp_path / "usage.json").write_text(json.dumps(raw), encoding="utf-8")
+    radial = tmp_path / "radial.json"
+    radial.write_text(json.dumps({"menus": {"m": {"title": "M", "hotkey": "Q",
+                                                  "items": [{"auto": "brush"}, {"auto": "brush"}]}}}), encoding="utf-8")
+    a = radiald.App(str(radial))
+    a.usage = usage.Usage(str(tmp_path / "usage.json")).load()
+    a.load_config(force=True, balloon=False)
+    a._record_pick(radiald.C.Item(label="Smooth", kind="brush", data={"brush": "Smooth"}))
+    assert a.usage.menus["m"]["slots"] == ["Smooth", "Clay"]

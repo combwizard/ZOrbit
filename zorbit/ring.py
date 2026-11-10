@@ -81,8 +81,12 @@ _sprite_cache = OrderedDict()   # key (see Ring._sprite_key) -> (sprites, labels
 SLOT_SPRITES = 160          # single slots kept, so a menu that changed by one slot redraws only that slot
 _slot_cache = OrderedDict()     # key (see Ring._slot_key) -> (slot sprites, label sprites), least recently used first
 _sprite_lock = threading.Lock()
-STATIC_BYTES = 16 * 2**20   # the static layers kept between opens (Ring._static_key), by their pixels ...
-STATIC_LAYERS = 16          # ... and by count
+# The static layers kept between opens (Ring._static_key), by their pixels: room for the hold and click layers of three
+# 16-slot hotkey rings at 150% (about 27 MB with what warm-up leaves free) or of the starter menus at 200% ...
+STATIC_BYTES = 32 * 2**20
+# ... and by count, which is only a backstop: the smallest layer, a ring at its minimum radius at 100%, is about 0.8 MB,
+# so the bytes run out at about 42 layers, before this.
+STATIC_LAYERS = 48
 FAN_LINE_BYTES = 4 * 2**20  # the same for the dashed lines of fans (Ring._fan_lines)
 FAN_LINE_IMAGES = 32
 ICON_SIGS = 1024            # icon signatures remembered (_icon_sig); each entry lives only as long as its image
