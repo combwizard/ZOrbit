@@ -84,6 +84,8 @@ def list_file(install=None):
     else:
         assets = brushes.user_assets_of(install) if install.get("python") else None
     if install.get("python"):                       # 2026 and newer: in the user assets folder
+        if assets is None:                          # none chosen yet: ZBrush keeps ZStartup in its stamp folder
+            assets = brushes.stamp_of(install)
         if assets is None:
             return None, f"no user assets folder recorded for {install['path']}"
         return Path(assets).joinpath(*SUBFOLDER, FILE_NAME), ""
