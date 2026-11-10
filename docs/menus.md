@@ -368,6 +368,8 @@ Opens the [browser window](browser.md). `kind` chooses the tab it opens on: `bru
 
 A **Recent** slot opens a fan of the files ZBrush opened last, newest first. `project` shows `.zpr` projects, `tool` shows `.ztl` tools and `any` shows both, in one list. Any other value is listed as a problem ("'recent' must be project, tool or any") and the slot is drawn empty. Without a `label`, the slot is called **Recent projects**, **Recent tools** or **Recent**.
 
+![A ring of five brushes and a Recent slot. The Recent slot's fan is open to the left with six files, Dragon Bust, Hero, Blockout, Sword, Helmet and Creature Sketch, each with the project or tool icon, and Hero is hovered](images/recent-fan.png)
+
 The list is ZBrush's own, the one Lightbox keeps of recent files. ZBrush writes it to `ZStartup\ConfigFiles\LightboxRecentFiles.cfg`:
 
 - **ZBrush 2026 and newer:** in your user assets folder, the one ZBrush records in `userassets_path.txt` under `%APPDATA%\Maxon` (the same folder the [brush list](#brush) reads). Until a user assets folder is chosen there is no `userassets_path.txt`, and ZBrush keeps the list in its own folder under `%APPDATA%\Maxon`, such as `ZBrush 2026_<letters and digits>`. ZOrbit reads it there.
