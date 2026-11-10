@@ -14,6 +14,7 @@ All notable changes to this project are listed here. The format follows
 ### Fixed
 
 - The auto slots of a submenu that opens as a ring of its own could change order when you opened it, while one of them was still empty. They now stay where they were, as in any other ring.
+- When a tag's fan has no room by a screen edge and its items open as a ring of their own, they now have the tag's colour, as they do in the fan. Before, each had the colour of its own first tag.
 
 ## [0.23.0] - 2026-11-10
 
