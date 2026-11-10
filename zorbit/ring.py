@@ -15,7 +15,8 @@ glow colour; a fan with a look of its own is drawn in it; the hub is a dot, disc
 All of it is drawn into the sprites when they are built, so a frame costs the same as before.
 Every disc is drawn before any label, and a label sits on a soft pill in the theme's colour, so a neighbouring disc never hides a name. The radius is
 a minimum: a ring with many items grows until neighbouring slots are SLOT_GAP slot widths apart.
-Sprites are kept between opens (_sprite_cache), so a menu opened again starts at once.
+Sprites are kept between opens (_sprite_cache), and so are the static layer of guide rings, spokes, title and hint
+(_static_layers) and the dashed lines of fans (_fan_line_cache), so a menu opened again starts at once.
 Selection is by angle outside a dead zone; a slot covers at most a quarter of the circle, so a ring of one to
 three slots has gaps between them.
 
@@ -49,6 +50,7 @@ import os
 import threading
 import time
 import traceback
+import weakref
 from collections import OrderedDict
 
 from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageFont
@@ -79,6 +81,11 @@ _sprite_cache = OrderedDict()   # key (see Ring._sprite_key) -> (sprites, labels
 SLOT_SPRITES = 160          # single slots kept, so a menu that changed by one slot redraws only that slot
 _slot_cache = OrderedDict()     # key (see Ring._slot_key) -> (slot sprites, label sprites), least recently used first
 _sprite_lock = threading.Lock()
+STATIC_BYTES = 16 * 2**20   # the static layers kept between opens (Ring._static_key), by their pixels ...
+STATIC_LAYERS = 16          # ... and by count
+FAN_LINE_BYTES = 4 * 2**20  # the same for the dashed lines of fans (Ring._fan_lines)
+FAN_LINE_IMAGES = 32
+ICON_SIGS = 1024            # icon signatures remembered (_icon_sig); each entry lives only as long as its image
 _class_registered = False
 _wndproc_ref = None
 try:
@@ -237,11 +244,71 @@ def _sprite_put(key, val):
             _sprite_cache.popitem(last=False)
 
 
+class _ImageLRU:
+    """Pictures kept between opens, least recently used first, within a pixel budget and a count. The newest entry
+    always stays, however big. Values are read only: a caller that draws on one must draw on a copy. The key is the
+    whole of what the picture is drawn from, so a change of any input is a new entry, never a stale one."""
+
+    def __init__(self, max_bytes, max_entries):
+        self.max_bytes, self.max_entries = max_bytes, max_entries
+        self._d = OrderedDict()            # key -> (value, bytes)
+        self.bytes = 0
+
+    def __len__(self):
+        return len(self._d)
+
+    def get(self, key):
+        with _sprite_lock:
+            got = self._d.get(key)
+            if got is None:
+                return None
+            self._d.move_to_end(key)
+            return got[0]
+
+    def put(self, key, val, nbytes):
+        with _sprite_lock:
+            old = self._d.pop(key, None)
+            if old is not None:
+                self.bytes -= old[1]
+            self._d[key] = (val, nbytes)
+            self.bytes += nbytes
+            while len(self._d) > 1 and (len(self._d) > self.max_entries or self.bytes > self.max_bytes):
+                self.bytes -= self._d.popitem(last=False)[1][1]
+
+    def clear(self):
+        with _sprite_lock:
+            self._d.clear()
+            self.bytes = 0
+
+
+_static_layers = _ImageLRU(STATIC_BYTES, STATIC_LAYERS)       # Ring._static_key -> the static layer
+_fan_line_cache = _ImageLRU(FAN_LINE_BYTES, FAN_LINE_IMAGES)  # Ring._fan_lines' key -> (image, top-left)
+_icon_sigs = {}             # id(image) -> (weak reference to the image, its signature)
+
+
 def _icon_sig(im):
-    """A short fingerprint of an icon image: same picture, same signature, however many objects hold it."""
+    """A short fingerprint of an icon image: same picture, same signature, however many objects hold it. Worked out
+    once per image object (icons are never drawn on: the ring draws copies), so a ring that opens again does not hash
+    every icon again. A replaced icon is another object and gets its own."""
     if im is None:
         return None
-    return (im.size, im.mode, hashlib.blake2b(im.tobytes(), digest_size=8).hexdigest())
+    got = _icon_sigs.get(id(im))
+    if got is not None and got[0]() is im:
+        return got[1]
+    sig = (im.size, im.mode, hashlib.blake2b(im.tobytes(), digest_size=8).hexdigest())
+    if len(_icon_sigs) >= ICON_SIGS:
+        _icon_sigs.clear()
+    key = id(im)
+
+    def gone(ref, key=key):                # the image was freed: its id may be given to another one
+        got = _icon_sigs.get(key)
+        if got is not None and got[0] is ref:
+            _icon_sigs.pop(key, None)
+    try:
+        _icon_sigs[key] = (weakref.ref(im, gone), sig)
+    except TypeError:                      # not weakly referable: just not remembered
+        pass
+    return sig
 
 
 def _shorten(draw, text, font, maxw):
@@ -431,6 +498,18 @@ def _blit(canvas, im, x, y):
         canvas.alpha_composite(im, (x + l, y + t), (l, t, r, b))
 
 
+def _premultiplied_bgra(im):
+    """An RGBA frame as the premultiplied BGRA bytes UpdateLayeredWindow wants. Pillow's BGRa packer premultiplies
+    while it packs (it rounds a channel times alpha slightly differently from ImageChops.multiply, by 1 at most);
+    a Pillow without it gets the split, multiply and merge."""
+    try:
+        return im.tobytes("raw", "BGRa")
+    except ValueError:
+        r, g, b, a = im.split()
+        r, g, b = (ImageChops.multiply(ch, a) for ch in (r, g, b))
+        return Image.merge("RGBA", (r, g, b, a)).tobytes("raw", "BGRA")
+
+
 def _glyph_tag(draw, cx, cy, size, fill):
     """A luggage tag (outline, a ring hole near the blunt end) pointing up and right, size across."""
     a = math.radians(-45)
@@ -611,6 +690,8 @@ class Ring:
         self._dib = None
         self._last_key = None
         self._base_cache = None
+        self._static_cache = None                  # the static layer this ring draws (see _static)
+        self._blend_cache, self._resized = {}, {}  # made again by _prepare
         self._icons = {}                           # id(item) -> its icon image, for _sprite_key and the sprites
 
     # --- public ----------------------------------------------------------------------------------
@@ -1220,6 +1301,7 @@ class Ring:
         self._base_cache = None
         self.hv = [[0.0, 0.0, 0.0] for _ in self.items]       # per slot: from, to, t0
         self._blend_cache = {}
+        self._resized = {}                                      # per slot: (picture, pixel size, it resized)
 
     def _icon(self, it):
         """The icon image of an item (or None), asked of icon_for once per ring."""
@@ -1489,7 +1571,18 @@ class Ring:
 
     def _fan_lines(self, anchor, anchor_r, pos, sizes, color="", look=None):
         """Dashed lines from a fan's slot out to each of its slots (sizes: their widths), in color if it has one,
-        else the lines colour of the fan's look: (image, top-left relative to the ring centre)."""
+        else the lines colour of the fan's look: (image, top-left relative to the ring centre). Kept between opens
+        (_fan_line_cache), keyed on everything they are drawn from; the image is shared, so it is only ever read."""
+        col = _rgba(color or (look or self.look).lines, 0.75)
+        key = (SS, self.scale, tuple(anchor), anchor_r, tuple(tuple(p) for p in pos), tuple(sizes), col)
+        got = _fan_line_cache.get(key)
+        if got is None:
+            got = self._draw_fan_lines(anchor, anchor_r, pos, sizes, col)
+            _fan_line_cache.put(key, got, got[0].size[0] * got[0].size[1] * 4)
+        return got
+
+    def _draw_fan_lines(self, anchor, anchor_r, pos, sizes, col):
+        """_fan_lines drawn anew, in the RGBA colour col."""
         s = SS
         m = 4 * self.scale
         xs, ys = [anchor[0]] + [p[0] for p in pos], [anchor[1]] + [p[1] for p in pos]
@@ -1497,7 +1590,6 @@ class Ring:
         w, h = math.ceil(max(xs) + m) - x0, math.ceil(max(ys) + m) - y0
         im = Image.new("RGBA", (w * s, h * s), (0, 0, 0, 0))
         d = ImageDraw.Draw(im)
-        col = _rgba(color or (look or self.look).lines, 0.75)
         lw = max(1, int(1.3 * self.scale * s))
         dash, gap = 5 * self.scale, 4 * self.scale
         ax, ay = anchor
@@ -1515,10 +1607,33 @@ class Ring:
         return im.resize((w, h), Image.LANCZOS), (x0, y0)
 
     def _static(self):
-        """Guide rings, spokes, title and hint (no dot, no slots) on the ring's own square. Cached per hint
-        text."""
-        if self._static_cache is not None:
-            return self._static_cache
+        """Guide rings, spokes, title and hint (no dot, no slots) on the ring's own square. Kept on the ring until
+        its hint or armed state changes, and between opens in _static_layers under _static_key, so a ring opened
+        again does not draw it again. The image is shared: it is only ever read."""
+        if self._static_cache is None:
+            key = self._static_key()
+            im = _static_layers.get(key)
+            if im is None:
+                im = self._draw_static()
+                _static_layers.put(key, im, im.size[0] * im.size[1] * 4)
+            self._static_cache = im
+        return self._static_cache
+
+    def _static_key(self):
+        """Everything _draw_static, _band and _caption read, as a hashable value: the sizes and geometry, each slot's
+        kind and rim colour, the tag band settings, the hub, the colours, the title, the hint as it reads now (the
+        hint setting, flick, hold or click, armed) and the fonts folder."""
+        lk = self.look
+        return (SS, _fonts_dir(), self.rsize, self.scale, self.slot, self.R, self.hit_r,
+                tuple(self.seats), tuple(self.rad), tuple(self.sizes), tuple(s.ring for s in self.plan.seats),
+                tuple((rp.radius, rp.step, rp.n, rp.first, rp.offset) for rp in self.plan.rings),
+                tuple((it.kind, _chrome(it, lk)) for it in self.items),
+                lk.tag_band, lk.tag_band_opacity, lk.hub_style, self._hub(),
+                self.c_text, self.c_lines, self.c_hi, self.c_accent, self.pre["hint"],
+                self.menu.title, tuple(self._hint_lines()))
+
+    def _draw_static(self):
+        """The static layer drawn anew (see _static)."""
         s = SS
         S = self.rsize * s
         cx = cy = self.rsize // 2 * s
@@ -1550,8 +1665,7 @@ class Ring:
         for text, font, dy, colr in self._caption(d):
             l, t, r_, b = d.textbbox((0, 0), text, font=font)
             d.text((cx - (r_ - l) / 2 - l, cy + dy * self.scale * s - (b - t) / 2 - t), text, font=font, fill=colr)
-        self._static_cache = im.resize((self.rsize, self.rsize), Image.LANCZOS)
-        return self._static_cache
+        return im.resize((self.rsize, self.rsize), Image.LANCZOS)
 
     def _hint_lines(self):
         """The hint for the ring's state as candidates, longest first: each a tuple of lines. None when the
@@ -1805,7 +1919,15 @@ class Ring:
         w0 = spr.size[0]
         wk = max(1, int(w0 * k))
         if wk != w0:
-            spr = spr.resize((wk, wk), Image.BILINEAR)
+            # A slot keeps its size from frame to frame unless it is growing, shrinking or easing its hover, and a
+            # settled one is still drawn at 1/1.12 of its sprite: the last resize is kept per slot and reused while
+            # the picture and the pixel size are the same.
+            last = self._resized.get(key)
+            if last is not None and last[0] is spr and last[1] == wk:
+                spr = last[2]
+            else:
+                src, spr = spr, spr.resize((wk, wk), Image.BILINEAR)
+                self._resized[key] = (src, wk, spr)
         if rot:
             spr = spr.rotate(rot, resample=Image.BILINEAR)
         if blur > 0.3:
@@ -1830,10 +1952,8 @@ class Ring:
 
     def _push(self, im):
         """Premultiply and hand the frame to Windows via UpdateLayeredWindow (which also moves and resizes
-        the window when the open fans change)."""
-        r, g, b, a = im.split()
-        r, g, b = (ImageChops.multiply(ch, a) for ch in (r, g, b))
-        data = Image.merge("RGBA", (r, g, b, a)).tobytes("raw", "BGRA")
+        the window when the open fans change). Pillow premultiplies as it packs the bytes, in one pass."""
+        data = _premultiplied_bgra(im)
         w, h = self.size
         screen = W.GetDC(None)
         try:

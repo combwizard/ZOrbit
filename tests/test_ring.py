@@ -41,11 +41,12 @@ def make_ring(menu=None, icon_for=None, log=None, **over):
 
 @pytest.fixture(autouse=True)
 def empty_sprite_cache():
-    ring._sprite_cache.clear()
-    ring._slot_cache.clear()
+    caches = (ring._sprite_cache, ring._slot_cache, ring._static_layers, ring._fan_line_cache)
+    for c in caches:
+        c.clear()
     yield
-    ring._sprite_cache.clear()
-    ring._slot_cache.clear()
+    for c in caches:
+        c.clear()
 
 
 # --- radius ------------------------------------------------------------------------------------
@@ -861,9 +862,9 @@ def test_a_look_names_its_colour_roles_for_the_hub_and_the_labels():
 
 
 # --- fans with a look of their own -------------------------------------------------------------
-def fan_ring(fan_look=None, ring_look=None):
+def fan_ring(fan_look=None, ring_look=None, n=3, scale=1.0):
     sub = SimpleNamespace(id="s", title="Sub", animation="", fan=True,
-                          items=[config.Item(f"S{i}", "brush", {"brush": f"S{i}"}) for i in range(3)])
+                          items=[config.Item(f"S{i}", "brush", {"brush": f"S{i}"}) for i in range(n)])
     if fan_look is not None:
         sub.look = fan_look
     menu = make_menu(4)
@@ -872,7 +873,7 @@ def fan_ring(fan_look=None, ring_look=None):
         menu.look = ring_look
     r = ring.Ring(menu, make_cfg(), lambda it: None, lambda *a: None, lambda m: None, held=False,
                   submenus=lambda mid: sub if mid == "s" else None)
-    r._geometry(1.0)
+    r._geometry(scale)
     r._relayout()
     r._prepare()
     return r, r._fan((1,))
@@ -1645,3 +1646,187 @@ def test_an_empty_recent_slot_cannot_be_flicked():
     picked = []
     r._finish = lambda *a: picked.append(a)
     assert r._flicked((0,), True, False) is False and picked == []
+
+
+# --- layers and lines kept between opens -----------------------------------------------------------------------------
+def tinted_menu(title="Test", colour="#ff0000"):
+    """Four brushes, the second with a tag colour, so the tag band shows."""
+    menu = make_menu(4, title=title)
+    menu.items[1] = dataclasses.replace(menu.items[1], color=colour)
+    return menu
+
+
+def static_layer(menu=None, scale=1.0, held=False, armed=True, **over):
+    r = ring.Ring(menu or tinted_menu(), make_cfg(**over), lambda it: None, lambda *a: None, lambda m: None, held=held)
+    r._geometry(scale)
+    r._prepare()
+    r._armed = armed
+    return r._static()
+
+
+def test_a_second_open_with_the_same_inputs_reuses_the_static_layer():
+    first = static_layer()
+    assert static_layer() is first
+    assert len(ring._static_layers) == 1
+
+
+@pytest.mark.parametrize("change", [
+    dict(menu="title"), dict(hint=False), dict(held=True), dict(armed=False), dict(tag_band="none"),
+    dict(tag_band="wide"), dict(tag_band_opacity=0.9), dict(scale=1.5), dict(hub=30), dict(theme="light"),
+    dict(colors=dict(config.DEFAULT_RING["colors"], lines="#00ff00")), dict(menu="colour")],
+    ids=["title", "hint off", "hold hint", "not armed", "band off", "band width", "band opacity", "scale", "hub",
+         "theme", "lines colour", "an item's colour"])
+def test_each_input_of_the_static_layer_gives_its_own_layer(change):
+    change = dict(change)
+    if change.get("menu") == "title":
+        change["menu"] = tinted_menu(title="Other")
+    elif change.get("menu") == "colour":
+        change["menu"] = tinted_menu(colour="#0000ff")
+    base = static_layer()
+    other = static_layer(**change)
+    assert other is not base and other.tobytes() != base.tobytes()
+    assert static_layer() is base                          # going back finds the first one again
+    assert static_layer(**change) is other
+
+
+def test_a_ring_that_changes_its_hint_or_armed_state_draws_the_new_layer_and_leaves_the_old_one_alone():
+    r = make_ring(tinted_menu())
+    r._geometry(1.0)
+    r._relayout()
+    r._prepare()
+    click = r._static()
+    before = click.tobytes()
+    r._stay_open("tap")                                    # the click hint again: no change
+    assert r._static() is click
+    r.mode = "hold"
+    r._static_cache = None
+    hold = r._static()
+    assert hold is not click and click.tobytes() == before
+    r._base(50)                                            # the fade of the first 100 ms works on a copy
+    r._base(500)
+    assert hold.tobytes() == static_layer(held=True).tobytes() and click.tobytes() == before
+
+
+def test_a_preview_follows_a_slider_drag_and_comes_back():
+    pics = [ring.Ring.preview(tinted_menu(), make_cfg(radius=v, tag_band_opacity=o), lambda it: None).tobytes()
+            for v, o in ((145, 0.45), (170, 0.45), (170, 0.8), (145, 0.45))]
+    assert len(set(pics[:3])) == 3 and pics[3] == pics[0]
+
+
+def test_the_static_layers_stay_within_their_bound(monkeypatch):
+    for k in range(ring.STATIC_LAYERS + 4):
+        static_layer(menu=tinted_menu(title=f"T{k}"))
+    assert len(ring._static_layers) == ring.STATIC_LAYERS
+    assert ring._static_layers.bytes <= ring.STATIC_BYTES
+    monkeypatch.setattr(ring._static_layers, "max_bytes", 1)       # one layer is over the budget: only the newest stays
+    newest = static_layer(menu=tinted_menu(title="newest"))
+    assert len(ring._static_layers) == 1 and static_layer(menu=tinted_menu(title="newest")) is newest
+
+
+def test_an_image_lru_drops_the_least_recently_used_by_count_and_by_bytes():
+    lru = ring._ImageLRU(max_bytes=100, max_entries=3)
+    for k in "abc":
+        lru.put(k, k.upper(), 30)
+    assert lru.get("a") == "A"                             # a is used again: b is now the oldest
+    lru.put("d", "D", 30)
+    assert lru.get("b") is None and len(lru) == 3 and lru.bytes == 90
+    lru.put("e", "E", 50)                                  # over 100 bytes: the oldest go until it fits
+    assert lru.get("c") is None and lru.get("a") is None and lru.get("d") == "D" and lru.bytes == 80
+    lru.put("f", "F", 500)                                 # bigger than the budget on its own: kept alone
+    assert len(lru) == 1 and lru.get("f") == "F"
+
+
+def test_fan_lines_are_kept_between_opens_and_follow_their_inputs():
+    _, a = fan_ring()
+    _, b = fan_ring()
+    assert b.lines is a.lines
+    _, colour = fan_ring(fan_look={"colors": {"lines": "#00ff00"}})
+    _, more = fan_ring(n=5)
+    _, bigger = fan_ring(scale=1.5)
+    for other in (colour, more, bigger):
+        assert other.lines is not a.lines and other.lines[0].tobytes() != a.lines[0].tobytes()
+    assert fan_ring()[1].lines is a.lines
+
+
+def test_the_fan_lines_stay_within_their_bound():
+    for n in range(2, 2 + ring.FAN_LINE_IMAGES + 4):
+        fan_ring(n=n % 9 + 2, scale=1.0 + n / 100)
+    assert len(ring._fan_line_cache) <= ring.FAN_LINE_IMAGES
+    assert ring._fan_line_cache.bytes <= ring.FAN_LINE_BYTES or len(ring._fan_line_cache) == 1
+
+
+def test_the_icon_signature_is_worked_out_once_and_follows_a_replaced_icon():
+    red, green = Image.new("RGBA", (16, 16), (255, 0, 0, 255)), Image.new("RGBA", (16, 16), (0, 255, 0, 255))
+    sig = ring._icon_sig(red)
+    assert ring._icon_sig(red) is sig                      # remembered for this image
+    assert ring._icon_sig(green) != sig                    # another picture
+    assert ring._icon_sig(red.copy()) == sig               # the same picture in another image
+    icon = {"pic": red}
+    menu = make_menu(3)
+    a = prepared(menu, icon_for=lambda it: icon["pic"])
+    icon["pic"] = green                                    # the icon file was replaced
+    b = prepared(menu, icon_for=lambda it: icon["pic"])
+    assert b._sprite_key() != a._sprite_key() and b.sprites[0] is not a.sprites[0]
+
+
+def test_an_icon_signature_goes_with_its_image(monkeypatch):
+    im = Image.new("RGBA", (8, 8), (1, 2, 3, 4))
+    ring._icon_sig(im)
+    key = id(im)
+    assert key in ring._icon_sigs
+    del im
+    assert key not in ring._icon_sigs
+    monkeypatch.setattr(ring, "ICON_SIGS", 4)
+    keep = [Image.new("RGBA", (8, 8), (k, 0, 0, 255)) for k in range(10)]
+    for im in keep:
+        ring._icon_sig(im)
+    assert len(ring._icon_sigs) <= 4
+
+
+def settled(menu=None, hover=1):
+    r = make_ring(menu or make_menu(6))
+    r._geometry(1.0)
+    r._relayout()
+    r._prepare()
+    r.t0 = 0.0
+    r.hover = (hover,)
+    r._apply_hover(10.0, instant=True)
+    return r
+
+
+def test_a_settled_frame_resizes_no_slot_again(monkeypatch):
+    r = settled()
+    first = r._compose(10.0).tobytes()
+    calls = []
+    real = Image.Image.resize
+    monkeypatch.setattr(Image.Image, "resize", lambda self, *a, **k: calls.append(1) or real(self, *a, **k))
+    again = r._compose(10.0).tobytes()
+    assert calls == [] and again == first
+    monkeypatch.setattr(Image.Image, "resize", real)
+    assert settled()._compose(10.0).tobytes() == first      # a ring that never kept anything draws the same
+
+
+def test_a_slot_easing_its_hover_is_resized_to_each_new_size():
+    r = settled()
+    r.hover = (3,)
+    r._apply_hover(10.0)                                   # slot 3 grows over 120 ms, slot 1 shrinks
+    sizes = set()
+    for k in range(1, 13):
+        r._compose(10.0 + k / 100)
+        sizes.add(r._resized[((), 3)][1])
+    assert len(sizes) > 3
+
+
+def test_the_premultiplied_bytes_are_within_one_of_the_three_pass_way():
+    from PIL import ImageChops
+    im = Image.new("RGBA", (256, 256))
+    im.putdata([(x, 255 - x, (x * 7) % 256, y) for y in range(256) for x in range(256)])
+    fast = ring._premultiplied_bgra(im)
+    r, g, b, a = im.split()
+    r, g, b = (ImageChops.multiply(ch, a) for ch in (r, g, b))
+    slow = Image.merge("RGBA", (r, g, b, a)).tobytes("raw", "BGRA")
+    diff = ImageChops.difference(Image.frombytes("RGBA", im.size, fast), Image.frombytes("RGBA", im.size, slow))
+    assert max(hi for _, hi in diff.getextrema()) <= 1
+    assert fast[3::4] == slow[3::4]                        # alpha untouched
+    for x in (0, 255):                                     # transparent and opaque pixels are exact
+        assert fast[(x * 256 + 37) * 4:(x * 256 + 38) * 4] == slow[(x * 256 + 37) * 4:(x * 256 + 38) * 4]

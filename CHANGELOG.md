@@ -9,6 +9,7 @@ All notable changes to this project are listed here. The format follows
 ### Changed
 
 - Each release has its SHA-256 hashes in a file you can download, `ZOrbit-<version>-SHA256.txt`, instead of in the release notes.
+- The ring shows up sooner every time you open it after the first, and moving over its slots, opening its fans and tapping the hotkey are smoother. A large ring at high display scaling gains the most. It looks exactly as before.
 
 ## [0.23.0] - 2026-11-10
 
