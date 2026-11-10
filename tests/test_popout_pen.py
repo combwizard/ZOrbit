@@ -276,3 +276,65 @@ def test_the_strip_page_is_not_told(pop):
 def test_a_tell_that_arrives_after_the_watch_went_off_does_nothing(pop, monkeypatch):
     pop._ctl_proc(pop.ctl, popout.WM_APP_PEN, popout.PEN_TELL, 0)
     assert pop._work.empty()
+
+
+def test_a_minimised_window_does_not_keep_the_watch_on(pop, monkeypatch):
+    """IsWindowVisible is true for a minimised window: with every browser window minimised, each move on the desktop
+    would still wake the browser. Restored, the next check (the theme poll) turns it on again."""
+    ext = add_extra(pop)
+    pop.hwnd, ext.hwnd = 0x301, 0x302
+    iconic = set()
+    monkeypatch.setattr(popout.user32, "IsIconic", lambda h: h in iconic)
+    pop._pen_check()
+    iconic.add(0x301)                                     # one of two minimised: still on
+    pop._pen_check()
+    assert pop.posted == [(popout.WM_APP_PEN, 1)]
+    iconic.add(0x302)
+    pop._pen_check()
+    assert pop.posted[-1] == (popout.WM_APP_PEN, 0)
+    iconic.discard(0x302)
+    pop._pen_check()
+    assert pop.posted[-1] == (popout.WM_APP_PEN, 1)
+
+
+def test_a_watch_that_could_not_be_turned_on_is_tried_again(pop, monkeypatch):
+    logged = []
+    monkeypatch.setattr(popout, "_log", logged.append)
+    monkeypatch.setattr(popout.W, "watch_raw_mouse", lambda hwnd, on: False)
+    pop._pen_check()
+    pop._ctl_proc(pop.ctl, popout.WM_APP_PEN, 1, 0)
+    assert pop._pen_wanted is False                       # not watching: the next check asks again
+    pop._pen_check()
+    pop._ctl_proc(pop.ctl, popout.WM_APP_PEN, 1, 0)
+    assert pop.posted == [(popout.WM_APP_PEN, 1), (popout.WM_APP_PEN, 1)]
+    assert len([m for m in logged if "raw mouse input could not be turned" in m]) == 1   # said once
+    monkeypatch.setattr(popout.W, "watch_raw_mouse", lambda hwnd, on: True)
+    pop._pen_check()
+    pop._ctl_proc(pop.ctl, popout.WM_APP_PEN, 1, 0)
+    assert pop._pen_wanted is True
+    pop._pen_check()
+    assert len(pop.posted) == 3
+
+
+def test_a_window_closing_while_a_tell_runs_is_not_called(pop):
+    """close() marks an extra closing under the lock before it destroys the window; the tell checks it under the same
+    lock, so it never runs a script in a web view that is being disposed (which never answers)."""
+    ext = add_extra(pop)
+    feed(pop, PEN)
+    called = []
+
+    class Closing(_Window):
+        def evaluate_js(self, js):                        # the first page's call: meanwhile the extra is closed
+            ext.closing = True
+            called.append(js)
+            return True
+    pop.window = Closing()
+    run_work(pop)
+    assert called and told(ext) == [] and ext._pen_told is None
+
+
+def test_nothing_is_told_while_quitting(pop):
+    feed(pop, PEN)
+    pop.quitting = True
+    run_work(pop)
+    assert told(pop) == []

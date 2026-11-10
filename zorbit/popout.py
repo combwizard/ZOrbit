@@ -919,6 +919,7 @@ class Popout(BrowserWindow):
         self._pen_queued = False             # a _tell_pen is waiting in the work queue
         self._pen_logged = False             # popout.log has said once that a pen was seen
         self._raw_failed = False             # ... and once that a raw report could not be read
+        self._watch_failed = False           # ... and once that raw input could not be turned on or off
         self._pen_lock = threading.Lock()    # _pen_check's decision and its post (each page's _pen_told is its own)
 
     # --- control window: how the app reaches us -------------------------------------------------------
@@ -1034,10 +1035,14 @@ class Popout(BrowserWindow):
     # One watch per process, on the control window (Windows gives a process's raw mouse input to one window); each
     # browser window's page has its own idea of what it was told (BrowserWindow._pen_told).
     def _browser_up(self) -> bool:
-        """A browser window is up: the first one (as the browser, not the strip) or another one."""
-        if self.mode == "browser" and self.visible():
+        """A browser window is up: the first one (as the browser, not the strip) or another one. A minimised one is not
+        (IsWindowVisible is true for it); restored from the taskbar, the theme poll turns the watch on within half a
+        second, while the browser is in front and Windows marks the pen's moves anyway."""
+        def up(win):
+            return win.visible() and not user32.IsIconic(win.hwnd)
+        if self.mode == "browser" and up(self):
             return True
-        return any(e.ready and not e.closing and e.visible() for e in list(self.extras))
+        return any(e.ready and not e.closing and up(e) for e in list(self.extras))
 
     def _pen_pages(self) -> list:
         """The windows whose page hears __popoutPen: loaded, not closing, and the browser (not the strip); hidden ones
@@ -1067,12 +1072,16 @@ class Popout(BrowserWindow):
         """Control window thread: raw mouse input on or off. Turned on, every page starts again from a mouse (moves
         were not watched while no window was up), and the next move that says otherwise tells them."""
         ok = W.watch_raw_mouse(self.ctl, on)
-        if on:
+        if on and not ok:
+            with self._pen_lock:                       # not watching after all: the next check (the theme poll) tries again
+                self._pen_wanted = False
+        if on and ok:
             self._pen_last = None
             for win in (self, *list(self.extras)):
                 win._pen_told = None
             self._queue_tell()
-        if not ok:
+        if not ok and not self._watch_failed:
+            self._watch_failed = True                  # said once: a retry every half second would fill the log
             _log(f"raw mouse input could not be turned {'on' if on else 'off'}: {ctypes.get_last_error()}")
 
     def _on_raw_mouse(self, lparam):
@@ -1101,6 +1110,8 @@ class Popout(BrowserWindow):
         (window.__popoutPen). Only an answer of true counts as told: a page still loading has no __popoutPen yet, and the
         next report tries again."""
         self._pen_queued = False
+        if self.quitting or self.session_ending:
+            return
         pen = self._pen_last == "pen"
         pages = self._pen_untold(pen)
         if not pages:
@@ -1109,11 +1120,18 @@ class Popout(BrowserWindow):
             self._pen_logged = True
             _log("a pen moved the cursor: a press it makes while another program is in front scrolls the grid")
         for win in pages:
-            try:
-                if win.window.evaluate_js(f"window.__popoutPen ? __popoutPen({'true' if pen else 'false'}) : false") is True:
-                    win._pen_told = pen
-            except Exception as e:
-                _log(f"__popoutPen{win.name()} failed: {e!r}")
+            # Under the lock, and only if the window is still there: an extra's close() marks it closing under this
+            # lock before it destroys the window, and a script still running in a web view being disposed never
+            # answers, which would stop this thread for good.
+            with self._lock:
+                if (self.quitting or self.session_ending or getattr(win, "closing", False)
+                        or not (win is self or win in self.extras)):
+                    continue
+                try:
+                    if win.window.evaluate_js(f"window.__popoutPen ? __popoutPen({'true' if pen else 'false'}) : false") is True:
+                        win._pen_told = pen
+                except Exception as e:
+                    _log(f"__popoutPen{win.name()} failed: {e!r}")
 
     # --- the window ---------------------------------------------------------------------------------
     def on_hwnd(self, hwnd):
