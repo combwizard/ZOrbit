@@ -44,6 +44,10 @@ The titles now say what is true until the step is done: **No ZBrush found**, **Z
 
 ## The strip goes with ZBrush
 
+![A horizontal strip with fourteen brush thumbnails in two rows, ten and four, after +4 was pressed so the button now says Less, then the browser button and a fold arrow at the right](../../images/strip-horizontal.png)
+
+The strip came in 0.22.0: a small bar of one tab's favourites that stays on top of ZBrush and never takes the keyboard from it, so one click picks an item. Turn it on with the strip button in the browser's header. Its menu switches the tab and lays the strip **Vertical** or **Horizontal**.
+
 With the [strip](../../browser.md#the-strip) on, you could open the full browser with the hotkey, close ZBrush, and then close the browser. The strip came back and sat on the desktop with nothing to pick into. Now the browser ends there, as it does without the strip, and the strip comes back the next time ZBrush starts ZOrbit. This one was in 0.22.0 too.
 
 ## How this release was tested
