@@ -1,6 +1,6 @@
 """Draws the ring pictures in docs/images (ring.png, ring-light.png, ring-zbrush.png, fan.png, tag-colours.png,
 animations.png, the look pictures slot-shapes.png, hub-styles.png, slot-styles.png, looks.png, second-ring.png,
-more-slot.png and empty-slots.png, and the GIFs) with the real renderer, zorbit/ring.py, so they follow the ring's look whenever it
+more-slot.png, empty-slots.png and recent-fan.png, and the GIFs) with the real renderer, zorbit/ring.py, so they follow the ring's look whenever it
 changes. No window is opened and no ZBrush is needed, but the brush pictures come from the installed ZBrush's
 presets, so a ZBrush has to be installed.
 
@@ -53,6 +53,7 @@ import expand  # noqa: E402
 import installs  # noqa: E402
 import looks  # noqa: E402
 import radiald  # noqa: E402
+import recent  # noqa: E402
 import tags  # noqa: E402
 import zbrush_colors  # noqa: E402
 from ring import Ring  # noqa: E402
@@ -78,6 +79,8 @@ LAYOUT_SLOTS = [("Sculpt", "D:/Layouts/Sculpt.cfg"), ("Paint", "D:/Layouts/Paint
                 ("Minimal", "D:/Layouts/Minimal.cfg")]
 FILE_SLOTS = [("Capture", "capture", ""), ("Hero", "tool", "D:/Models/Hero.ztl"),   # the file slots picture: label, type, path
               ("Blockout", "project", "D:/Projects/Blockout")]
+RECENT_FILES = ["D:/Projects/Dragon Bust.zpr", "D:/Models/Hero.ztl", "D:/Projects/Blockout.zpr",   # the recent fan picture:
+                "D:/Models/Sword.ztl", "D:/Models/Helmet.ztl", "D:/Projects/Creature Sketch.zpr"]   # made-up files, newest first
 COMMAND = 'ZOrbit.exe --open "brushes"'            # the command animation: what it shows, its band's height and its lit colour
 COMMAND_BAND, COMMAND_ON = 56, (255, 122, 61)
 FAN_SCALE = 0.95                               # the fan picture is a little smaller, about 594 pixels wide
@@ -353,6 +356,20 @@ def shot_layout_slots(w):
     menu = w.define("layouts", ["ClayBuildup", "Move", "DamStandard", "hPolish", "TrimDynamic"], title="Sculpt")
     menu.items += [C.Item(label=label, kind="layout", data={"layout": path}) for label, path in LAYOUT_SLOTS]
     im = w.preview("layouts", hover=6, held=True, scale=RING_SCALE)
+    return with_cursor(on_background(im), *hovered(im))
+
+
+def shot_recent_fan(w):
+    """Five brushes and a Recent slot, its fan of made-up projects and tools open, Hero in the fan hovered."""
+    w.fans(False)
+    menu = w.define("recentfan", ["ClayBuildup", "Move", "DamStandard", "hPolish", "TrimDynamic"], title="Sculpt")
+    menu.items.append(C.Item(label="Recent", kind="recent", data={"recent": "any"}))
+    real = recent.entries
+    recent.entries = lambda kind, limit, install=None, log=None: RECENT_FILES[:limit]   # never the real list
+    try:
+        im = w.preview("recentfan", hover=(5, 1), open_path=[5], held=True, scale=FAN_SCALE)
+    finally:
+        recent.entries = real
     return with_cursor(on_background(im), *hovered(im))
 
 
@@ -1111,6 +1128,8 @@ SHOTS = {
                   "the Brushes ring with Move's slot waiting for a target, before 0.20.0 and now, DamStandard hovered in each"),
     "layout-slots": ("layout-slots.png", shot_layout_slots,
                      "five brushes with three Layout slots, the Paint slot hovered"),
+    "recent-fan": ("recent-fan.png", shot_recent_fan,
+                   "five brushes and a Recent slot, its fan of six made-up projects and tools open, Hero hovered"),
     "command-open": ("command-open.gif", shot_command_open,
                      "the command lights up, the ring opens at the cursor, a flick picks ClayBuildup"),
     "trailer-readme": ("trailer-readme.gif", shot_trailer,
