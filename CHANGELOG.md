@@ -8,6 +8,7 @@ All notable changes to this project are listed here. The format follows
 
 ### Added
 
+- You can open up to six browser windows. The new window button in the browser's header (or **Ctrl+N**) opens another one, which starts as a copy of the window you opened it from (tab, **Keep on top**, folders column, thumbnail size) and then keeps its own, including its place and size. Windows still open when the browser ends come back the next time you open it. The hotkey and the other ways of opening the browser go to the open window you used last.
 - A **Recent** slot opens a fan of the projects or tools ZBrush opened last (`{"recent": "project"}`, `"tool"` or `"any"`), read from ZBrush's own Lightbox list of recent files. A pick opens the file as a Project or Tool slot does, ZBrush's check for unsaved changes included. It is a Full mode type in Studio, with a **Shows** select for Projects, Tools or Both. (#189)
 
 ### Fixed

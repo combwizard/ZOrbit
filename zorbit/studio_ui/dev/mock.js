@@ -43,6 +43,8 @@
    The strip: ?strip starts popout.html?mock as the strip (?strip=horizontal lies it down); its settings are kept in localStorage rm_pop_strip.
    Show as a strip, Open browser, Hide strip and the close button switch the page as popout.py switches the window; popout_strip_size only
    logs, and keeps the last size it was given in window.__mockStripSize (a page in a browser tab cannot size its window).
+   More windows: ?extra draws the page as a window other than the first (no strip button), ?windows=6 starts with that many open (6: New
+   window is greyed out); New window only counts up and logs (a browser tab cannot open the window).
    ?kinds adds a Tag item ({"tag": "blocking"}), a Browser item ({"browser": ""}) and a Recent item ({"recent": "any"}) to the end of
    the Tools menu, so the newer kinds can be seen (the recorded config has none). The default stays the faithful recording.
    Profiles (the picker after the brand in the top bar): ?profiles=3 (three profiles, Creatures, Default and Hard surface, each with its own menus: the first menu's title carries the
@@ -74,6 +76,7 @@
 (function () {
   var M = window.__RADIAL_MOCK__ || {};
   var q = new URLSearchParams(location.search);
+  var mockWins = Math.max(1, Math.min(6, +q.get('windows') || 1));        // the popout's browser windows open (?windows=N)
   var lag = +(q.get('lag') || 0);
   var sleep = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
   var clone = function (o) { return JSON.parse(JSON.stringify(o)); };
@@ -1420,9 +1423,16 @@
       var onTop = true, kind = null, side = 'left', column = true;
       try { onTop = localStorage.getItem('rm_pop_on_top') !== '0'; kind = localStorage.getItem('rm_pop_kind'); side = localStorage.getItem('rm_pop_side') || 'left'; column = localStorage.getItem('rm_pop_column') !== '0'; } catch (e) {}
       return Promise.resolve({ on_top: onTop, size: 96, side: side, column: column, tag: q.get('tag') || null, kind: q.get('kind') || kind || 'brush', tags_path: '', profile: profiles.editing,
+        extra: q.has('extra'), windows: mockWins, max_windows: 6,
         mode: q.has('strip') ? 'strip' : 'browser', strip: stripGet(), theme: themeSetting(), theme_effective: themeEff(), theme_base: themeBase(), theme_tokens: themeEff() === 'zbrush' ? clone(ZB_TOKENS) : {} });
     },
     popout_log: function (msg) { console.log('[mock] popout_log', msg); return Promise.resolve(true); },
+    popout_new_window: function (asked) {
+      console.log('[mock] popout_new_window', asked);
+      if (mockWins >= 6) return Promise.resolve({ ok: false, error: 'Six browser windows are open. Close one to open another.', windows: mockWins, max_windows: 6 });
+      mockWins += 1;
+      return Promise.resolve({ ok: true, windows: mockWins, max_windows: 6 });
+    },
   };
   window.pywebview = { api: api };
   setTimeout(function () { window.dispatchEvent(new Event('pywebviewready')); }, 0);

@@ -326,3 +326,18 @@ def test_a_hidden_maximised_window_is_left_for_after_it_is_shown(plain_window, m
     assert wf.bring_on_screen(plain_window) is False     # SetWindowPlacement would have shown it
     assert not calls
     assert not wf.user32.IsWindowVisible(plain_window)
+
+
+def test_on_activate_is_called_when_the_window_is_activated_not_deactivated(plain_window):
+    u, h = wf.user32, plain_window
+    calls = []
+    wf.install_frame(h, on_activate=lambda: calls.append(1))
+    u.SendMessageW(h, 0x0006, 0, 0)                                      # WA_INACTIVE
+    assert calls == []
+    u.SendMessageW(h, 0x0006, 1, 0)                                      # WA_ACTIVE (the Static class answers it with one more)
+    n = len(calls)
+    assert n >= 1
+    u.SendMessageW(h, 0x0006, 0x10000, 0)                                # minimised, inactive: the high word is not the state
+    assert len(calls) == n
+    u.SendMessageW(h, 0x0006, 2, 0)                                      # WA_CLICKACTIVE
+    assert len(calls) > n

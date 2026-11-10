@@ -48,6 +48,7 @@ class _Window:
 def pop(monkeypatch):
     p = popout.Popout({"tag": None, "kind": None, "managed": True, "show": False, "zbrush": 0})
     p.window, p.ctl, p.ready, p.up = _Window(), 0x99, True, True
+    p._loaded.set()
     monkeypatch.setattr(p, "visible", lambda: p.up)
     p.reports, p.posted = [], []
     monkeypatch.setattr(popout.W, "read_raw_mouse", lambda lparam: p.reports.pop(0))
@@ -67,8 +68,27 @@ def run_work(p):
         fn(*args)
 
 
-def told(p):
-    return [js.split("__popoutPen(")[1].split(")")[0] for js in p.window.js]
+def told(win):
+    return [js.split("__popoutPen(")[1].split(")")[0] for js in win.window.js]
+
+
+def add_extra(p, eid="e1"):
+    """Another browser window, made, loaded and up."""
+    ext = popout.ExtraWindow(p, eid, {"id": eid})
+    ext.window, ext.ready, ext.up = _Window(), True, True
+    ext._loaded.set()
+    ext.visible = lambda: ext.up
+    p.extras.append(ext)
+    return ext
+
+
+def deliver(p, monkeypatch):
+    """What the control window's thread does with the WM_APP_PEN messages posted to it."""
+    monkeypatch.setattr(popout.W, "watch_raw_mouse", lambda hwnd, on: True)
+    for msg, wp in list(p.posted):
+        if msg == popout.WM_APP_PEN:
+            p._ctl_proc(p.ctl, msg, wp, 0)
+    p.posted.clear()
 
 
 MOUSE = (0, 2, 1, 0, MOUSE_DEV)
@@ -151,3 +171,170 @@ def test_a_report_that_cannot_be_read_still_frees_the_input(pop, monkeypatch):
     pop._ctl_proc(pop.ctl, W.WM_INPUT, 0, 0)
     pop._ctl_proc(pop.ctl, W.WM_INPUT, 0, 0)
     assert freed == [W.WM_INPUT, W.WM_INPUT] and pop._raw_failed
+
+
+# --- several browser windows: one watch for the process, each page told on its own ---------------------------
+def test_an_extra_window_shown_while_the_pen_is_in_use_is_told_at_once(pop, monkeypatch):
+    pop._pen_check()
+    deliver(pop, monkeypatch)                             # the watch is on: the first page starts from a mouse
+    run_work(pop)
+    feed(pop, PEN)
+    run_work(pop)
+    assert told(pop) == ["false", "true"]
+    ext = add_extra(pop)
+    pop._pen_check(tell=True)                             # what its show() asks: the watch is on already
+    assert pop.posted == [(popout.WM_APP_PEN, popout.PEN_TELL)]
+    deliver(pop, monkeypatch)
+    run_work(pop)
+    assert told(ext) == ["true"] and told(pop) == ["false", "true"]    # the first page knew already
+    pop._pen_check(tell=True)                             # every page knows: nothing to post
+    assert pop.posted == []
+
+
+def test_an_extra_window_is_told_by_the_next_report_too(pop):
+    feed(pop, PEN)
+    run_work(pop)
+    ext = add_extra(pop)
+    feed(pop, PEN)                                        # the same device: the new page has not heard it
+    run_work(pop)
+    assert told(ext) == ["true"] and told(pop) == ["true"]
+    feed(pop, MOUSE)
+    run_work(pop)
+    assert told(ext) == ["true", "false"] and told(pop) == ["true", "false"]
+
+
+def test_a_reloaded_page_is_told_again_and_only_it(pop):
+    ext = add_extra(pop)
+    feed(pop, PEN)
+    run_work(pop)
+    ext.on_loaded()
+    feed(pop, PEN)
+    run_work(pop)
+    assert told(ext) == ["true", "true"] and told(pop) == ["true"]
+
+
+def test_one_page_that_does_not_answer_leaves_the_others_told(pop):
+    ext = add_extra(pop)
+    ext.window.answer = None
+    feed(pop, PEN)
+    run_work(pop)
+    feed(pop, PEN)
+    run_work(pop)
+    assert told(pop) == ["true"] and told(ext) == ["true", "true"]
+    ext.window.answer = True
+    feed(pop, PEN)
+    run_work(pop)
+    assert told(ext) == ["true", "true", "true"]
+    feed(pop, PEN)
+    assert pop._work.empty()
+
+
+def test_turning_the_watch_on_starts_every_page_again_from_a_mouse(pop, monkeypatch):
+    ext = add_extra(pop)
+    pop._pen_check()
+    deliver(pop, monkeypatch)
+    run_work(pop)
+    feed(pop, PEN)
+    run_work(pop)
+    pop.up = ext.up = False
+    pop._pen_check()
+    pop.up = ext.up = True
+    pop._pen_check()
+    assert pop.posted == [(popout.WM_APP_PEN, 0), (popout.WM_APP_PEN, 1)]
+    deliver(pop, monkeypatch)
+    run_work(pop)
+    assert told(pop) == told(ext) == ["false", "true", "false"]
+
+
+def test_the_watch_stays_on_while_any_browser_window_is_up(pop):
+    ext = add_extra(pop)
+    pop._pen_check()
+    pop.up = False                                        # the first window hidden: the other one is still up
+    pop._pen_check()
+    assert pop.posted == [(popout.WM_APP_PEN, 1)]
+    pop.up, pop.mode = True, "strip"                      # the first window is the strip: the other one still counts
+    pop._pen_check()
+    assert pop.posted == [(popout.WM_APP_PEN, 1)]
+    ext.up = False                                        # the last browser window hidden
+    pop._pen_check()
+    assert pop.posted == [(popout.WM_APP_PEN, 1), (popout.WM_APP_PEN, 0)]
+    ext.up = True
+    pop._pen_check()
+    ext.closing = True                                    # closed for good (it may still be visible a moment)
+    pop._pen_check()
+    assert pop.posted[-2:] == [(popout.WM_APP_PEN, 1), (popout.WM_APP_PEN, 0)]
+
+
+def test_the_strip_page_is_not_told(pop):
+    ext = add_extra(pop)
+    pop.mode = "strip"                                    # the strip leaves ZBrush the pen: nothing to scroll there
+    feed(pop, PEN)
+    run_work(pop)
+    assert told(pop) == [] and told(ext) == ["true"]
+
+
+def test_a_tell_that_arrives_after_the_watch_went_off_does_nothing(pop, monkeypatch):
+    pop._ctl_proc(pop.ctl, popout.WM_APP_PEN, popout.PEN_TELL, 0)
+    assert pop._work.empty()
+
+
+def test_a_minimised_window_does_not_keep_the_watch_on(pop, monkeypatch):
+    """IsWindowVisible is true for a minimised window: with every browser window minimised, each move on the desktop
+    would still wake the browser. Restored, the next check (the theme poll) turns it on again."""
+    ext = add_extra(pop)
+    pop.hwnd, ext.hwnd = 0x301, 0x302
+    iconic = set()
+    monkeypatch.setattr(popout.user32, "IsIconic", lambda h: h in iconic)
+    pop._pen_check()
+    iconic.add(0x301)                                     # one of two minimised: still on
+    pop._pen_check()
+    assert pop.posted == [(popout.WM_APP_PEN, 1)]
+    iconic.add(0x302)
+    pop._pen_check()
+    assert pop.posted[-1] == (popout.WM_APP_PEN, 0)
+    iconic.discard(0x302)
+    pop._pen_check()
+    assert pop.posted[-1] == (popout.WM_APP_PEN, 1)
+
+
+def test_a_watch_that_could_not_be_turned_on_is_tried_again(pop, monkeypatch):
+    logged = []
+    monkeypatch.setattr(popout, "_log", logged.append)
+    monkeypatch.setattr(popout.W, "watch_raw_mouse", lambda hwnd, on: False)
+    pop._pen_check()
+    pop._ctl_proc(pop.ctl, popout.WM_APP_PEN, 1, 0)
+    assert pop._pen_wanted is False                       # not watching: the next check asks again
+    pop._pen_check()
+    pop._ctl_proc(pop.ctl, popout.WM_APP_PEN, 1, 0)
+    assert pop.posted == [(popout.WM_APP_PEN, 1), (popout.WM_APP_PEN, 1)]
+    assert len([m for m in logged if "raw mouse input could not be turned" in m]) == 1   # said once
+    monkeypatch.setattr(popout.W, "watch_raw_mouse", lambda hwnd, on: True)
+    pop._pen_check()
+    pop._ctl_proc(pop.ctl, popout.WM_APP_PEN, 1, 0)
+    assert pop._pen_wanted is True
+    pop._pen_check()
+    assert len(pop.posted) == 3
+
+
+def test_a_window_closing_while_a_tell_runs_is_not_called(pop):
+    """close() marks an extra closing under the lock before it destroys the window; the tell checks it under the same
+    lock, so it never runs a script in a web view that is being disposed (which never answers)."""
+    ext = add_extra(pop)
+    feed(pop, PEN)
+    called = []
+
+    class Closing(_Window):
+        def evaluate_js(self, js):                        # the first page's call: meanwhile the extra is closed
+            ext.closing = True
+            called.append(js)
+            return True
+    pop.window = Closing()
+    run_work(pop)
+    assert called and told(ext) == [] and ext._pen_told is None
+
+
+def test_nothing_is_told_while_quitting(pop):
+    feed(pop, PEN)
+    pop.quitting = True
+    run_work(pop)
+    assert told(pop) == []

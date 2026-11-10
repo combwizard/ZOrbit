@@ -1228,7 +1228,7 @@ body.dragging .irow:hover { background: transparent; }
 /* Folders and tags on the right (popout.json "side"): the columns swap and the divider moves with them. */
 .pop.side-right .browser.full { grid-template-columns: minmax(0, 1fr) 190px; }
 .pop.side-right .lib-side { order: 2; border-right: 0; border-left: 1px solid var(--line); }
-.pop-head .side-btn, .pop-head .col-btn, .pop-head .strip-btn { width: 30px; height: 30px; }
+.pop-head .side-btn, .pop-head .col-btn, .pop-head .strip-btn, .pop-head .newwin-btn { width: 30px; height: 30px; }
 .pop-head .col-btn[aria-pressed="true"] { color: var(--accent); }
 /* Folders and tags collapsed (popout.json "column"): the grid takes the whole width. */
 .pop.col-hidden .browser.full { grid-template-columns: minmax(0, 1fr); }

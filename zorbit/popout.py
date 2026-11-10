@@ -10,7 +10,7 @@ Start menu shortcut open it too, and it stays up when the app quits.
 
   ZOrbit.exe --popout [--managed] [--show] [--tag KEY] [--kind KIND] [--zbrush-hwnd N]
 
-  --managed       started by the app: exits by itself once the app is gone, unless its window is up. A managed
+  --managed       started by the app: exits by itself once the app is gone, unless one of its windows is up. A managed
                   popout whose window the user closes only hides it (the app can show it again at once); one that
                   is not managed, or has lost its app, quits when its window is closed
                   A managed popout that sits hidden for browser.quit_after_minutes (radial.json, off by default) quits
@@ -33,6 +33,18 @@ Talks to the app with WM_COPYDATA (ids in radiald.py):
 SHOW: a hidden window appears (afresh: no search, this tag only, on the given tab); one that is visible comes to the front; one that
 is already in front hands the keyboard back to ZBrush when asked to toggle (the hotkey), but never closes. A pick
 and Esc hand the keyboard back to ZBrush too. Keep on top (popout.json "on_top", on by default) is the pin button in the header.
+More windows: New window in the header (or Ctrl+N) opens another browser window, up to MAX_WINDOWS in all. It starts as a
+copy of the window it was opened from (its tab, Keep on top, the folders column shown or not and its side, the thumbnail
+size), NEW_OFFSET logical pixels down and right of it, with an empty search. From then on each window keeps its own: the
+first one ("main") in the top-level keys of popout.json as before, each other one in its entry under "extras" (see
+extras_state), and "last_used" names the window a SHOW goes to ("main" or an extra's id): the one used most recently
+(activated) that is still open (up, or the strip), else the first one. Only the first window can be the strip, and only
+it is pre-warmed. The close button (or Alt+F4) on another window closes it for good and drops its entry; one still open
+when the process ends (the session ends, or it is stopped) keeps its entry and comes back, where it was, at the next SHOW,
+or the strip's Open browser; not when the strip comes up by itself, nor at a hidden pre-warm. When "last_used" names one
+of them, that SHOW is answered by it once it is made (each is made on a thread of its own), and the first window stays
+hidden. A popout that is not managed ends once no window of it is up
+(the strip counts as up), and a managed one never quits unused while one is.
 The strip: the same window can instead be a small strip of one tab's favourites that stays on top of everything,
 has no taskbar button and never takes the keyboard (WS_EX_NOACTIVATE, shown with SW_SHOWNOACTIVATE). popout.json
 "strip_on" makes it the window's resting state: it shows by itself once the page is up, and the browser's close button
@@ -58,6 +70,7 @@ import sys
 import threading
 import time
 import traceback
+import uuid
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
@@ -87,7 +100,8 @@ POLL_S = 3.0                       # --managed: how often to look for the app, a
 POLL_MISSES = 2                    # ... how many misses in a row mean it has quit
 WM_APP_STOP = W.WM_APP + 1         # control window: leave the message loop
 WM_APP_PILL = W.WM_APP + 2         # control window: put up or take down the strip's name pill, or a note (see _pill)
-WM_APP_PEN = W.WM_APP + 3          # control window: start (wParam 1) or stop (0) watching which device moves the cursor
+WM_APP_PEN = W.WM_APP + 3          # control window: start (wParam 1) or stop (0) watching which device moves the cursor,
+PEN_TELL = 2                       # ... or (wParam PEN_TELL) tell the pages that do not know yet (a window just shown)
 STRIP_ORIENTS = ("vertical", "horizontal")
 STRIP_START = (64, 420)            # logical pixels: a strip's size until the page has measured it
 STRIP_MARGIN = 8                   # logical pixels between a strip's first place and the edge of ZBrush's window
@@ -95,6 +109,10 @@ ZBRUSH_PIDS_TTL_S = 3.0            # how long the list of ZBrush's process ids i
 STRIP_HIDE_AFTER_S = 1.0           # how long another program must have been in front before the strip steps aside
 FAV = "favourite"                  # the Favourites tag (tags.FAVOURITE)
 GWL_EXSTYLE, WS_EX_APPWINDOW = -20, 0x00040000
+MAX_WINDOWS = 6                    # browser windows at most, the first one included
+NEW_OFFSET = 32                    # logical pixels a new window sits down and right of the one it was opened from
+CAP_MESSAGE = "Six browser windows are open. Close one to open another."
+MAIN_ID = "main"                   # popout.json "last_used" for the first window
 
 user32 = ctypes.WinDLL("user32", use_last_error=True)
 kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
@@ -230,6 +248,111 @@ def _update_strip(**changes):
         _update_state(strip=cur)
 
 
+def _int(v) -> bool:
+    return isinstance(v, int) and not isinstance(v, bool)
+
+
+def window_settings(src) -> dict:
+    """One window's own settings, read from where popout.json keeps them (the top level for the first window, its entry
+    under "extras" for another); a value that is not what it should be counts as missing. {"on_top": bool (on unless
+    set off; "pinned" is the setting's earlier name), "kind": a tab or None, "side": "left" or "right", "column": bool
+    (the folders and tags column is shown), "size": the thumbnail size or None, "window": the saved place or None}."""
+    src = src if isinstance(src, dict) else {}
+    if isinstance(src.get("on_top"), bool):
+        on_top = src["on_top"]
+    elif "pinned" in src:
+        on_top = bool(src["pinned"])
+    else:
+        on_top = True
+    return {"on_top": on_top, "kind": src.get("kind") if src.get("kind") in C.ASSET_KINDS else None,
+            "side": "right" if src.get("side") == "right" else "left", "column": src.get("column") != "hidden",
+            "size": src["size"] if _int(src.get("size")) else None,
+            "window": src.get("window") if isinstance(src.get("window"), dict) else None}
+
+
+def extras_state(st) -> list:
+    """The other windows in popout.json "extras", in order: dicts with "id" (a short string, never "main") and the keys
+    window_settings reads ("window", "on_top", "kind", "side", "column", "size"). An entry that is not a dict, has no
+    usable id or repeats one is left out, and only the first MAX_WINDOWS - 1 count. Copies: changing one changes
+    nothing else."""
+    raw = st.get("extras") if isinstance(st, dict) else None
+    out, seen = [], set()
+    for e in raw if isinstance(raw, list) else []:
+        if not isinstance(e, dict):
+            continue
+        eid = e.get("id")
+        if not isinstance(eid, str) or not eid or len(eid) > 40 or eid == MAIN_ID or eid in seen:
+            continue
+        seen.add(eid)
+        out.append(dict(e))
+        if len(out) >= MAX_WINDOWS - 1:
+            break
+    return out
+
+
+def _update_extras(change):
+    """Read-modify-write of popout.json "extras": change(entries) edits the list in place and returns True to save it
+    (entries as extras_state reads them, so a bad one is dropped by the save)."""
+    with _state_lock:
+        entries = extras_state(_read_state())
+        if change(entries):
+            _update_state(extras=entries[:MAX_WINDOWS - 1])
+
+
+def _update_extra(eid, **changes):
+    """The keys named, in the entry of the window eid; nothing when it has none (it was closed)."""
+    def change(entries):
+        for e in entries:
+            if e["id"] == eid:
+                e.update(changes)
+                return True
+        return False
+    _update_extras(change)
+
+
+def _add_extra(entry):
+    def change(entries):
+        entries[:] = [e for e in entries if e["id"] != entry["id"]] + [entry]
+        return True
+    _update_extras(change)
+
+
+def _remove_extra(eid):
+    def change(entries):
+        n = len(entries)
+        entries[:] = [e for e in entries if e["id"] != eid]
+        return len(entries) != n
+    _update_extras(change)
+
+
+def new_window_settings(opener, asked) -> dict:
+    """The settings a new window starts with, as popout.json keeps them: what the page of the window it was opened
+    from says it shows now (asked: {"kind", "on_top", "column", "side", "size"}, any of them), else that window's saved
+    settings (opener, as window_settings reads them)."""
+    asked = asked if isinstance(asked, dict) else {}
+    o = opener if isinstance(opener, dict) else window_settings({})
+    kind = asked.get("kind") if asked.get("kind") in C.ASSET_KINDS else o.get("kind")
+    out = {"on_top": asked["on_top"] if isinstance(asked.get("on_top"), bool) else bool(o.get("on_top", True)),
+           "side": asked["side"] if asked.get("side") in ("left", "right") else o.get("side") or "left",
+           "column": "shown" if (asked["column"] if isinstance(asked.get("column"), bool) else o.get("column", True))
+           else "hidden"}
+    if kind in C.ASSET_KINDS:
+        out["kind"] = kind
+    size = asked.get("size") if _int(asked.get("size")) else o.get("size")
+    if _int(size):
+        out["size"] = max(84, min(220, size))
+    return out
+
+
+def offset_place(rect, offset, work) -> tuple:
+    """Where a new window goes: the size of rect (left, top, right, bottom, the window it was opened from), offset
+    pixels down and right of it, kept inside work (left, top, right, bottom). (x, y, width, height)."""
+    l, t, r, b = rect
+    wd, ht = r - l, b - t
+    x, y = keep_inside(l + offset, t + offset, wd, ht, work)
+    return x, y, wd, ht
+
+
 def keep_inside(x, y, wd, ht, work) -> tuple:
     """(x, y) moved so a wd x ht rectangle there lies inside work (left, top, right, bottom); the top-left wins when it
     is larger than work."""
@@ -323,10 +446,12 @@ def _find_target() -> int:
 
 
 class PopoutApi(webapi.LibraryApi, webapi.TagApi):
-    """What the page calls. get_library, get_thumbs and the tag methods come from the mixins."""
+    """What the page calls. get_library, get_thumbs and the tag methods come from the mixins. One per window: the
+    settings a page reads and writes are its own window's (win), the rest is the process's (win.pop)."""
 
-    def __init__(self, pop):
-        self._pop = pop          # underscore: pywebview must not expose (and crawl) it to JS
+    def __init__(self, win):
+        self._win = win          # underscore: pywebview must not expose (and crawl) it to JS
+        self._pop = getattr(win, "pop", None)
 
     def merge_tags(self, src, dst):
         """Merges the tags, then points the ring items that used src at dst in radial.json (this window holds no
@@ -351,22 +476,24 @@ class PopoutApi(webapi.LibraryApi, webapi.TagApi):
     def popout_get_state(self):
         """What the page needs before it draws: keep on top, the thumbnail size, which side the folders and tags
         column is on and whether it is shown, the tag and the tab (kind) it was started with, else the tab it was
-        last on."""
+        last on; all of them this window's own. extra: it is not the first window (it has no strip button); windows
+        and max_windows: how many browser windows are open, and how many there can be (the New window button)."""
+        win = self._win
         st = _read_state()
-        size = st.get("size")
-        kind = self._pop.start_kind or st.get("kind")
-        side = "right" if st.get("side") == "right" else "left"
+        mine = window_settings(win.settings(st))
+        kind = win.start_kind or mine["kind"]
         setting, sig = theme.read_setting(), theme.signature()
         effective = sig[0]
         look = theme.preset(effective)                     # Match ZBrush: the scheme's tokens for the page
         with self._pop._lock:                              # show() reads and writes it under the same lock
-            self._pop._theme_seen = (setting, sig)         # show() tells the page only when this changes
+            win._theme_seen = (setting, sig)               # show() tells the page only when this changes
         ss = strip_state(st)
-        return {"on_top": self._pop.on_top, "size": size if isinstance(size, int) else None, "side": side,
-                "column": st.get("column") != "hidden", "mode": self._pop.mode,
-                "strip": {"on": self._pop.strip_on, "orient": ss["orient"], "kind": ss["kind"], "wrap": ss["wrap"],
+        return {"on_top": win.on_top, "size": mine["size"], "side": mine["side"],
+                "column": mine["column"], "mode": win.mode, "extra": win is not self._pop,
+                "windows": self._pop.window_count(), "max_windows": MAX_WINDOWS,
+                "strip": {"on": self._pop.strip_on and win is self._pop, "orient": ss["orient"], "kind": ss["kind"], "wrap": ss["wrap"],
                           "fold": ss["fold"]},
-                "tag": self._pop.start_tag,
+                "tag": win.start_tag,
                 "kind": kind if kind in C.ASSET_KINDS else "brush", "tags_path": profiles.tags_file(),
                 "profile": profiles.active(), "theme": setting, "theme_effective": effective,
                 "theme_base": look["base"], "theme_tokens": look["web"]}
@@ -374,19 +501,25 @@ class PopoutApi(webapi.LibraryApi, webapi.TagApi):
     def popout_theme_changed(self, effective):
         """The page saw Windows change its app colour mode (Follow Windows): the frame follows. True."""
         if effective in theme.EFFECTIVE:
-            self._pop.apply_frame_theme(theme.preset(effective)["window"])
+            self._win.apply_frame_theme(theme.preset(effective)["window"])
         return True
 
     def popout_pick(self, name, kind="brush"):
         """Selects a brush, alpha, material or texture in ZBrush: hands the focus back to ZBrush, then asks the
         app. The window stays open. {"ok": bool, "error"}."""
-        return self._pop.pick(str(name or ""), kind)
+        return self._pop.pick(str(name or ""), kind, self._win)
 
     def popout_hide(self):
         """The close button. Answered at once: the window is closed on another thread, because hiding it from
         inside this call would wait for the UI thread."""
-        threading.Thread(target=self._pop.close, kwargs={"why": "close button"}, daemon=True).start()
+        threading.Thread(target=self._win.close, kwargs={"why": "close button"}, daemon=True).start()
         return True
+
+    def popout_new_window(self, asked=None):
+        """New window (Ctrl+N): another browser window, a copy of this one (asked: what this page shows now, see
+        new_window_settings). Answered at once; the window is made on another thread. {"ok", "windows",
+        "max_windows"}, and "error" when it could not be (MAX_WINDOWS are open already)."""
+        return self._pop.new_window(self._win, asked)
 
     def popout_release_focus(self):
         """Esc with nothing left to clear: the keyboard goes back to ZBrush. The window stays open."""
@@ -394,13 +527,13 @@ class PopoutApi(webapi.LibraryApi, webapi.TagApi):
         return True
 
     def popout_set_on_top(self, flag):
-        self._pop.set_on_top(bool(flag))
+        self._win.set_on_top(bool(flag))
         return True
 
     def popout_set_size(self, px):
-        """The thumbnail size the slider ended on."""
+        """The thumbnail size the slider ended on (this window's, as are the three below)."""
         try:
-            _update_state(size=max(84, min(220, int(px))))
+            self._win.save(size=max(84, min(220, int(px))))
         except (TypeError, ValueError):
             return False
         return True
@@ -409,19 +542,19 @@ class PopoutApi(webapi.LibraryApi, webapi.TagApi):
         """Which side of the window the folders and tags column is on: "left" (the default) or "right"."""
         if side not in ("left", "right"):
             return False
-        _update_state(side=side)
+        self._win.save(side=side)
         return True
 
     def popout_set_column(self, shown):
         """Whether the folders and tags column is shown (popout.json "column": "shown" or "hidden")."""
-        _update_state(column="shown" if shown else "hidden")
+        self._win.save(column="shown" if shown else "hidden")
         return True
 
     def popout_set_kind(self, kind):
         """The tab the user ended on, shown again the next time the window starts."""
         if kind not in C.ASSET_KINDS:
             return False
-        _update_state(kind=kind)
+        self._win.save(kind=kind)
         return True
 
     def popout_log(self, msg):
@@ -471,20 +604,281 @@ class PopoutApi(webapi.LibraryApi, webapi.TagApi):
         return True
 
 
-class Popout:
-    """The window and everything that happens to it: show, close, pick, the control window the app talks to."""
+class BrowserWindow:
+    """One browser window: its pywebview window and handle, and what is its own (Keep on top, its place, its settings
+    in popout.json, the theme its page was last given). The first window is the Popout itself, which can also be the
+    strip and only hides when closed; the others are ExtraWindow. What belongs to the process (the lock, the ZBrush
+    window picks go back to, the idle count, quitting) is on self.pop."""
+    mode = "browser"                         # the first window's is "strip" while it is the strip
+
+    def _init_window(self, pop, on_top):
+        self.pop = pop
+        self.window = None
+        self.hwnd = 0
+        self.on_top = on_top
+        self.start_tag = None                # the tag and tab the page starts on (popout_get_state)
+        self.start_kind = None
+        self._placed = False                 # the window has had its first position
+        self._was_max = False                # it was maximised when it was last hidden
+        self._theme_seen = None              # (setting, theme.signature()) the page was last given
+        self._page_strip = False             # the page was last told to draw the strip: show() must tell it otherwise
+        self._pen_told = None                # what its page was last told (__popoutPen); None: nothing yet, or a new page
+        self._loaded = threading.Event()
+        self._quiet = False                  # being shown without being the window used last (see show)
+
+    def settings(self, st=None) -> dict:
+        """Where popout.json keeps this window's own settings (st: popout.json as read already): the top level."""
+        return _read_state() if st is None else st
+
+    def save(self, **changes):
+        """Saves this window's own settings."""
+        _update_state(**changes)
+
+    def on_activate(self):
+        """WM_ACTIVATE (UI thread): the user is in this window, so it is the one a SHOW goes to. Cheap."""
+        if not self._quiet:
+            self.pop._used(self)
+
+    def visible(self) -> bool:
+        return bool(self.hwnd and user32.IsWindowVisible(self.hwnd))
+
+    def _rect(self):
+        r = w.RECT()
+        return r if user32.GetWindowRect(self.hwnd, ctypes.byref(r)) else None
+
+    def _save_placement(self):
+        """popout.json "window": the normal (restored) rectangle from the tracker and whether it is maximised,
+        in the shape studio.json keeps its own. In strip mode: the strip's own place (see _save_strip_place)."""
+        if self.mode == "strip":
+            self._save_strip_place()
+            return
+        rec = winframe.placement_record(self.hwnd)
+        if not rec:
+            r = self._rect()
+            if not r:
+                return
+            rec = {"x": r.left, "y": r.top, "width": r.right - r.left, "height": r.bottom - r.top,
+                   "maximized": bool(user32.IsZoomed(self.hwnd))}
+        if rec["width"] > 100 and rec["height"] > 100:
+            self.save(window=rec)
+
+    def _place(self, zb):
+        """(x, y, w, h, maximised) for a window that is about to appear for the first time: where it was last time,
+        else centred on the screen ZBrush is on."""
+        r = self._rect()
+        scale = user32.GetDpiForSystem() / 96 if hasattr(user32, "GetDpiForSystem") else 1.0
+        minw, minh = round(MIN_SIZE[0] * scale), round(MIN_SIZE[1] * scale)
+        saved = winframe.saved_window(self.settings().get("window"), minw, minh)
+        if saved:
+            return saved
+        if r and r.right - r.left >= minw and r.bottom - r.top >= minh:     # not the strip's size
+            wd, ht = r.right - r.left, r.bottom - r.top
+        else:
+            wd, ht = round(START_SIZE[0] * scale), round(START_SIZE[1] * scale)
+        wa = winframe.work_area(zb or self.pop.prev_fg or W.GetForegroundWindow() or 0)
+        return wa.left + (wa.right - wa.left - wd) // 2, wa.top + (wa.bottom - wa.top - ht) // 2, wd, ht, False
+
+    def _on_screen(self, zb=0):
+        """A window left on a monitor that has since gone is brought back onto one: centred on the screen of the
+        ZBrush window the request named, else the primary one. Checked on every show, not only the first."""
+        try:
+            near = zb if zb and W.IsWindow(zb) else self.pop.prev_fg
+            if winframe.bring_on_screen(self.hwnd, near):
+                _log("the window was off every screen; moved onto one")
+        except Exception as e:
+            _log(f"on-screen check failed: {e!r}")
+
+    def _z_order(self):
+        return winframe.HWND_TOPMOST if self.on_top or self.mode == "strip" else winframe.HWND_NOTOPMOST
+
+    def apply_frame_theme(self, window):
+        """The frame's dark mode and border for a theme's "window" palette, once the window is there. Never raises."""
+        try:
+            if self.hwnd:
+                winframe.apply_theme(self.hwnd, window)
+        except Exception as e:
+            _log(f"frame theme failed: {e!r}")
+
+    def _sync_theme(self):
+        """The theme may have changed (Studio's setting, Windows' colour mode under Follow Windows, a new stored
+        ZBrush scheme under Match ZBrush): when it differs from what the page was last given, set the frame and tell
+        the page. Called with the lock held, by show() and, while the window is up, by theme_tick()."""
+        now = (theme.read_setting(), theme.signature())   # a new stored ZBrush scheme changes the digest, not the name
+        if now == self._theme_seen:
+            return
+        look = theme.preset(now[1][0])
+        self.apply_frame_theme(look["window"])
+        try:
+            arg = json.dumps({"setting": now[0], "effective": now[1][0], "base": look["base"], "tokens": look["web"]})
+            self.window.evaluate_js("window.__popoutTheme && __popoutTheme(" + arg + ")")
+            self._theme_seen = now                 # a failed call is tried again at the next show
+        except Exception as e:
+            _log(f"__popoutTheme failed: {e!r}")
+
+    def show(self, tag=None, zb=0, reset=True, kind=None, activate=True):
+        """Shows the window, takes the focus and puts the cursor in the search box. reset: also tell the page to
+        start afresh (empty search, this tag only). Without it the page is left as it is, except that a tag
+        or tab (kind) given is applied. activate False: only shown (a window brought back beside the one asked for),
+        and the foreground goes back to the window that had it (see _show_hidden)."""
+        with self._lock:
+            if not self.hwnd or self.pop.quitting:
+                return
+            self.pop._note_shown()
+            was_visible = self.visible()
+            self.pop._remember_target(zb)
+            self._sync_theme()
+            if reset or tag or kind or self._page_strip:
+                try:
+                    arg = json.dumps({"mode": "browser", "tag": tag or None, "kind": kind or None, "reset": bool(reset)})
+                    self.window.evaluate_js("window.__popoutShow && __popoutShow(" + arg + ")")
+                    self._page_strip = False
+                except Exception as e:
+                    _log(f"__popoutShow failed: {e!r}")
+            if was_visible:
+                if user32.IsIconic(self.hwnd):
+                    user32.ShowWindow(self.hwnd, SW_RESTORE)
+                self._on_screen(zb)
+                winframe.user32.SetWindowPos(self.hwnd, self._z_order(), 0, 0, 0, 0,
+                                             W.SWP_NOMOVE | W.SWP_NOSIZE | W.SWP_SHOWWINDOW)
+            else:                                      # shown through pywebview: the form has to know it is visible, or the
+                self._show_hidden(zb, activate)        # web view inside stays "hidden" and paints nothing
+            self.pop._pen_check(tell=True)             # raw input on, or this page told what the others know
+            if not activate:
+                _log(f"shown without the focus{self.name()}")
+                return
+            self.pop._used(self)
+            # Windows lets only the process that got the last input take the foreground; a no-op key from us
+            # (0xE8 is an unassigned virtual key, so nothing acts on it) counts as that input.
+            W.send_keys([(0xE8, False), (0xE8, True)])
+            got = winframe.force_foreground(self.hwnd)
+            _log(f"shown{self.name()} (tag={tag}, kind={kind}, reset={reset}, prev_fg={self.pop.prev_fg}, "
+                 f"was_visible={was_visible}, foreground={got})")
+            self._focus_page()
+
+    def _show_hidden(self, zb, activate):
+        """show() for a hidden window: placed, shown through pywebview, maximised again when it was. pywebview's show
+        activates the form, and so does a maximise: without activate the window is not the one used last for all of
+        it (on_activate), and the foreground goes back to the window that had it."""
+        fg_before = 0 if activate else int(W.GetForegroundWindow() or 0)
+        self._quiet = not activate
+        try:
+            maxed = self._was_max
+            if not self._placed:                       # the first time: where it was last session; after that, its own place
+                x, y, wd, ht, maxed = self._place(zb)
+                maxed = maxed or self._was_max         # the browser the strip took the place of was maximised
+                winframe.user32.SetWindowPos(self.hwnd, self._z_order(), x, y, wd, ht, W.SWP_NOACTIVATE)
+                self._placed = True
+            else:
+                self._on_screen(zb)                    # the screen it was on may be gone since it was hidden
+                winframe.user32.SetWindowPos(self.hwnd, self._z_order(), 0, 0, 0, 0,
+                                             W.SWP_NOMOVE | W.SWP_NOSIZE | W.SWP_NOACTIVATE)
+            self.window.show()
+            winframe.user32.SetWindowPos(self.hwnd, self._z_order(), 0, 0, 0, 0,           # Show() may re-apply a stale
+                                         W.SWP_NOMOVE | W.SWP_NOSIZE | W.SWP_NOACTIVATE)      # TopMost: ours wins
+            if maxed and not user32.IsZoomed(self.hwnd):
+                user32.ShowWindow(self.hwnd, SW_MAXIMIZE)                                      # activates, too
+            self._on_screen(zb)                        # a maximised window could not be moved while it was hidden
+            if fg_before and int(W.GetForegroundWindow() or 0) != fg_before:
+                winframe.force_foreground(fg_before)
+        finally:
+            self._quiet = False
+
+    def _focus_page(self):
+        """The search box gets the cursor: the page does it, and when the web view itself has no focus yet (the
+        form has it, not the browser inside) the browser window is given it with Win32."""
+        has = False
+        try:
+            has = bool(self.window.evaluate_js("window.__popoutFocus ? __popoutFocus() : false"))
+        except Exception as e:
+            _log(f"__popoutFocus failed: {e!r}")
+        if has:
+            return
+        found = []
+        Enum = ctypes.WINFUNCTYPE(w.BOOL, w.HWND, w.LPARAM)
+
+        def visit(h, _):
+            buf = ctypes.create_unicode_buffer(64)
+            user32.GetClassNameW(h, buf, 64)
+            if buf.value.startswith("Chrome_WidgetWin"):
+                found.append(h)
+            return True
+        user32.EnumChildWindows.argtypes = [w.HWND, Enum, w.LPARAM]
+        user32.EnumChildWindows(self.hwnd, Enum(visit), 0)
+        if not found:
+            _log("no web view child window to focus")
+            return
+        child = found[0]
+        me = kernel32.GetCurrentThreadId()
+        tid = user32.GetWindowThreadProcessId(child, None)
+        attached = bool(tid and tid != me and user32.AttachThreadInput(me, tid, True))
+        try:
+            user32.SetFocus(child)
+        finally:
+            if attached:
+                user32.AttachThreadInput(me, tid, False)
+        try:
+            has = bool(self.window.evaluate_js("window.__popoutFocus ? __popoutFocus() : false"))
+        except Exception:
+            pass
+        _log(f"web view focused with Win32 ({len(found)} child windows): page has focus {has}")
+
+    def hide(self, restore=True, why=""):
+        """Hides the window. restore: give the focus back to ZBrush first (allowed while we hold it); a window that
+        lost the focus to something else just goes."""
+        with self._lock:
+            if not self.visible():
+                return False
+            self._save_placement()
+            if self.mode == "browser":
+                self._was_max = bool(user32.IsZoomed(self.hwnd))
+            else:
+                self.pop._pill_off()
+            if restore and _is_target(self.pop.prev_fg) and self.pop._holds_foreground():
+                user32.SetForegroundWindow(self.pop.prev_fg)
+            self.window.hide()
+            if self.visible():                         # shown with Win32 (the strip): the form may not know it was up
+                user32.ShowWindow(self.hwnd, SW_HIDE)
+            self.pop._note_hidden()
+            self.pop._pen_check()                      # the last browser window up: raw input off
+            W.nudge_mouse()
+            _log(f"hidden ({why})")
+            return True
+
+    def set_on_top(self, flag):
+        with self._lock:
+            self.on_top = flag
+            self.save(on_top=flag)
+            if self.hwnd:
+                winframe.user32.SetWindowPos(self.hwnd, self._z_order(), 0, 0, 0, 0,
+                                             W.SWP_NOMOVE | W.SWP_NOSIZE | W.SWP_NOACTIVATE)
+        # The form keeps its own TopMost (set once at creation) and may put it back when it is shown; show() sets
+        # ours again after that. Never window.on_top: pywebview sets the form's TopMost on the calling thread, which
+        # holds the GIL while the UI thread needs it for winframe's window procedure, and both hang.
+        _log(f"keep on top{self.name()}: {flag}")
+
+    def name(self) -> str:
+        """How popout.log names the window: nothing for the first one, " [id]" for another."""
+        return ""
+
+    def _scale(self) -> float:
+        """Physical pixels per logical one for this window (the process is system DPI aware, as pywebview makes it)."""
+        try:
+            dpi = user32.GetDpiForWindow(self.hwnd) if self.hwnd else 0
+        except Exception:
+            dpi = 0
+        return (dpi or winframe._system_dpi()) / 96
+
+
+class Popout(BrowserWindow):
+    """The process and its first window: show, close, pick, the strip, the other windows, the control window the app
+    talks to."""
 
     def __init__(self, opts):
         self.opts = opts
+        st = _read_state()
+        self._init_window(self, window_settings(st)["on_top"])    # "pinned", the setting's earlier name, is read once
         self.start_tag = opts["tag"]
         self.start_kind = opts["kind"]
-        st = _read_state()
-        if isinstance(st.get("on_top"), bool):
-            self.on_top = st["on_top"]
-        elif "pinned" in st:                  # the setting's earlier name; read once, then on_top is what is saved
-            self.on_top = bool(st["pinned"])
-        else:
-            self.on_top = True
         self.managed = opts["managed"]       # the app owns us; false once it is gone, or when it never was
         self.exit_code = 0                   # of the process: radiald.POPOUT_EXIT_IDLE after an idle quit
         self._now = time.monotonic           # the clock of the idle quit (a test moves its own)
@@ -493,25 +887,18 @@ class Popout:
         #                                      hidden); None while it is up or about to be
         self._idle_minutes = 0               # browser.quit_after_minutes as last read from radial.json
         self._idle_closing = False           # decided to quit unused: a SHOW is answered "quitting"
-        self.window = None
-        self.hwnd = 0
         self.ctl = 0
         self.ready = False                   # page loaded and frame set: only then can the window be shown
         self.quitting = False
         self.prev_fg = 0                     # the window to hand the focus back to
-        self._placed = False                 # the window has had its first position
-        self._was_max = False                # it was maximised when it was last hidden
         self.session_ending = False          # Windows is shutting down, restarting or signing out: let the window close
         self._pending = None                 # (tag, zbrush hwnd, kind) to show once ready
-        self._lock = threading.RLock()       # show, hide and pick run one at a time
-        self._loaded = threading.Event()
+        self._lock = threading.RLock()       # show, hide and pick run one at a time, in every window
         self._ctl_up = threading.Event()
         self._work = queue.SimpleQueue()     # what the control window asks for, done off its thread
         self._refs = []                      # callbacks that must outlive the calls
-        self._theme_seen = None              # (setting, theme.signature()) the page was last given
         self.strip_on = strip_state(st)["on"]   # the strip is the window's resting state (popout.json "strip_on")
         self.mode = "browser"                # what the window is now: "browser" or "strip"
-        self._page_strip = False             # the page was last told to draw the strip: show() must tell it otherwise
         self._app_window = False             # the window had WS_EX_APPWINDOW before it became the strip
         self._strip_home = None              # (x, y): where the strip's corner belongs; a larger size (its menu open by the
         #                                      right edge of the screen) may push it back onto the screen for a while
@@ -522,14 +909,18 @@ class Popout:
         self._fg_hidden = False              # the strip is up (mode "strip") but hidden because another program is in front
         self._fg_away_since = None           # when the foreground was first seen away from ZBrush (strip_tick's grace)
         self._zb_pids = (None, [])           # (when read, ZBrush's process ids): the strip's foreground watch, see _zbrush_pids
-        self._pen_wanted = False             # the browser is up: the control window should watch raw mouse input (_pen_check)
+        self.extras = []                     # the other windows (ExtraWindow), open or on their way, in the order made
+        self._mru = [self]                   # the windows by their last use, most recent first (_used, _target)
+        self._restored = False               # the windows popout.json "extras" lists have been brought back (once)
+        self._ending = False                 # on_end_session has run
+        self._pen_wanted = False             # a browser window is up: the control window watches raw mouse input (_pen_check)
         self._pen_devices = set()            # raw input devices seen moving the cursor absolutely: a tablet's (pointer_source)
         self._pen_last = None                # "pen" or "mouse": what moved the cursor last (control window thread)
-        self._pen_told = None                # what the page was last told (__popoutPen); None: nothing yet, or a new page
         self._pen_queued = False             # a _tell_pen is waiting in the work queue
         self._pen_logged = False             # popout.log has said once that a pen was seen
         self._raw_failed = False             # ... and once that a raw report could not be read
-        self._pen_lock = threading.Lock()    # _pen_check's decision and its post
+        self._watch_failed = False           # ... and once that raw input could not be turned on or off
+        self._pen_lock = threading.Lock()    # _pen_check's decision and its post (each page's _pen_told is its own)
 
     # --- control window: how the app reaches us -------------------------------------------------------
     def start_ctl(self):
@@ -582,7 +973,11 @@ class Popout:
                         _log(f"raw mouse input could not be read: {e!r}")
                 return W.DefWindowProcW(hwnd, msg, wparam, lparam)   # frees the input
             if msg == WM_APP_PEN:
-                self._pen_watch(bool(wparam))
+                if wparam == PEN_TELL:
+                    if self._pen_wanted:
+                        self._queue_tell()
+                else:
+                    self._pen_watch(bool(wparam))
                 return 0
             if msg == W.WM_DESTROY:
                 W.PostQuitMessage(0)
@@ -637,27 +1032,60 @@ class Popout:
             W.PostMessageW(self.ctl, WM_APP_STOP, 0, 0)
 
     # --- pen or mouse: which moved the cursor last (see pointer_source) ---------------------------------
-    def _pen_check(self):
-        """Watch raw mouse input while the browser is up, and only then: every move anywhere is a message to this
-        process. Asked after a show and at each theme poll; the control window's thread does the (un)registering."""
-        with self._pen_lock:                           # show() and the theme poll both ask: the posts keep their order
-            want = bool(self.ready and not self.quitting and self.mode == "browser" and self.visible())
-            if want != self._pen_wanted and self.ctl:
+    # One watch per process, on the control window (Windows gives a process's raw mouse input to one window); each
+    # browser window's page has its own idea of what it was told (BrowserWindow._pen_told).
+    def _browser_up(self) -> bool:
+        """A browser window is up: the first one (as the browser, not the strip) or another one. A minimised one is not
+        (IsWindowVisible is true for it); restored from the taskbar, the theme poll turns the watch on within half a
+        second, while the browser is in front and Windows marks the pen's moves anyway."""
+        def up(win):
+            return win.visible() and not user32.IsIconic(win.hwnd)
+        if self.mode == "browser" and up(self):
+            return True
+        return any(e.ready and not e.closing and up(e) for e in list(self.extras))
+
+    def _pen_pages(self) -> list:
+        """The windows whose page hears __popoutPen: loaded, not closing, and the browser (not the strip); hidden ones
+        too, so a window that comes back already knows."""
+        return [win for win in (self, *list(self.extras)) if win.window is not None and win._loaded.is_set()
+                and win.mode == "browser" and not getattr(win, "closing", False)]
+
+    def _pen_untold(self, pen) -> list:
+        return [win for win in self._pen_pages() if win._pen_told is not pen]
+
+    def _pen_check(self, tell=False):
+        """Watch raw mouse input while a browser window is up, and only then: every move anywhere is a message to this
+        process. Asked after each show and hide, as a window closes, and at each theme poll; the control window's thread
+        does the (un)registering. tell (a show): when the watch stays on, a page that does not know yet (a new window,
+        a reloaded page) is told now, not at the next move."""
+        with self._pen_lock:                           # shows, hides and the theme poll all ask: the posts keep their order
+            want = bool(self.ready and not self.quitting and self._browser_up())
+            if not self.ctl:
+                return
+            if want != self._pen_wanted:
                 self._pen_wanted = want
                 W.PostMessageW(self.ctl, WM_APP_PEN, 1 if want else 0, 0)
+            elif want and tell and self._pen_untold(self._pen_last == "pen"):
+                W.PostMessageW(self.ctl, WM_APP_PEN, PEN_TELL, 0)
 
     def _pen_watch(self, on):
-        """Control window thread: raw mouse input on or off. Turned on, the page starts again from a mouse (moves were
-        not watched while the window was away), and the next move that says otherwise tells it."""
+        """Control window thread: raw mouse input on or off. Turned on, every page starts again from a mouse (moves
+        were not watched while no window was up), and the next move that says otherwise tells them."""
         ok = W.watch_raw_mouse(self.ctl, on)
-        if on:
-            self._pen_last = self._pen_told = None
+        if on and not ok:
+            with self._pen_lock:                       # not watching after all: the next check (the theme poll) tries again
+                self._pen_wanted = False
+        if on and ok:
+            self._pen_last = None
+            for win in (self, *list(self.extras)):
+                win._pen_told = None
             self._queue_tell()
-        if not ok:
+        if not ok and not self._watch_failed:
+            self._watch_failed = True                  # said once: a retry every half second would fill the log
             _log(f"raw mouse input could not be turned {'on' if on else 'off'}: {ctypes.get_last_error()}")
 
     def _on_raw_mouse(self, lparam):
-        """Control window thread, for every mouse report while the browser is up: kept short."""
+        """Control window thread, for every mouse report while a browser window is up: kept short."""
         r = W.read_raw_mouse(lparam)
         if not r:
             return
@@ -668,36 +1096,50 @@ class Popout:
         if src is None:
             return
         self._pen_last = src
-        if (src == "pen") is not self._pen_told:       # compared with what the page has, so a page not yet ready is told later
+        if self._pen_untold(src == "pen"):             # compared with what each page has, so a page not yet ready is told later
             self._queue_tell()
 
     def _queue_tell(self):
+        """Control window thread: one _tell_pen at a time waits in the work queue."""
         if not self._pen_queued:
             self._pen_queued = True
             self._work.put((self._tell_pen, ()))
 
     def _tell_pen(self):
-        """Work thread: the page learns whether the pen moved the cursor last (window.__popoutPen). Only an answer of
-        true counts as told: a page still loading has no __popoutPen yet, and the next report tries again."""
+        """Work thread: each page that does not know yet learns whether the pen moved the cursor last
+        (window.__popoutPen). Only an answer of true counts as told: a page still loading has no __popoutPen yet, and the
+        next report tries again."""
         self._pen_queued = False
+        if self.quitting or self.session_ending:
+            return
         pen = self._pen_last == "pen"
-        if pen is self._pen_told or not self.window:
+        pages = self._pen_untold(pen)
+        if not pages:
             return
         if pen and not self._pen_logged:
             self._pen_logged = True
             _log("a pen moved the cursor: a press it makes while another program is in front scrolls the grid")
-        try:
-            if self.window.evaluate_js(f"window.__popoutPen ? __popoutPen({'true' if pen else 'false'}) : false") is True:
-                self._pen_told = pen
-        except Exception as e:
-            _log(f"__popoutPen failed: {e!r}")
+        for win in pages:
+            # Under the lock, and only if the window is still there: an extra's close() marks it closing under this
+            # lock before it destroys the window, and a script still running in a web view being disposed never
+            # answers, which would stop this thread for good.
+            with self._lock:
+                if (self.quitting or self.session_ending or getattr(win, "closing", False)
+                        or not (win is self or win in self.extras)):
+                    continue
+                try:
+                    if win.window.evaluate_js(f"window.__popoutPen ? __popoutPen({'true' if pen else 'false'}) : false") is True:
+                        win._pen_told = pen
+                except Exception as e:
+                    _log(f"__popoutPen{win.name()} failed: {e!r}")
 
     # --- the window ---------------------------------------------------------------------------------
     def on_hwnd(self, hwnd):
         """From custom_frame, on the worker thread, before the frame is changed."""
         self.hwnd = int(hwnd)
         # draws without Windows' frame, resizes by its own border; sees Windows ending the session
-        winframe.install_frame(hwnd, on_query_end=self.on_query_end, on_end=self.on_end_session, on_moved=self.on_moved)
+        winframe.install_frame(hwnd, on_query_end=self.on_query_end, on_end=self.on_end_session, on_moved=self.on_moved,
+                               on_activate=self.on_activate)
 
     def on_moved(self):
         """WM_EXITSIZEMOVE (UI thread): the user has dragged the window. The strip's place is saved at once."""
@@ -714,22 +1156,27 @@ class Popout:
         """WM_ENDSESSION (UI thread). ending: the session really ends, else something cancelled it. Saves the
         window and goes: Windows stops the process soon after this returns, and it must not need the page."""
         if not ending:
-            _log("the session end was cancelled")
+            if self.session_ending:
+                _log("the session end was cancelled")
             self.session_ending = False
             return
         self.session_ending = True
         self.quitting = True
-        try:
-            if self.visible():
-                self._save_placement()
-        except Exception as e:
-            _log(f"could not save the window at session end: {e!r}")
+        if self._ending:                               # every window hears it: once is enough
+            return
+        self._ending = True
+        for win in [self, *self.extras]:               # the other windows stay in "extras" and come back next time
+            try:
+                if win.visible():
+                    win._save_placement()
+            except Exception as e:
+                _log(f"could not save the window{win.name()} at session end: {e!r}")
         _log("session ended; exiting")
         threading.Timer(2.0, os._exit, args=(0,)).start()       # WinForms is closing the form; this is the backstop
 
     def on_loaded(self):
         _log("page loaded")
-        self._pen_told = self._pen_last = None         # a new page knows nothing yet: the next move tells it
+        self._pen_told = None                          # a new page knows nothing yet: the next move tells it
         self._loaded.set()
 
     def worker(self):
@@ -813,11 +1260,14 @@ class Popout:
                 _log(f"pen watch check failed: {e!r}")
 
     def theme_tick(self):
-        """One look at the theme: the same sync show() does, for a visible window only (a hidden one is synced when
-        it is shown)."""
+        """One look at the theme: the same sync show() does, for each visible window (a hidden one is synced when
+        it is shown). Each window's page has its own idea of what it was last given."""
         with self._lock:
-            if self.ready and not self.quitting and self.visible():
-                self._sync_theme()
+            if self.quitting:
+                return
+            for win in [self, *self.extras]:
+                if win.ready and not getattr(win, "closing", False) and win.visible():
+                    win._sync_theme()
 
     def _zbrush_pids(self, fresh=False) -> list:
         """Process ids of the running ZBrushes, kept ZBRUSH_PIDS_TTL_S (a snapshot of every process each half second is
@@ -893,6 +1343,9 @@ class Popout:
             self._hidden_at = None
 
     def _note_hidden(self):
+        """The first window was hidden, or another closed: the idle count starts, unless another window is up."""
+        if self._extras_up():
+            return
         with self._idle_lock:
             self._hidden_at = self._now()
 
@@ -918,7 +1371,7 @@ class Popout:
         strip that steps aside while another program is in front is up all the same."""
         if not self.managed or not self.ready or self.quitting or self.session_ending or self._idle_closing:
             return
-        if self.visible() or self._fg_hidden:
+        if self.any_up():
             self._note_shown()
             return
         minutes = self._read_idle_minutes()
@@ -927,103 +1380,315 @@ class Popout:
             with self._idle_lock:
                 if self._hidden_at is None:            # hidden, though nothing said so
                     self._hidden_at = now
-                if not minutes or self.visible() or now - self._hidden_at < minutes * 60:
+                if not minutes or self.any_up() or now - self._hidden_at < minutes * 60:
                     return
                 self._idle_closing = True              # from here a SHOW is refused, so none is taken and then lost
         self.quit(f"unused for {minutes} minutes (browser.quit_after_minutes)", idle=True)
 
     def app_gone(self, why):
         """The app quit (or told us to). A hidden window has no reason to stay; one that is up does not depend
-        on the app, so it stays, no longer managed: closing it then ends the process. The strip of a managed
-        popout goes with the app (strip_on stays, so the next pre-warm brings it back); one started by hand
-        (the Start menu, --show) is not managed and stays, as the browser does."""
+        on the app, so it stays, no longer managed: closing the last one up then ends the process. The strip of a
+        managed popout goes with the app (strip_on stays, so the next pre-warm brings it back), even when another
+        window stays; one started by hand (the Start menu, --show) is not managed and stays, as the browser does."""
         with self._lock:
             up = self.visible() or (self.mode == "strip" and self._fg_hidden)
+            if self._extras_up() and not self.quitting:   # another browser window is up: the process stays for it
+                if self.managed and self.mode == "strip":  # ... but the strip still goes with the app
+                    self.hide(restore=False, why="the app is gone")
+                    self._leave_strip()
+                _log("app gone; staying open (another window is up)")
+                self.managed = False
+                return
             if up and not self.quitting and not (self.managed and self.mode == "strip"):
                 _log("app gone; staying open (the window is up)")
                 self.managed = False
                 return
         self.quit(why)
 
-    def visible(self) -> bool:
-        return bool(self.hwnd and user32.IsWindowVisible(self.hwnd))
-
     def _holds_foreground(self) -> bool:
         fg = W.GetForegroundWindow()
         return bool(fg) and W.window_pid(fg) == os.getpid()
 
-    def _rect(self):
-        r = w.RECT()
-        return r if user32.GetWindowRect(self.hwnd, ctypes.byref(r)) else None
-
-    def _save_placement(self):
-        """popout.json "window": the normal (restored) rectangle from the tracker and whether it is maximised,
-        in the shape studio.json keeps its own. In strip mode: the strip's own place (see _save_strip_place)."""
-        if self.mode == "strip":
-            self._save_strip_place()
-            return
-        rec = winframe.placement_record(self.hwnd)
-        if not rec:
-            r = self._rect()
-            if not r:
-                return
-            rec = {"x": r.left, "y": r.top, "width": r.right - r.left, "height": r.bottom - r.top,
-                   "maximized": bool(user32.IsZoomed(self.hwnd))}
-        if rec["width"] > 100 and rec["height"] > 100:
-            _update_state(window=rec)
-
-    def _place(self, zb):
-        """(x, y, w, h, maximised) for a window that is about to appear for the first time: where it was last time,
-        else centred on the screen ZBrush is on."""
-        r = self._rect()
-        scale = user32.GetDpiForSystem() / 96 if hasattr(user32, "GetDpiForSystem") else 1.0
-        minw, minh = round(MIN_SIZE[0] * scale), round(MIN_SIZE[1] * scale)
-        saved = winframe.saved_window(_read_state().get("window"), minw, minh)
-        if saved:
-            return saved
-        if r and r.right - r.left >= minw and r.bottom - r.top >= minh:     # not the strip's size
-            wd, ht = r.right - r.left, r.bottom - r.top
-        else:
-            wd, ht = round(START_SIZE[0] * scale), round(START_SIZE[1] * scale)
-        wa = winframe.work_area(zb or self.prev_fg or W.GetForegroundWindow() or 0)
-        return wa.left + (wa.right - wa.left - wd) // 2, wa.top + (wa.bottom - wa.top - ht) // 2, wd, ht, False
-
-    def _on_screen(self, zb=0):
-        """A window left on a monitor that has since gone is brought back onto one: centred on the screen of the
-        ZBrush window the request named, else the primary one. Checked on every show, not only the first."""
-        try:
-            near = zb if zb and W.IsWindow(zb) else self.prev_fg
-            if winframe.bring_on_screen(self.hwnd, near):
-                _log("the window was off every screen; moved onto one")
-        except Exception as e:
-            _log(f"on-screen check failed: {e!r}")
-
-    def _z_order(self):
-        return winframe.HWND_TOPMOST if self.on_top or self.mode == "strip" else winframe.HWND_NOTOPMOST
+    def _in_front(self, win) -> bool:
+        """This process has the foreground, and not in another of its browser windows than win."""
+        if not self._holds_foreground():
+            return False
+        fg = int(W.GetForegroundWindow() or 0)
+        return not any(o.hwnd and o.hwnd == fg for o in (self, *self.extras) if o is not win)
 
     def request_show(self, tag, zb, toggle, kind=None):
-        """The app asks for the window (SHOW), or the first launch does (--show). Never closes it: a window that is
-        hidden appears, one that is up comes to the front, and one that is already in front hands the keyboard
-        back to ZBrush when asked to toggle (the hotkey)."""
+        """The app asks for the browser (SHOW), or the first launch does (--show): the window used most recently that
+        is still open answers, else the first one (see _target). Never closes it: a window that is hidden appears, one
+        that is up comes to the front, and one that is already in front hands the keyboard back to ZBrush when asked to
+        toggle (the hotkey). The first SHOW also brings back the other windows that were open when the process last
+        ended; when the one used last is among them, it answers once it is made, and the first window stays hidden.
+        On the work thread, which never waits for a window to be made."""
         with self._lock:
             if not self.ready:                         # still starting: it shows itself when it is up
                 self._pending = (tag, zb, kind)
                 _log(f"SHOW while starting: pending {self._pending}")
                 return
-            if self.mode == "strip":                   # the strip never has the keyboard: a SHOW always means the browser
+            first, others = self._restore_extras()
+        if first is not None or others:
+            self._bring_back_later(first, others, (tag, zb, kind, time.monotonic()))
+            if first is not None:
+                _log(f"SHOW: the window used last{first.name()} answers once it is made")
+                return
+            self._answer(tag, zb, toggle, kind, win=self)     # the first window was the one used last
+            return
+        self._answer(tag, zb, toggle, kind)
+
+    def _answer(self, tag, zb, toggle, kind, win=None):
+        """A SHOW, for win (else the window _target names)."""
+        with self._lock:
+            win = win or self._target()
+            if win is self and self.mode == "strip":   # the strip never has the keyboard: a SHOW always means the browser
                 self.open_browser(tag, zb, kind, True, "SHOW")
                 return
-            if not self.visible():
-                self.show(tag, zb, kind=kind)
-            elif self._holds_foreground():
+            if not win.visible():
+                win.show(tag, zb, kind=kind)
+            elif self._in_front(win):
                 self._remember_target(zb)
                 if toggle:
-                    _log("SHOW toggle: in front; the keyboard goes back to ZBrush")
+                    _log(f"SHOW toggle: in front{win.name()}; the keyboard goes back to ZBrush")
                     self.release_focus()
                 else:
-                    self.show(tag, zb, reset=False, kind=kind)    # already in front: the search box gets the cursor
+                    win.show(tag, zb, reset=False, kind=kind)     # already in front: the search box gets the cursor
             else:
-                self.show(tag, zb, reset=False, kind=kind)
+                win.show(tag, zb, reset=False, kind=kind)
+
+    # --- the other windows ----------------------------------------------------------------------------
+    def window_count(self) -> int:
+        """Browser windows open or on their way, the first one included (hidden or not)."""
+        return 1 + len(self.extras)
+
+    def _extras_up(self) -> bool:
+        """Another window is up, or on its way up."""
+        return any(e.visible() or not e.ready for e in self.extras if not e.closing)
+
+    def any_up(self) -> bool:
+        """A window of this process is up: the browser, the strip (even while it steps aside), or another window."""
+        return self.visible() or (self.mode == "strip" and self._fg_hidden) or self._extras_up()
+
+    def _end_if_none_up(self, why):
+        """A popout that is not managed has nothing to wait for once no window is up: it ends."""
+        if not self.managed and not self.quitting and not self.any_up():
+            self.quit(why)
+
+    @property
+    def last_used(self):
+        """The window used most recently, open or not."""
+        mru = self._mru
+        return mru[0] if mru else self
+
+    def _is_open(self, win) -> bool:
+        """win is up (minimised counts), or is the strip."""
+        if win is self:
+            return self.visible() or self.mode == "strip"
+        return win in self.extras and not win.closing and win.ready and win.visible()
+
+    def _target(self):
+        """The window a SHOW goes to: the one used most recently that is still open, else the first."""
+        for win in self._mru:
+            if self._is_open(win):
+                return win
+        return self
+
+    def _used(self, win):
+        """win was used (activated, or shown with the focus): first in the order. Any thread, the UI one included, so
+        no lock: the list is replaced, never changed in place. popout.json "last_used" is written on the work thread."""
+        mru = self._mru
+        if mru and mru[0] is win:
+            return
+        self._mru = [win, *(o for o in mru if o is not win)]
+        self._work.put((self._save_last_used, ()))
+
+    def _forget(self, win):
+        """win is gone: out of the order of use."""
+        self._mru = [o for o in self._mru if o is not win]
+        self._work.put((self._save_last_used, ()))
+
+    def _closed_one(self):
+        """A window was hidden or closed: the window a SHOW goes to may be another one now."""
+        self._work.put((self._save_last_used, ()))
+
+    def _save_last_used(self):
+        """popout.json "last_used": the window a SHOW would go to now, which is the one to bring back first. Left as it
+        is while the process ends: the windows closing one by one then must not move it."""
+        if self.quitting or self.session_ending:
+            return
+        target = self._target()
+        want = MAIN_ID if target is self else target.id
+        if _read_state().get("last_used") != want:
+            _update_state(last_used=want)
+
+    def _restore_extras(self):
+        """Once per process, at the first SHOW (or the strip's Open browser): the windows popout.json "extras" still
+        lists, which were open when the process last ended, are taken back in. Lock held; only the bookkeeping, the
+        caller opens them. (the one of them used last or None, [the others])."""
+        if self._restored or self.quitting:
+            return None, []
+        self._restored = True
+        st = _read_state()
+        lu = st.get("last_used")
+        first, others = None, []
+        for e in extras_state(st):
+            if self.window_count() >= MAX_WINDOWS:
+                break
+            ext = ExtraWindow(self, e["id"], e)
+            self.extras.append(ext)
+            if e["id"] == lu:
+                first = ext
+            else:
+                others.append(ext)
+        if first is not None:
+            self._mru = [first, *(o for o in self._mru if o is not first)]
+        if self.extras:
+            _log(f"bringing back {len(self.extras)} other window(s){' (one used last)' if first else ''}")
+        return first, others
+
+    def _bring_back_later(self, first, others, request=None):
+        """Makes the windows brought back, each on a thread of its own. first answers request (tag, zbrush hwnd, kind,
+        when it was asked for) once it is up; the others are shown where they were without taking the keyboard."""
+        for ext in ([first] if first is not None else []) + list(others):
+            threading.Thread(target=self._bring_back, args=(ext, request if ext is first else None), daemon=True,
+                             name="popout-back").start()
+
+    def _bring_back(self, ext, request=None):
+        made = self._open_extra(ext, end_if_none=request is None)
+        if request is not None:
+            tag, zb, kind, t0 = request
+            if made:
+                with self._lock:
+                    if not ext.closing and not self.quitting:
+                        ext.show(tag, zb, kind=kind)
+                        _log(f"SHOW answered by{ext.name()} {time.monotonic() - t0:.2f} s after it came")
+            elif not self.quitting:
+                _log("the window used last did not come back: the first window answers")
+                self._answer(tag, zb, False, kind, win=self)
+        elif made:
+            with self._lock:
+                if not ext.closing and not self.quitting:
+                    ext.show(activate=False)
+                    if ext not in self._mru:
+                        self._mru = [*self._mru, ext]      # open, but used before the others
+        self._windows_changed()
+
+    def new_window(self, opener, asked) -> dict:
+        """New window from opener's page (a js_api call: nothing here waits for the UI thread). The window is made on
+        a thread of its own; the answer says how many windows there are, or why there is no new one."""
+        with self._lock:
+            if self.quitting or not self.ready:
+                return {"ok": False, "error": "The browser is closing.", "windows": self.window_count(),
+                        "max_windows": MAX_WINDOWS}
+            first, others = self._restore_extras()     # all paths to a window up have done it; this is the backstop
+            back = ([first] if first else []) + others
+            n = self.window_count()
+            ext = None
+            if n < MAX_WINDOWS:
+                eid = uuid.uuid4().hex[:8]
+                entry = {"id": eid, **new_window_settings(window_settings(opener.settings()), asked)}
+                place = self._new_place(opener)
+                if place:
+                    x, y, wd, ht = place
+                    entry["window"] = {"x": x, "y": y, "width": wd, "height": ht, "maximized": False}
+                _add_extra(entry)
+                ext = ExtraWindow(self, eid, entry)
+                self.extras.append(ext)
+        if back:
+            self._bring_back_later(None, back)
+        if ext is None:
+            _log(f"New window: {n} windows are open already")
+            return {"ok": False, "error": CAP_MESSAGE, "windows": n, "max_windows": MAX_WINDOWS}
+        _log(f"New window{ext.name()} from{opener.name() or ' the first window'}: {entry}")
+        threading.Thread(target=self._open_new, args=(ext,), daemon=True, name="popout-new").start()
+        return {"ok": True, "windows": n + 1, "max_windows": MAX_WINDOWS}
+
+    def _new_place(self, opener):
+        """(x, y, width, height) for a new window: the normal size of opener, NEW_OFFSET logical pixels down and right
+        of it, on its screen. None when opener's place cannot be read."""
+        try:
+            nr = winframe.normal_rect(opener.hwnd) if opener.hwnd else None
+            if nr:
+                rect = nr[:4]
+            else:
+                r = opener._rect() if opener.hwnd else None
+                if not r:
+                    return None
+                rect = (r.left, r.top, r.right, r.bottom)
+            return offset_place(rect, round(NEW_OFFSET * opener._scale()), winframe._work_of(rect))
+        except Exception as e:
+            _log(f"the new window's place could not be worked out: {e!r}")
+            return None
+
+    def _open_new(self, ext):
+        self._windows_changed()                        # the other pages' New window buttons
+        if self._open_extra(ext):
+            with self._lock:
+                if not ext.closing and not self.quitting:
+                    ext.show()                         # afresh, with the focus, at the place saved for it
+        self._windows_changed()
+
+    def _open_extra(self, ext, end_if_none=True) -> bool:
+        """Makes ext's window (hidden), sets its frame and waits for its page. Off the UI thread, with no lock held and
+        never inside a js_api call. False when it could not be made: it is dropped, entry and all (but for the process
+        quitting, when the entry stays for next time); end_if_none: then a popout not managed with no window up ends."""
+        try:
+            import webview
+            title = f"{TITLE} {ext.id}"                # custom_frame finds the window by its title: this one only
+            win = webview.create_window(title, url=UI_PAGE, js_api=PopoutApi(ext), width=START_SIZE[0],
+                                        height=START_SIZE[1], min_size=MIN_SIZE, hidden=True, on_top=ext.on_top,
+                                        frameless=True, easy_drag=False, text_select=False,
+                                        background_color=theme.preset(theme.current())["window"]["background"])
+            if win is None:
+                raise RuntimeError("pywebview made no window")
+            ext.window = win
+            win.events.closing += ext.on_closing
+            win.events.closed += ext.on_closed
+            win.events.loaded += ext.on_loaded
+            if win.events.loaded.is_set():             # loaded before the handler was there
+                ext._loaded.set()
+            winframe.custom_frame(title, placement=None, pid=os.getpid(), topmost=ext.on_top, toolwindow=False,
+                                  maximizable=True, include_hidden=True, on_hwnd=ext.on_hwnd,
+                                  theme=theme.preset(theme.current())["window"])
+            if not ext.hwnd:
+                raise RuntimeError("its window was not found")
+            win.set_title(TITLE)
+            if not ext._loaded.wait(60):
+                _log(f"the page{ext.name()} did not load within 60 s")
+            ext.ready = True
+            _log(f"window{ext.name()} made: {ext.hwnd}")
+            return True
+        except Exception as e:
+            ending = self.quitting or self.session_ending
+            _log(f"window{ext.name()} could not be made{' (the process is ending)' if ending else ''}: {e!r}")
+            with self._lock:
+                ext.closing = True
+                if ext in self.extras:
+                    self.extras.remove(ext)
+                self._forget(ext)
+            if ending:                                 # quit destroyed what it was made on: it comes back next time
+                return False
+            _remove_extra(ext.id)
+            if ext.window is not None:
+                try:
+                    ext.window.destroy()
+                except Exception:
+                    pass
+            if end_if_none:
+                self._end_if_none_up("no window left")
+            return False
+
+    def _windows_changed(self):
+        """Tells every page how many windows there are (its New window button). Off the UI thread, no lock held."""
+        arg = json.dumps({"windows": self.window_count(), "max_windows": MAX_WINDOWS})
+        for win in (self, *self.extras):
+            if win.window is None or getattr(win, "closing", False) or not win._loaded.is_set():
+                continue
+            try:
+                win.window.evaluate_js("window.__popoutWindows && __popoutWindows(" + arg + ")")
+            except Exception as e:
+                _log(f"__popoutWindows{win.name()} failed: {e!r}")
 
     def _remember_target(self, zb=0):
         """The window the focus goes back to: the ZBrush window the app named, else ZBrush in front, else the one
@@ -1046,118 +1711,6 @@ class Popout:
         W.nudge_mouse()                                # a zero move: the pen and cursor tracking wake up in ZBrush
         return True
 
-    def apply_frame_theme(self, window):
-        """The frame's dark mode and border for a theme's "window" palette, once the window is there. Never raises."""
-        try:
-            if self.hwnd:
-                winframe.apply_theme(self.hwnd, window)
-        except Exception as e:
-            _log(f"frame theme failed: {e!r}")
-
-    def _sync_theme(self):
-        """The theme may have changed (Studio's setting, Windows' colour mode under Follow Windows, a new stored
-        ZBrush scheme under Match ZBrush): when it differs from what the page was last given, set the frame and tell
-        the page. Called with the lock held, by show() and, while the window is up, by theme_tick()."""
-        now = (theme.read_setting(), theme.signature())   # a new stored ZBrush scheme changes the digest, not the name
-        if now == self._theme_seen:
-            return
-        look = theme.preset(now[1][0])
-        self.apply_frame_theme(look["window"])
-        try:
-            arg = json.dumps({"setting": now[0], "effective": now[1][0], "base": look["base"], "tokens": look["web"]})
-            self.window.evaluate_js("window.__popoutTheme && __popoutTheme(" + arg + ")")
-            self._theme_seen = now                 # a failed call is tried again at the next show
-        except Exception as e:
-            _log(f"__popoutTheme failed: {e!r}")
-
-    def show(self, tag=None, zb=0, reset=True, kind=None):
-        """Shows the window, takes the focus and puts the cursor in the search box. reset: also tell the page to
-        start afresh (empty search, this tag only). Without it the page is left as it is, except that a tag
-        or tab (kind) given is applied."""
-        with self._lock:
-            if not self.hwnd or self.quitting:
-                return
-            self._note_shown()
-            was_visible = self.visible()
-            self._remember_target(zb)
-            self._sync_theme()
-            if reset or tag or kind or self._page_strip:
-                try:
-                    arg = json.dumps({"mode": "browser", "tag": tag or None, "kind": kind or None, "reset": bool(reset)})
-                    self.window.evaluate_js("window.__popoutShow && __popoutShow(" + arg + ")")
-                    self._page_strip = False
-                except Exception as e:
-                    _log(f"__popoutShow failed: {e!r}")
-            if was_visible:
-                if user32.IsIconic(self.hwnd):
-                    user32.ShowWindow(self.hwnd, SW_RESTORE)
-                self._on_screen(zb)
-                winframe.user32.SetWindowPos(self.hwnd, self._z_order(), 0, 0, 0, 0,
-                                             W.SWP_NOMOVE | W.SWP_NOSIZE | W.SWP_SHOWWINDOW)
-            else:                                      # shown through pywebview: the form has to know it is visible, or the
-                maxed = self._was_max                  # web view inside stays "hidden" and paints nothing
-                if not self._placed:                   # the first time: where it was last session. After that it keeps its place
-                    x, y, wd, ht, maxed = self._place(zb)
-                    maxed = maxed or self._was_max     # the browser the strip took the place of was maximised
-                    winframe.user32.SetWindowPos(self.hwnd, self._z_order(), x, y, wd, ht, W.SWP_NOACTIVATE)
-                    self._placed = True
-                else:
-                    self._on_screen(zb)                # the screen it was on may be gone since it was hidden
-                    winframe.user32.SetWindowPos(self.hwnd, self._z_order(), 0, 0, 0, 0,
-                                                 W.SWP_NOMOVE | W.SWP_NOSIZE | W.SWP_NOACTIVATE)
-                self.window.show()
-                winframe.user32.SetWindowPos(self.hwnd, self._z_order(), 0, 0, 0, 0,       # Show() may re-apply a stale
-                                             W.SWP_NOMOVE | W.SWP_NOSIZE | W.SWP_NOACTIVATE)  # TopMost: ours wins
-                if maxed and not user32.IsZoomed(self.hwnd):
-                    user32.ShowWindow(self.hwnd, SW_MAXIMIZE)
-                self._on_screen(zb)                    # a maximised window could not be moved while it was hidden
-            # Windows lets only the process that got the last input take the foreground; a no-op key from us
-            # (0xE8 is an unassigned virtual key, so nothing acts on it) counts as that input.
-            W.send_keys([(0xE8, False), (0xE8, True)])
-            got = winframe.force_foreground(self.hwnd)
-            _log(f"shown (tag={tag}, kind={kind}, reset={reset}, prev_fg={self.prev_fg}, was_visible={was_visible}, foreground={got})")
-            self._focus_page()
-            self._pen_check()
-
-    def _focus_page(self):
-        """The search box gets the cursor: the page does it, and when the web view itself has no focus yet (the
-        form has it, not the browser inside) the browser window is given it with Win32."""
-        has = False
-        try:
-            has = bool(self.window.evaluate_js("window.__popoutFocus ? __popoutFocus() : false"))
-        except Exception as e:
-            _log(f"__popoutFocus failed: {e!r}")
-        if has:
-            return
-        found = []
-        Enum = ctypes.WINFUNCTYPE(w.BOOL, w.HWND, w.LPARAM)
-
-        def visit(h, _):
-            buf = ctypes.create_unicode_buffer(64)
-            user32.GetClassNameW(h, buf, 64)
-            if buf.value.startswith("Chrome_WidgetWin"):
-                found.append(h)
-            return True
-        user32.EnumChildWindows.argtypes = [w.HWND, Enum, w.LPARAM]
-        user32.EnumChildWindows(self.hwnd, Enum(visit), 0)
-        if not found:
-            _log("no web view child window to focus")
-            return
-        child = found[0]
-        me = kernel32.GetCurrentThreadId()
-        tid = user32.GetWindowThreadProcessId(child, None)
-        attached = bool(tid and tid != me and user32.AttachThreadInput(me, tid, True))
-        try:
-            user32.SetFocus(child)
-        finally:
-            if attached:
-                user32.AttachThreadInput(me, tid, False)
-        try:
-            has = bool(self.window.evaluate_js("window.__popoutFocus ? __popoutFocus() : false"))
-        except Exception:
-            pass
-        _log(f"web view focused with Win32 ({len(found)} child windows): page has focus {has}")
-
     def release_focus(self):
         """The keyboard goes back to the window that had it before (ZBrush). The window stays open. Allowed because
         this process holds the foreground when the user presses Esc or the hotkey in it."""
@@ -1176,29 +1729,8 @@ class Popout:
         self.hide(restore=True, why=why)
         with self._lock:
             self._leave_strip()                        # a hidden window is the browser, for the next SHOW
-        if not self.managed and not self.quitting:
-            self.quit("closed by the user")
-
-    def hide(self, restore=True, why=""):
-        """Hides the window. restore: give the focus back to ZBrush first (allowed while we hold it); a window that
-        lost the focus to something else just goes."""
-        with self._lock:
-            if not self.visible():
-                return False
-            self._save_placement()
-            if self.mode == "browser":
-                self._was_max = bool(user32.IsZoomed(self.hwnd))
-            else:
-                self._pill_off()
-            if restore and _is_target(self.prev_fg) and self._holds_foreground():
-                user32.SetForegroundWindow(self.prev_fg)
-            self.window.hide()
-            if self.visible():                         # shown with Win32 (the strip): the form may not know it was up
-                user32.ShowWindow(self.hwnd, SW_HIDE)
-            self._note_hidden()
-            W.nudge_mouse()
-            _log(f"hidden ({why})")
-            return True
+        self._closed_one()
+        self._end_if_none_up("closed by the user")    # another window up keeps the process
 
     # --- the strip ----------------------------------------------------------------------------------
     def strip_from_browser(self):
@@ -1291,6 +1823,9 @@ class Popout:
         with self._lock:
             if not self.hwnd or self.quitting:
                 return
+            first, others = self._restore_extras()     # a user's request for the browser, as a SHOW is
+            if first is not None or others:
+                self._bring_back_later(None, ([first] if first else []) + others)
             if self.mode == "strip":
                 if self.visible():
                     self.hide(restore=False, why=why or "to the browser")    # the strip never had the keyboard
@@ -1312,14 +1847,6 @@ class Popout:
             _log(f"the window could not be {'fitted to the strip' if on else 'made resizable again'} in time")
         winframe.user32.SetWindowPos(self.hwnd, self._z_order(), 0, 0, 0, 0,
                                      W.SWP_NOMOVE | W.SWP_NOSIZE | W.SWP_NOACTIVATE | 0x0020)      # FRAMECHANGED
-
-    def _scale(self) -> float:
-        """Physical pixels per logical one for this window (the process is system DPI aware, as pywebview makes it)."""
-        try:
-            dpi = user32.GetDpiForWindow(self.hwnd) if self.hwnd else 0
-        except Exception:
-            dpi = 0
-        return (dpi or winframe._system_dpi()) / 96
 
     def _target_rect(self):
         """The rectangle of the ZBrush window the strip goes beside the first time, or None."""
@@ -1432,29 +1959,17 @@ class Popout:
         else:
             toast.show(p[1], _log, ms=3600, colour=pre["text"], pill=pre["pill"])
 
-    def set_on_top(self, flag):
-        with self._lock:
-            self.on_top = flag
-            _update_state(on_top=flag)
-            if self.hwnd:
-                winframe.user32.SetWindowPos(self.hwnd, self._z_order(), 0, 0, 0, 0,
-                                             W.SWP_NOMOVE | W.SWP_NOSIZE | W.SWP_NOACTIVATE)
-        # The form keeps its own TopMost (set once at creation) and may put it back when it is shown; show() sets
-        # ours again after that. Never window.on_top: pywebview sets the form's TopMost on the calling thread, which
-        # holds the GIL while the UI thread needs it for winframe's window procedure, and both hang.
-        _log(f"keep on top: {flag}")
-
-    def pick(self, name, kind="brush") -> dict:
+    def pick(self, name, kind="brush", win=None) -> dict:
         """The page picked a brush, alpha, material or texture. The window stays where it is; the focus goes back
         to ZBrush, because the app selects the item with ZBrush in front. From the strip nothing is handed back: it
-        never took the focus, so ZBrush is in front already. Runs inside a js_api call: no show, hide or evaluate_js
-        here."""
+        never took the focus, so ZBrush is in front already. win: the window it came from (the first one when None).
+        Runs inside a js_api call: no show, hide or evaluate_js here."""
         if kind not in C.ASSET_KINDS:
             return {"ok": False, "error": f"Unknown kind {kind!r}."}
         if not name:
             return {"ok": False, "error": f"No {kind} to select."}
         with self._lock:
-            strip = self.mode == "strip"
+            strip = (win or self).mode == "strip"
             if not strip:
                 self._back_to_target()
         if strip and not self._zbrush_pids(fresh=True):    # a strip started by hand with no ZBrush: the pick has nowhere to go
@@ -1484,8 +1999,12 @@ class Popout:
             if idle:
                 self.exit_code = radiald.POPOUT_EXIT_IDLE
             _log(f"quitting ({why})")
-            if self.visible():
-                self._save_placement()
+            for win in (self, *self.extras):           # the other windows keep their entries: they come back next time
+                try:
+                    if win.visible():
+                        win._save_placement()
+                except Exception as e:
+                    _log(f"could not save the window{win.name()}: {e!r}")
         if not idle:
             self.stop_ctl()
 
@@ -1494,6 +2013,12 @@ class Popout:
             _log("still here after 5 s; exiting")
             os._exit(self.exit_code)
         threading.Thread(target=kill, daemon=True).start()
+        for ext in list(self.extras):                  # the process ends with the last window pywebview has
+            try:
+                if ext.window is not None:
+                    ext.window.destroy()
+            except Exception as e:
+                _log(f"destroy{ext.name()} failed: {e!r}")
         if self.window is None:
             os._exit(self.exit_code)
         try:
@@ -1509,6 +2034,115 @@ class Popout:
             return None
         threading.Thread(target=self.close, kwargs={"why": "close requested"}, daemon=True).start()   # hiding needs the UI thread free
         return False
+
+
+class ExtraWindow(BrowserWindow):
+    """Another browser window (New window, or one brought back at a SHOW). Its settings are its entry in popout.json
+    "extras" (see extras_state). It is never the strip, and its close button closes it for good."""
+
+    def __init__(self, pop, eid, entry):
+        self._init_window(pop, window_settings(entry)["on_top"])
+        self.id = eid
+        self.ready = False                   # made, framed and its page loaded (Popout._open_extra)
+        self.closing = False                 # closed for good (or never made, or gone): on its way out
+        self._keep_entry = False             # it closes because the process quits or the session ends
+
+    @property
+    def _lock(self):
+        return self.pop._lock
+
+    def name(self) -> str:
+        return f" [{self.id}]"
+
+    def settings(self, st=None) -> dict:
+        """Its entry in popout.json "extras", or {} once it has none."""
+        for e in extras_state(_read_state() if st is None else st):
+            if e["id"] == self.id:
+                return e
+        return {}
+
+    def save(self, **changes):
+        _update_extra(self.id, **changes)
+
+    def on_hwnd(self, hwnd):
+        """From custom_frame, before the frame is changed: as the first window, plus its own moves and activations."""
+        self.hwnd = int(hwnd)
+        winframe.install_frame(hwnd, on_query_end=self.pop.on_query_end, on_end=self.pop.on_end_session,
+                               on_moved=self.on_moved, on_activate=self.on_activate)
+
+    def on_loaded(self):
+        _log(f"page loaded{self.name()}")
+        self._pen_told = None                          # a new page knows nothing yet: the next move tells it
+        self._loaded.set()
+
+    def on_moved(self):
+        """WM_EXITSIZEMOVE (UI thread): its place is saved, on the work thread."""
+        self.pop._work.put((self._save_moved, ()))
+
+    def _save_moved(self):
+        with self._lock:
+            if not self.closing and not self.pop.quitting and self.visible():
+                self._save_placement()
+
+    def close(self, why=""):
+        """The close button, Alt+F4 or the taskbar: the window closes for good and its entry leaves popout.json. A
+        popout that is not managed ends when this was the last window up."""
+        pop = self.pop
+        with self._lock:
+            if self.closing or pop.quitting:
+                return
+            self.closing = True
+            _remove_extra(self.id)
+            if self in pop.extras:
+                pop.extras.remove(self)
+            pop._forget(self)                          # a SHOW goes to the window used before it that is still open
+            fg = W.GetForegroundWindow()
+            if fg and int(fg) == self.hwnd and _is_target(pop.prev_fg):    # it had the keyboard: back to ZBrush
+                user32.SetForegroundWindow(pop.prev_fg)
+        _log(f"closed{self.name()} ({why})")
+        try:
+            if self.window is not None:
+                self.window.destroy()
+        except Exception as e:
+            _log(f"destroy{self.name()} failed: {e!r}")
+        if not pop.any_up():
+            pop._note_hidden()
+        pop._pen_check()                               # it was the last browser window up: raw input off
+        pop._windows_changed()
+        pop._end_if_none_up("closed by the user")
+
+    def on_closing(self):
+        """pywebview 'closing' (UI thread; False cancels): Alt+F4 and the like close it for good, on another thread.
+        When the process quits or the session ends it just goes, and keeps its entry."""
+        if self.closing:
+            return None
+        if self.pop.quitting or self.pop.session_ending:
+            self._keep_entry = True
+            return None
+        threading.Thread(target=self.close, kwargs={"why": "close requested"}, daemon=True).start()
+        return False
+
+    def on_closed(self):
+        """pywebview 'closed' (a thread of its own): the form is gone, however it went. close() has dealt with one it
+        closed; one closed some other way (WinForms closes its forms as the session ends, which may then be
+        cancelled, or the process is quitting) leaves the list here, so a dead window neither counts toward the cap
+        nor answers a SHOW. Its entry stays when the process quits or the session ends."""
+        pop = self.pop
+        with self._lock:
+            if self.closing:
+                return
+            self.closing = True
+            if self in pop.extras:
+                pop.extras.remove(self)
+            pop._forget(self)
+            keep = self._keep_entry or pop.quitting or pop.session_ending
+        if not keep:
+            _remove_extra(self.id)
+        _log(f"window{self.name()} gone{' (kept for next time)' if keep else ''}")
+        if not pop.quitting:
+            pop._pen_check()
+            pop._windows_changed()
+            pop._end_if_none_up("the last window closed")
 
 
 FORWARD_AGAIN = None                  # _forward: the running popout is quitting; start in its place once it has gone
