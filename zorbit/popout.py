@@ -880,6 +880,8 @@ class Popout(BrowserWindow):
         self.start_tag = opts["tag"]
         self.start_kind = opts["kind"]
         self.managed = opts["managed"]       # the app owns us; false once it is gone, or when it never was
+        self._app_left = False               # the app that started us is gone: our strip went with it, and X no longer
+        #                                      brings it back (a popout started by hand keeps its strip)
         self.exit_code = 0                   # of the process: radiald.POPOUT_EXIT_IDLE after an idle quit
         self._now = time.monotonic           # the clock of the idle quit (a test moves its own)
         self._idle_lock = threading.Lock()   # the idle quit's decision and a SHOW arriving meet here, never both
@@ -1397,10 +1399,12 @@ class Popout(BrowserWindow):
                     self.hide(restore=False, why="the app is gone")
                     self._leave_strip()
                 _log("app gone; staying open (another window is up)")
+                self._app_left = self._app_left or self.managed
                 self.managed = False
                 return
             if up and not self.quitting and not (self.managed and self.mode == "strip"):
                 _log("app gone; staying open (the window is up)")
+                self._app_left = self._app_left or self.managed
                 self.managed = False
                 return
         self.quit(why)
@@ -1722,8 +1726,10 @@ class Popout(BrowserWindow):
     def close(self, why=""):
         """The user closed the window (the X button, Alt+F4, the taskbar). It is hidden, and kept for the app to
         show again when the app started it; a popout that is on its own has nothing to wait for and ends. With the
-        strip on, the browser goes back to the strip instead."""
-        if self.strip_on and self.mode == "browser" and not self.quitting and not self.session_ending:
+        strip on, the browser goes back to the strip instead, unless the app that started it is gone (the strip went
+        with the app, and nothing is left for it to sit over)."""
+        if (self.strip_on and self.mode == "browser" and not self.quitting and not self.session_ending
+                and not self._app_left):
             self.show_strip(why or "close")
             return
         self.hide(restore=True, why=why)
