@@ -4,6 +4,12 @@ All notable changes to this project are listed here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+
+- Each release has its SHA-256 hashes in a file you can download, `ZOrbit-<version>-SHA256.txt`, instead of in the release notes.
+
 ## [0.23.0] - 2026-11-10
 
 ZOrbit 0.23.0 adds a **Recent** slot: a fan of the projects and tools ZBrush opened last, read from ZBrush's own

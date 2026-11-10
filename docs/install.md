@@ -13,6 +13,8 @@
 3. **ZBrush 2026 and newer:** restart ZBrush once (it reads `ZBRUSH_PLUGIN_PATH` only when it starts). **ZBrush 2022 to 2025:** open **ZOrbit Studio**, go to **Setup**, press **Install** next to your ZBrush (approve the Windows prompt if it asks), then restart that ZBrush.
 4. Open a canvas, hover over it and press **Q**.
 
+To check the download, each release also has `ZOrbit-<version>-SHA256.txt` with the SHA-256 of the installer and the portable zip. In PowerShell, `Get-FileHash .\ZOrbitSetup-<version>.exe` prints the hash to compare with it. With Git Bash or WSL, put the files in one folder and run `sha256sum -c ZOrbit-<version>-SHA256.txt`.
+
 The first time you open **ZOrbit Studio** it starts on its **Setup** screen. Setup walks through the rest: it finds your ZBrush, tells you whether to restart it, lists each ZBrush 2022 to 2025 it finds with an **Install** button (press it for each version you use), and has you try the ring once. You can reopen it any time with Alt+6.
 
 ![The Setup screen with ZBrush found open, showing a row for each ZBrush version with its Install, Update or Remove button, and Plugin loaded in ZBrush and Try the ring ticked and folded to one line each](images/setup.png)
