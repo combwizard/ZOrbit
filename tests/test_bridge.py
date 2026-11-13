@@ -109,6 +109,8 @@ def bridge(tmp_path, monkeypatch):
     monkeypatch.setitem(sys.modules, "zbrush", pkg)
     monkeypatch.setitem(sys.modules, "zbrush.commands", stub)
     monkeypatch.setenv("RADIAL_BRIDGE_NO_INSTALL", "1")
+    # A fresh S, as in a ZBrush that has not loaded the plugin yet: the module's own defaults fill it.
+    monkeypatch.setitem(sys.modules, "_zorbit_bridge_state", types.ModuleType("_zorbit_bridge_state"))
     spec = importlib.util.spec_from_file_location("zorbit_bridge_under_test", BRIDGE)
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
@@ -122,9 +124,6 @@ def bridge(tmp_path, monkeypatch):
     monkeypatch.setattr(mod, "STATE_QUERY_FILE", str(data / "zstate_query.json"))
     monkeypatch.setattr(mod, "STATE_FILE", str(data / "zstate.json"))
     monkeypatch.setattr(mod, "primary_down", lambda: False)
-    mod.S.select_pending = []
-    mod.S.hwnd = None
-    mod.S.pick, mod.S.state_ctrl, mod.S.state_count, mod.S.state_last = 0, None, 0, ""
     mod.stub = stub
     mod.timers = []
     monkeypatch.setattr(mod, "SetTimer", lambda hwnd, tid, ms, cb: mod.timers.append(("set", tid)))
@@ -416,7 +415,7 @@ def test_the_snapshot_has_the_statuses_values_ranges_and_extras(bridge):
     assert snap["truncated"] is False and isinstance(snap["ms"], float)
     assert abs(snap["time"] - time.time()) < 5
     assert bridge.posted == [(APP_HWND, bridge.WM_APP_STATE_READY, 42, 0)]
-    assert not os.path.exists(bridge.STATE_FILE + ".tmp")
+    assert sorted(os.listdir(bridge.DATA_DIR)) == ["bridge.log", "zstate.json", "zstate_query.json"]   # no tmp
     assert bridge.stub.calls == []                        # nothing pressed, set or toggled: reads only
 
 
@@ -470,14 +469,15 @@ def test_an_extra_that_cannot_be_read_is_left_out(bridge):
     assert extras["brush"] == "Standard"
 
 
-def test_no_more_than_128_paths_are_read(bridge):
-    paths = [(f"Draw:Item {i}", "press") for i in range(130)]
+@pytest.mark.parametrize("asked, truncated", [(128, False), (129, True)])
+def test_no_more_than_128_paths_are_read(bridge, asked, truncated):
+    paths = [(f"Draw:Item {i}", "press") for i in range(asked)]
     bridge.stub.items.update(p for p, _ in paths)
-    ask(bridge, paths)
+    ask(bridge, paths + [("Draw:Item 0", "set")])         # a path asked twice counts once
     snap = answer(bridge)
     assert len(snap["items"]) == bridge.STATE_MAX_PATHS == 128
     assert "Draw:Item 127" in snap["items"] and "Draw:Item 128" not in snap["items"]
-    assert snap["truncated"] is True
+    assert snap["truncated"] is truncated
 
 
 def test_reading_stops_after_the_time_budget(bridge, monkeypatch):
@@ -615,3 +615,127 @@ def test_status_shows_the_state_channel(bridge):
     ask(bridge, [])
     bridge.status()
     assert "State channel: 1 answer(s), last #42 (asked)" in bridge.stub.calls[-1][1]
+
+
+def test_a_question_answered_while_a_pick_runs_does_not_claim_that_pick(bridge):
+    """A long press (a load with a progress bar) can let ZBrush dispatch the listener's messages."""
+    bridge.stub.items.add("Tool:Load Tool")
+    ask(bridge, [])
+    during = []
+    bridge.stub.on_press["Tool:Load Tool"] = lambda: (ask(bridge, [], qid=43), during.append(answer(bridge)))
+    send(bridge, [{"press": "Tool:Load Tool"}])
+    assert during[0]["id"] == 43 and during[0]["pick"] == 0
+    assert answer(bridge)["pick"] == 1 and bridge.S.pick == 1
+
+
+def test_the_tmp_file_is_named_for_this_process(bridge, monkeypatch):
+    moved = []
+    real = os.replace
+    monkeypatch.setattr(bridge.os, "replace", lambda a, b: (moved.append((a, b)), real(a, b)))
+    ask(bridge, [])
+    assert moved == [(f"{bridge.STATE_FILE}.{os.getpid()}.tmp", bridge.STATE_FILE)]
+
+
+def test_the_refreshes_stop_when_the_app_removes_its_question(bridge):
+    ask(bridge, [])
+    os.remove(bridge.STATE_QUERY_FILE)
+    before = log_text(bridge)
+    send(bridge, [])
+    assert len(bridge.posted) == 1 and bridge.S.state_ctrl is None
+    assert "zstate_query.json" not in log_text(bridge)[len(before):]     # stopping is normal: nothing logged
+    send(bridge, [])
+    assert len(bridge.posted) == 1
+    ask(bridge, [], qid=50)                                # asking again starts them again
+    send(bridge, [])
+    assert len(bridge.posted) == 3 and answer(bridge)["pick"] == 1
+
+
+def test_a_question_that_turns_bad_stops_the_refreshes_with_one_log_line(bridge):
+    ask(bridge, [])
+    Path(bridge.STATE_QUERY_FILE).write_text('{"v": 2, "id": 1}', encoding="utf-8")
+    send(bridge, [])
+    send(bridge, [])
+    assert len(bridge.posted) == 1 and bridge.S.state_ctrl is None
+    assert log_text(bridge).count("no more unasked answers") == 1
+
+
+def test_a_bad_question_asked_does_not_start_the_refreshes(bridge):
+    ask(bridge, [], v=2)
+    assert bridge.S.state_ctrl is None
+
+
+def test_a_question_file_being_replaced_does_not_stop_the_refreshes(bridge, monkeypatch):
+    ask(bridge, [])
+    real_read = bridge._read_query
+    bridge._read_query = lambda: (None, ("busy", "zstate_query.json could not be read: PermissionError"))
+    send(bridge, [])
+    bridge._read_query = real_read
+    assert len(bridge.posted) == 1 and bridge.S.state_ctrl == APP_HWND
+    send(bridge, [])
+    assert len(bridge.posted) == 2
+
+
+def test_a_question_file_that_cannot_be_opened_is_busy(bridge, monkeypatch):
+    real_open = open
+
+    def locked(path, *a, **kw):
+        if str(path) == bridge.STATE_QUERY_FILE:
+            raise PermissionError(13, "in use")
+        return real_open(path, *a, **kw)
+    monkeypatch.setattr("builtins.open", locked)
+    q, problem = bridge._read_query()
+    monkeypatch.setattr("builtins.open", real_open)
+    assert q is None and problem[0] == "busy"
+
+
+def state_lines(bridge):
+    return [ln.split(" state ")[1].split(" ")[0] for ln in log_text(bridge).splitlines() if " state #" in ln]
+
+
+def test_after_ten_answers_only_the_odd_one_is_logged(bridge, monkeypatch):
+    monkeypatch.setattr(bridge, "_clock", lambda: 0.0)
+    for i in range(12):
+        ask(bridge, [], qid=i)
+    assert state_lines(bridge) == [f"#{i}" for i in range(10)]
+    assert bridge.S.state_count == 12 and bridge.S.state_last.startswith("#11 (asked)")    # Status sees them all
+
+    ask(bridge, [(f"Draw:Item {i}", "press") for i in range(129)], qid=20)    # cut short
+    bridge.stub.items.add("Draw:Broken")
+    bridge.stub.raising.add("Draw:Broken")
+    ask(bridge, [("Draw:Broken", "set")], qid=21)                             # a read raised
+    monkeypatch.setattr(bridge, "PostMessageW", lambda *a: 0)
+    ask(bridge, [], qid=22)                                                   # not posted
+    monkeypatch.setattr(bridge, "PostMessageW", lambda *a: 1)
+    ticks = iter(range(0, 10_000, 3))
+    monkeypatch.setattr(bridge, "_clock", lambda: next(ticks) / 1000.0)
+    ask(bridge, [("Draw:A", "press")], qid=23)                                # slow: 6 ms of reads
+    monkeypatch.setattr(bridge, "_clock", lambda: 0.0)
+    ask(bridge, [("Draw:A", "press")], qid=24)                                # ordinary again: not logged
+    assert state_lines(bridge)[10:] == ["#20", "#21", "#22", "#23"]
+
+
+def test_a_request_that_is_not_an_object_is_dropped(bridge):
+    bridge.stub.items.add("Brush:Standard")
+    Path(bridge.REQUEST_FILE).write_text("[1, 2]", encoding="utf-8")
+    bridge.apply_request("listener")
+    assert "unreadable request: not an object" in log_text(bridge)
+    assert bridge.stub.calls == [] and not os.path.exists(bridge.REQUEST_FILE)
+
+
+def test_a_reload_over_the_state_of_an_older_plugin_fills_in_the_new_fields(tmp_path, monkeypatch):
+    """ZBrush's Python keeps S between loads; one left by a plugin from before the state channel lacks its fields."""
+    pkg = types.ModuleType("zbrush")
+    pkg.commands = Stub()
+    monkeypatch.setitem(sys.modules, "zbrush", pkg)
+    monkeypatch.setitem(sys.modules, "zbrush.commands", pkg.commands)
+    monkeypatch.setenv("RADIAL_BRIDGE_NO_INSTALL", "1")
+    old = types.ModuleType("_zorbit_bridge_state")
+    old.keepalive, old.hwnd, old.seq, old.verified, old.last = ["proc"], 77, 3, True, "#9 'Standard' via listener"
+    old.select_pending = [("Brush:Dam", 4)]
+    monkeypatch.setitem(sys.modules, "_zorbit_bridge_state", old)
+    spec = importlib.util.spec_from_file_location("zorbit_bridge_reloaded", BRIDGE)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    assert mod.S is old
+    assert (old.pick, old.state_ctrl, old.state_count, old.state_last) == (0, None, 0, "")
+    assert (old.hwnd, old.seq, old.select_pending) == (77, 3, [("Brush:Dam", 4)])     # what it had stays

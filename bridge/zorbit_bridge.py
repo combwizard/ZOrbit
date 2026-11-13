@@ -75,6 +75,8 @@ STATE_V = 1                       # the zstate*.json format, and the "state" cap
 STATE_MAX_PATHS = 128             # paths read per snapshot at most; the rest are left out and `truncated` set
 STATE_BUDGET_S = 0.020            # reading stops after this long, also with `truncated`
 STATE_QUERY_MAX_BYTES = 256_000   # a bigger question is not read
+STATE_LOG_FIRST = 10              # answers logged after a load; later only the odd one (see _answer)
+STATE_LOG_SLOW_MS = 5.0           # an answer whose reads took longer than this is logged
 WM_TIMER = 0x113
 TIMER_VERIFY, TIMER_RETRY, TIMER_SELECT = 1, 2, 3
 SELECT_TRIES = 25                 # an asset just loaded: look for its button every 40 ms, for up to a second
@@ -256,9 +258,6 @@ def apply_request(sender: str = "") -> None:
         log(f"apply ({sender or 'button'}): unreadable request: not an object")
         return
     rid = req.get("id")
-    if isinstance(rid, int) and not isinstance(rid, bool):
-        # Also for a request dropped as stale below: the state after it is the state the app waits for.
-        S.pick = rid
     try:
         age = time.time() - float(req.get("time"))
     except (TypeError, ValueError):
@@ -267,6 +266,7 @@ def apply_request(sender: str = "") -> None:
     # waits up to 30 s), so the age only counts for a request applied as it comes in.
     if age > REQUEST_MAX_AGE_S and not str(sender or "").endswith("after stroke"):
         log(f"apply ({sender or 'button'}): request #{req.get('id')} is {age:.0f} s old; ignored")
+        _picked(rid)                                      # dropped, but the state after it is the one the app waits for
         _refresh_state(f"after pick #{rid}")
         return
     S.select_pending = []                                 # a newer pick wins over items still waiting to be selected
@@ -290,7 +290,9 @@ def apply_request(sender: str = "") -> None:
     else:
         S.select_pending = []
     # Toggles and sliders are current now; the brush of a load is not until _select_pending has pressed it, and
-    # it sends the state once more when its queue is empty.
+    # it sends the state once more when its queue is empty. The id is set only now: a question answered while an
+    # action ran (a long load can pump messages) must not claim this pick.
+    _picked(rid)
     _refresh_state(f"after pick #{rid}")
 
 
@@ -418,6 +420,13 @@ def _query_paths(query: dict) -> dict:
 
 
 _clock = time.perf_counter
+_answers_logged = 0               # state answers logged since this file was loaded
+
+
+def _picked(rid) -> None:
+    """Records the id of the request just taken from request.json, for the `pick` field of the next snapshot."""
+    if isinstance(rid, int) and not isinstance(rid, bool):
+        S.pick = rid
 
 
 def _snapshot(query: dict) -> dict:
@@ -444,32 +453,31 @@ def _snapshot(query: dict) -> dict:
 
 
 def _read_query():
-    """The app's question, or None (logged) when there is none or it is not one this plugin answers."""
+    """(question, None) or (None, (kind, why)): kind is "missing" (no file: the app has stopped asking), "bad"
+    (not a question this plugin answers) or "busy" (the file could not be opened just now)."""
     try:
         with open(STATE_QUERY_FILE, "rb") as f:
             raw = f.read(STATE_QUERY_MAX_BYTES + 1)
     except FileNotFoundError:
-        log("state: asked, but there is no zstate_query.json")
-        return None
+        return None, ("missing", "there is no zstate_query.json")
+    except OSError as e:
+        return None, ("busy", f"zstate_query.json could not be read: {e!r}")
     if len(raw) > STATE_QUERY_MAX_BYTES:
-        log(f"state: zstate_query.json is over {STATE_QUERY_MAX_BYTES} bytes; not answered")
-        return None
+        return None, ("bad", f"zstate_query.json is over {STATE_QUERY_MAX_BYTES} bytes")
     try:
         q = json.loads(raw.decode("utf-8"))
     except ValueError as e:
-        log(f"state: unreadable zstate_query.json: {e!r}")
-        return None
+        return None, ("bad", f"unreadable zstate_query.json: {e!r}")
     qid = q.get("id") if isinstance(q, dict) else None
     if not isinstance(q, dict) or q.get("v") != STATE_V or not isinstance(qid, int) or isinstance(qid, bool) \
             or qid < 0:
-        log(f"state: zstate_query.json is not a version {STATE_V} question with an id; not answered")
-        return None
-    return q
+        return None, ("bad", f"zstate_query.json is not a version {STATE_V} question with an id")
+    return q, None
 
 
 def _write_state(snap: dict) -> None:
     os.makedirs(DATA_DIR, exist_ok=True)
-    tmp = STATE_FILE + ".tmp"
+    tmp = f"{STATE_FILE}.{os.getpid()}.tmp"               # two ZBrush instances may answer at the same moment
     with open(tmp, "w", encoding="utf-8") as f:
         json.dump(snap, f, allow_nan=False)
     for attempt in range(3):
@@ -482,13 +490,13 @@ def _write_state(snap: dict) -> None:
             time.sleep(0.002)
 
 
-def _answer(ctrl, why: str) -> bool:
-    """Reads the question, takes the snapshot, writes zstate.json and posts WM_APP_STATE_READY to ctrl, the app's
-    control window. Never raises: it runs from the listener and from ZBrush's Apply button. True when posted."""
+def _answer(ctrl, why: str, q: dict) -> bool:
+    """Takes the snapshot for question q, writes zstate.json and posts WM_APP_STATE_READY to ctrl, the app's
+    control window. Never raises: it runs from the listener and from ZBrush's Apply button. True when posted.
+    The first STATE_LOG_FIRST answers after a load are logged (the round trip is measured from them), later ones
+    only when something is off: cut short, not posted, slow, or a read that raised."""
+    global _answers_logged
     try:
-        q = _read_query()
-        if q is None:
-            return False
         snap = _snapshot(q)
         _write_state(snap)
         posted = bool(PostMessageW(ctrl, WM_APP_STATE_READY, snap["id"], 0))
@@ -504,7 +512,10 @@ def _answer(ctrl, why: str) -> bool:
         S.state_last = (f"#{snap['id']} ({why}): {len(snap['items'])} paths in {snap['ms']:.1f} ms{lag}"
                         + (f" ({counts})" if counts else "") + (", truncated" if snap["truncated"] else "")
                         + ("" if posted else ", NOT posted to the app"))
-        log("state " + S.state_last)
+        if (_answers_logged < STATE_LOG_FIRST or snap["truncated"] or not posted or snap["ms"] > STATE_LOG_SLOW_MS
+                or "error" in statuses):
+            _answers_logged += 1
+            log("state " + S.state_last)
         return posted
     except Exception:
         log(f"state ({why}) error:\n" + traceback.format_exc())
@@ -517,17 +528,30 @@ def _on_state_query(wparam, lparam) -> None:
     if ctrl is None:
         log(f"state: question #{wparam} from a window that is not ZOrbit's ({lparam}); not answered")
         return
-    S.state_ctrl = ctrl
-    _answer(ctrl, "asked")
+    q, problem = _read_query()
+    if q is None:
+        log(f"state: asked, but {problem[1]}; not answered")
+        return
+    S.state_ctrl = ctrl                                   # a question (again): picks send the state from now on
+    _answer(ctrl, "asked", q)
 
 
 def _refresh_state(why: str) -> None:
     """After a pick: answers the last question again, unasked, so the app's copy is current before the next ring
-    opens. Only once this ZBrush has been asked, and only while that app window is still there."""
+    opens. Only once this ZBrush has been asked, and only while that app window is still there. The app deletes
+    its question when it stops asking (the setting turned off): then the refreshes stop too, until it asks again."""
     try:
         ctrl = _app_window(S.state_ctrl)
-        if ctrl is not None:
-            _answer(ctrl, why)
+        if ctrl is None:
+            return
+        q, problem = _read_query()
+        if q is None:
+            if problem[0] == "bad":
+                log(f"state: {problem[1]}; no more unasked answers until the app asks again")
+            if problem[0] != "busy":                      # a file just being replaced does not stop the refreshes
+                S.state_ctrl = None
+            return
+        _answer(ctrl, why, q)
     except Exception:
         log("state refresh error:\n" + traceback.format_exc())
 
