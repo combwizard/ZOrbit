@@ -4296,11 +4296,26 @@ function sizeRow(live) {
   for (const ev of ['pointerdown', 'focusin']) row.addEventListener(ev, () => { base = null; }, true);
   return row;
 }
-function switchRow({ label, hint, key }) {
-  const v = ring()[key];
+/* get/put let a row drive a setting outside the ring section (see bridgeStateRow); the defaults are a ring key. */
+function switchRow({ label, hint, key, get = () => { const v = ring()[key]; return typeof v === 'boolean' ? v : S.defaults[key]; }, put = on => putRing(key, on) }) {
   return h('div', { class: 'srow' }, h('div', { class: 'slabel' }, h('span', null, label), h('small', null, hint)),
-    h('div', { class: 'sctl switch' }, toggleSwitch(typeof v === 'boolean' ? v : S.defaults[key], on => putRing(key, on), label)));
+    h('div', { class: 'sctl switch' }, toggleSwitch(get(), put, label)));
 }
+/* bridge.show_state is on when the key is absent, so only false is ever written; anything that is not false (true, or a value the
+   loader flagged) shows the switch on. */
+const bridgeShowState = cfg => !(cfg && isPlainObj(cfg.bridge) && cfg.bridge.show_state === false);
+function setBridgeShowState(on) {
+  if (!on) {
+    if (!isPlainObj(S.cfg.bridge)) S.cfg.bridge = {};
+    S.cfg.bridge.show_state = false;
+  } else if (isPlainObj(S.cfg.bridge)) {
+    delete S.cfg.bridge.show_state;
+    dropIfEmpty('bridge');
+  }
+  commit();
+}
+const bridgeStateRow = () => switchRow({ label: 'Show ZBrush’s state on the ring', get: () => bridgeShowState(S.cfg), put: setBridgeShowState,
+  hint: 'A Toggle slot is lit while its switch is on, a Set slot shows what its slider is at, and a slot ZBrush would ignore right now is dimmed. The ring asks the plugin in ZBrush as it opens, so this needs ZBrush 2026 or newer.' });
 /* A radio group: only the chosen card is a Tab stop; the arrow keys move and choose, Home and End jump to the ends. */
 function choiceCards(items, current, onPick, cls = '', label = '') {
   const wrap = h('div', { class: 'choices ' + cls, role: 'radiogroup', 'aria-label': label || null });
@@ -4722,7 +4737,8 @@ function buildSettingsScreen(root) {
       page.append(card('ZBrush bridge', 'How a pick reaches ZBrush',
         h('div', { class: 'fhint' }, 'Applies to the profile you are editing. Each profile keeps its own bridge key.'),
         choiceCards(['auto', 'message', 'key'].map(m => [m, BRIDGE_INFO[m][0], BRIDGE_INFO[m][1]]), bmode, v => { bridge().mode = v; commit(); paintKey(); }, 'bridge-cards', 'How a pick reaches ZBrush'),
-        keyWrap));
+        keyWrap,
+        bridgeStateRow()));
       paintKey();
 
       /* --- ZScript bridge for ZBrush 2022-2025 (acts straight away, not part of the menus) */
@@ -5510,6 +5526,7 @@ function describeProblem(raw) {
   const bridge = { kind: 'settings', card: 'set-zbrush-bridge' };
   if ((m = /^bridge\.mode (.+) unknown; using auto$/s.exec(raw))) return out(`Bridge mode ${unq(m[1])} is unknown; Auto is used instead`, bridge);
   if ((m = /^bridge\.key (.+) not understood(?:; using (.+))?$/s.exec(raw))) return out(`The bridge key ${unq(m[1])} is not understood` + (m[2] ? `; ${m[2]} is used instead` : ''), bridge);
+  if ((m = /^bridge\.show_state (.+) must be true or false; using true$/s.exec(raw))) return out(`Show ZBrush’s state on the ring must be on or off, not ${unq(m[1])}; it is on for now`, bridge);
   if (raw.startsWith('bridge.key must not use Ctrl or Shift')) {
     const using = /; using ([^;]+)$/.exec(raw);
     return out('The bridge key cannot use Ctrl or Shift, because ZBrush reads them as mask and smooth. Use a bare F-key' + (using ? `; ${using[1]} is used instead` : ''), bridge);
@@ -6282,6 +6299,7 @@ function describeChanges() {
   const bridgeLines = [];
   if ((bb.mode || 'auto') !== (ab.mode || 'auto')) bridgeLines.push('Mode: ' + (bb.mode || 'auto') + ' \u2192 ' + (ab.mode || 'auto'));
   if ((bb.key || '') !== (ab.key || '')) bridgeLines.push('Bridge key: ' + (bb.key || 'F9 (default)') + ' \u2192 ' + (ab.key || 'F9 (default)'));
+  if (bridgeShowState(before) !== bridgeShowState(after)) bridgeLines.push('Show ZBrush’s state on the ring: ' + (bridgeShowState(before) ? 'on' : 'off') + ' → ' + (bridgeShowState(after) ? 'on' : 'off'));
   if (bridgeLines.length) groups.push({ area: 'ZBrush bridge', lines: bridgeLines });
   const bwb = before.browser || {}, bwa = after.browser || {};
   const quitOf = w => (Number.isInteger(w.quit_after_minutes) && w.quit_after_minutes > 0 ? w.quit_after_minutes + ' min' : 'off');

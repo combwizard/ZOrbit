@@ -113,6 +113,19 @@ test('problem targets: a named look, Swallow hotkey and Fan out switch to Full; 
   assert(target({ kind: 'settings', card: 'set-zbrush-bridge' }));
 });
 
+test('turning off the state on the ring is a Full setting, like the bridge mode and key', () => {
+  const cfg = fresh();
+  cfg.bridge = { show_state: false };
+  assert.deepStrictEqual(M.fullOnlyChanges(cfg, 'settings', ctxFor(cfg)), ['ZBrush bridge']);
+  assert.deepStrictEqual(M.fullOnlyChanges(cfg, 'look', ctxFor(cfg)), []);
+  assert(needs(cfg));
+  cfg.bridge = { show_state: true };
+  assert.deepStrictEqual(M.fullOnlyChanges(cfg, undefined, ctxFor(cfg)), []);
+  assert(!needs(cfg));
+  cfg.bridge = {};
+  assert(!needs(cfg));
+});
+
 test('problem targets: the everyday places stay in Simple', () => {
   assert(!target({ kind: 'look', level: 'menu', menuId: 'main', key: 'animation', group: 'opening' }));
   assert(!target({ kind: 'look', level: 'global', key: 'animation', group: 'opening' }));
