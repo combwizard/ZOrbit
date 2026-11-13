@@ -429,7 +429,7 @@
           </details>
           <details class="faq-q" id="q-free">
             <summary>Is it really free?</summary>
-            <div class="faq-a"><p>Yes. There is no licence key, no account, no trial and no expiry date, and you can use it on as many machines as you like. The Licence screen in Studio is a joke. You can hide it in Settings &gt; Studio.</p></div>
+            <div class="faq-a"><p>Yes. There is no licence key, no account, no trial and no expiry date, and you can use it on as many machines as you like.</p></div>
           </details>
           <details class="faq-q" id="q-commercial">
             <summary>Can I use it for paid work?</summary>
@@ -437,7 +437,7 @@
           </details>
           <details class="faq-q" id="q-versions">
             <summary>Which versions of ZBrush and Windows does it work with?</summary>
-            <div class="faq-a"><p>ZBrush 2022 or newer, on 64-bit Windows 10 or 11. ZBrush 2026 and newer load the plugin the installer sets up. ZBrush 2022 to 2025 need one extra step in Studio, see <a href="#q-older">older ZBrush</a>.</p></div>
+            <div class="faq-a"><p>ZBrush 2022 or newer, on 64-bit Windows 10 or 11. ZBrush 2026 and newer load the plugin the installer sets up. ZBrush 2022 to 2025 need one extra step in Studio, see <a href="#q-older">older ZBrush</a>. ZBrush Core and ZBrushCore Mini are not supported, because they do not load plugins.</p></div>
           </details>
           <details class="faq-q" id="q-mac">
             <summary>Is there a Mac or Linux version?</summary>
@@ -445,7 +445,7 @@
           </details>
           <details class="faq-q" id="q-running">
             <summary>Is ZOrbit running when ZBrush is closed?</summary>
-            <div class="faq-a"><p>No. ZBrush starts it through the plugin, and it quits a few seconds after ZBrush closes. While it runs it has an icon in the notification area with Open Studio, Reload menus, Open logs folder and Quit ZOrbit.</p></div>
+            <div class="faq-a"><p>No. ZBrush starts it through the plugin, and it quits a few seconds after ZBrush closes. While it runs it has an icon in the notification area. Left-click it to open Studio. Its right-click menu opens the browser, reloads your menus, switches profile, opens the logs folder and quits ZOrbit.</p></div>
           </details>
           <details class="faq-q" id="q-maxon">
             <summary>Is it made by Maxon?</summary>
@@ -457,11 +457,11 @@
           <h3>Install and updates</h3>
           <details class="faq-q" id="q-admin">
             <summary>Do I need administrator rights?</summary>
-            <div class="faq-a"><p>Not for the installer. It installs for your user only. The one exception is the plugin for ZBrush 2022 to 2025 when that ZBrush lives under Program Files: Windows asks once while Studio copies the plugin in.</p></div>
+            <div class="faq-a"><p>Not for the installer. It installs for your user only. The one exception is the plugin for ZBrush 2022 to 2025. If your account cannot write to that ZBrush’s folder, which can happen under Program Files, Windows asks you to approve it while Studio copies the plugin in.</p></div>
           </details>
           <details class="faq-q" id="q-where">
             <summary>Where does it install, and what does it change?</summary>
-            <div class="faq-a"><p>It installs to <code>%LOCALAPPDATA%\Programs\ZOrbit</code>. It adds that folder’s <code>bridge</code> folder to your user <code>ZBRUSH_PLUGIN_PATH</code> variable, keeping any entries already there, and adds a Start menu shortcut called ZOrbit Studio. A desktop shortcut is offered but off unless you tick it.</p></div>
+            <div class="faq-a"><p>It installs to <code>%LOCALAPPDATA%\Programs\ZOrbit</code>. It adds that folder’s <code>bridge</code> folder to your user <code>ZBRUSH_PLUGIN_PATH</code> variable, keeping any entries already there, and adds two Start menu shortcuts, ZOrbit Studio and ZOrbit Browser. A desktop shortcut is offered but off unless you tick it.</p></div>
           </details>
           <details class="faq-q" id="q-restart">
             <summary>Why do I have to restart ZBrush?</summary>
@@ -473,7 +473,7 @@
           </details>
           <details class="faq-q" id="q-older">
             <summary>I use ZBrush 2022, 2023, 2024 or 2025. What is different?</summary>
-            <div class="faq-a"><p>Those versions have no Python API, so ZOrbit gives them a ZScript plugin with the same Zplugin &gt; ZOrbit palette. Open Studio, go to Settings &gt; Older ZBrush and click Install next to your version. If it is not listed, use Add a ZBrush folder. Then restart that ZBrush.</p></div>
+            <div class="faq-a"><p>Those versions have no Python API, so ZOrbit gives them a ZScript plugin with the same Zplugin &gt; ZOrbit palette. Open Studio, go to Setup (Alt+6) and click Install next to your version. Settings &gt; Older ZBrush in Full mode has the same list. If your version is not listed, use Add a ZBrush folder. Then restart that ZBrush.</p></div>
           </details>
           <details class="faq-q" id="q-webview">
             <summary>What is the WebView2 runtime, and do I need it?</summary>
@@ -481,12 +481,12 @@
           </details>
           <details class="faq-q" id="q-portable">
             <summary>Is there a portable version?</summary>
-            <div class="faq-a"><p>Yes. Unzip the <a class="portable" href="https://github.com/combwizard/zorbit/releases/latest">portable zip</a>, run <code>ZOrbit.exe</code> once, add the zip’s <code>bridge</code> folder to <code>ZBRUSH_PLUGIN_PATH</code>, then restart ZBrush. The first launch can show the same SmartScreen warning as the installer.</p></div>
+            <div class="faq-a"><p>Yes. Unzip the <a class="portable" href="https://github.com/combwizard/zorbit/releases/latest">portable zip</a> somewhere permanent and run <code>ZOrbit\ZOrbit.exe</code>. Left-click its tray icon to open Studio, go to Setup and press Fix next to your ZBrush, which adds the zip’s <code>bridge</code> folder to <code>ZBRUSH_PLUGIN_PATH</code>. Then restart ZBrush. For ZBrush 2022 to 2025, press Install on Setup instead. The first launch can show the same SmartScreen warning as the installer.</p></div>
           </details>
           <details class="faq-q" id="q-update">
             <summary>How do I update?</summary>
             <div class="faq-a">
-              <p>When Studio opens it asks GitHub whether there is a newer release. If there is, an orange dot and the new version number appear at the top. Click it to read the release notes, then press Download and install. Studio fetches the installer from GitHub, checks its SHA-256, runs it over your install and reopens when it is done. It stops ZOrbit, replaces the program and leaves your menus alone. Then restart ZBrush. You can also download the installer from the release page and run it yourself. A portable copy gets a link to the download page instead.</p>
+              <p>When Studio opens it asks GitHub whether there is a newer release. If there is, the new version number appears in orange at the top. Click it to read the release notes, then press Download and install. Studio fetches the installer from GitHub, checks its SHA-256, runs it over your install and reopens when it is done. It stops ZOrbit, replaces the program and leaves your menus alone. Then restart ZBrush. You can also download the installer from the release page and run it yourself. A portable copy gets a link to the download page instead.</p>
               <p>On ZBrush 2022 to 2025, Settings &gt; Older ZBrush then shows Update available. Click Update and restart that ZBrush.</p>
             </div>
           </details>
@@ -498,7 +498,7 @@
             <summary>How do I uninstall?</summary>
             <div class="faq-a">
               <p>Open Windows Settings &gt; Apps &gt; Installed apps, find ZOrbit and choose Uninstall. Restart ZBrush afterwards so it lets go of the plugin. The uninstaller removes only its own entry from <code>ZBRUSH_PLUGIN_PATH</code>.</p>
-              <p>On ZBrush 2022 to 2025, remove the plugin first with Studio &gt; Settings &gt; Older ZBrush &gt; Remove. If you forgot, delete <code>ZOrbitBridge.zsc</code> and the <code>ZOrbitData</code> folder from that ZBrush’s <code>ZStartup\ZPlugs64</code>.</p>
+              <p>The uninstaller also removes the plugin from every ZBrush 2022 to 2025 that Studio’s Setup lists. If it could not clean a folder, it names it, and you delete <code>ZOrbitBridge.zsc</code> and the <code>ZOrbitData</code> folder from that ZBrush’s <code>ZStartup\ZPlugs64</code> yourself.</p>
             </div>
           </details>
           <details class="faq-q" id="q-uninstall-menus">
@@ -507,7 +507,7 @@
           </details>
           <details class="faq-q" id="q-radial-menu">
             <summary>I used Radial Menu for ZBrush. Do my menus carry over?</summary>
-            <div class="faq-a"><p>Yes. ZOrbit is the same project under a new name. Run the new installer over the old install. It moves the program, removes the old shortcut and plugin path entry, and copies your menus and settings to <code>%APPDATA%\ZOrbit</code> on first start. The old data folders stay where they are, and you can delete them. In ZBrush 2026 and newer, an F9 you bound by hand to the old Apply has to be bound again on Zplugin &gt; ZOrbit &gt; Apply.</p></div>
+            <div class="faq-a"><p>Yes. ZOrbit is the same project under a new name. Run the new installer over the old install. It moves the program, removes the old shortcut and plugin path entry, and copies your menus, settings and tags to the Default profile in <code>%APPDATA%\ZOrbit\profiles\Default</code> on first start. The old data folders stay where they are, and you can delete them. In ZBrush 2026 and newer, an F9 you bound by hand to the old Apply has to be bound again on Zplugin &gt; ZOrbit &gt; Apply.</p></div>
           </details>
         </div>
 
@@ -522,7 +522,7 @@
                 <li><strong>Flick.</strong> Move out past a slot’s outer edge and it is picked at once, without letting go.</li>
                 <li><strong>Click.</strong> Tap the hotkey, which keeps the ring open, then click a slot.</li>
               </ul>
-              <p>A press shorter than 250 ms counts as a tap. You can change that in Settings, from 0 to 1000 ms.</p>
+              <p>A press shorter than 250 ms counts as a tap. You can change that with Tap time in Settings (Full mode), from 0 to 1000 ms.</p>
             </div>
           </details>
           <details class="faq-q" id="q-aim">
@@ -531,7 +531,7 @@
           </details>
           <details class="faq-q" id="q-stroke">
             <summary>What if I pick in the middle of a stroke?</summary>
-            <div class="faq-a"><p>The pick waits until you lift the pen or release the mouse button, then ZBrush switches. The tool never changes halfway through a stroke, so a pick that feels a moment late is doing this on purpose.</p></div>
+            <div class="faq-a"><p>The pick waits until you lift the pen or release the mouse button, then ZBrush switches. In ZBrush 2026 and newer the tool never changes halfway through a stroke, so a pick that feels a moment late is doing this on purpose. ZBrush 2022 to 2025 cannot wait and apply the pick at once.</p></div>
           </details>
           <details class="faq-q" id="q-cancel">
             <summary>How do I close the ring without picking anything?</summary>
@@ -557,17 +557,27 @@
           <details class="faq-q" id="q-browser">
             <summary>What is the Browser?</summary>
             <div class="faq-a">
-              <p>A window with your brushes, alphas, materials and textures on four tabs, each with search, folders, tag chips and thumbnails. Press <kbd>Alt</kbd>+<kbd>B</kbd> to open it over ZBrush. New installs have that hotkey. If you have an older <code>radial.json</code>, set one on Settings &gt; Browser first. A Browser slot on a ring opens it too.</p>
-              <p>Switch tabs with <kbd>Ctrl</kbd>+<kbd>Tab</kbd>, type to search, use the arrow keys to move and press <kbd>Enter</kbd> to pick. Press the hotkey again while it is in front and the keyboard goes back to ZBrush. It also works without ZBrush running, so you can browse and tag items on their own.</p>
+              <p>A window with your brushes, alphas, materials and textures on four tabs, each with search, folders, tag chips and thumbnails. Press <kbd>Alt</kbd>+<kbd>B</kbd> to open it over ZBrush. New installs have that hotkey. If your <code>radial.json</code> is older and has none, record one under Browser hotkey in Settings &gt; Behaviour. A Browser slot on a ring, the tray menu, Studio’s Browser button and the Start menu shortcut open it too.</p>
+              <p>Switch tabs with <kbd>Ctrl</kbd>+<kbd>Tab</kbd>, type to search, use the arrow keys to move and press <kbd>Enter</kbd> to pick. Press the hotkey again while it is in front and the keyboard goes back to ZBrush. Opened from Studio or the Start menu, it works without ZBrush running, so you can browse and tag items on their own. <kbd>Ctrl</kbd>+<kbd>N</kbd> opens another browser window, up to six, each with its own tab, size and place. See the <a href="https://zorbit.lol/docs/browser/">docs</a>.</p>
             </div>
           </details>
           <details class="faq-q" id="q-favourites">
             <summary>How do Favourites and Recent work?</summary>
-            <div class="faq-a"><p>Hover an item in the Browser or the Library and press the star in its corner, or select it and press <kbd>Ctrl</kbd>+<kbd>D</kbd>. Favourites is the first entry in the folders list on every tab. Recent sits under it and lists every brush, alpha, material or texture you picked in ZBrush, newest first, up to 24 per tab. A <code>{"tag": "favourite"}</code> slot opens a fan of your favourites on the ring.</p></div>
+            <div class="faq-a">
+              <p>Hover an item in the Browser or the Library and press the star in its corner, or select it and press <kbd>Ctrl</kbd>+<kbd>D</kbd>. Favourites is the first entry in the folders list on every tab. It lists starred items most used first until you give the tab an order of your own: open Favourites and drag a card to a new place. A Most used button puts the tab back. Each tab keeps its own order.</p>
+              <p>Recent sits under Favourites and lists every brush, alpha, material or texture you picked in ZBrush, newest first, up to 24 per tab. A <code>{"tag": "favourite"}</code> slot opens a fan of your favourites on the ring, in your order if you set one. The <a href="#q-strip">strip</a> shows them over ZBrush.</p>
+            </div>
+          </details>
+          <details class="faq-q" id="q-strip">
+            <summary>What is the strip?</summary>
+            <div class="faq-a">
+              <p>A small bar of one tab’s favourites that stays on top of ZBrush and never takes the keyboard from it, so one click on a thumbnail picks the item. Turn it on with the strip button in the browser’s header (Show as a strip). Once it is on, X on the browser goes back to the strip instead of hiding the window.</p>
+              <p>Click the star at the top of the strip for its menu: switch the tab, lay the strip out vertically or horizontally, open the full browser or hide the strip. Drag a thumbnail to change your Favourites order, and drag the grip to move the strip. It steps aside while another program is in front. See the <a href="https://zorbit.lol/docs/browser/#the-strip">docs</a>.</p>
+            </div>
           </details>
           <details class="faq-q" id="q-tablet">
             <summary>Does it work with a pen tablet?</summary>
-            <div class="faq-a"><p>The ring opens from a keyboard key, so you point with the pen as you would with a mouse. Picks made mid-stroke wait for the pen to lift, and after each pick ZOrbit nudges the cursor by zero pixels to wake ZBrush’s pen tracking.</p></div>
+            <div class="faq-a"><p>The ring opens from a keyboard key, so you point with the pen as you would with a mouse. Keys sent by a tablet driver work like the real key. In ZBrush 2026 and newer a pick made mid-stroke waits for the pen to lift, and after each pick ZOrbit nudges the cursor by zero pixels to wake ZBrush’s pen tracking.</p></div>
           </details>
         </div>
 
@@ -579,7 +589,7 @@
           </details>
           <details class="faq-q" id="q-which-keys">
             <summary>Which keys and modifiers can I use?</summary>
-            <div class="faq-a"><p>Any mix of Ctrl, Alt and Shift, with a letter, a digit, F1 to F24 or one of <code>` - = [ ] \ ; ' , . /</code>. In the menu file you can also use <code>space</code>, <code>tab</code>, <code>enter</code>, <code>backspace</code>, <code>insert</code>, <code>delete</code>, <code>home</code>, <code>end</code>, <code>pageup</code> and <code>pagedown</code>. The Windows key is not allowed.</p></div>
+            <div class="faq-a"><p>Any mix of Ctrl, Alt and Shift, with a letter, a digit, F1 to F24, <code>space</code>, <code>tab</code>, <code>enter</code>, <code>backspace</code>, <code>insert</code>, <code>delete</code>, <code>home</code>, <code>end</code>, <code>pageup</code>, <code>pagedown</code> or one of <code>` - = [ ] \ ; ' , . /</code>. Studio’s hotkey field records them when you press them, except numpad keys, which it cannot record. The Windows key is not allowed.</p></div>
           </details>
           <details class="faq-q" id="q-many-menus">
             <summary>Can I have several menus, each on its own key?</summary>
@@ -587,11 +597,18 @@
           </details>
           <details class="faq-q" id="q-swallow">
             <summary>Will ZBrush’s own shortcut for that key fire as well?</summary>
-            <div class="faq-a"><p>Not by default. A menu swallows its hotkey, so ZBrush never sees it. Switch off Swallow hotkey in that menu’s settings, or set <code>"swallow": false</code>, if you want the key to reach ZBrush too.</p></div>
+            <div class="faq-a"><p>That depends on the menu. A menu swallows its hotkey by default, so ZBrush never sees it. The starter Brushes menu has Swallow hotkey off, so ZBrush still sees <kbd>Q</kbd> and goes to Draw mode as the ring opens. To let a key reach ZBrush too, switch off Swallow hotkey in that menu’s settings (Full mode), or set <code>"swallow": false</code>.</p></div>
           </details>
           <details class="faq-q" id="q-other-apps">
             <summary>Does the hotkey do anything outside ZBrush?</summary>
-            <div class="faq-a"><p>No. It only works while ZBrush is the front window. Everywhere else the key behaves as normal. Keys sent by other programs, such as macro tools, are ignored as well.</p></div>
+            <div class="faq-a"><p>No. It only works while ZBrush is the front window, and in every other program the key behaves as normal. It is also left alone while a Windows dialog such as Save As is in front or a Windows text box has the focus, so you can type the key there. The browser hotkey works while the browser is in front as well. Keys sent by a tablet driver, a macro tool or a key remapper work like the real key.</p></div>
+          </details>
+          <details class="faq-q" id="q-commands">
+            <summary>Can a Stream Deck or a script open a menu or pick a brush?</summary>
+            <div class="faq-a">
+              <p>Yes. Run <code>ZOrbit.exe</code> with an option and it passes the command to the running app and quits: <code>--open "menu id"</code>, <code>--pick brush:ClayBuildup</code> (<code>alpha:</code>, <code>material:</code> and <code>texture:</code> work too), <code>--press "Tool:Masking:Clear"</code>, <code>--set</code>, <code>--toggle</code>, <code>--browser</code> and <code>--profile</code>. A menu opened this way needs no hotkey. The command never starts a second app and shows no window.</p>
+              <p><code>--open</code> needs ZBrush in front, as a hotkey does, and so do picks in ZBrush 2022 to 2025. In a Stream Deck, add a System &gt; Open action and put the full path of <code>ZOrbit.exe</code> and the command in App / File. If the button does nothing, put the line in a <code>.bat</code> file and choose that. Exit code 0 means ZOrbit took the command, 1 that it was refused and 2 that no ZOrbit answered. See the <a href="https://zorbit.lol/docs/hotkeys/#commands-from-other-programs">docs</a> for every command.</p>
+            </div>
           </details>
         </div>
 
@@ -607,22 +624,35 @@
                 <li>Press any ZBrush button by its interface path (<code>press</code>).</li>
                 <li>Set a slider or value to a number (<code>set</code>).</li>
                 <li>Flip a switch (<code>toggle</code>).</li>
+                <li>Save the document as a PNG (<code>capture</code>).</li>
+                <li>Load a tool, open a project or load an interface layout (<code>tool</code>, <code>project</code>, <code>layout</code>).</li>
                 <li>Run a list of those in order (<code>steps</code>).</li>
                 <li>Open another ring (<code>menu</code>).</li>
+                <li>Hold a brush that ZOrbit picks for you from your most used (<code>auto</code>).</li>
                 <li>Open a fan of every item with a tag (<code>tag</code>).</li>
+                <li>Open a fan of the projects or tools ZBrush opened last (<code>recent</code>).</li>
                 <li>Open the Browser (<code>browser</code>).</li>
+                <li>Hold its place and do nothing (<code>empty</code>).</li>
               </ul>
+              <p>In Studio, Simple mode offers brush, alpha, material, texture, press, toggle, menu and empty. The rest need <a href="#q-simple-full">Full mode</a>. The <a href="https://zorbit.lol/docs/menus/#item-types">docs</a> describe each type.</p>
             </div>
           </details>
           <details class="faq-q" id="q-alpha-slot">
             <summary>Can a slot load an alpha, material or texture?</summary>
-            <div class="faq-a"><p>Yes. Use <code>{"alpha": "Alpha 058"}</code>, <code>{"material": "SkinShade4"}</code> or <code>{"texture": "Txtr01"}</code>, or drag one in from the Library. The name is the file’s name without its extension, and capitals and spaces do not matter. If ZBrush has it loaded, it is selected. If not, ZOrbit loads it from its file first. A material goes into the selected material slot and replaces what was there, as in ZBrush. ZBrush 2022 to 2025 need the plugin updated first, with Update in Settings &gt; Older ZBrush.</p></div>
+            <div class="faq-a"><p>Yes. Use <code>{"alpha": "Alpha 058"}</code>, <code>{"material": "SkinShade4"}</code> or <code>{"texture": "Txtr01"}</code>, or drag one in from the Library. The name is the file’s name without its extension, and capitals and spaces do not matter. If ZBrush has it loaded, it is selected. If not, ZOrbit loads it from its file first. A material goes into the selected material slot and replaces what was there, as in ZBrush. ZBrush 2022 to 2025 need the plugin updated first, with Update on Setup or in Settings &gt; Older ZBrush.</p></div>
           </details>
           <details class="faq-q" id="q-tags">
             <summary>What are tags, and how do I use them?</summary>
             <div class="faq-a">
-              <p>A tag is a coloured label for brushes, alphas, materials and textures. An item can have several, and they all share one set of tags. In the Library, select items and press Tag..., or right-click one, then click a tag to put it on or take it off.</p>
-              <p>Favourites is a built-in tag with a star. It cannot be deleted or renamed. A tag slot, such as <code>{"tag": "blocking"}</code>, opens a fan of every item with that tag, brushes first and most used first. The fan holds up to 12, and a last More... slot opens the Browser on that tag. <a href="#q-tag-colours">Tag colours</a> can show the colour on the ring.</p>
+              <p>A tag is a coloured label for brushes, alphas, materials and textures. An item can have several, and they all share one set of tags. In the Library, select items and press Tag..., or right-click one, then click a tag to put it on or take it off. With two or more tag chips on, the Match switch chooses whether an item needs any of them or all of them.</p>
+              <p>Favourites is a built-in tag with a star. It cannot be deleted or renamed. A tag slot, such as <code>{"tag": "blocking"}</code>, opens a fan of every item with that tag, brushes first and most used first. The fan holds up to 12 by default (Tag fan slots in Settings sets 4 to 24, in Full mode), and a last More... slot opens the Browser on that tag. <a href="#q-tag-colours">Tag colours</a> can show the colour on the ring.</p>
+            </div>
+          </details>
+          <details class="faq-q" id="q-auto">
+            <summary>What is an auto slot?</summary>
+            <div class="faq-a">
+              <p>A slot that holds a brush ZOrbit picked for you. Every brush you pick from a ring or the Browser scores a point, and points fade with a half-life of two weeks, so last week’s brushes count for more than last month’s. A menu’s auto slots hold its best-scoring brushes, leaving out any brush the menu already has as an ordinary item. Add one with Add item &gt; Auto in Full mode.</p>
+              <p>The ring does not reshuffle under your hand. A brush keeps its slot until another brush takes it, and a newcomer has to be among the best after two picks in a row. A slot nothing has filled yet is a faint plus and says This slot is empty when you pick it. Each menu learns on its own, so changing a menu’s id resets what its auto slots learned. See the <a href="https://zorbit.lol/docs/menus/#auto">docs</a>.</p>
             </div>
           </details>
           <details class="faq-q" id="q-how-many">
@@ -631,19 +661,44 @@
           </details>
           <details class="faq-q" id="q-path">
             <summary>How do I find the path of a ZBrush button?</summary>
-            <div class="faq-a"><p>Join the palette and button names with colons, as ZBrush shows them, for example <code>Tool:Masking:Clear</code>. Capitals do not matter, and Studio suggests common paths as you type. A path your ZBrush does not have shows up in <code>bridge.log</code> as “no such interface item”.</p></div>
+            <div class="faq-a"><p>Join the palette and button names with colons, as ZBrush shows them, for example <code>Tool:Masking:Clear</code>. Capitals do not matter, and Studio suggests common paths as you type, along with the macros that have a button in your ZBrush, as <code>Macro:Misc:...</code> paths. A path your ZBrush does not have shows up in <code>bridge.log</code> as “no such interface item”.</p></div>
           </details>
           <details class="faq-q" id="q-steps">
             <summary>What can a steps slot contain?</summary>
-            <div class="faq-a"><p>Brush, press, set and toggle actions, run in order. Steps cannot open menus or hold more steps. The starter menus have a Fresh Start slot that clears the mask and then picks the Standard brush.</p></div>
+            <div class="faq-a"><p>Brush, alpha, material, texture, press, set, toggle, capture, tool, project and layout actions, run in order. Steps cannot open menus or hold more steps, and they cannot hold auto, tag, browser or recent items. Put a tool or project step last. The starter menus have a Fresh Start slot that clears the mask and then picks the Standard brush.</p></div>
+          </details>
+          <details class="faq-q" id="q-file-items">
+            <summary>Can a slot load a tool, open a project, load a layout or save a picture?</summary>
+            <div class="faq-a">
+              <p>Yes, with four item types that Studio shows in Full mode. A Capture slot saves ZBrush’s document as a PNG in a folder, with no dialog. With the folder left empty, it goes to the ZBrush folder inside your Pictures folder. A Tool slot loads a <code>.ZTL</code> file into the Tool palette. A Project slot opens a <code>.ZPR</code> project, or the newest project in a folder you give it. A Layout slot loads a ZBrush interface layout from a <code>.cfg</code> file. Each has a Browse button in Studio.</p>
+              <p>A Project slot goes through ZBrush’s own check for unsaved work, so ZBrush asks whether to save first. A layout lasts until ZBrush closes, unless you press Store Config. A file that is not there is a problem only when you pick the slot, and then nothing is sent. The paths of Tool, Project and Layout slots stay out of an exported menu. In ZBrush 2022 to 2025 the plugin has to be up to date. See the <a href="https://zorbit.lol/docs/menus/#capture">docs</a>.</p>
+            </div>
+          </details>
+          <details class="faq-q" id="q-recent-slot">
+            <summary>Can a slot open my last projects or tools?</summary>
+            <div class="faq-a">
+              <p>Yes, with a Recent slot (<code>{"recent": "project"}</code>, <code>"tool"</code> or <code>"any"</code>). It opens a fan of the projects or tools ZBrush opened last, newest first, read from ZBrush’s own Lightbox list of recent files. A pick opens the file as a Project or Tool slot does. In Studio, Recent is a Full mode type, and its Shows select chooses Projects, Tools or Both.</p>
+              <p>A project goes through ZBrush’s own check for unsaved work, so ZBrush asks whether to save changes first. The fan holds as many files as Tag fan slots allows, 12 unless you change it. A slot with no files to show is a faint clock and says This slot is empty. See the <a href="https://zorbit.lol/docs/menus/#recent">docs</a>.</p>
+            </div>
           </details>
           <details class="faq-q" id="q-custom-brushes">
             <summary>Can I use my own brushes?</summary>
-            <div class="faq-a"><p>Yes, if ZBrush has them loaded or ZOrbit can find the <code>.zbp</code>. It looks in your ZBrush install’s brush folders and your user <code>ZStartup\BrushPresets</code> folder, subfolders included, and skips folders whose names start with an underscore. Spaces and capitals in a brush name do not matter.</p></div>
+            <div class="faq-a"><p>Yes, if ZBrush has them loaded or ZOrbit can find the <code>.zbp</code>. It looks in your ZBrush install’s brush folders and your user <code>ZStartup\BrushPresets</code> folder, subfolders included, and skips folders whose names start with an underscore. Spaces and capitals in a brush name do not matter. Brushes in a folder of your own are found too, see <a href="#q-library-folders">your own folders</a>.</p></div>
+          </details>
+          <details class="faq-q" id="q-library-folders">
+            <summary>Can ZOrbit find brushes, alphas, materials and textures in my own folders?</summary>
+            <div class="faq-a">
+              <p>Yes, in ZBrush 2026 and newer. Add the folder in Studio, with Add a folder... under the folders on the Library screen, or on Settings &gt; Library folders. The browser, the Library and the ring then search it after ZBrush’s own folders, and it shows as a folder of its own. Subfolders are searched, except those whose names start with an underscore. Forgetting a folder only takes it off the list, and a toast with an Undo button follows.</p>
+              <p>Packs often reuse file names, so a file whose name is already taken is listed with its pack folder, such as 10 (Crack Alphas Vol 1). The lists belong to this PC, not to a profile. ZBrush 2022 to 2025 do not search these folders: an item that only they have is listed, but a pick says it could not be found in ZBrush. See the <a href="https://zorbit.lol/docs/browser/#your-own-folders">docs</a>.</p>
+            </div>
+          </details>
+          <details class="faq-q" id="q-multi-zbrush">
+            <summary>I have several versions of ZBrush installed. Whose folders does ZOrbit list?</summary>
+            <div class="faq-a"><p>Those of the ZBrush that is running, or of the newest one when several run. With none running it uses the newest installed. A running ZBrush 2022 to 2025 gives its own installation’s folders. The app reads the library again a few seconds after another ZBrush starts, and the browser follows on its next rescan or when you press Rescan. A ZBrush running as administrator cannot be seen, so it counts as none running. See <a href="https://zorbit.lol/docs/menus/#brush">Brush</a> in the docs.</p></div>
           </details>
           <details class="faq-q" id="q-icons">
             <summary>Can I give a slot its own label or icon?</summary>
-            <div class="faq-a"><p>Yes. <code>label</code> is the text under the slot. <code>icon</code> can be a brush name or the path to a <code>.zbp</code> or <code>.png</code>. Without one, a brush slot uses the brush’s own thumbnail and other slots show a round placeholder with short text.</p></div>
+            <div class="faq-a"><p>Yes. <code>label</code> is the text under the slot. <code>icon</code> can be a brush name or the path to a <code>.zbp</code> or <code>.png</code>. Without one, brush, alpha, material and texture slots use the item’s own thumbnail and other slots show a round placeholder with short text.</p></div>
           </details>
           <details class="faq-q" id="q-submenus">
             <summary>How do submenus work?</summary>
@@ -651,7 +706,7 @@
           </details>
           <details class="faq-q" id="q-hover">
             <summary>Can I stop submenus opening on hover?</summary>
-            <div class="faq-a"><p>Yes. Switch off Open submenus on hover in Settings, or set <code>"hover_submenus": false</code>. Submenus then open when you release or click on them.</p></div>
+            <div class="faq-a"><p>Yes. Switch off Open submenus on hover in Settings (Full mode), or set <code>"hover_submenus": false</code>. Submenus then open when you release or click on them.</p></div>
           </details>
           <details class="faq-q" id="q-fan">
             <summary>What is the difference between a submenu and a fan?</summary>
@@ -671,7 +726,7 @@
           </details>
           <details class="faq-q" id="q-starter">
             <summary>What is in the starter menus?</summary>
-            <div class="faq-a"><p>Brushes on Q, with the submenus More Brushes, Tools (masking, symmetry, PolyFrame, LazyMouse and other switches) and SubDivide. They use only brushes that come with ZBrush, so they work on any install.</p></div>
+            <div class="faq-a"><p>Brushes on Q, with the submenus More Brushes and Tools. Tools holds masking, symmetry, PolyFrame, LazyMouse and other switches, a Browser slot, a Favourites slot and a SubDivide submenu. They use only brushes that come with ZBrush, so they work on any install.</p></div>
           </details>
         </div>
 
@@ -707,11 +762,11 @@
           </details>
           <details class="faq-q" id="q-full">
             <summary>What happens when a menu has too many items for the ring?</summary>
-            <div class="faq-a"><p>That is the When full setting on the Look screen. Grow makes the ring bigger until every slot fits, as before. Second ring keeps the radius and puts the rest on a ring outside it; only the outer ring picks on a flick. More slot ends the ring with a slot that opens the rest as a ring of its own. Fans are never split. A note above the item list in Studio says when a ring is full and how many items fit.</p></div>
+            <div class="faq-a"><p>That is the When full setting on the Look screen. Grow, the default, makes the ring bigger until every slot fits. Second ring keeps the radius and puts the rest on a ring outside it; only the outer ring picks on a flick. More slot ends the ring with a slot that opens the rest as a ring of its own. Fans are never split. A note above the item list in Studio says when a ring is full and how many items fit.</p></div>
           </details>
           <details class="faq-q" id="q-tag-colours">
             <summary>How do I colour slots by tag?</summary>
-            <div class="faq-a"><p>Open Tag colours on the Look screen (Full mode). An item’s first tag can show on its slot as an icon tint, a glow or a band through the ring. Each has its own switch and an opacity, and a preview beside them shows the result. The band is on by default. A ring with no tagged slots has no band.</p></div>
+            <div class="faq-a"><p>Open Tag colours on the Look screen (Full mode). An item’s first tag can show on its slot as an icon tint, a glow or a band through the ring. Each has its own switch and an opacity, and a preview beside them shows the result. The tint and the band are on by default. A ring with no tagged slots has no band.</p></div>
           </details>
         </div>
 
@@ -719,11 +774,18 @@
           <h3>Studio and your files</h3>
           <details class="faq-q" id="q-studio">
             <summary>What does Studio do?</summary>
-            <div class="faq-a"><p>It edits your menus. The Menus screen has a live preview drawn by the same code as the real ring. The Library lets you search every brush, alpha, material and texture ZBrush can load, tag them and drag them in. Setup walks a new install through its first steps. Look covers the shape, size, labels and colours of the ring, and Settings covers animation, timing and the ZBrush bridge. Status shows whether ZBrush, the app and the bridge are running.</p></div>
+            <div class="faq-a"><p>It edits your menus. The Menus screen has a live preview drawn by the same code as the real ring. The Library lets you search every brush, alpha, material and texture ZBrush can load, tag them and drag them in. Setup walks a new install through its first steps. Look covers the shape, size, labels, colours and open animation of the ring, and Settings covers the theme, timing, your own library folders and the ZBrush bridge. Status shows whether ZBrush, the app and the bridge are running.</p></div>
+          </details>
+          <details class="faq-q" id="q-simple-full">
+            <summary>What are Simple and Full mode?</summary>
+            <div class="faq-a">
+              <p>The Simple and Full switch in Studio’s top bar chooses how much you see. Simple shows the everyday controls. Full shows every control, such as the rarer item types, the Colours and Tag colours groups on the Look screen and the ZBrush bridge settings. It changes only what Studio shows. The ring and your files are the same in both, and a setting that Simple hides keeps its value.</p>
+              <p>A fresh install starts in Simple. After that Studio opens in the mode you left it in. If you cannot find a setting or an item type, press Full. See the <a href="https://zorbit.lol/docs/studio/#simple-and-full-mode">docs</a>.</p>
+            </div>
           </details>
           <details class="faq-q" id="q-tour">
             <summary>Is there a tour of Studio?</summary>
-            <div class="faq-a"><p>Yes. Studio offers a short guided tour once, after you finish or skip Setup. It lights up one part of the window at a time, nine stops in all, and ends with Save, Revert, Status and Setup. It changes no menu and no setting. If you used Studio before the tour existed, it does not ask, but you can take it from Settings &gt; Studio, next to What’s new.</p></div>
+            <div class="faq-a"><p>Yes. Studio offers a short guided tour once, after you finish or skip Setup. It lights up one part of the window at a time, six stops in all, and ends with Revert and Save. It changes no menu and no setting. If you used Studio before the tour existed, it does not ask, but you can take it from Settings &gt; Studio, next to What’s new.</p></div>
           </details>
           <details class="faq-q" id="q-profiles">
             <summary>Can I keep more than one setup?</summary>
@@ -747,7 +809,7 @@
           </details>
           <details class="faq-q" id="q-broken">
             <summary>What happens if I break the JSON?</summary>
-            <div class="faq-a"><p>The app keeps using the last good version and logs the error. Studio opens a recovery screen with the error, its line and column, and three choices: Open folder, Restore backup and Start from defaults. The unreadable file is kept as <code>radial.json.broken</code>.</p></div>
+            <div class="faq-a"><p>The app keeps using the last good version and logs the error. Studio opens a recovery screen with the error, its line and column, and buttons to open the folder, restore the backup (when there is one), start from the defaults or try again. The unreadable file is kept as <code>radial.json.broken</code>.</p></div>
           </details>
           <details class="faq-q" id="q-problems">
             <summary>The file is valid, but something in it is wrong. Then what?</summary>
@@ -759,7 +821,10 @@
           </details>
           <details class="faq-q" id="q-share">
             <summary>How do I share my menus with someone?</summary>
-            <div class="faq-a"><p>Export from Settings &gt; Import and export and send them the <code>.json</code> file. They press Import, which shows what the file holds before anything changes. Menus and settings load as an unsaved change, so Undo takes them back. For tags they choose Merge or Replace, and Replace keeps their old tags as <code>tags.json.bak</code>. They need the same brushes, alphas, materials and textures, and any button paths must exist in their ZBrush. Icons that point at <code>.png</code> files on your disk do not travel with it. Your tags live in <code>tags.json</code> in your profile’s folder.</p></div>
+            <div class="faq-a">
+              <p>Export from Settings &gt; Import and export and send them the <code>.json</code> file. They press Import, which shows what the file holds before anything changes. Menus and settings load as an unsaved change, so Undo takes them back. For tags they choose Merge or Replace, and Replace keeps their old tags as <code>tags.json.bak</code>. They need the same brushes, alphas, materials and textures, and any button paths must exist in their ZBrush. Icons that point at <code>.png</code> files on your disk do not travel with it. Your tags live in <code>tags.json</code> in your profile’s folder.</p>
+              <p>To share a single menu, press Export menu... on the Menu tab. The file holds the menu, its submenus, their tags and any looks of your own they use. The other person adds it with Import menu..., which puts it after their menus and overwrites nothing. See the <a href="https://zorbit.lol/docs/menus/#share-a-menu">docs</a>.</p>
+            </div>
           </details>
           <details class="faq-q" id="q-reset">
             <summary>How do I go back to the starter menus?</summary>
@@ -780,12 +845,13 @@
                 <li>If Status says the app is not running, press Start App, then read <code>app_stderr.log</code> and <code>radiald.log</code>.</li>
                 <li>In Studio, look for the problems pill. A menu with no usable items or a duplicate hotkey does not open.</li>
                 <li>Another program may grab the same key first. Try a different hotkey.</li>
+                <li>ZBrush may be running as administrator. ZOrbit cannot see its window then and ignores the hotkey. Start ZBrush without Run as administrator.</li>
               </ol>
             </div>
           </details>
           <details class="faq-q" id="q-no-palette">
             <summary>There is no Zplugin &gt; ZOrbit in ZBrush.</summary>
-            <div class="faq-a"><p>ZBrush did not load the plugin. Restart ZBrush, then check that your user environment variable <code>ZBRUSH_PLUGIN_PATH</code> contains ZOrbit’s <code>bridge</code> folder. On ZBrush 2022 to 2025, install the plugin again from Studio &gt; Settings &gt; Older ZBrush and restart that ZBrush.</p></div>
+            <div class="faq-a"><p>ZBrush did not load the plugin. Restart ZBrush, then check that your user environment variable <code>ZBRUSH_PLUGIN_PATH</code> contains ZOrbit’s <code>bridge</code> folder. On ZBrush 2022 to 2025, install the plugin again from Studio’s Setup screen (or Settings &gt; Older ZBrush in Full mode) and restart that ZBrush.</p></div>
           </details>
           <details class="faq-q" id="q-pick-nothing">
             <summary>The ring opens, but picking does nothing.</summary>
@@ -797,7 +863,7 @@
           </details>
           <details class="faq-q" id="q-letters">
             <summary>A slot shows letters instead of a picture.</summary>
-            <div class="faq-a"><p>There is no thumbnail for it. For a brush, ZOrbit found no <code>.zbp</code> file. For other kinds of slot a round placeholder with short text is normal.</p></div>
+            <div class="faq-a"><p>There is no thumbnail for it. For a brush, ZOrbit found no <code>.zbp</code> file. A material with no icon in its <code>.zmt</code> file and an EXR texture show letters too, and still pick fine. For other kinds of slot a round placeholder with short text is normal.</p></div>
           </details>
           <details class="faq-q" id="q-studio-blank">
             <summary>Studio does not open, or its window stays blank.</summary>
@@ -805,11 +871,11 @@
           </details>
           <details class="faq-q" id="q-logs">
             <summary>Where are the logs?</summary>
-            <div class="faq-a"><p>In <code>%LOCALAPPDATA%\ZOrbit</code>: <code>radiald.log</code> for the app, <code>bridge.log</code> for the ZBrush side, <code>app_stderr.log</code> for crashes at startup and <code>studio.log</code> for Studio. ZBrush 2022 to 2025 also write <code>zscript_bridge.log</code>. Studio’s Status screen and the notification-area icon both open the folder.</p></div>
+            <div class="faq-a"><p>In <code>%LOCALAPPDATA%\ZOrbit</code>: <code>radiald.log</code> for the app, <code>bridge.log</code> for the ZBrush side, <code>popout.log</code> for the browser, <code>app_stderr.log</code> for crashes at startup and <code>studio.log</code> for Studio. ZBrush 2022 to 2025 also write <code>zscript_bridge.log</code>. Studio’s Status screen and the notification-area icon both open the folder.</p></div>
           </details>
           <details class="faq-q" id="q-bug">
             <summary>Where do I report a bug or ask for help?</summary>
-            <div class="faq-a"><p>On the <a href="https://github.com/combwizard/zorbit/issues">issue tracker</a>. Say which Windows and ZBrush you use, what you did, what you expected and what happened, and paste the last lines of <code>radiald.log</code> and <code>bridge.log</code>. The logs hold brush names and menu ids, so glance over them first.</p></div>
+            <div class="faq-a"><p>On the <a href="https://github.com/combwizard/zorbit/issues">issue tracker</a>. Say what you did, what you expected and what happened. Press Copy report on Studio’s Status screen and paste the result: it gathers the versions, your ZBrush installs, the Status cards and the ends of the logs, with your Windows user name and folders hidden. Report a bug next to it opens the bug form with the versions filled in. Look the report over before you post it.</p></div>
           </details>
         </div>
 
@@ -817,11 +883,15 @@
           <h3>Privacy, safety and licence</h3>
           <details class="faq-q" id="q-smartscreen">
             <summary>Why does Windows say “Windows protected your PC”?</summary>
-            <div class="faq-a"><p>The installer is not code-signed yet, and SmartScreen warns about any program it does not recognise. It does not mean Windows found a problem. Choose More info, then Run anyway. The <a href="#install">install section</a> has the other ways through.</p></div>
+            <div class="faq-a"><p>The installer is not code-signed yet, and SmartScreen warns about any program it does not recognise. It does not mean Windows found a problem. Choose More info, then Run anyway. If the warning has no Run anyway, Smart App Control is on: use the portable zip instead of the installer. Some antivirus programs also quarantine a program they do not know. Restore it and add an exclusion for the install folder. The <a href="#install">install section</a> and the <a href="https://zorbit.lol/docs/install/#smart-app-control-and-antivirus">docs</a> have the other ways through.</p></div>
+          </details>
+          <details class="faq-q" id="q-check-download">
+            <summary>How do I check that my download is the real one?</summary>
+            <div class="faq-a"><p>Each release has a file called <code>ZOrbit-&lt;version&gt;-SHA256.txt</code> with the SHA-256 of the installer and of the portable zip. In PowerShell, <code>Get-FileHash .\ZOrbitSetup-&lt;version&gt;.exe</code> prints the hash to compare with it. With Git Bash or WSL, put the files in one folder and run <code>sha256sum -c ZOrbit-&lt;version&gt;-SHA256.txt</code>. Studio checks the installer it downloads for an update in the same way. See the <a href="https://zorbit.lol/docs/install/#install">docs</a>.</p></div>
           </details>
           <details class="faq-q" id="q-data">
             <summary>Does ZOrbit send any data?</summary>
-            <div class="faq-a"><p>No. There is no account, no tracking and no telemetry. The only network request is Studio’s update check, which asks GitHub for the latest release and sends nothing about you or your menus. The app that draws the ring and the ZBrush plugin make no network requests. On your own PC, the app keeps a count of which brushes you pick, and your recent picks, in <code>usage.json</code> in your profile’s folder, and that file never leaves it.</p></div>
+            <div class="faq-a"><p>No. There is no account, no tracking and no telemetry. The only network requests are Studio’s update check, which asks GitHub for the latest release and sends nothing about you or your menus, and the installer download when you press Download and install. The app that draws the ring and the ZBrush plugin make no network requests. On your own PC, the app keeps a count of which brushes you pick, and your recent picks, in <code>usage.json</code> in your profile’s folder, and that file never leaves it.</p></div>
           </details>
           <details class="faq-q" id="q-offline">
             <summary>Does it need an internet connection?</summary>
@@ -833,11 +903,11 @@
           </details>
           <details class="faq-q" id="q-zbrush-access">
             <summary>What can ZOrbit do inside ZBrush?</summary>
-            <div class="faq-a"><p>Only what is on your menus: select a brush, alpha, material or texture, press a button, set a slider, flip a switch, or a list of those. It does them through ZBrush’s own commands, and <code>radial.json</code> is plain text, so you can read exactly what each slot does.</p></div>
+            <div class="faq-a"><p>Only what is on your menus: select a brush, alpha, material or texture, press a button, set a slider, flip a switch, save the document as a PNG, load a tool, project or layout, or run a list of those. A command from another program, such as a Stream Deck button, can do the same. It does them through ZBrush’s own commands, and <code>radial.json</code> is plain text, so you can read exactly what each slot does.</p></div>
           </details>
           <details class="faq-q" id="q-build">
             <summary>I would rather not run a binary I did not build.</summary>
-            <div class="faq-a"><p>Then <a href="https://github.com/combwizard/zorbit#build-from-source">build it from the source</a>. All of it is in the repository. You need Windows, Python 3.12 and the packages in <code>requirements-dev.txt</code>, then run <code>packaging\build.ps1</code>.</p></div>
+            <div class="faq-a"><p>Then <a href="https://github.com/combwizard/zorbit#build-from-source">build it from the source</a>. All of it is in the repository. You need Windows, Python 3.14 and the packages in <code>requirements-dev.txt</code>, then run <code>packaging\build.ps1</code>. Without Inno Setup 6 it stops after the portable zip.</p></div>
           </details>
           <details class="faq-q" id="q-licence">
             <summary>What is the licence? Can I change ZOrbit?</summary>
