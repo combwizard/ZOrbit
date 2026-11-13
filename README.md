@@ -11,103 +11,55 @@ If you know pie menus from Blender or marking menus from Maya, ZOrbit brings tha
   <img src="docs/images/trailer-readme.gif" alt="One ring going through its settings with a caption naming each: the seven looks, fans, tag colours, slot shapes, colours, the theme, what a full ring does, styles on single slots, the glow, empty slots, the hub, labels, ring radius, slot size, corner roundness, rim width and icon size" width="480">
 </p>
 
-**Contents**
-
-- [Documentation](#documentation)
-- [Roadmap and ideas](#roadmap-and-ideas)
-- [Features](#features)
-- [Requirements](#requirements)
-- [Install](#install)
-  - [Windows says "Windows protected your PC"](#windows-says-windows-protected-your-pc)
-- [First steps](#first-steps)
-- [Upgrading, uninstalling and troubleshooting](#upgrading-uninstalling-and-troubleshooting)
-- [Build from source](#build-from-source)
-- [Licence](#licence)
-- [Disclaimer](#disclaimer)
-
-## Documentation
-
-The full documentation is at **[zorbit.lol/docs](https://zorbit.lol/docs/)**: every setting and item type, tags, the browser, hotkeys, files and logs, and how ZOrbit talks to ZBrush.
-
-## Roadmap and ideas
-
-The **[roadmap board](https://github.com/users/combwizard/projects/2)** shows what's next, what's later and the ideas that aren't planned yet. Each card is an issue: add a thumbs-up to the ones you want, or comment on how you'd use them. Have ZBrush 2023 or 2025? The [needs testing](https://github.com/combwizard/zorbit/issues?q=is%3Aissue%20is%3Aopen%20label%3A%22needs%20testing%22) issues list a few quick checks.
+[Download](https://github.com/combwizard/zorbit/releases) · [Documentation](https://zorbit.lol/docs/) · [FAQ](https://zorbit.lol/#faq) · [Roadmap](https://github.com/users/combwizard/projects/2)
 
 ## Features
 
-- **Fast picking.** Hold the hotkey and flick past a slot, or move toward it and release. Or tap the hotkey and click.
-- **More than brushes.** A slot can select a brush, load an alpha, material, texture or tool, load an interface layout, open a project or one of the files ZBrush opened last, press any ZBrush button, set a slider, flip a switch, save the picture as a PNG, run several of those in a row, or open another ring.
-- **Submenus.** Rings can open other rings, so a handful of hotkeys can reach a lot. Hover a submenu and it opens on the spot, so one stroke can reach an item two rings deep.
-- **Fan-out submenus.** Switch a menu to fan out and it opens in place: its items spread in an arc beyond its slot while the ring you came from stays put. Fans can open fans, up to three deep.
-- **Tags and a browser.** Tag your brushes, alphas, materials and textures in Studio, colour their slots by tag (an icon tint, a glow, or a band through the ring), and give a slot a tag to open a fan of every item that carries it. A hotkey (Alt+B) opens a browser over ZBrush with four tabs (brushes, alphas, materials and textures), search, folders, tag chips and thumbnails; Enter picks the item. Add folders of your own brushes, alphas, materials and textures (ZBrush 2026 and newer) and they are listed beside ZBrush's. Star your favourites with one press and keep them in a small strip over ZBrush, where one click picks them, and open up to six browser windows at once. A Recent list shows what you picked last.
-- **ZOrbit Studio.** Edit menus with a live preview of the real ring. Drag brushes in from a searchable library with thumbnails, record hotkeys, pick a dark or light theme or match ZBrush's own colours, change colours, size and animation. A Setup screen walks a new install through finding ZBrush and trying the ring, Import and export moves your menus, settings and tags to another PC, and Export menu... saves one menu to a file you can send to someone. A Simple / Full switch keeps Studio to the everyday controls until you want the rest, and a short tour shows where everything is.
-- **Looks.** Six slot shapes, hub styles, glow and label colours, seven built-in looks and your own, for every menu,
-  one menu or one slot. A full ring can grow, spill onto a second ring, or end in a More slot.
-- **Twelve open animations**, from instant to a swirling spiral, plus ring size, dead zone and label options.
-- **Starts and stops with ZBrush.** There is nothing to launch by hand.
-- **Safe with your stroke.** In ZBrush 2026 and newer, a pick that arrives mid-stroke waits until you lift the pen. ZBrush 2022 to 2025 cannot wait and apply it at once.
-- **High-DPI and multi-monitor aware.** The ring stays on screen, even at the screen edge.
-- **Profiles.** Keep a whole set of menus, settings, tags and usage per kind of work, and switch between them from Studio's top bar or the tray icon without a restart.
-- **Commands from other programs.** A Stream Deck, tablet software or a script can open a menu, pick a brush or switch profile by running `ZOrbit.exe` with an option.
-- **Plain JSON menus** in `%APPDATA%\ZOrbit\profiles\<profile>\radial.json`, so you can back them up, share them and keep them in version control.
+- Hold the hotkey and flick past a slot, or move toward it and release. Or tap the hotkey and click.
+- A slot can select a brush, load an alpha, material, texture, tool or interface layout, open a project, press any ZBrush button, set a slider, flip a switch, save the document as a PNG, or run several of those in a row.
+- A slot can open another ring. A submenu can also fan out in place, beside the ring you came from, and fans can open fans up to three deep.
+- An auto slot holds a brush you pick often, and ZOrbit fills it for you. A Recent slot opens a fan of the projects and tools ZBrush opened last.
+- Tag your brushes, alphas, materials and textures, colour their slots by tag, and give a slot a tag to open a fan of every item that carries it.
+- **Alt+B** opens a browser over ZBrush with search, folders, tag chips and thumbnails. It lists ZBrush's own items and, in ZBrush 2026 and newer, folders you add. Star your favourites and keep them in a small strip over ZBrush, where one click picks them.
+- ZOrbit Studio edits your menus with a live preview of the real ring. Drag brushes in from a library with thumbnails, record hotkeys, and pick a dark or light theme or match ZBrush's own colours.
+- Six slot shapes, seven built-in looks and twelve open animations, for every menu, one menu or one slot. You can save looks of your own.
+- Profiles keep a set of menus, settings and tags per kind of work. Switch between them from Studio or the tray icon without a restart.
+- A Stream Deck, tablet software or a script can open a menu, pick a brush or switch profile by running `ZOrbit.exe` with an option.
+- ZOrbit starts and stops with ZBrush. In ZBrush 2026 and newer, a pick that arrives mid-stroke waits until you lift the pen.
+- Menus are plain JSON in `%APPDATA%\ZOrbit\profiles\<profile>\radial.json`, so you can back them up or keep them in version control. **Export menu** saves one menu to a file you can send to someone.
 
-<p align="center">
-  <img src="docs/images/ring.png" alt="Brushes menu with ClayBuildup hovered" width="600">
-</p>
-
-### Fan-out submenus
-
-A menu can open as a fan: hover its slot and its items spread out beyond it, with the ring you came from still in place. The [menus page](https://zorbit.lol/docs/menus/#submenu) explains how to turn it on.
-
-<p align="center">
-  <img src="docs/images/fan-out.gif" alt="Holding Q: hovering More Brushes fans its brushes out to the left; moving to Tools fans out its switches, SubDivide fans out its sizes above that, and a flick past 1.00 picks it" width="520">
-</p>
-
-## Requirements
-
-- Windows 10 or 11, 64-bit
-- ZBrush 2022 or newer. ZBrush 2026 and newer load the Python plugin that the installer sets up. ZBrush 2022 to 2025 have no Python API, so they get a ZScript plugin, which you install from Studio (see [ZBrush 2022 to 2025](https://zorbit.lol/docs/install/#zbrush-2022-to-2025)). ZBrush Core and ZBrushCore Mini are not supported, because they do not load plugins.
-- The Microsoft Edge WebView2 runtime, which Studio uses for its window. It is part of Windows 11 and of up-to-date Windows 10.
-
-## Install
-
-1. Download the installer from the [Releases page](https://github.com/combwizard/zorbit/releases).
-2. Run it. It installs for your user only and does not need administrator rights. It adds the plugin folder to your `ZBRUSH_PLUGIN_PATH` user environment variable and creates two Start menu shortcuts, **ZOrbit Studio** and **ZOrbit Browser**, plus an optional desktop icon.
-3. **ZBrush 2026 and newer:** restart ZBrush once (it reads `ZBRUSH_PLUGIN_PATH` only when it starts). **ZBrush 2022 to 2025:** open **ZOrbit Studio**, go to **Setup**, press **Install** next to your ZBrush (approve the Windows prompt if it asks), then restart that ZBrush.
-4. Open a canvas, hover over it and press **Q**.
-
-The first time you open **ZOrbit Studio** it starts on its **Setup** screen. Setup walks through the rest: it finds your ZBrush, tells you whether to restart it, lists each ZBrush 2022 to 2025 with an **Install** button, and has you try the ring once. You can reopen it any time with Alt+6.
-
-The first run puts a starter set of menus in the **Default** profile, `%APPDATA%\ZOrbit\profiles\Default\radial.json`. They use only brushes that come with ZBrush.
-
-### Windows says "Windows protected your PC"
-
-The installer is not code-signed yet. Code-signing certificates cost money every year, and this is a free hobby project, so Windows SmartScreen shows its warning for any program it does not recognise. The warning does not mean it found a problem.
-
-To continue, click **More info**, then **Run anyway**. If you would rather not run a binary you did not build, the whole source is in this repository and [Build from source](#build-from-source) explains how to make the installer yourself. If Windows offers no **Run anyway**, or an antivirus removed the program, see [Smart App Control and antivirus](https://zorbit.lol/docs/install/#smart-app-control-and-antivirus).
-
-## First steps
-
-1. Open **ZOrbit Studio** from the Start menu (or from ZBrush: **Zplugin > ZOrbit > Studio**). On a fresh install it opens on the **Setup** screen: work down its steps, then press **Finish**.
-2. On the **Menus** screen (Alt+1), pick a menu on the left. The ring preview in the middle is drawn by the same code that draws it inside ZBrush.
-3. Drag brushes from the **Library** onto the ring, or use **Add item** to add a brush, alpha, material, texture, press, toggle or submenu. Studio starts in **Simple** mode, which shows the everyday controls. Press **Full** in the top bar for buttons, sliders, switches and the rest.
-4. Click **Save** (Ctrl+S). The next time you open the ring in ZBrush it uses your changes. There is no need to restart anything.
+The [documentation](https://zorbit.lol/docs/) covers each of these, with every setting and item type.
 
 <p align="center">
   <img src="docs/images/studio.png" alt="ZOrbit Studio on the Menus screen: the menu list, the ring preview of the Brushes menu, its item list and the Menu settings panel">
 </p>
 
-The [documentation](https://zorbit.lol/docs/) covers every setting and item type.
+## Install
 
-## Upgrading, uninstalling and troubleshooting
+You need 64-bit Windows 10 or 11 and ZBrush 2022 or newer. ZBrush Core and ZBrushCore Mini are not supported, because they do not load plugins. Studio uses the Microsoft Edge WebView2 runtime, which is part of Windows 11 and of up-to-date Windows 10.
 
-- **Upgrading from Radial Menu for ZBrush:** run the new installer over the old one. Your menus and settings are copied over on the first start. See [Upgrading from Radial Menu for ZBrush](https://zorbit.lol/docs/install/#upgrading-from-radial-menu-for-zbrush).
-- **Updating:** click the new version at the top of Studio and press **Download and install**, or run the new installer over the old one. Your menus, settings and tags stay (an update from a version before profiles moves them into the **Default** profile). See [Updating](https://zorbit.lol/docs/install/#updating).
-- **Portable zip:** unzip it somewhere permanent and press **Fix** on Studio's **Setup** screen. See [Portable zip](https://zorbit.lol/docs/install/#portable-zip).
-- **ZBrush 2022 to 2025:** these versions get a ZScript plugin that you install from Studio. See [ZBrush 2022 to 2025](https://zorbit.lol/docs/install/#zbrush-2022-to-2025).
-- **Uninstall:** remove ZOrbit in **Windows Settings > Apps > Installed apps**. The uninstaller also removes the plugin from the ZBrush 2022 to 2025 that Setup lists. Your profiles stay. See [Uninstall](https://zorbit.lol/docs/install/#uninstall).
-- **How it works:** a small app draws the ring outside ZBrush, and a plugin inside ZBrush carries out the pick. The app installs a Windows keyboard hook that compares each key press with your hotkeys and acts only when ZBrush is the front window; it does not record, store or send what you type. See [How ZOrbit talks to ZBrush](https://zorbit.lol/docs/bridge/).
-- **Something not working?** See [Troubleshooting](https://zorbit.lol/docs/troubleshooting/).
+1. Download the installer from the [Releases page](https://github.com/combwizard/zorbit/releases).
+2. Run it. It installs for your user only and does not need administrator rights.
+3. **ZBrush 2026 and newer:** restart ZBrush once. **ZBrush 2022 to 2025:** open **ZOrbit Studio**, go to **Setup**, press **Install** next to your ZBrush (approve the Windows prompt if it asks), then restart that ZBrush.
+4. Open a canvas, hover over it and press **Q**.
+
+The first time you open **ZOrbit Studio** it starts on its **Setup** screen, which finds your ZBrush and has you try the ring once. [Install and uninstall](https://zorbit.lol/docs/install/) has the rest: what the installer changes, checking the download against its SHA-256 file, updating, the portable zip, uninstalling, and upgrading from Radial Menu for ZBrush. [Getting started](https://zorbit.lol/docs/getting-started/) goes on from the first ring to your first edit in Studio.
+
+### Windows says "Windows protected your PC"
+
+The installer is not code-signed, because certificates cost money every year and this is a free hobby project. Windows SmartScreen shows its warning for any program it does not recognise, so the warning does not mean it found a problem. Click **More info**, then **Run anyway**.
+
+If Windows offers no **Run anyway**, or an antivirus removed the program, see [Smart App Control and antivirus](https://zorbit.lol/docs/install/#smart-app-control-and-antivirus). If you would rather not run a binary you did not build, [build it from source](#build-from-source).
+
+## How it works
+
+A small app draws the ring outside ZBrush, and a plugin inside ZBrush carries out the pick. The app installs a Windows keyboard hook that compares each key press with your hotkeys and acts only when ZBrush is the front window. It does not record, store or send what you type. [How ZOrbit talks to ZBrush](https://zorbit.lol/docs/bridge/) has the details.
+
+## Help and ideas
+
+- The [FAQ](https://zorbit.lol/#faq) has short answers, such as [is it really free](https://zorbit.lol/#q-free), [how do I update](https://zorbit.lol/#q-update) and [does ZOrbit send any data](https://zorbit.lol/#q-data).
+- [Troubleshooting](https://zorbit.lol/docs/troubleshooting/) is the page for when something does not work.
+- The [roadmap board](https://github.com/users/combwizard/projects/2) shows what's next, what's later and the ideas that aren't planned yet. Each card is an issue: add a thumbs-up to the ones you want, or comment on how you'd use them.
 
 ## Build from source
 
@@ -118,13 +70,11 @@ pip install -r requirements-dev.txt
 .\packaging\build.ps1
 ```
 
-The script's header lists what else it needs and where the installer ends up.
-
-To run straight from a checkout while you work on the code, use `tools\dev-install.ps1`. It registers the checkout's `bridge` folder in `ZBRUSH_PLUGIN_PATH` and adds two Start menu shortcuts, **ZOrbit Studio (dev)** and **ZOrbit Browser (dev)**. `-Uninstall` takes all of it away again. Add `-WhatIf` to see what it would do first.
+[Build from source](https://zorbit.lol/docs/building/) says what else the script needs and where the installer ends up. [CONTRIBUTING.md](CONTRIBUTING.md) covers running straight from a checkout.
 
 ## Licence
 
-ZOrbit is licensed under the **GNU General Public License v3.0** (see [LICENSE](LICENSE)). You can use it on as many machines as you like, and study, change and share it. If you distribute a modified version, you must publish its source under the same licence. The licences of the bundled libraries are listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Contributions are welcome; see [CONTRIBUTING.md](CONTRIBUTING.md).
+ZOrbit is licensed under the **GNU General Public License v3.0** (see [LICENSE](LICENSE)). The licences of the bundled libraries are listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Contributions are welcome; see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Disclaimer
 
