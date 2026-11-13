@@ -4,7 +4,12 @@ All notable changes to this project are listed here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.24.0] - 2026-11-14
+
+ZOrbit 0.24.0 makes the ring open sooner. It keeps its pictures between opens and draws them about a second after
+your menus load, so the first press of a hotkey finds them there. The ring looks exactly as before. The auto slots of
+a submenu ring stay in place while one is empty, a tag's items by a screen edge keep the tag's colour, and each
+release has its SHA-256 hashes in a file.
 
 ### Changed
 
@@ -1059,6 +1064,7 @@ First public release.
   only brushes included with ZBrush.
 - Documentation: README, user guide, third-party notices and contributing guide.
 
+[0.24.0]: https://github.com/combwizard/zorbit/releases/tag/v0.24.0
 [0.23.0]: https://github.com/combwizard/zorbit/releases/tag/v0.23.0
 [0.22.0]: https://github.com/combwizard/zorbit/releases/tag/v0.22.0
 [0.21.0]: https://github.com/combwizard/zorbit/releases/tag/v0.21.0
