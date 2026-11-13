@@ -9,6 +9,12 @@ All notable changes to this project are listed here. The format follows
 ### Changed
 
 - Each release has its SHA-256 hashes in a file you can download, `ZOrbit-<version>-SHA256.txt`, instead of in the release notes.
+- The ring shows up sooner, the first time after ZOrbit starts as well as every time after, and moving over its slots, opening its fans and tapping the hotkey are smoother. A large ring at high display scaling gains the most. It looks exactly as before.
+
+### Fixed
+
+- The auto slots of a submenu that opens as a ring of its own could change order when you opened it, while one of them was still empty. They now stay where they were, as in any other ring.
+- When a tag's fan has no room by a screen edge and its items open as a ring of their own, they now have the tag's colour, as they do in the fan. Before, each had the colour of its own first tag.
 
 ## [0.23.0] - 2026-11-10
 

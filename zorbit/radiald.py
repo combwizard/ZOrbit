@@ -101,7 +101,15 @@ RESULT_TRIES = 30                     # ticks (100 ms) to wait for the plugin to
 ACK_HOLD_MAX_S = 30                   # ... but not while the left button is down, for this long at most
 LEGACY_SCAN_S = 60                    # how long the scan for ZBrush 2022-2025 installations is kept
 TIMER_WATCH, TIMER_ACK, TIMER_REHOOK, TIMER_CONFIG, TIMER_BROWSER_PICK, TIMER_PREWARM, TIMER_POPOUT_SHOW, \
-    TIMER_ZS_RESULT, TIMER_COMMAND, TIMER_APPLY = range(1, 11)
+    TIMER_ZS_RESULT, TIMER_COMMAND, TIMER_APPLY, TIMER_RING_WARM = range(1, 12)
+RING_WARM_WAIT_MS = 1000              # ring warm-up starts this long after the last change (a slider drag saves often)
+RING_WARM_PICK_MS = 2000              # ... and this long after a pick that changed an auto slot
+RING_WARM_STEP_MS = 10                # one picture per tick while it runs
+RING_WARM_HOLD_MS = 100               # how often it looks again while something more urgent is going on
+RING_WARM_TICK_S = 0.004              # pictures already there are walked past in one tick for at most this long
+RING_WARM_RECENT_S = 4.0              # a plan with recent slots waits at most this long for the first recent-files answer
+RING_WARM_SHARE = 0.75                # warm-up fills at most this share of each ring cache, so it never pushes out
+                                      # what it drew a moment ago, and leaves room for what is opened by hand
 COMMAND_WAIT_S = 2                    # how long a command's pick waits for the one before it to be taken
 ZS_RESULT_S = 15                      # how long to look for the ZScript plugin's line about a pick (a stroke delays it)
 RECENT_PREFETCH_S = 30                # while ZBrush is in front, the recent slots' lists are read again this often
@@ -447,6 +455,12 @@ class App:
         self._popout_zb = None          # (ZBrush hwnd, its install) from when the browser was last opened
         self._browser_pick = None       # brush Item picked in the popout, waiting for ZBrush to have focus
         self._browser_pick_deadline = 0.0
+        self._prefetch_threads = []     # the threads still reading the menus' thumbnails (see _prefetch)
+        self._warm = None               # the ring warm-up under way (see _warm_tick), or None
+        self._warm_gen = 0              # moved by every change that makes a warm-up plan out of date
+        self._warm_why = "start"        # what asked for the next warm-up
+        self._warm_scale = None         # the display scale the last warm-up was planned for
+        self._zb_monitor = None         # (work area, scale) of ZBrush's monitor when it was last seen in front
 
     # --- library folders -------------------------------------------------------------------------
     def _check_library_folders(self) -> None:
@@ -546,6 +560,7 @@ class App:
                 self.cfg = C.Config(path=self.cfg_path, mtime=0.0)
                 self.expander = expand.Expander(self.cfg, self.usage, self.tags, front=self.target_install, log=log)
                 self._set_slots([], None)
+                self._warm_soon("no menus")        # drops a plan for the menus that went
             self._menus_problem(announce=fresh and balloon)
             return
         self._config_error = None
@@ -567,6 +582,7 @@ class App:
         self._prefetch()
         self._prune_icons()
         self._schedule_prewarm()
+        self._warm_soon("menus loaded")            # the first open finds its pictures drawn
 
     def _check_profile(self, notify=False):
         """Follows the profile pointer: when Studio or the tray has pointed it at another profile, switches to it."""
@@ -708,7 +724,12 @@ class App:
                     if tm is not None:
                         pairs.update(g for g in (C.asset_of(i.data) for i in tm.items) if g)
         size = THUMB_PX
-        threading.Thread(target=assets.prefetch, args=(sorted(pairs), size), daemon=True).start()
+        # Kept, so the ring warm-up waits for it: icon_for would otherwise decode on the main thread the same pictures
+        # this thread is decoding and writing to the thumbnail cache. Every one still running is kept, not only the
+        # newest: a second load can come while the first load's thread is still reading.
+        t = threading.Thread(target=assets.prefetch, args=(sorted(pairs), size), daemon=True)
+        self._prefetch_threads = [p for p in self._prefetch_threads if p.is_alive()] + [t]
+        t.start()
 
     @staticmethod
     def _icon_kind(src):
@@ -993,6 +1014,9 @@ class App:
                     self._check_profile()       # before load_config, so a renamed-away path is never read first
                     self._check_library_folders()
                     self.load_config()          # a new or changed hotkey must work before any ring opens
+                    self._check_warm_scale()
+                elif wparam == TIMER_RING_WARM:
+                    self._warm_tick()
                 elif wparam == TIMER_BROWSER_PICK:
                     self._browser_pick_tick()
                 elif wparam == TIMER_PREWARM:
@@ -1116,8 +1140,11 @@ class App:
         self.usage.load()
         self.usage.record_pick(item.kind, item.data[item.kind])
         if item.kind == "brush":                  # the auto slots follow brushes only
-            self.usage.record(item.data["brush"])
             autos = [m for m in self.cfg.menus.values() if usage.auto_count(m)]
+            # What the rings last showed (and warm-up drew): a copy of the stored slots. Not slots(), which would fill
+            # an empty slot from the ranking before this pick is counted, and so change where the pick lands.
+            shown = [list(self.usage.menus.get(m.id, {}).get("slots", [])) for m in autos]
+            self.usage.record(item.data["brush"])
             for m in autos:
                 before = self.usage.slots(m)
                 self.usage.update(m)
@@ -1125,6 +1152,9 @@ class App:
                 if after != before:
                     log(f"auto slots of '{m.id}': {before} -> {after}")
             self.usage.menus = {m.id: self.usage.menus[m.id] for m in autos}
+            if shown != [self.usage.menus[m.id]["slots"] for m in autos]:
+                # an empty slot took the brush, or one gave way: warm-up walks past what it has and draws the new slots
+                self._warm_soon("auto slots changed", RING_WARM_PICK_MS)
         if self._frozen:                          # files of a newer ZOrbit: never written
             return
         try:
@@ -1178,6 +1208,169 @@ class App:
             self._record_pick(item)
         except Exception:
             log("usage error:\n" + traceback.format_exc())
+
+    # --- ring warm-up --------------------------------------------------------------------------
+    # After the menus load, the pictures the next open will look for are drawn on this thread, one per timer tick,
+    # so the first press of a hotkey finds them: each hotkey menu (its slots, its sprites and the static layer with
+    # the hold hint), then the slots and lines of the fans they open, then the rings their slots open one level
+    # down, then the static layers with the click hint a tap leaves. It stops where a ring cache would be fuller than
+    # RING_WARM_SHARE. Nothing runs while a ring is open or a pick is on its way, and a hotkey waits for at most the
+    # one picture being drawn. Any change throws the plan away and starts a new one RING_WARM_WAIT_MS later.
+    def _warm_soon(self, why, wait_ms=RING_WARM_WAIT_MS):
+        """Drops the warm-up plan and starts a new one wait_ms after the last call, so a run of changes (Studio saves
+        on every step of a slider drag) starts one warm-up. A picture already there is walked past, not drawn again."""
+        self._warm_gen += 1
+        self._warm = None
+        self._warm_why = why
+        if self.ctrl is not None:
+            W.SetTimer(self.ctrl, TIMER_RING_WARM, wait_ms, None)
+
+    def _zbrush_monitor(self):
+        """(work area, scale) of the monitor holding ZBrush's window when ZBrush is in front, else None. Each answer is
+        kept in _zb_monitor, so warm-up planned while another program is in front (Studio saving) still uses it."""
+        fg = W.GetForegroundWindow()
+        if not fg or not self.target_in_front():
+            return None
+        self._zb_monitor = W.monitor_for_window(fg)
+        return self._zb_monitor
+
+    def _warm_target(self):
+        """(work area, scale) of the monitor the next ring most likely opens on: ZBrush's, in front now or where it
+        was last seen in front, else (ZBrush not seen yet) the primary one, which holds the point 0, 0."""
+        return self._zbrush_monitor() or self._zb_monitor or W.monitor_for_point(0, 0)
+
+    def _check_warm_scale(self):
+        """On the config tick: notes ZBrush's monitor while it is in front, and warms again when that monitor's scale
+        is not the one the last warm-up was planned for (ZBrush moved to another monitor, or the scale changed). Focus
+        moving to another program is no change."""
+        mon = self._zbrush_monitor()
+        if mon is None or self._warm_scale is None or self.ctrl is None:
+            return
+        if mon[1] != self._warm_scale:
+            self._warm_scale = mon[1]
+            self._warm_soon("display scale changed")
+
+    def _warm_busy(self, w=None) -> bool:
+        """Something comes first: a ring is open or its hotkey is down, a pick is on its way to ZBrush, the menus'
+        thumbnails are still being read, or (for a plan w with recent slots, until its deadline) the first answer about
+        ZBrush's recent files has not come yet, so the Recent fan is not planned empty."""
+        if (self.ring is not None or self.held_vk is not None or self._ack is not None
+                or self._browser_pick is not None or bool(self._commands) or self._apply_watch is not None
+                or any(t.is_alive() for t in self._prefetch_threads)):
+            return True
+        if w is None or not w["recent"] or time.monotonic() >= w["recent_until"]:
+            return False
+        limit = self.expander._tag_limit()
+        return not all(recent.known(kind, limit) for kind in w["recent"])
+
+    def _warm_plan(self):
+        """A new plan, as _warm_tick keeps it."""
+        work, scale = self._warm_target()
+        self._warm_scale = scale
+        kinds = {it.data.get("recent") for m in self.cfg.menus.values() for it in m.items if it.kind == "recent"}
+        now = time.monotonic()
+        return {"gen": self._warm_gen, "jobs": self._warm_jobs(work, scale), "limits": self._warm_limits(),
+                "want": {}, "drawn": 0, "found": 0, "ms": 0.0, "longest": 0.0, "steps": 0, "at": now, "scale": scale,
+                "full": False, "why": self._warm_why,
+                "recent": sorted(k for k in kinds if isinstance(k, str)), "recent_until": now + RING_WARM_RECENT_S}
+
+    @staticmethod
+    def _warm_limits():
+        """{cache: (entries, bytes)} warm-up may fill: RING_WARM_SHARE of each ring cache's bounds."""
+        import ring as R
+        k = RING_WARM_SHARE
+        return {"slot": (int(R.SLOT_SPRITES * k), float("inf")), "menu": (int(R.SPRITE_MENUS * k), float("inf")),
+                "static": (int(R.STATIC_LAYERS * k), int(R.STATIC_BYTES * k)),
+                "lines": (int(R.FAN_LINE_IMAGES * k), int(R.FAN_LINE_BYTES * k))}
+
+    def _warm_jobs(self, work, scale):
+        """The warm-up plan as Ring.warm_jobs jobs, most wanted first, each ring built the way open_menu builds it."""
+        from ring import Ring
+        resolve = self.expander.resolve
+
+        def ring_of(menu, nested=False):
+            return Ring.for_warmup(self.expander.menu(menu), self.cfg.ring, self.icon_for, resolve, work, scale, nested)
+        hot, seen = [], set()
+        for m in self.slots:                       # the hotkey menus, in full
+            if m.id in seen:
+                continue
+            seen.add(m.id)
+            r = ring_of(m)
+            hot.append(r)
+            yield from r.warm_jobs("menu")
+        for r in hot:                              # their fans
+            yield from r.warm_jobs("fans")
+        subs = []
+        for r in hot:                              # the rings their slots open, one level down
+            for mid in r.ring_submenus():
+                if mid in seen:
+                    continue
+                seen.add(mid)
+                sub = resolve(mid)
+                if sub is None or not sub.items:
+                    continue
+                s = ring_of(sub, nested=True)
+                subs.append(s)
+                yield from s.warm_jobs("menu")
+        for r in hot + subs:                       # the click hint, as a tap leaves it
+            yield from r.warm_jobs("click")
+
+    def _warm_tick(self):
+        """One warm-up step: plans when the wait is over, then draws one picture (walking past those already there),
+        and kills its timer when the plan is done or the caches would hold no more."""
+        w = self._warm
+        if w is not None and w["gen"] != self._warm_gen:      # made for menus that have changed since
+            w = self._warm = None
+        if w is None and (self.cfg is None or not self.slots or self.expander is None):
+            W.KillTimer(self.ctrl, TIMER_RING_WARM)
+            return
+        t0 = time.perf_counter()
+        done = False
+        try:
+            if w is None:
+                w = self._warm = self._warm_plan()
+            if self._warm_busy(w):
+                W.SetTimer(self.ctrl, TIMER_RING_WARM, RING_WARM_HOLD_MS, None)
+                return
+            W.SetTimer(self.ctrl, TIMER_RING_WARM, RING_WARM_STEP_MS, None)
+            t0 = time.perf_counter()
+            while True:
+                job = next(w["jobs"], None)
+                if job is None:
+                    done = True
+                    break
+                cache, key, size, run = job
+                want = w["want"].setdefault(cache, {})
+                if key not in want:
+                    entries, budget = w["limits"][cache]
+                    if len(want) + 1 > entries or sum(want.values()) + size > budget:
+                        w["full"] = done = True
+                        break
+                    want[key] = size
+                if run():
+                    w["drawn"] += 1
+                    break
+                w["found"] += 1
+                if time.perf_counter() - t0 > RING_WARM_TICK_S:
+                    break
+        except Exception:                          # planning or a picture failed: said once, and the plan goes
+            log("ring warm-up error; the rest of this warm-up is dropped:\n" + traceback.format_exc())
+            W.KillTimer(self.ctrl, TIMER_RING_WARM)
+            self._warm = None
+            return
+        ms = (time.perf_counter() - t0) * 1000
+        w["ms"] += ms
+        w["longest"] = max(w["longest"], ms)
+        w["steps"] += 1
+        if not done:
+            return
+        W.KillTimer(self.ctrl, TIMER_RING_WARM)
+        self._warm = None
+        if w["drawn"] or w["full"]:
+            log(f"ring warm-up ({w['why']}): {w['drawn']} pictures drawn, {w['found']} already there, "
+                f"{w['ms']:.0f} ms in {w['steps']} steps (longest {w['longest']:.0f} ms) over "
+                f"{time.monotonic() - w['at']:.1f} s at scale {w['scale']:.2f}"
+                + ("; stopped where the ring caches would hold no more" if w["full"] else ""))
 
     # --- browser popout ------------------------------------------------------------------------
     @property
@@ -1946,6 +2139,7 @@ class App:
             return 1
         self._create_ctrl()
         self._schedule_prewarm()
+        self._warm_soon("start")                    # the load above came before the window its timer needs
         self.start_hook()
         W.SetTimer(self.ctrl, TIMER_WATCH, 3000, None)
         W.SetTimer(self.ctrl, TIMER_REHOOK, 120000, None)

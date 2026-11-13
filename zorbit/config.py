@@ -174,6 +174,9 @@ class Menu:
     look: dict | None = None  # the complete look this menu is drawn with (roles resolved); None: use Config.ring
     look_spec: dict = field(default_factory=dict)   # {"preset": name or "", **the menu's own look keys}
     icon: str = ""            # the icon of a hub_style "icon" hub
+    # Set by expand.Expander on the menu it hands the ring (auto slots filled, tag colours stamped), so that handing it
+    # back in leaves it as it is: filling it twice would read the filled auto slots as brushes the menu pins.
+    filled: bool = field(default=False, compare=False, repr=False)
 
 
 @dataclass

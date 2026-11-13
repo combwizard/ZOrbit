@@ -83,8 +83,10 @@ class Expander:
 
     def menu(self, menu):
         """The menu as the ring draws it now. Nothing is saved. A paged menu (when_full "more") comes back with its
-        More slot; a "more:" menu comes back as it is, already filled and cut."""
-        if menu.id.startswith(MORE_PREFIX):
+        More slot; a "more:" menu comes back as it is, already filled and cut. So does any menu this Expander has
+        made (its filled mark is set), whoever hands it back: App.open_menu is given what resolve made, and a second
+        fill would read the filled auto slots as pinned brushes and cut the saved slots down to the empty ones."""
+        if menu.id.startswith(MORE_PREFIX) or getattr(menu, "filled", False):
             return menu
         return self._page(self._fill(menu))
 
@@ -98,7 +100,7 @@ class Expander:
                 if name:
                     it = dataclasses.replace(it, label=name, kind="brush", data={"brush": name}, auto=True)
             items.append(self._stamp(it))
-        return dataclasses.replace(menu, items=items)
+        return dataclasses.replace(menu, items=items, filled=True)
 
     def _page_size(self, menu) -> int:
         """How many slots one page of the menu holds, the More slot included; 0 when the menu is not paged."""
@@ -187,7 +189,7 @@ class Expander:
             if more:
                 items.append(C.Item(label="More…", kind="browser", data={"browser": key, "kind": found[0][0]},
                                     color=color))
-            menu = C.Menu(id="tag:" + key, title=self.tags.label(key), items=items, fan=True)
+            menu = C.Menu(id="tag:" + key, title=self.tags.label(key), items=items, fan=True, filled=True)
         if missing:
             self._cache.pop(key, None)                   # built again next time: a rescan may find the missing items
         else:
@@ -211,7 +213,7 @@ class Expander:
                 return None
             items = [C.Item(label=recent.label(p), kind=recent.item_kind(p), data={recent.item_kind(p): p})
                      for p in paths]
-            return C.Menu(id=RECENT_PREFIX + kind, title=C.RECENT_LABELS[kind], items=items, fan=True)
+            return C.Menu(id=RECENT_PREFIX + kind, title=C.RECENT_LABELS[kind], items=items, fan=True, filled=True)
         except Exception as e:                           # never stops a ring from opening: the slot stays empty
             if self.log is not None and not self._recent_said:
                 self._recent_said = True
