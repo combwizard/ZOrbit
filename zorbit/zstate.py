@@ -470,13 +470,21 @@ class Channel:
         answer (then only the file is rewritten: the message in flight answers the newest query). Called after the ring is
         shown, and never raises. pid: the ZBrush in front. listener: its verified listener window, or None. capable: its
         listener.json says "state": 1. enabled: bridge.show_state. Without all four nothing is written or posted and
-        marks() gives None; told enabled=False or capable=False after having asked, it also takes its query file away
-        (stop()). Returns whether a question is now waiting."""
+        marks() gives None; told enabled=False after having asked, it also takes its query file away (stop()). A ZBrush
+        that cannot answer (capable=False) leaves the file alone: with two running, the other one may be the one that
+        was asked, and it answers after its picks while the file is there. Returns whether a question is now waiting."""
         self.pid = 0
-        if not enabled or not capable:
+        try:
+            return self._ask(menu, resolve, pid, listener, capable, enabled)
+        except Exception as e:               # anything: the ring is already open and picks must go on as before
+            self._note("ask", pid, f"ZBrush state: asking pid {pid} failed: {e!r}")
+            return False
+
+    def _ask(self, menu, resolve, pid, listener, capable, enabled):
+        if not enabled:
             self.stop()
             return False
-        if listener is None or not pid:
+        if not capable or listener is None or not pid:
             return False
         self.pid = pid                       # the ring draws from the cache for this ZBrush even if nothing is asked
         try:
@@ -509,7 +517,12 @@ class Channel:
 
     def _post(self, now) -> bool:
         key = self._key
-        if self.post(self._listener, WM_APP_STATE, self._id, self.ctrl):
+        try:
+            posted = self.post(self._listener, WM_APP_STATE, self._id, self.ctrl)
+        except Exception as e:               # a ctypes argument error, say: as a message that was not posted
+            self._note("post-error", self._asked_pid, f"ZBrush state: posting to pid {self._asked_pid} failed: {e!r}")
+            posted = False
+        if posted:
             self._flights[key] = now
             self._flights.move_to_end(key)
             while len(self._flights) > _MAX_FLIGHTS:

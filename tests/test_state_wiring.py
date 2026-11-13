@@ -215,6 +215,49 @@ def test_turning_the_setting_off_takes_the_question_away_at_the_next_open(env):
     assert [e for e in env["events"] if e[0] == "post"] == [("post", LISTENER, zstate.WM_APP_STATE, 1, CTRL)]
 
 
+def test_turning_the_setting_off_takes_the_question_away_when_the_config_loads(env, tmp_path):
+    app = env["app"]
+    open_ring(env)
+    query = env["data"] / zstate.QUERY_FILE
+    radial = tmp_path / "radial.json"
+    app.load_config(force=True, balloon=False)                     # still on: the question stays
+    assert query.exists()
+    radial.write_text(json.dumps({"bridge": {"show_state": False}, "menus": MENUS}), encoding="utf-8")
+    app.load_config(force=True, balloon=False)
+    assert not app.cfg.bridge_show_state and not query.exists()
+
+
+BAD_LISTENERS = {"infinity": '{"hwnd": Infinity, "pid": 4242, "verified": 1, "state": 1}',
+                 "nested": "[" * 100000 + "]" * 100000,
+                 "pid Infinity": '{"hwnd": 4660, "pid": Infinity, "verified": 1, "state": 1}',
+                 "not an object": '"listener"', "binary": "\udcff"}
+
+
+@pytest.mark.parametrize("name", BAD_LISTENERS)
+def test_a_bad_listener_file_never_stops_a_ring_or_a_pick(env, picks, name):
+    env["listener"].write_bytes(BAD_LISTENERS[name].encode("utf-8", "surrogateescape"))
+    app = env["app"]
+    app.state = zstate.Channel(lambda *a: pytest.fail("asked"), CTRL, str(env["data"]), log=env["lines"].append)
+    r = open_ring(env)
+    assert app.ring is r and r._marks_fn is None and not env["data"].exists()
+    app.ring = None
+    app.send(env["item"])                               # no listener: the bridge key
+    assert env["pressed"] == [7] and env["pick_posts"] == []
+
+
+def test_a_lookup_that_raises_is_nothing_to_ask_and_said_once(env, monkeypatch):
+    app = env["app"]
+
+    def boom():
+        raise RuntimeError("no foreground window")
+    monkeypatch.setattr(app, "_front_pid", boom)
+    r = open_ring(env)
+    assert app.ring is r and r._marks_fn is None and env["events"] == [("show", False)]
+    app.ring = None
+    open_ring(env)
+    assert len([ln for ln in env["lines"] if ln.startswith("ZBrush state: could not look up the listener")]) == 1
+
+
 def test_a_menu_with_nothing_to_ask_writes_nothing(env):
     open_ring(env, "plain")
     assert env["events"] == [("show", False)] and not env["data"].exists()
@@ -369,11 +412,44 @@ def test_a_pick_that_was_never_handed_off_is_dropped_not_recorded(env, picks, mo
     assert picks.named("picked") == [] and picks.named("dropped") == [("dropped", (7,), {})]
 
 
-def test_every_drop_takes_the_pick_back(env, picks):
+def test_every_drop_that_removes_the_request_takes_the_pick_back(env, picks):
     app = env["app"]
+    env["request"].write_text("{}")
     app._drop_request(12)
+    env["request"].write_text("{}")
     app._give_up_apply(13, "ZBrush did not take the pick", toast=False)
     assert picks.named("dropped") == [("dropped", (12,), {}), ("dropped", (13,), {})]
+
+
+def test_a_request_already_taken_is_not_taken_back(env, picks):
+    """The listener took request.json between _check_ack's look and the drop: ZBrush applies the pick."""
+    env["request"].unlink(missing_ok=True)
+    env["app"]._drop_request(12)
+    assert picks.named("dropped") == []
+
+
+def test_a_request_that_cannot_be_removed_is_not_taken_back(env, picks, monkeypatch):
+    env["request"].write_text("{}")
+    real = os.remove
+
+    def remove(p):
+        if os.path.abspath(p) == os.path.abspath(str(env["request"])):
+            raise PermissionError("the plugin has it open")
+        real(p)
+    monkeypatch.setattr(radiald.os, "remove", remove)
+    env["app"]._drop_request(12)
+    assert picks.named("dropped") == [] and env["request"].exists()
+    assert [ln for ln in env["lines"] if "could not remove request.json" in ln]
+
+
+def test_a_browser_pick_to_the_listener_is_recorded_for_the_zbrush_the_browser_was_opened_from(env, picks,
+                                                                                               monkeypatch):
+    app = env["app"]
+    env["front"] = OTHER_PID                            # the focus has not come back to ZBrush yet
+    monkeypatch.setattr(app, "_browser_zb_pid", lambda: PID)
+    app.send(radiald.C.Item(label="Clay", kind="brush", data={"brush": "Clay"}), source="browser")
+    assert env["pick_posts"] == [(LISTENER, radiald.WM_APP_PICK, 7)]
+    assert picks.named("picked") == [("picked", (7, PID), {})]
 
 
 # --- stopping ----------------------------------------------------------------------------------------------------------

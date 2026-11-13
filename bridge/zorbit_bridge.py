@@ -80,6 +80,8 @@ STATE_LOG_SLOW_MS = 5.0           # an answer whose reads took longer than this 
 WM_TIMER = 0x113
 TIMER_VERIFY, TIMER_RETRY, TIMER_SELECT = 1, 2, 3
 SELECT_TRIES = 25                 # an asset just loaded: look for its button every 40 ms, for up to a second
+PUBLISH_TRIES = 10                # listener.json refused (the app has it open): tried again on the verify timer
+PUBLISH_RETRY_MS = 300            # ... this long apart, about 3 s in all
 # kind -> (palette its buttons live in, interface path of the button that loads a file). Maxon's own xmd_bridge
 # plugin selects and loads alphas, materials and textures the same way.
 ASSETS = {"brush": ("Brush", "Brush:Load Brush"), "alpha": ("Alpha", "Alpha:Import"),
@@ -97,7 +99,8 @@ if not isinstance(getattr(S, "select_pending", None), list):
     S.select_pending = []         # (interface path, tries left) per asset this pick loaded from file, in order
 for _name, _value in (("pick", 0),                 # id of the last request taken from request.json
                       ("state_ctrl", None),        # the app window of the last state question, for the refresh
-                      ("state_count", 0), ("state_last", "")):
+                      ("state_count", 0), ("state_last", ""),
+                      ("publish_tries", 0)):       # tries at publishing listener.json since the listener started
     if not hasattr(S, _name):
         setattr(S, _name, _value)
 del _name, _value
@@ -298,12 +301,39 @@ def apply_request(sender: str = "") -> None:
 
 # --- listener window -----------------------------------------------------------------------------
 def _publish_listener():
+    """Writes listener.json atomically. The app reads it on every ring open and every pick, and a file it has open
+    cannot be replaced: the replace is tried three times, 2 ms apart, then the error goes to the caller."""
     os.makedirs(DATA_DIR, exist_ok=True)
     tmp = LISTENER_FILE + ".tmp"
     with open(tmp, "w", encoding="utf-8") as f:
         json.dump({"hwnd": int(S.hwnd), "pid": os.getpid(), "thread": GetCurrentThreadId(),
                    "verified": time.time(), "state": STATE_V}, f)    # state: answers WM_APP_STATE
-    os.replace(tmp, LISTENER_FILE)
+    for attempt in range(3):
+        try:
+            os.replace(tmp, LISTENER_FILE)
+            return
+        except PermissionError:                           # the app is reading the old one this very moment
+            if attempt == 2:
+                raise
+            time.sleep(0.002)
+
+
+def _on_verified(hwnd) -> None:
+    """TIMER_VERIFY: ZBrush dispatches window messages to Python, so the listener is published. A refused publish
+    is tried again on the same timer, PUBLISH_TRIES times in all, then given up with one line. Never raises."""
+    S.verified = True
+    S.publish_tries += 1
+    try:
+        _publish_listener()
+    except Exception as e:
+        if S.publish_tries < PUBLISH_TRIES:
+            SetTimer(hwnd, TIMER_VERIFY, PUBLISH_RETRY_MS, None)
+        else:
+            log(f"listener: could not publish listener.json in {PUBLISH_TRIES} tries ({e!r}); picks use the "
+                f"bridge key and the ring shows no state until the plugin loads again")
+        return
+    log(f"listener verified: ZBrush dispatches window messages to Python (window {int(hwnd)}, "
+        f"thread {GetCurrentThreadId()})" + (f"; published on try {S.publish_tries}" if S.publish_tries > 1 else ""))
 
 
 def _select_pending(hwnd):
@@ -577,10 +607,7 @@ def _wndproc(hwnd, msg, wparam, lparam):
             return 0
         if msg == WM_TIMER and wparam == TIMER_VERIFY:
             KillTimer(hwnd, TIMER_VERIFY)
-            S.verified = True
-            _publish_listener()
-            log(f"listener verified: ZBrush dispatches window messages to Python (window {int(hwnd)}, "
-                f"thread {GetCurrentThreadId()})")
+            _on_verified(hwnd)
             return 0
     except Exception:
         log("listener error:\n" + traceback.format_exc())
@@ -591,7 +618,7 @@ def _wndproc(hwnd, msg, wparam, lparam):
 def start_listener() -> None:
     if S.hwnd and IsWindow(S.hwnd):
         DestroyWindow(S.hwnd)                             # from a previous load; same thread
-    S.hwnd, S.verified = None, False
+    S.hwnd, S.verified, S.publish_tries = None, False, 0
     try:
         os.remove(LISTENER_FILE)                          # republished once verified
     except OSError:

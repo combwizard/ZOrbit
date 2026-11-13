@@ -573,6 +573,8 @@ class App:
         self._theme = eff
         self._theme_sig = sig
         self.cfg = cfg
+        if not cfg.bridge_show_state:
+            self._state_call("stop")                # the question goes now, so the plugin stops answering after picks
         self.expander = expand.Expander(cfg, self.usage, self.tags, front=self.target_install, log=log)
         self._set_slots([m for m in cfg.menus.values() if m.hotkey], cfg.browser_key, cfg.profile_key)
         for err in cfg.errors:
@@ -1195,11 +1197,18 @@ class App:
 
     def _state_question(self):
         """(pid of the ZBrush in front, its listener window or None, whether its listener answers the state channel,
-        whether the ring asks it). Nothing is looked up without a channel or with the setting off."""
+        whether the ring asks it). Nothing is looked up without a channel or with the setting off. Never raises: a
+        failure is logged once and is nothing to ask, so the ring opens as it did before the channel."""
         if self.state is None or not self.cfg.bridge_show_state:
             return 0, None, False, False
-        pid = self._front_pid()
-        listener, capable = self._listener_info(pid, quiet=True)
+        try:
+            pid = self._front_pid()
+            listener, capable = self._listener_info(pid, quiet=True)
+        except Exception:
+            if "question" not in self._state_failed:
+                self._state_failed.add("question")
+                log("ZBrush state: could not look up the listener; nothing asked:\n" + traceback.format_exc())
+            return 0, None, False, False
         return pid, listener, capable, listener is not None and capable
 
     def _state_marks(self, menu, pid):
@@ -1828,7 +1837,7 @@ class App:
             owner = int(info["pid"])
             if not (info.get("verified") and W.IsWindow(hwnd)):
                 return None, False
-        except (OSError, ValueError, KeyError, TypeError):
+        except Exception:           # whatever the file holds (Infinity overflows int(), deep nesting recurses): no listener
             return None, False
         if owner == pid and self._exe_of(owner) == self.target_exe:
             return hwnd, info.get("state") == zstate.VERSION
@@ -1861,14 +1870,17 @@ class App:
     def _drop_request(self, seq):
         """A pick nobody will carry out must not wait for the Apply button or the bridge key press that comes
         later: that would apply it long after the user asked."""
-        self._state_call("dropped", seq)            # nothing changed in ZBrush: what the ring knew is true again
+        taken = False                               # this call removed request.json: the plugin can no longer apply it
         for p in (REQUEST_FILE, zscript_bridge.REQUEST_TXT):
             try:
                 os.remove(p)
+                taken = taken or p == REQUEST_FILE
             except FileNotFoundError:
                 pass
             except OSError as e:
                 log(f"pick #{seq}: could not remove {os.path.basename(p)}: {e!r}")
+        if taken:
+            self._state_call("dropped", seq)        # nothing changed in ZBrush: what the ring knew is true again
         log(f"pick #{seq} not delivered; request removed")
 
     def send(self, item, install=None, source="ring", pid=None):

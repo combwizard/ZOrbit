@@ -528,6 +528,63 @@ def test_the_listener_publishes_the_state_capability(bridge):
     assert info["state"] == 1 and info["hwnd"] == 1234 and info["pid"] == os.getpid()
 
 
+def _refusing_replace(bridge, monkeypatch, refusals):
+    """os.replace onto listener.json refuses the first `refusals` calls, as when the app has the file open."""
+    real, calls = os.replace, []
+
+    def replace(a, b):
+        if b == bridge.LISTENER_FILE:
+            calls.append(1)
+            if len(calls) <= refusals:
+                raise PermissionError(13, "in use")
+        real(a, b)
+    monkeypatch.setattr(bridge.os, "replace", replace)
+    return calls
+
+
+def verify_tick(bridge):
+    return bridge._wndproc(1234, bridge.WM_TIMER, bridge.TIMER_VERIFY, 0)
+
+
+def test_the_listener_is_published_through_a_moment_the_app_has_the_file_open(bridge, monkeypatch):
+    bridge.S.hwnd = 1234
+    calls = _refusing_replace(bridge, monkeypatch, 2)
+    assert verify_tick(bridge) == 0
+    assert len(calls) == 3 and json.loads(Path(bridge.LISTENER_FILE).read_text(encoding="utf-8"))["hwnd"] == 1234
+    assert ("set", bridge.TIMER_VERIFY) not in bridge.timers
+    assert "listener verified" in Path(bridge.LOG_FILE).read_text(encoding="utf-8")
+
+
+def test_a_refused_publish_is_tried_again_on_a_later_tick(bridge, monkeypatch):
+    bridge.S.hwnd = 1234
+    calls = _refusing_replace(bridge, monkeypatch, 3)              # the whole first tick is refused
+    verify_tick(bridge)
+    assert bridge.timers[-1] == ("set", bridge.TIMER_VERIFY) and not os.path.exists(bridge.LISTENER_FILE)
+    assert bridge.S.verified is True                               # messages do arrive: Status says so
+    verify_tick(bridge)
+    assert len(calls) == 4 and os.path.exists(bridge.LISTENER_FILE)
+    assert "published on try 2" in Path(bridge.LOG_FILE).read_text(encoding="utf-8")
+
+
+def test_a_publish_refused_every_time_gives_up_with_one_line_and_never_raises(bridge, monkeypatch):
+    bridge.S.hwnd = 1234
+    _refusing_replace(bridge, monkeypatch, 10 ** 6)
+    for _ in range(bridge.PUBLISH_TRIES):
+        assert verify_tick(bridge) == 0
+    sets = [t for t in bridge.timers if t == ("set", bridge.TIMER_VERIFY)]
+    assert len(sets) == bridge.PUBLISH_TRIES - 1
+    text = Path(bridge.LOG_FILE).read_text(encoding="utf-8")
+    assert text.count("could not publish listener.json") == 1 and "listener error" not in text
+    assert not os.path.exists(bridge.LISTENER_FILE)
+
+
+def test_a_new_listener_starts_its_publish_tries_again(bridge, monkeypatch):
+    bridge.S.publish_tries = bridge.PUBLISH_TRIES
+    monkeypatch.setattr(bridge, "RegisterClassExW", lambda wc: 0)  # stops start_listener after the reset
+    bridge.start_listener()
+    assert bridge.S.publish_tries == 0
+
+
 def test_a_pick_sends_the_state_again_unasked(bridge):
     zbrush_with_state(bridge)
     ask(bridge, [("Transform:Activate Symmetry", "toggle")])

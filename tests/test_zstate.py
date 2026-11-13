@@ -958,16 +958,51 @@ def test_stop_without_a_file_or_with_the_file_already_gone_is_no_error(rig):
     rig.ch.stop()
 
 
-@pytest.mark.parametrize("kw", [{"enabled": False}, {"capable": False}])
-def test_asking_with_the_switch_off_or_an_old_plugin_removes_the_file_once(rig, kw):
+def test_asking_with_the_switch_off_removes_the_file_once(rig):
     path = os.path.join(rig.dir, Z.QUERY_FILE)
     rig.ask()
     assert os.path.exists(path)
-    assert rig.ask(**kw) is False
+    assert rig.ask(enabled=False) is False
     assert not os.path.exists(path)
     open(path, "w").close()                                            # not ours any more: left alone
-    assert rig.ask(**kw) is False
+    assert rig.ask(enabled=False) is False
     assert os.path.exists(path)
+
+
+def test_a_ring_over_a_zbrush_that_cannot_answer_leaves_the_question_of_the_one_that_can(rig):
+    """Two ZBrush: the one asked keeps its question (it answers after its picks); the other gets nothing."""
+    path = os.path.join(rig.dir, Z.QUERY_FILE)
+    rig.ask()
+    before = rig.query()
+    assert rig.ask(pid=PID + 1, capable=False) is False
+    assert os.path.exists(path) and rig.query() == before
+    assert len(rig.sent) == 1 and rig.ch.pid == 0 and rig.ch.marks(rig.menu) is None
+    assert rig.ch._flights                                             # its question is still in flight
+
+
+@pytest.mark.parametrize("where", ["post", "write", "paths"])
+def test_ask_never_raises(rig, monkeypatch, where):
+    if where == "post":
+        def post(*a):
+            raise TypeError("wrong type")                              # as a ctypes ArgumentError would
+        rig.ch.post = post
+    elif where == "write":
+        monkeypatch.setattr(Z.Query, "to_json", lambda self: (_ for _ in ()).throw(ValueError("odd")))
+    else:
+        monkeypatch.setattr(Z, "paths_for", lambda menu, resolve: (_ for _ in ()).throw(KeyError("x")))
+    assert rig.ask() is False
+    assert rig.ask() is False
+    assert len([ln for ln in rig.lines if "failed" in ln or "could not" in ln]) >= 1
+    assert len(rig.lines) == len(set(rig.lines))                       # each said once
+
+
+def test_a_post_that_raises_is_taken_as_not_posted_and_asked_again_next_time(rig):
+    def post(*a):
+        raise TypeError("wrong type")
+    rig.ch.post = post
+    assert rig.ask() is False and not rig.ch._flights
+    rig.ch.post = rig.post
+    assert rig.ask() is True and len(rig.sent) == 1
 
 
 def test_a_listener_that_is_missing_does_not_remove_the_file(rig):
