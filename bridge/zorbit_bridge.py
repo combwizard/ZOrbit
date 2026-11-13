@@ -18,6 +18,11 @@ What it does:
   * A hidden message-only window on ZBrush's main thread. The app posts WM_APP+1 to it after a pick, so no
     keystroke is needed. Its handle is published in listener.json only after a timer message has proved
     that ZBrush dispatches window messages to Python; if that never happens the app uses the bridge key.
+  * The state channel: the app writes the interface paths a ring shows to zstate_query.json and posts WM_APP+2;
+    the listener reads them here, on ZBrush's main thread, writes zstate.json (on or off, slider values and
+    ranges, greyed or missing items, the current tool, brush and material) and posts WM_APP+19 back to the
+    app's control window. After a pick it answers the last question again, unasked, so the app's copy is
+    current before the next ring opens.
 """
 import ctypes
 import ctypes.wintypes as w
@@ -35,6 +40,8 @@ LAUNCH_FILE = os.path.join(os.environ.get("APPDATA") or os.path.expanduser("~"),
 REQUEST_FILE = os.path.join(DATA_DIR, "request.json")
 REQUEST_TXT = os.path.join(DATA_DIR, "request.txt")       # the same pick for the ZScript bridge (ZBrush 2022-2025)
 LISTENER_FILE = os.path.join(DATA_DIR, "listener.json")
+STATE_QUERY_FILE = os.path.join(DATA_DIR, "zstate_query.json")    # the app's question: which paths to read
+STATE_FILE = os.path.join(DATA_DIR, "zstate.json")                # the answer: a snapshot of those paths
 LOG_FILE = os.path.join(DATA_DIR, "bridge.log")
 BRIDGE_DIR = os.path.dirname(os.path.abspath(__file__))
 PALETTE = "Zplugin:ZOrbit"
@@ -61,6 +68,15 @@ except Exception:
     raise
 
 WM_APP_PICK = 0x8000 + 1
+WM_APP_STATE = 0x8000 + 2         # app -> listener: answer zstate_query.json (wparam query id, lparam app window)
+WM_APP_STATE_READY = 0x8000 + 19  # listener -> the app's control window: zstate.json is written (wparam its id)
+APP_CLASS = "ZOrbitControl"       # the only window class the state answer is posted to
+STATE_V = 1                       # the zstate*.json format, and the "state" capability in listener.json
+STATE_MAX_PATHS = 128             # paths read per snapshot at most; the rest are left out and `truncated` set
+STATE_BUDGET_S = 0.020            # reading stops after this long, also with `truncated`
+STATE_QUERY_MAX_BYTES = 256_000   # a bigger question is not read
+STATE_LOG_FIRST = 10              # answers logged after a load; later only the odd one (see _answer)
+STATE_LOG_SLOW_MS = 5.0           # an answer whose reads took longer than this is logged
 WM_TIMER = 0x113
 TIMER_VERIFY, TIMER_RETRY, TIMER_SELECT = 1, 2, 3
 SELECT_TRIES = 25                 # an asset just loaded: look for its button every 40 ms, for up to a second
@@ -79,6 +95,12 @@ if not hasattr(S, "keepalive"):
     S.keepalive, S.hwnd, S.seq, S.verified, S.last = [], None, 0, False, "none yet"
 if not isinstance(getattr(S, "select_pending", None), list):
     S.select_pending = []         # (interface path, tries left) per asset this pick loaded from file, in order
+for _name, _value in (("pick", 0),                 # id of the last request taken from request.json
+                      ("state_ctrl", None),        # the app window of the last state question, for the refresh
+                      ("state_count", 0), ("state_last", "")):
+    if not hasattr(S, _name):
+        setattr(S, _name, _value)
+del _name, _value
 
 # --- Win32 (own WinDLL instances so other plugins' argtypes are untouched) -----------------------
 user32 = ctypes.WinDLL("user32", use_last_error=True)
@@ -109,6 +131,8 @@ DestroyWindow = _sig(user32, "DestroyWindow", w.BOOL, w.HWND)
 IsWindow = _sig(user32, "IsWindow", w.BOOL, w.HWND)
 SetTimer = _sig(user32, "SetTimer", ctypes.c_size_t, w.HWND, ctypes.c_size_t, w.UINT, ctypes.c_void_p)
 KillTimer = _sig(user32, "KillTimer", w.BOOL, w.HWND, ctypes.c_size_t)
+PostMessageW = _sig(user32, "PostMessageW", w.BOOL, w.HWND, w.UINT, w.WPARAM, w.LPARAM)
+GetClassNameW = _sig(user32, "GetClassNameW", ctypes.c_int, w.HWND, w.LPWSTR, ctypes.c_int)
 GetAsyncKeyState = _sig(user32, "GetAsyncKeyState", ctypes.c_short, ctypes.c_int)
 GetSystemMetrics = _sig(user32, "GetSystemMetrics", ctypes.c_int, ctypes.c_int)
 GetModuleHandleW = _sig(kernel32, "GetModuleHandleW", w.HMODULE, w.LPCWSTR)
@@ -230,6 +254,10 @@ def apply_request(sender: str = "") -> None:
         except OSError:
             pass
         return
+    if not isinstance(req, dict):
+        log(f"apply ({sender or 'button'}): unreadable request: not an object")
+        return
+    rid = req.get("id")
     try:
         age = time.time() - float(req.get("time"))
     except (TypeError, ValueError):
@@ -238,6 +266,8 @@ def apply_request(sender: str = "") -> None:
     # waits up to 30 s), so the age only counts for a request applied as it comes in.
     if age > REQUEST_MAX_AGE_S and not str(sender or "").endswith("after stroke"):
         log(f"apply ({sender or 'button'}): request #{req.get('id')} is {age:.0f} s old; ignored")
+        _picked(rid)                                      # dropped, but the state after it is the one the app waits for
+        _refresh_state(f"after pick #{rid}")
         return
     S.select_pending = []                                 # a newer pick wins over items still waiting to be selected
     if S.hwnd and IsWindow(S.hwnd):
@@ -259,6 +289,11 @@ def apply_request(sender: str = "") -> None:
         SetTimer(S.hwnd, TIMER_SELECT, 40, None)          # the items this pick loaded, once ZBrush shows them
     else:
         S.select_pending = []
+    # Toggles and sliders are current now; the brush of a load is not until _select_pending has pressed it, and
+    # it sends the state once more when its queue is empty. The id is set only now: a question answered while an
+    # action ran (a long load can pump messages) must not claim this pick.
+    _picked(rid)
+    _refresh_state(f"after pick #{rid}")
 
 
 # --- listener window -----------------------------------------------------------------------------
@@ -267,7 +302,7 @@ def _publish_listener():
     tmp = LISTENER_FILE + ".tmp"
     with open(tmp, "w", encoding="utf-8") as f:
         json.dump({"hwnd": int(S.hwnd), "pid": os.getpid(), "thread": GetCurrentThreadId(),
-                   "verified": time.time()}, f)
+                   "verified": time.time(), "state": STATE_V}, f)    # state: answers WM_APP_STATE
     os.replace(tmp, LISTENER_FILE)
 
 
@@ -300,10 +335,232 @@ def _select_pending(hwnd):
         pend[0] = (path, tries - 1)
     if not pend:
         KillTimer(hwnd, TIMER_SELECT)
+        _refresh_state(f"after pick #{S.pick}, its loaded items selected")    # the brush in `extras` changed
+
+
+# --- the state channel ---------------------------------------------------------------------------
+def _class_name(hwnd) -> str:
+    buf = ctypes.create_unicode_buffer(256)
+    n = GetClassNameW(hwnd, buf, 256)
+    return buf.value[:n] if n > 0 else ""
+
+
+def _app_window(hwnd):
+    """hwnd when it is the app's control window, else None: the answer is never posted to a foreign window."""
+    try:
+        h = int(hwnd or 0)
+        return h if h and _class_name(h) == APP_CLASS else None
+    except Exception:
+        return None
+
+
+def _num(x) -> float:
+    v = float(x)
+    if v != v or v in (float("inf"), float("-inf")):
+        raise ValueError(f"not a finite number: {x!r}")
+    return v
+
+
+def _item_name(title) -> str:
+    """ZBrush's title of an ItemInfo slot, 'SimpleBrush.', as the name 'SimpleBrush'."""
+    t = str(title).strip()
+    return t[:-1] if t.endswith(".") else t
+
+
+def _extras() -> dict:
+    """The current tool, brush and material, and Edit mode. A read that fails leaves its key out."""
+    out = {}
+    reads = (("tool", lambda: _item_name(zbc.get_title("Tool:ItemInfo"))),
+             ("brush", lambda: _item_name(zbc.get_title("Brush:ItemInfo"))),
+             ("brush_file", lambda: str(zbc.get_title("Brush:Current Brush")).strip().replace("\\", "/")),
+             ("material", lambda: _item_name(zbc.get_title("Material:ItemInfo"))),
+             ("edit", lambda: bool(zbc.get("Transform:Edit"))),
+             ("edit_enabled", lambda: bool(zbc.is_enabled("Transform:Edit"))))
+    for key, read in reads:
+        try:
+            out[key] = read()
+        except Exception:
+            pass
+    return out
+
+
+def _read_item(path: str, kinds: set) -> dict:
+    """One path's entry: s is ok, disabled or missing (or error when a read raised); v for set and toggle, min and
+    max for set."""
+    try:
+        if not zbc.exists(path):
+            return {"s": "missing"}
+        s = "ok" if zbc.is_enabled(path) else "disabled"
+    except Exception:
+        return {"s": "error"}
+    item = {"s": s}
+    try:
+        if "set" in kinds or "toggle" in kinds:
+            item["v"] = _num(zbc.get(path))
+        if "set" in kinds:
+            item["min"], item["max"] = _num(zbc.get_min(path)), _num(zbc.get_max(path))
+    except Exception:
+        # A greyed item may not give its value; it stays greyed. An enabled one that cannot be read is an error.
+        return {"s": s} if s == "disabled" else {"s": "error"}
+    return item
+
+
+def _query_paths(query: dict) -> dict:
+    """{path: kinds} in the question's order, each path once with its kinds merged. Entries that are not
+    {"p": str, "k": str} objects are skipped."""
+    out = {}
+    paths = query.get("paths")
+    for e in paths if isinstance(paths, list) else ():
+        if not isinstance(e, dict) or not isinstance(e.get("p"), str) or not e["p"]:
+            continue
+        kinds = out.setdefault(e["p"], set())
+        if isinstance(e.get("k"), str):
+            kinds.add(e["k"])
+    return out
+
+
+_clock = time.perf_counter
+_answers_logged = 0               # state answers logged since this file was loaded
+
+
+def _picked(rid) -> None:
+    """Records the id of the request just taken from request.json, for the `pick` field of the next snapshot."""
+    if isinstance(rid, int) and not isinstance(rid, bool):
+        S.pick = rid
+
+
+def _snapshot(query: dict) -> dict:
+    """Reads the asked paths now, on ZBrush's main thread. At most STATE_MAX_PATHS paths and STATE_BUDGET_S of
+    reading; whatever is left out sets `truncated`. Never raises for a read: a path whose read raises is "error"."""
+    t0 = _clock()
+    try:
+        session = str(int(_num(zbc.zbrush_info(7))))       # 7: ZBrush's unique session id
+    except Exception:
+        session = ""
+    extras = _extras()
+    asked = _query_paths(query)
+    items, truncated = {}, len(asked) > STATE_MAX_PATHS
+    for i, (path, kinds) in enumerate(asked.items()):
+        if i >= STATE_MAX_PATHS:
+            break
+        if _clock() - t0 >= STATE_BUDGET_S:
+            truncated = True
+            break
+        items[path] = _read_item(path, kinds)
+    ms = (_clock() - t0) * 1000.0
+    return {"v": STATE_V, "id": query.get("id"), "pick": S.pick, "pid": os.getpid(), "session": session,
+            "time": time.time(), "ms": round(ms, 2), "truncated": truncated, "extras": extras, "items": items}
+
+
+def _read_query():
+    """(question, None) or (None, (kind, why)): kind is "missing" (no file: the app has stopped asking), "bad"
+    (not a question this plugin answers) or "busy" (the file could not be opened just now)."""
+    try:
+        with open(STATE_QUERY_FILE, "rb") as f:
+            raw = f.read(STATE_QUERY_MAX_BYTES + 1)
+    except FileNotFoundError:
+        return None, ("missing", "there is no zstate_query.json")
+    except OSError as e:
+        return None, ("busy", f"zstate_query.json could not be read: {e!r}")
+    if len(raw) > STATE_QUERY_MAX_BYTES:
+        return None, ("bad", f"zstate_query.json is over {STATE_QUERY_MAX_BYTES} bytes")
+    try:
+        q = json.loads(raw.decode("utf-8"))
+    except ValueError as e:
+        return None, ("bad", f"unreadable zstate_query.json: {e!r}")
+    qid = q.get("id") if isinstance(q, dict) else None
+    if not isinstance(q, dict) or q.get("v") != STATE_V or not isinstance(qid, int) or isinstance(qid, bool) \
+            or qid < 0:
+        return None, ("bad", f"zstate_query.json is not a version {STATE_V} question with an id")
+    return q, None
+
+
+def _write_state(snap: dict) -> None:
+    os.makedirs(DATA_DIR, exist_ok=True)
+    tmp = f"{STATE_FILE}.{os.getpid()}.tmp"               # two ZBrush instances may answer at the same moment
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(snap, f, allow_nan=False)
+    for attempt in range(3):
+        try:
+            os.replace(tmp, STATE_FILE)                   # atomic: the app never reads half a snapshot
+            return
+        except PermissionError:                           # the app is reading the old one this very moment
+            if attempt == 2:
+                raise
+            time.sleep(0.002)
+
+
+def _answer(ctrl, why: str, q: dict) -> bool:
+    """Takes the snapshot for question q, writes zstate.json and posts WM_APP_STATE_READY to ctrl, the app's
+    control window. Never raises: it runs from the listener and from ZBrush's Apply button. True when posted.
+    The first STATE_LOG_FIRST answers after a load are logged (the round trip is measured from them), later ones
+    only when something is off: cut short, not posted, slow, or a read that raised."""
+    global _answers_logged
+    try:
+        snap = _snapshot(q)
+        _write_state(snap)
+        posted = bool(PostMessageW(ctrl, WM_APP_STATE_READY, snap["id"], 0))
+        statuses = [e["s"] for e in snap["items"].values()]
+        counts = ", ".join(f"{statuses.count(s)} {s}" for s in ("missing", "disabled", "error") if s in statuses)
+        lag = ""
+        try:
+            if why == "asked":
+                lag = f", {(snap['time'] - float(q.get('time'))) * 1000:.0f} ms after the question was written"
+        except (TypeError, ValueError):
+            pass
+        S.state_count += 1
+        S.state_last = (f"#{snap['id']} ({why}): {len(snap['items'])} paths in {snap['ms']:.1f} ms{lag}"
+                        + (f" ({counts})" if counts else "") + (", truncated" if snap["truncated"] else "")
+                        + ("" if posted else ", NOT posted to the app"))
+        if (_answers_logged < STATE_LOG_FIRST or snap["truncated"] or not posted or snap["ms"] > STATE_LOG_SLOW_MS
+                or "error" in statuses):
+            _answers_logged += 1
+            log("state " + S.state_last)
+        return posted
+    except Exception:
+        log(f"state ({why}) error:\n" + traceback.format_exc())
+        return False
+
+
+def _on_state_query(wparam, lparam) -> None:
+    """WM_APP_STATE. Not held back during a stroke: reads change nothing in ZBrush."""
+    ctrl = _app_window(lparam)
+    if ctrl is None:
+        log(f"state: question #{wparam} from a window that is not ZOrbit's ({lparam}); not answered")
+        return
+    q, problem = _read_query()
+    if q is None:
+        log(f"state: asked, but {problem[1]}; not answered")
+        return
+    S.state_ctrl = ctrl                                   # a question (again): picks send the state from now on
+    _answer(ctrl, "asked", q)
+
+
+def _refresh_state(why: str) -> None:
+    """After a pick: answers the last question again, unasked, so the app's copy is current before the next ring
+    opens. Only once this ZBrush has been asked, and only while that app window is still there. The app deletes
+    its question when it stops asking (the setting turned off): then the refreshes stop too, until it asks again."""
+    try:
+        ctrl = _app_window(S.state_ctrl)
+        if ctrl is None:
+            return
+        q, problem = _read_query()
+        if q is None:
+            if problem[0] == "bad":
+                log(f"state: {problem[1]}; no more unasked answers until the app asks again")
+            if problem[0] != "busy":                      # a file just being replaced does not stop the refreshes
+                S.state_ctrl = None
+            return
+        _answer(ctrl, why, q)
+    except Exception:
+        log("state refresh error:\n" + traceback.format_exc())
 
 
 def _wndproc(hwnd, msg, wparam, lparam):
     try:
+        if msg == WM_APP_STATE:
+            _on_state_query(wparam, lparam)
+            return 0
         if msg == WM_APP_PICK:
             if primary_down():                             # never switch tools in the middle of a stroke
                 SetTimer(hwnd, TIMER_RETRY, 40, None)
@@ -438,11 +695,13 @@ def open_studio(sender: str = "") -> None:
 
 def status(sender: str = "") -> None:
     pending = "yes" if os.path.exists(REQUEST_FILE) else "no"
+    state = f"{S.state_count} answer(s), last {S.state_last}" if S.state_count else "not asked yet"
     zbc.message_ok(
         f"Listener: {'verified, window ' + str(int(S.hwnd)) if S.verified else 'NOT verified (bridge key only)'}\n"
         f"App running: {'yes' if app_running() else 'no'}\n"
         f"Pending request: {pending}\n"
         f"Last pick: {S.last}\n"
+        f"State channel: {state}\n"
         f"Logs: {DATA_DIR}", "ZOrbit")
 
 
