@@ -346,3 +346,25 @@ Only `spiral` staggers its slots; every other mode animates all slots at the sam
 Frames from a few modes, partway through opening:
 
 ![Five open animations partway through](images/animations.png)
+
+## State marks
+
+In ZBrush 2026 and newer, the ring marks its **Press**, **Set** and **Toggle** slots with what ZBrush is doing now. [ZBrush's state on the ring](menus.md#zbrushs-state-on-the-ring) says which slot shows what; this section is about how the marks look.
+
+![A ring of nine slots. Brush slots ClayBuildup and Move; Symmetry with a filled dot and an outline; PolyF with a hollow dot; Size 128 with the figures 64 on it; a row of presets 0.25, 0.5 and 1 with 0.5 filled and outlined; and Clear Mask faint. Move is hovered](images/state.png)
+
+- **A switch that is on** has a filled dot at the upper right of the slot, in the colour of the slot's hover rim, with a thin rim in the ring's background colour. The slot has an outline in that colour too.
+- **A switch that is off** has a hollow dot in the text colour, faint.
+- **A Set slot** shows the slider's value in a small pill in the lower part of the slot, in the label pill's colours. The figures have at most five characters. The decimals follow the slider's range: none from a range of 100 up, one from 10 up, two from 1 up and three below that, or as many as the slot's own `value` has when that is more, but never more than three. Trailing zeros are left off. From 10000 up it is written as `12.5k`. A Set slot that is lit has the same dot and outline as a switch that is on. It is lit when its `value` is what the slider is at, to the precision the figures have.
+- **A dimmed slot** and its name are drawn at 40 percent, and at 70 percent while the pointer is on it.
+
+The marks follow the look of the ring: they take the slot's shape, the theme and the label pill, and the dot and outline take the slot's own glow colour or its tag colour when it has one. A slot with no mark is drawn as it always was, and a ring with no marks at all looks as it did before ZOrbit could show them.
+
+**Show ZBrush's state on the ring** in **Settings > ZBrush bridge** (Full mode) turns the marks off. It is kept in the profile as `"bridge": {"show_state": false}`. Studio's own ring preview never shows marks.
+
+When the marks show depends on when ZBrush last answered:
+
+- The ring asks as it opens, so the first picture can show what ZBrush said when the ring last opened, if that was less than 30 seconds ago. The marks that changed are redrawn as the answer comes.
+- The ring does not draw what ZOrbit knew from before a pick that went to ZBrush. After each pick ZBrush answers again by itself, and the next ring already has the answer. If you open the next ring before that answer arrives, its slots show no marks for a moment.
+- An answer older than 30 seconds is not drawn. A ZBrush that was restarted, or a different ZBrush in front, starts from nothing.
+- A slot whose state ZBrush could not read has no mark.

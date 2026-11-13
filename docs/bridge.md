@@ -59,6 +59,7 @@ Differences from ZBrush 2026 and newer:
 
 - There is no listener, so **every pick uses the bridge key**, whatever the mode. When ZBrush loads the plugin it binds **F9** to **Apply** if **Apply** has no hotkey yet (checked in ZBrush 2022, 2023 and 2025; in 2024 look at **Zplugin > ZOrbit > Apply** and bind F9 yourself if it is empty). A key you stored for **Apply** yourself is kept. If you choose another bridge key, bind and store it in each of these versions (the steps in [How picks reach ZBrush](#how-picks-reach-zbrush-bridge-modes)); each version keeps its own hotkeys.
 - A pick does not wait for the end of a stroke (see above).
+- The ring does not show [ZBrush's state](#how-zbrushs-state-reaches-the-ring). It needs the listener.
 - The plugin does not check how old a request is: **Apply** carries out whichever pick is waiting.
 - Brushes load from that version's own `.zbp` files, because an older ZBrush cannot always read a newer version's brushes.
 - Status shows where picks arrive, whether one is waiting, and the last pick. The plugin also writes that last pick to `zscript_bridge.log`, which Studio's Status screen shows. The file holds only the last pick, so the app copies each result into `radiald.log` (`pick #12 result: ...`). If the result says an item could not be loaded or a button does not exist, the message near the cursor says so too. When none comes within 15 seconds, the app logs that the plugin wrote no result. A pick that runs a macro always ends that way, because the macro takes over before the plugin can write its line. Pressing **Apply** when no pick is waiting changes nothing, so it does not replace that last pick.
@@ -77,6 +78,35 @@ When this version of ZOrbit has a newer plugin than one you installed, **Setting
 | Studio | Opens ZOrbit Studio. |
 | Apply | Carries out the pending pick. Bound to the bridge key for the fallback route. In ZBrush 2022 to 2025 the plugin binds F9 to it when it has no hotkey. |
 | Start App | Starts the app if it is not running. Normally unnecessary. |
-| Status | Shows whether the listener is verified, whether the app is running, and the last pick. |
+| Status | Shows whether the listener is verified, whether the app is running, the last pick, and the **State channel** (see [below](#how-zbrushs-state-reaches-the-ring)). |
 
 If the plugin fails while it starts, it writes the error to `bridge.log` before ZBrush reports it, and a button or the listener that cannot be created is skipped without stopping the rest. Picks that load a brush, alpha, material or texture from a file press the button ZBrush names after that file (`ClayBuildup` for `ClayBuildup.zbp`), whatever the item is called in the menu.
+
+## How ZBrush's state reaches the ring
+
+The ring can show what ZBrush is doing: which switches are on, where a slider is, which buttons ZBrush would ignore. [ZBrush's state on the ring](menus.md#zbrushs-state-on-the-ring) says what it shows, and [State marks](appearance.md#state-marks) how it looks. The state travels through the same listener as a pick, so it only works in ZBrush 2026 and newer.
+
+1. The ring opens and is drawn at once. It never waits for ZBrush.
+2. The app writes the interface paths of the ring's **Press**, **Set** and **Toggle** slots, and those of the fans it can open, to `zstate_query.json` and posts a Windows message to the listener of the ZBrush in front. Each path is asked once, up to 128 of them.
+3. The plugin reads each one on ZBrush's main thread: whether the button is there, whether it is greyed, and for a switch or a slider its value and its range. It writes the answer to `zstate.json` and posts a message back to the app.
+4. The app takes the answer if it belongs to the question it asked and to that ZBrush, and draws the marks on the open ring.
+
+A question changes nothing in ZBrush, so the plugin answers it even in the middle of a stroke. The app keeps one question waiting per listener. If ZBrush has not answered after 2 seconds, it counts the question as lost and asks again when the next ring opens.
+
+After every pick the plugin answers again by itself, without being asked, so the app already knows the new state when the next ring opens. A pick that waits for a stroke to end is answered once it has been carried out. The plugin stops doing this when the app takes `zstate_query.json` away: when you turn the setting off, when the ring is opened over a ZBrush that cannot answer, and when the app quits.
+
+The plugin stops reading after 20 milliseconds. A slot whose path it did not reach by then gets no mark, and both logs say the answer was cut short.
+
+The marks need all of these:
+
+- ZBrush 2026 or newer with the plugin that comes with this ZOrbit. After you update ZOrbit, restart ZBrush once so it loads the new plugin. An older plugin does not say it can answer, so the app does not ask it and the ring shows no marks.
+- The listener of the ZBrush in front is verified (**Zplugin > ZOrbit > Status**). The bridge mode does not matter: the question goes to the listener even in `key` mode.
+- **Show ZBrush's state on the ring** is on. It is on by default. Turn it off in **Settings > ZBrush bridge** (Full mode), or in `radial.json`:
+
+```json
+"bridge": {"mode": "auto", "key": "F9", "show_state": false}
+```
+
+`show_state` is `true` or `false`. Without it the state is shown, and Studio writes it only when it is off. A value that is neither is listed as a problem, and the state is shown. Each [profile](profiles.md) has its own, and the ring follows a change the next time it opens.
+
+**Zplugin > ZOrbit > Status** has a **State channel** line. It says `not asked yet` until the first question has been answered, then how many answers the plugin has given since it loaded and the last one, such as `3 answer(s), last #3 (asked): 9 paths in <n> ms, <n> ms after the question was written (1 missing)`. `asked` is an answer to a question and `after pick #12` one the plugin gave by itself after a pick. The brackets count the paths ZBrush does not have (`missing`), the greyed ones (`disabled`) and the ones it could not read (`error`), and the line ends with `truncated` when the plugin stopped at its time limit and with `NOT posted to the app` when it could not tell the app. If the line stays on `not asked yet` after you opened a ring over ZBrush, see [My slots show no state](troubleshooting.md#my-slots-show-no-state). The two files are in [Files and logs](files.md#files-and-logs).

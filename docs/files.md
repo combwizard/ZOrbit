@@ -36,6 +36,8 @@ To share one menu, use **Export menu...** in the **Menu** tab. It writes the men
 | `%LOCALAPPDATA%\ZOrbit\bridge.log` | The plugin inside ZBrush: what each pick actually did. |
 | `%LOCALAPPDATA%\ZOrbit\app_stderr.log` | Output when the app crashes on startup. When ZBrush 2026 starts the app, the app's log lines land here too. |
 | `%LOCALAPPDATA%\ZOrbit\listener.json` | The verified listener window (written by the plugin). |
+| `%LOCALAPPDATA%\ZOrbit\zstate_query.json` | What the app asked ZBrush 2026 and newer: the interface paths of the **Press**, **Set** and **Toggle** slots of the ring that opened last, and of its fans, each with its type. Written by the app each time a ring opens over ZBrush, and removed when the app stops asking (**Show ZBrush's state on the ring** turned off, a ZBrush that cannot answer, the app quitting). See [How ZBrush's state reaches the ring](bridge.md#how-zbrushs-state-reaches-the-ring). Safe to delete. |
+| `%LOCALAPPDATA%\ZOrbit\zstate.json` | ZBrush's answer, written by the plugin: for each path whether ZBrush has it, whether it is greyed, and for a switch or a slider its value and range. It also holds the names of ZBrush's current tool, brush and material, the file of the current brush and whether Edit mode is on. The brush file is a full path, so look before you share the file. Rewritten with each answer. Safe to delete. |
 | `%LOCALAPPDATA%\ZOrbit\activity.json` | The last ring the app opened and the last pick it sent: the route, whether it went out, and whether the plugin picked it up. `elevated_zbrush` is `true` while a ZBrush running as administrator is open (the app cannot work with it). Written by the app; Setup's **Try the ring** step reads it. Safe to delete. |
 | `%LOCALAPPDATA%\ZOrbit\request.json` | The pick in transit. Normally gone in a moment. A pick that could not be handed over is deleted again. |
 | `%LOCALAPPDATA%\ZOrbit\request.txt` | The same pick for the ZBrush 2022 to 2025 plugin. Only written when such a ZBrush is installed. |
@@ -60,5 +62,27 @@ To share one menu, use **Export menu...** in the **Menu** tab. It writes the men
 | `<ZBrush>\ZStartup\ZPlugs64\ZOrbitBridge.zsc` | ZBrush 2022 to 2025: the plugin. Its `ZOrbitData` folder says where picks arrive and how to start the app. |
 | `ZStartup\ConfigFiles\LightboxRecentFiles.cfg` in the user assets folder of ZBrush 2026 and newer (in its folder under `%APPDATA%\Maxon` until one is chosen), or `%PUBLIC%\Documents\ZBrushData<year>\ZStartup\ConfigFiles\LightboxRecentFiles.cfg` for ZBrush 2022 to 2025 | ZBrush's own list of the files it opened last. ZOrbit reads it for a [Recent](menus.md#recent) slot and never changes it. |
 | `%PUBLIC%\Documents\ZBrushData<year>\ZStartup\CustomUserInterface<year>.cfg`, and for ZBrush 2026.1 and newer `%APPDATA%\Maxon\ZBrush <year>_<id>\ZStartup\UserInterfaceLayouts\CustomUserInterface<year>.cfg` | ZBrush's own file, written when you press **Store Config**. ZOrbit reads the interface colours in it for the **Match ZBrush** [theme](appearance.md#match-zbrush) and never changes it. |
+
+The state channel (see [How ZBrush's state reaches the ring](bridge.md#how-zbrushs-state-reaches-the-ring)) writes a few lines of its own. The app logs each one once for each ZBrush that is running, so a line does not repeat with every ring.
+
+In `radiald.log`, lines that start `ZBrush state:`:
+
+- `answered in <n> ms (plugin <n> ms, <n> paths)`: the first answer from a ZBrush. The first number is the time from the question to the answer, the second what the plugin spent reading.
+- `'<path>' is not in ZBrush (or not there now); drawn dimmed`: ZBrush does not have that button, so its slot is dimmed. That is normal for a button that only exists in Edit mode.
+- `the plugin stopped at its time limit after <n> paths`: ZBrush answered only part of the question, and the other slots have no mark.
+- `no answer from pid <n> in 2 s; asking again`: the plugin did not answer in time. The question is asked again when the next ring opens.
+- `zstate.json ignored: <reason>`: the answer could not be used, for example because it was not valid JSON or was over 256 KB.
+- `could not write zstate_query.json`, `could not post to the listener of pid <n>` and `could not remove zstate_query.json`, with the Windows error where there is one: the question could not be sent. The ring goes on without marks.
+- `<call> failed; the ring and picks go on without it`, with a traceback: something in the channel broke. Send it with a report.
+
+A line such as `ring 'brushes' marks for 'tools' ignored` or `ring 'brushes' marks not drawn` means the ring could not use the marks it was given and drew without them.
+
+In `bridge.log`, lines that start `state`:
+
+- `state #<id> (asked): <n> paths in <n> ms, ...` and `state #<id> (after pick #<n>): ...` are one answer: to a question, or by itself after a pick. The end of the line counts the paths that are missing, greyed or unreadable, and says `truncated` or `NOT posted to the app` when that happened. The first ten answers after the plugin loads are logged. Later ones are logged only when they were cut short, could not be posted, took unusually long to read or had a path that could not be read.
+- `state: asked, but <reason>; not answered`: the plugin was asked, and the question file was missing, could not be read, was too big or was not a question it knows.
+- `state: question #<id> from a window that is not ZOrbit's; not answered`: the plugin answers only the app's own window.
+- `state: <reason>; no more unasked answers until the app asks again`: the question file went bad, so the plugin stopped answering by itself after picks.
+- `state (<why>) error:` or `state refresh error:`, with a traceback: the plugin failed while answering. Send it with a report.
 
 When you report a bug, use **Copy report** on Studio's **Status** screen. It takes the ends of the logs that fit your setup, lists the library folders you added, and [hides your user name and folders](troubleshooting.md#logs). If you copy a log by hand, read what you paste. The logs hold brush names and menu ids, and also your Windows user name and folder paths: the plugin logs where it loaded from and how it started the app, the app logs the command line of the browser, and `studio.log` and `popout.log` log the working directory. Black out those parts.
