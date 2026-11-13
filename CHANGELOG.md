@@ -4,6 +4,14 @@ All notable changes to this project are listed here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- The ring shows ZBrush's state, in ZBrush 2026 and newer. As a ring opens, the app asks the plugin about its **Press**, **Set** and **Toggle** slots, and the ring marks them when ZBrush answers: a **Toggle** has a dot, filled with the slot outlined while the switch is on and hollow while it is off; a **Set** slot shows what its slider is at, and is lit when that is its own value (a row of presets for one slider lights only the matching one); and a slot ZBrush would ignore now, such as everything under **Tool:Masking** with no mesh in Edit mode, is dimmed but can still be picked. Fans show the marks too. The ring never waits: it opens as before, and after every pick the plugin answers again so the next ring already knows. Restart ZBrush once after updating so it loads the new plugin. ZBrush 2022 to 2025 do not give their state. (#188)
+- **Show ZBrush's state on the ring** in **Settings > ZBrush bridge** (Full mode) turns the marks off, per profile (`"bridge": {"show_state": false}`). It is on by default.
+- The plugin's **Zplugin > ZOrbit > Status** box has a **State channel** line. The two files the channel uses, `zstate_query.json` and `zstate.json`, are in `%LOCALAPPDATA%\ZOrbit`, and its lines in `radiald.log` start `ZBrush state:` and in `bridge.log` start `state`.
+
 ## [0.24.0] - 2026-11-14
 
 ZOrbit 0.24.0 makes the ring open sooner. It keeps its pictures between opens and draws them about a second after

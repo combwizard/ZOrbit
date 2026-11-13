@@ -184,6 +184,27 @@ No installed item carries that tag, or the tag no longer exists (the problems pi
 
 ZBrush's list of recent files has no project or tool for the slot that is still on disk, or ZOrbit could not find or read the list. The slot fills once ZBrush adds a project or tool to that list. ZOrbit reads the list in the background (when the menus load, every half minute while ZBrush is in front, and after a ring with the slot opens), so a ring opened in the first moment after the app starts, or straight after the list changed, can still show the last read; open it again. `radiald.log` has a line that starts `recent files:` when the list is not there or cannot be read, with the path it looked at. With several ZBrush versions installed, the list is that of the ZBrush in front, so another version's files do not show. See [Recent](menus.md#recent).
 
+### A slot is dimmed
+
+A dimmed slot is one that ZBrush told ZOrbit it would ignore now: the button is greyed, or it is not there at the moment. The slot can still be picked. See [ZBrush's state on the ring](menus.md#zbrushs-state-on-the-ring).
+
+The usual cause is a button that only exists in some states. Everything under **Tool:Masking**, and **Transform:Activate Symmetry**, are there only while a 3D model is in Edit mode, so with a 2.5D tool on the canvas those slots are dimmed. Put a model on the canvas, press **Edit** and open the ring again. The ring asks ZBrush as it opens, so the first picture can still show the state from before, and the slot lights up a moment later.
+
+If a slot stays dimmed with a model in Edit mode, its path is probably not the one ZBrush has. `radiald.log` has a line `ZBrush state: '<path>' is not in ZBrush (or not there now); drawn dimmed` for it, and picking it gives the same "no such interface item" in `bridge.log` (see [Finding a button's path](menus.md#finding-a-buttons-path)). Dimming is only a hint and never stops a pick. To have no marks at all, switch off **Show ZBrush's state on the ring** in **Settings > ZBrush bridge** (Full mode).
+
+### My slots show no state
+
+The ring marks **Press**, **Set** and **Toggle** slots in ZBrush 2026 and newer, asking the plugin as it opens. If none of them has a mark, work down this list.
+
+1. **Is it a kind of slot that has marks?** Brush, alpha, material, texture, submenu, steps and every other kind never do. A **Press** slot shows only the dimming, so a **Press** that works looks as it always did. A **Toggle** gets no dot while ZOrbit does not know its value, and a **Set** slot gets no figures when several **Set** slots of one menu use the same slider, as in a row of presets. Only the matching one is lit.
+2. **Which ZBrush?** ZBrush 2022 to 2025 do not give their state, because their plugin only runs when a pick is carried out. Their rings never have marks.
+3. **Did you restart ZBrush after updating ZOrbit?** ZBrush keeps running the plugin it loaded when it started. The old one does not answer the state question, so the ring shows no marks until ZBrush is restarted. In ZBrush, **Zplugin > ZOrbit > Status** has no **State channel** line while the old plugin is loaded.
+4. **Is the switch on?** **Show ZBrush's state on the ring** in **Settings > ZBrush bridge** (Full mode) is on by default. It is kept per profile, so check the profile in use. In `radial.json` it is `"bridge": {"show_state": false}` when it is off.
+5. **Is the listener verified?** The state uses the plugin's listener and never the bridge key. **Zplugin > ZOrbit > Status** should say the listener is verified, and the **Bridge listener** card on Studio's **Status** screen should say **Connected**. If it does not, see [The ring opens, but picks do nothing](#the-ring-opens-but-picks-do-nothing). The listener file names one ZBrush at a time, so with two ZBrushes running the marks can show in one of them and not the other.
+6. **Open a ring over ZBrush and read Status again.** The **State channel** line says `not asked yet` if the app has not asked this ZBrush, and then one of the points above is the cause. With `<n> answer(s)`, ZBrush is answering, and the reason is in the app: read `radiald.log` for lines that start `ZBrush state:` (see [Files and logs](files.md#files-and-logs)), and `bridge.log` for lines that start `state`.
+
+If marks show and then go, one of these is it. An answer is only drawn for 30 seconds, and after a pick the ring does not draw what it knew from before the pick until ZBrush has answered again, so a ring opened at once after a pick can have none for a moment. A ring with more than 128 different buttons in it and its fans is not marked past the 128th, and an answer that the plugin cut short at its time limit leaves the rest unmarked (`the plugin stopped at its time limit` in the log).
+
 ### My slots are not coloured by tag
 
 Check **Look > Tag colours** (Full mode): the **Icon tint**, **Glow** and **Band** switches may all be off. Only an item's first tag colours its slot, and an item with no tag is not coloured. A change made by hand to `tags.json` shows within a moment.
@@ -264,7 +285,7 @@ Exit code 2 with ZOrbit running usually means ZOrbit runs as administrator and t
 
 ## Logs
 
-`%LOCALAPPDATA%\ZOrbit` holds `radiald.log` (the app), `bridge.log` (ZBrush side), `zscript_bridge.log` (ZBrush 2022 to 2025: the last pick), `studio.log` (how Studio started), `popout.log` (the browser) and `app_stderr.log` (crashes at startup). Studio's **Status** screen shows the tail of the app log and has buttons that open the logs folder and the config folder. [Files, backups and logs](files.md#files-and-logs) lists every file ZOrbit keeps.
+`%LOCALAPPDATA%\ZOrbit` holds `radiald.log` (the app), `bridge.log` (ZBrush side), `zscript_bridge.log` (ZBrush 2022 to 2025: the last pick), `studio.log` (how Studio started), `popout.log` (the browser) and `app_stderr.log` (crashes at startup). The lines the state channel writes, in `radiald.log` and `bridge.log`, are explained under [Files and logs](files.md#files-and-logs). Studio's **Status** screen shows the tail of the app log and has buttons that open the logs folder and the config folder. [Files, backups and logs](files.md#files-and-logs) lists every file ZOrbit keeps.
 
 For a bug report, press **Copy report** on the **Status** screen and paste the result into the form. **Report a bug** next to it opens the form with the versions filled in. The report holds the ZOrbit and Windows versions, how ZOrbit was installed, your ZBrush installs and which of them runs (and whether as administrator), the bridge mode and key, the **Status** cards, the profile in use, any problems in the menus file, your Library folders (one line each: found with its file count, missing, or could not be read, or "none added"), and the end of each log that fits your setup, from the current session where the log marks one.
 

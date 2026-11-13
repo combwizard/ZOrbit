@@ -175,6 +175,8 @@ If two macros share a name, ZBrush goes by the name, so it may run either. Renam
 
 In `steps`, a macro has to be the last step in ZBrush 2022 to 2025. There the plugin also writes no result for a macro, so the app logs that none came (see [Bridge](bridge.md)).
 
+In ZBrush 2026 and newer the slot is dimmed while ZBrush would ignore the button: it is greyed, or it is not there at the moment (see [ZBrush's state on the ring](#zbrushs-state-on-the-ring)). A dimmed slot can still be picked.
+
 ### Set
 
 ```json
@@ -184,12 +186,32 @@ In `steps`, a macro has to be the last step in ZBrush 2022 to 2025. There the pl
 
 `value` is a number: what the slider shows in ZBrush, in the slider's own range (`64` for **Draw Size**, `0.25` for **SubDivide Size**).
 
+In ZBrush 2026 and newer the slot shows what the slider is at now, and is lit when that is its own `value` (see [ZBrush's state on the ring](#zbrushs-state-on-the-ring)).
+
 ### Toggle
 
 ```json
 {"toggle": "Transform:Activate Symmetry", "label": "Symmetry"}
 {"toggle": "Stroke:LazyMouse"}
 ```
+
+In ZBrush 2026 and newer the slot has a small dot that says whether the switch is on (see [ZBrush's state on the ring](#zbrushs-state-on-the-ring)).
+
+### ZBrush's state on the ring
+
+In ZBrush 2026 and newer, the ring marks its **Press**, **Set** and **Toggle** slots with what ZBrush is doing right now. The marks are not saved in `radial.json`. **Show ZBrush's state on the ring** in **Settings > ZBrush bridge** turns them off (see [State marks](appearance.md#state-marks) for how they look and [How the state travels](bridge.md#how-zbrushs-state-reaches-the-ring) for how they get to the ring).
+
+| Slot | What it shows |
+|---|---|
+| **Toggle** | A small dot at the upper right. Filled, with the slot outlined, while the switch is on. Hollow while it is off. No dot while ZOrbit does not know. |
+| **Set** | The slider's value now, in small figures in the slot. When the slot's own `value` is what the slider is at, the slot is lit like a switch that is on. When one menu has several **Set** slots for the same slider, such as a row of presets, none of them shows figures, and only the one that matches is lit. |
+| **Press** | Nothing, unless the slot is dimmed. |
+
+A **Press**, **Set** or **Toggle** slot is dimmed when ZBrush would ignore it now: the button is greyed, or it is not there at the moment. Everything under **Tool:Masking** is not there with no mesh in Edit mode, so those slots are dimmed until you have one (see [Finding a button's path](#finding-a-buttons-path)). A dimmed slot can still be picked, and the pick goes to ZBrush as it always did. A dimmed **Toggle** or **Set** slot keeps its dot or its figures when ZBrush gave a value.
+
+Brush, alpha, material, texture, tool, project, layout, capture, auto, tag, browser, recent, submenu, steps and empty slots are never marked. A step inside a `steps` slot is not marked, and neither are the items of a tag or **Recent** fan. The other fans show their marks as a ring does, up to three fans deep.
+
+The ring never waits for ZBrush. It opens as before, and the marks appear when ZBrush answers. With no answer, or with the switch off, the ring looks as it always did. ZBrush 2022 to 2025 do not give their state, so their rings never have marks (see [ZBrush 2022 to 2025](bridge.md#zbrush-2022-to-2025)). Studio's ring preview has none either.
 
 ### Capture
 
@@ -281,7 +303,7 @@ Spell the names the way ZBrush spells them, spaces included. In Studio, the targ
 
 A path that does not exist in your ZBrush does nothing in ZBrush. `bridge.log` has a line such as `press Tool:Masking:Cler: no such interface item`, and the app shows a short message near the cursor (see [Troubleshooting](troubleshooting.md#the-ring-opens-but-picks-do-nothing)).
 
-Some buttons only exist while a 3D model is in Edit mode, such as everything under **Tool:Masking** and **Transform:Activate Symmetry**. With only a 2.5D tool on the canvas (ZBrush opens on one), a pick of those gives the same "no such interface item", even though the path is right.
+Some buttons only exist while a 3D model is in Edit mode, such as everything under **Tool:Masking** and **Transform:Activate Symmetry**. With only a 2.5D tool on the canvas (ZBrush opens on one), a pick of those gives the same "no such interface item", even though the path is right. In ZBrush 2026 and newer the ring dims such a slot while the button is missing (see [ZBrush's state on the ring](#zbrushs-state-on-the-ring)).
 
 ### Steps
 

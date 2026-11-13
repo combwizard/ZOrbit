@@ -1,6 +1,6 @@
 """Draws the ring pictures in docs/images (ring.png, ring-light.png, ring-zbrush.png, fan.png, tag-colours.png,
 animations.png, the look pictures slot-shapes.png, hub-styles.png, slot-styles.png, looks.png, second-ring.png,
-more-slot.png, empty-slots.png and recent-fan.png, and the GIFs) with the real renderer, zorbit/ring.py, so they follow the ring's look whenever it
+more-slot.png, empty-slots.png, state.png and recent-fan.png, and the GIFs) with the real renderer, zorbit/ring.py, so they follow the ring's look whenever it
 changes. No window is opened and no ZBrush is needed, but the brush pictures come from the installed ZBrush's
 presets, so a ZBrush has to be installed.
 
@@ -20,6 +20,7 @@ import atexit
 import colorsys
 import dataclasses
 import glob
+import json
 import math
 import os
 import shutil
@@ -56,6 +57,7 @@ import radiald  # noqa: E402
 import recent  # noqa: E402
 import tags  # noqa: E402
 import zbrush_colors  # noqa: E402
+import zstate  # noqa: E402
 from ring import Ring  # noqa: E402
 
 OUT = os.path.join(ROOT, "docs", "images")
@@ -83,6 +85,21 @@ RECENT_FILES = ["D:/Projects/Dragon Bust.zpr", "D:/Models/Hero.ztl", "D:/Project
                 "D:/Models/Sword.ztl", "D:/Models/Helmet.ztl", "D:/Projects/Creature Sketch.zpr"]   # made-up files, newest first
 COMMAND = 'ZOrbit.exe --open "brushes"'            # the command animation: what it shows, its band's height and its lit colour
 COMMAND_BAND, COMMAND_ON = 56, (255, 122, 61)
+# The state picture: label, type, path and value of each slot clockwise from the top (None: a brush), and a made-up
+# snapshot of ZBrush as the plugin would write it. The marks come from zstate's own rules.
+STATE_SLOTS = [("ClayBuildup", "brush", None, None),
+               ("Symmetry", "toggle", "Transform:Activate Symmetry", None),
+               ("PolyF", "toggle", "Transform:Pf", None),
+               ("Size 128", "set", "Draw:Draw Size", 128),
+               ("0.25", "set", "Stroke:SubDivide Size", 0.25),
+               ("0.5", "set", "Stroke:SubDivide Size", 0.5),
+               ("1", "set", "Stroke:SubDivide Size", 1),
+               ("Clear Mask", "press", "Tool:Masking:Clear", None),
+               ("Move", "brush", None, None)]
+STATE_ZBRUSH = {"Transform:Activate Symmetry": {"s": "ok", "v": 1}, "Transform:Pf": {"s": "ok", "v": 0},
+                "Draw:Draw Size": {"s": "ok", "v": 64, "min": 1, "max": 1000},
+                "Stroke:SubDivide Size": {"s": "ok", "v": 0.5, "min": 0, "max": 2},
+                "Tool:Masking:Clear": {"s": "missing"}}
 FAN_SCALE = 0.95                               # the fan picture is a little smaller, about 594 pixels wide
 
 
@@ -356,6 +373,25 @@ def shot_layout_slots(w):
     menu = w.define("layouts", ["ClayBuildup", "Move", "DamStandard", "hPolish", "TrimDynamic"], title="Sculpt")
     menu.items += [C.Item(label=label, kind="layout", data={"layout": path}) for label, path in LAYOUT_SLOTS]
     im = w.preview("layouts", hover=6, held=True, scale=RING_SCALE)
+    return with_cursor(on_background(im), *hovered(im))
+
+
+def shot_state(w):
+    """Nine slots with ZBrush's state on them: a Toggle on and one off, a Set slot with its figures, a row of three
+    presets for one slider with the matching one lit, and a Press slot ZBrush would ignore, dimmed."""
+    w.fans(False)
+    menu = w.define("state", [], title="Sculpt")
+    for label, kind, path, value in STATE_SLOTS:
+        data = {"brush": label} if kind == "brush" else {kind: path}
+        if kind == "set":
+            data["value"] = value
+        menu.items.append(C.Item(label=label, kind=kind, data=data))
+    pid, now = 4242, 100.0
+    snap = {"v": 1, "id": 1, "pick": 0, "pid": pid, "session": "1", "time": 0.0, "ms": 1.0, "truncated": False,
+            "extras": {}, "items": STATE_ZBRUSH}
+    cache = zstate.Cache()
+    cache.merge(zstate.parse_snapshot(json.dumps(snap)), now)
+    im = w.preview("state", hover=8, held=True, scale=RING_SCALE, marks=lambda m: zstate.marks_for(m, cache, pid, now))
     return with_cursor(on_background(im), *hovered(im))
 
 
@@ -1128,6 +1164,9 @@ SHOTS = {
                   "the Brushes ring with Move's slot waiting for a target, before 0.20.0 and now, DamStandard hovered in each"),
     "layout-slots": ("layout-slots.png", shot_layout_slots,
                      "five brushes with three Layout slots, the Paint slot hovered"),
+    "state": ("state.png", shot_state,
+              "nine slots with ZBrush's state: Symmetry on, PolyF off, Size 128 with 64 shown, presets 0.25, 0.5 (lit) "
+              "and 1, Clear Mask dimmed, Move hovered"),
     "recent-fan": ("recent-fan.png", shot_recent_fan,
                    "five brushes and a Recent slot, its fan of six made-up projects and tools open, Hero hovered"),
     "command-open": ("command-open.gif", shot_command_open,
