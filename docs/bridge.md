@@ -31,7 +31,7 @@ When you pick a slot, the app has to tell ZBrush. It writes the request to a fil
 | `message` | Posts a window message to a hidden listener inside ZBrush. No keystroke is sent, so nothing can collide with your own shortcuts. If the listener is not available, the pick is dropped and logged. |
 | `key` | Presses the bridge key every time. |
 
-![Settings > ZBrush bridge (Full mode): the Auto, Message and Key modes with Auto selected, and the bridge key field set to F9 with Record and Clear buttons](images/settings-bridge.png)
+![Settings > ZBrush bridge (Full mode): the Auto, Message and Key modes with Auto selected, the bridge key field set to F9 with Record and Clear buttons, and the Show ZBrush's state on the ring switch, which is on](images/settings-bridge.png)
 
 The **message** route needs nothing from you. It works once the plugin has loaded and its listener is verified (see **Zplugin > ZOrbit > Status**).
 
@@ -91,9 +91,9 @@ The ring can show what ZBrush is doing: which switches are on, where a slider is
 3. The plugin reads each one on ZBrush's main thread: whether the button is there, whether it is greyed, and for a switch or a slider its value and its range. It writes the answer to `zstate.json` and posts a message back to the app.
 4. The app takes the answer if it belongs to the question it asked and to that ZBrush, and draws the marks on the open ring.
 
-A question changes nothing in ZBrush, so the plugin answers it even in the middle of a stroke. The app keeps one question waiting per listener. If ZBrush has not answered after 2 seconds, it counts the question as lost and asks again when the next ring opens.
+A question changes nothing in ZBrush, so the plugin does not hold it back during a stroke, as it does a pick. The app keeps one question waiting per listener. If ZBrush has not answered after 2 seconds, it counts the question as lost and asks again when the next ring opens.
 
-After every pick the plugin answers again by itself, without being asked, so the app already knows the new state when the next ring opens. A pick that waits for a stroke to end is answered once it has been carried out. The plugin stops doing this when the app takes `zstate_query.json` away: when you turn the setting off, when the ring is opened over a ZBrush that cannot answer, and when the app quits.
+After every pick the plugin answers again by itself, without being asked, so the app already knows the new state when the next ring opens. A pick that waits for a stroke to end is answered once it has been carried out. The plugin stops doing this when the app takes `zstate_query.json` away: when you turn the setting off, and when the app quits.
 
 The plugin stops reading after 20 milliseconds. A slot whose path it did not reach by then gets no mark, and both logs say the answer was cut short.
 
