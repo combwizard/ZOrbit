@@ -8,6 +8,7 @@ import json
 import math
 import os
 import shutil
+from collections import namedtuple
 from types import SimpleNamespace
 
 import pytest
@@ -41,7 +42,8 @@ def make_ring(menu=None, icon_for=None, log=None, **over):
 
 @pytest.fixture(autouse=True)
 def empty_sprite_cache():
-    caches = (ring._sprite_cache, ring._slot_cache, ring._static_layers, ring._fan_line_cache)
+    caches = (ring._sprite_cache, ring._slot_cache, ring._static_layers, ring._fan_line_cache, ring._marked_cache,
+              ring._mark_parts)
     for c in caches:
         c.clear()
     yield
@@ -1888,3 +1890,352 @@ def test_the_premultiplied_bytes_are_within_one_of_the_three_pass_way():
     assert fast[3::4] == slow[3::4]                        # alpha untouched
     for x in (0, 255):                                     # transparent and opaque pixels are exact
         assert fast[(x * 256 + 37) * 4:(x * 256 + 38) * 4] == slow[(x * 256 + 37) * 4:(x * 256 + 38) * 4]
+
+
+# --- ZBrush's state: marks over the slots ------------------------------------------------------
+Mark = namedtuple("Mark", "lit value_text dim")
+ON, OFF, DIMMED = Mark(True, None, False), Mark(False, None, False), Mark(None, None, True)
+
+
+def state_item(kind, i=0):
+    if kind in ("press", "toggle"):
+        return config.Item(f"{kind} {i}", kind, {kind: f"Draw:Thing {i}"})
+    if kind == "set":
+        return config.Item(f"set {i}", "set", {"set": f"Draw:Slider {i}", "value": 10})
+    if kind == "empty":
+        return config.Item("", "empty", {"empty": True})
+    if kind == "tag":
+        return config.Item("Tag", "tag", {"tag": "t"}, tag="t", color="#00aa00")
+    if kind == "auto":
+        return config.Item("Auto", "auto", {"auto": "brush"})
+    if kind == "menu":
+        return config.Item("Sub", "menu", {"menu": "x"})
+    if kind == "steps":
+        return config.Item("Steps", "steps", {"steps": [{"press": "Draw:A"}]})
+    return config.Item(f"{kind} {i}", kind, {kind: f"Thing {i}"})
+
+
+def state_menu(kinds="ttsp", mid="m"):
+    """A menu of toggles (t), sets (s), presses (p) and brushes (b)."""
+    names = {"t": "toggle", "s": "set", "p": "press", "b": "brush"}
+    return SimpleNamespace(id=mid, title="State", animation="", fan=False,
+                           items=[state_item(names[k], i) for i, k in enumerate(kinds)])
+
+
+def state_ring(menu, marks, submenus=None, log=None, **over):
+    """A ring with marks, laid out and prepared as show() does it, settled."""
+    r = ring.Ring(menu, make_cfg(**over), lambda it: None, lambda *a: None, log or (lambda m: None), held=False,
+                  submenus=submenus, marks=marks)
+    r._geometry(1.0)
+    r._relayout()
+    r._prepare()
+    r.t0 = 0.0
+    return r
+
+
+def pip_at(r, i):
+    """(picture width, the disc's half width in it, the pip's centre) of slot i, as the ring works them out."""
+    shape, _ = r._shape_of(r.items[i], r.look)
+    d = r.sizes[i] * 1.12 * ring.SS
+    c = int(d + 2 * 30 * r.scale * ring.SS + shapes.pad_extra(shape, d))
+    n = int(c / ring.SS)
+    r1 = d / 2 * n / c
+    b = shapes.badge(shape)
+    return n, r1, (round(n / 2 + r1 * b), round(n / 2 - r1 * b))
+
+
+def near(px, colour, tol=45):
+    return px[3] > 200 and sum(abs(a - b) for a, b in zip(px[:3], ring._rgb(colour))) <= tol
+
+
+def diff_box(a, b):
+    """The box where two pictures differ in any channel (None: they are the same)."""
+    return ring.ImageChops.difference(a, b).getbbox(alpha_only=False)
+
+
+def state_fan_menus():
+    sub = SimpleNamespace(id="s", title="Sub", animation="", fan=True,
+                          items=[state_item("toggle", 10), state_item("set", 11), state_item("brush", 12)])
+    menu = state_menu("tbtt")
+    menu.items[1] = config.Item("Sub", "menu", {"menu": "s"})
+    return menu, sub
+
+
+def raising(menu):
+    raise RuntimeError("no state")
+
+
+class Grumpy:
+    lit = True
+
+    @property
+    def dim(self):
+        raise RuntimeError("no dim")
+
+
+NEUTRAL_MARKS = {
+    "none passed": None,
+    "None for the menu": lambda m: None,
+    "None for each item": lambda m: [None] * len(m.items),
+    "neutral marks": lambda m: [Mark(None, None, False)] * len(m.items),
+    "an empty value text": lambda m: [Mark(None, "  ", False)] * len(m.items),
+    "a callable that raises": raising,
+    "a list too long": lambda m: [ON] * (len(m.items) + 1),
+    "a list too short": lambda m: [ON] * (len(m.items) - 1),
+    "not a list": lambda m: 5,
+    "a mark that raises": lambda m: [Grumpy()] * len(m.items),
+}
+
+
+@pytest.mark.parametrize("marks", NEUTRAL_MARKS.values(), ids=NEUTRAL_MARKS.keys())
+def test_no_marks_or_neutral_marks_draw_todays_ring_pixel_for_pixel(marks):
+    menu, sub = state_fan_menus()
+    subs = lambda mid: sub if mid == "s" else None      # noqa: E731
+    cases = [dict(), dict(hover=2), dict(open_path=(1,), hover=(1, 0)), dict(t=0.05), dict(scale=1.5, held=True)]
+    for kw in cases:
+        today = ring.Ring.preview(menu, make_cfg(), lambda it: None, submenus=subs, **kw)
+        im = ring.Ring.preview(menu, make_cfg(), lambda it: None, submenus=subs, marks=marks, **kw)
+        assert im.tobytes() == today.tobytes(), kw
+
+
+def test_a_neutral_ring_keeps_the_kept_list_itself():
+    r = state_ring(state_menu(), lambda m: [None] * 4)
+    assert r.sprites is r._plain and r._dims.get(()) is None
+
+
+def test_a_lit_toggle_gets_a_filled_pip_and_an_outline_and_an_off_one_a_hollow_pip():
+    r = state_ring(state_menu("tttt"), lambda m: [ON, OFF, None, None])
+    plain = r._plain
+    assert r.sprites is not plain and r.sprites[2] is plain[2] and r.sprites[3] is plain[3]
+    hue = ring._hover_hue(r.items[0], r.look)
+    n, r1, (px, py) = pip_at(r, 0)
+    for k in (0, 1):                               # the idle and the hover picture both carry the mark
+        lit, off, none = r.sprites[0][k], r.sprites[1][k], plain[0][k]
+        assert near(lit.getpixel((px, py)), hue)                    # the pip, filled
+        assert not near(none.getpixel((px, py)), hue)
+        assert off.getpixel((px, py)) == none.getpixel((px, py))   # hollow: the middle is the slot's own
+        ring_px = (px + round(ring.MARK_PIP * r1 - 1), py)          # on the off pip's ring
+        assert off.getpixel(ring_px) != none.getpixel(ring_px)
+        assert len({lit.tobytes(), off.tobytes(), none.tobytes()}) == 3   # unknown, off and on all differ
+    rim = (math.floor(n / 2 - r1 + 1), n // 2)                    # in the left of the rim, away from the pip
+    assert near(r.sprites[0][0].getpixel(rim), hue)              # lit: the outline in the hover colour
+    assert not near(plain[0][0].getpixel(rim), hue)
+    assert r.sprites[1][0].getpixel(rim) == plain[1][0].getpixel(rim)   # off: no outline
+
+
+@pytest.mark.parametrize("shape", ALL_SHAPES)
+def test_the_pip_sits_at_the_badge_corner_mirrored_upwards_in_every_shape(shape):
+    r = state_ring(state_menu("tt"), lambda m: [ON, None], slot_shape=shape)
+    n, r1, (px, py) = pip_at(r, 0)
+    hue = ring._hover_hue(r.items[0], r.look)
+    assert near(r.sprites[0][0].getpixel((px, py)), hue)
+    assert not near(r.sprites[0][0].getpixel((n - 1 - px, py)), hue)      # not at the upper left
+
+
+def test_the_pip_and_outline_take_the_slots_own_glow_colour():
+    menu = state_menu("tt")
+    menu.items[0] = dataclasses.replace(menu.items[0], style={"glow_color": "#0000ff"})
+    r = state_ring(menu, lambda m: [ON, ON])
+    _, _, at = pip_at(r, 0)
+    assert near(r.sprites[0][0].getpixel(at), "#0000ff") and near(r.sprites[1][0].getpixel(at), r.look.accent)
+
+
+def test_a_set_slot_gets_a_value_chip_below_its_centre_and_keeps_its_label():
+    r = state_ring(state_menu("ssss"), lambda m: [Mark(None, "64", False), Mark(None, "1000", False), None, None])
+    n = r.sprites[0][0].size[0]
+    for k in (0, 1):
+        box = diff_box(r.sprites[0][k], r._plain[0][k])
+        assert box is not None and box[1] > n / 2 and box[0] > n / 4 and box[2] < n * 3 / 4   # below the centre
+    assert diff_box(r.sprites[0][0], r._plain[0][0]) != diff_box(r.sprites[1][0], r._plain[1][0])   # the text
+    assert r.labels is ring._sprite_cache[r._sprite_key()][1]          # the labels are the kept ones
+
+
+def test_a_lit_set_slot_with_a_chip_has_both():
+    r = state_ring(state_menu("ss"), lambda m: [Mark(True, "64", False), None])
+    it, size, plain = r.items[0], r.sizes[0], r._plain[0]
+    _, _, at = pip_at(r, 0)
+    assert near(r.sprites[0][0].getpixel(at), r.look.accent)
+    chip_only = r._marked(plain, it, size, r.look, (None, "64"))
+    chip = diff_box(chip_only[0], plain[0])
+    assert r.sprites[0][0].crop(chip).tobytes() == chip_only[0].crop(chip).tobytes()
+
+
+def test_a_long_value_text_is_cut_to_fit_the_disc():
+    r = state_ring(state_menu("ss"), lambda m: [Mark(None, "123456789012345", False), None])
+    box = diff_box(r.sprites[0][0], r._plain[0][0])
+    n, r1, _ = pip_at(r, 0)
+    assert box[2] - box[0] <= 1.6 * r1 + 2
+
+
+def slot_alpha(r, i, now=10.0):
+    """Alpha of a composed frame at the centre of slot i and on the left of its label's pill."""
+    im = r._compose(now)
+    cx, cy = r.centre
+    px, py = cx + r.seats[i][0] * r.rad[i], cy + r.seats[i][1] * r.rad[i]
+    lab = r.labels[i][0]
+    ly = py + r.sizes[i] / 2 * (1.0 + 0.12 * r._hover_val(r.hv, i, now)) + 2 * r.scale
+    return (im.getpixel((round(px), round(py)))[3],
+            im.getpixel((round(px - lab.size[0] / 2 + 4), round(ly + lab.size[1] / 2)))[3])
+
+
+def test_a_dimmed_slot_and_its_label_are_fainter_and_less_so_under_the_cursor():
+    plain = state_ring(state_menu("tptt"), None)
+    dim = state_ring(state_menu("tptt"), lambda m: [None, DIMMED, None, None])
+    assert dim.sprites is dim._plain                         # dimming is drawn, not put in the pictures
+    (pd, pl), (dd, dl) = slot_alpha(plain, 1), slot_alpha(dim, 1)
+    assert dd / pd == pytest.approx(ring.DIM_IDLE, abs=0.03) and dl / pl == pytest.approx(ring.DIM_IDLE, abs=0.05)
+    assert slot_alpha(dim, 0) == slot_alpha(plain, 0)       # its neighbours are not dimmed
+    for r in (plain, dim):
+        r.hover = (1,)
+        r._apply_hover(10.0, instant=True)
+    (pd, pl), (dd, dl) = slot_alpha(plain, 1), slot_alpha(dim, 1)
+    assert dd / pd == pytest.approx(ring.DIM_HOVER, abs=0.03) and dl / pl == pytest.approx(ring.DIM_HOVER, abs=0.05)
+
+
+def test_a_dimmed_slot_can_also_be_lit():
+    r = state_ring(state_menu("tt"), lambda m: [Mark(True, None, True), None])
+    assert r.sprites[0] is not r._plain[0] and r._dims[()] == [True, False]
+
+
+def test_slots_that_never_show_state_get_no_mark():
+    menu = SimpleNamespace(id="never", title="Never", animation="", fan=False, items=[
+        state_item(k, i) for i, k in enumerate(("empty", "brush", "alpha", "material", "texture", "tag", "auto", "menu",
+                                                "steps", "capture", "browser"))])
+    everything = lambda m: [Mark(True, "64", True)] * len(m.items)     # noqa: E731
+    r = state_ring(menu, everything)
+    assert r.sprites is r._plain and r._dims.get(()) is None and r._marks.get(()) is None
+    assert ring.Ring.preview(menu, make_cfg(), lambda it: None, marks=everything).tobytes() == \
+        ring.Ring.preview(menu, make_cfg(), lambda it: None).tobytes()
+
+
+def test_odd_values_in_a_mark_read_as_nothing():
+    it = state_item("toggle")
+    assert ring._mark_sig(Mark(1, 64, "yes"), it) is None
+    assert ring._mark_sig(Mark(True, "  ", False), it) == (True, None, False)
+    assert ring._mark_sig(Mark(None, " 1.25 ", True), it) == (None, "1.25", True)
+    assert ring._mark_sig(SimpleNamespace(), it) is None                     # attributes missing
+    assert ring._mark_sig(Mark(None, "x" * 20, False), it)[1] == "x" * ring.MARK_TEXT
+
+
+def test_refresh_marks_redraws_only_the_slots_whose_mark_changed_and_no_slot_picture(monkeypatch):
+    state = {"marks": [ON, OFF, None, None]}
+    r = state_ring(state_menu("tttt"), lambda m: state["marks"])
+    sprite_key, static_key, static = r._sprite_key(), r._static_key(), r._static()
+    before = list(r.sprites)
+    drawn = []
+    real = ring.Ring._slot_sprites
+    monkeypatch.setattr(ring.Ring, "_slot_sprites", lambda self, *a, **k: drawn.append(1) or real(self, *a, **k))
+    r._blend_cache[(((), 0), 0.5)] = r._blend_cache[(((), 1), 0.5)] = "blend"
+    r._last_key = "drawn"
+    r.refresh_marks()                                       # nothing changed: nothing to draw
+    assert r._last_key == "drawn" and r.sprites == before
+    state["marks"] = [ON, ON, Mark(None, None, True), None]
+    r.refresh_marks()
+    assert r._last_key is None                              # the next tick draws a frame
+    assert r.sprites[0] is before[0] and r.sprites[1] is not before[1] and r.sprites[2] is before[2]
+    assert (((), 0), 0.5) in r._blend_cache and (((), 1), 0.5) not in r._blend_cache
+    assert r._dims[()] == [False, False, True, False]
+    assert drawn == [] and r._sprite_key() == sprite_key and r._static_key() == static_key and r._static() is static
+    state["marks"] = None
+    r.refresh_marks()                                       # the state is gone: back to the kept pictures
+    assert r.sprites is r._plain and r._dims[()] is None and (((), 0), 0.5) not in r._blend_cache
+    assert drawn == []
+
+
+def test_marks_never_change_the_kept_pictures_and_the_next_open_without_them_is_todays():
+    menu = state_menu("tstp")
+    today = ring.Ring.preview(menu, make_cfg(), lambda it: None, hover=1).tobytes()
+    kept = {k: (v, [[im.tobytes() for im in pair] for pair in v[0]]) for k, v in ring._sprite_cache.items()}
+    slots = {k: (v, [im.tobytes() for im in v[0]]) for k, v in ring._slot_cache.items()}
+    state = {"marks": [ON, Mark(True, "64", True), OFF, DIMMED]}
+    r = state_ring(menu, lambda m: state["marks"])
+    state["marks"] = [OFF, Mark(None, "65", False), ON, None]
+    r.refresh_marks()
+    r._compose(10.0)
+    for k, (v, pixels) in kept.items():
+        assert ring._sprite_cache[k] is v and [[im.tobytes() for im in pair] for pair in v[0]] == pixels
+    for k, (v, pixels) in slots.items():
+        assert ring._slot_cache[k] is v and [im.tobytes() for im in v[0]] == pixels
+    again = state_ring(menu, None)
+    assert again.sprites is r._plain
+    assert ring.Ring.preview(menu, make_cfg(), lambda it: None, hover=1).tobytes() == today
+
+
+def test_a_marked_picture_is_kept_between_opens():
+    marks = lambda m: [ON, Mark(None, "64", False), None, None]     # noqa: E731
+    a, b = state_ring(state_menu(), marks), state_ring(state_menu(), marks)
+    assert b.sprites[0] is a.sprites[0] and b.sprites[1] is a.sprites[1]
+    assert len(ring._marked_cache) == 2
+
+
+def test_refresh_marks_is_safe_before_show_while_opening_with_a_fan_and_after_the_ring_is_done():
+    menu, sub = state_fan_menus()
+    asked, state = [], {"m": [ON, None, OFF, DIMMED], "s": [ON, Mark(None, "7", False), None]}
+
+    def marks(m):
+        asked.append(m.id)
+        return state[m.id]
+    r = ring.Ring(menu, make_cfg(), lambda it: None, lambda *a: None, lambda m: None, held=False,
+                  submenus=lambda mid: sub if mid == "s" else None, marks=marks)
+    r.refresh_marks()                                       # before show(): nothing to draw yet
+    assert asked == []
+    r._geometry(1.0)
+    r._relayout()
+    r._prepare()
+    assert asked == ["m"]
+    r.t0 = 1000.0
+    r._compose(1000.05)                                     # opening
+    state["m"] = [OFF, None, ON, None]
+    r.refresh_marks()
+    r._compose(1000.06)
+    r._set_open((1,), 1000.1)                               # the fan asks for its own menu when it is made
+    fan = r.fans[(1,)]
+    assert asked == ["m", "m", "s"] and fan.sprites is not fan.plain and fan.sprites[2] is fan.plain[2]
+    state["s"] = [Mark(None, None, True), None, None]
+    r.refresh_marks()
+    assert asked[-2:] == ["m", "s"] and fan.sprites is fan.plain and r._dims[(1,)] == [True, False, False]
+    r.hover = (1, 0)
+    r._apply_hover(1000.2)
+    r._compose(1000.25)
+    r._compose(1010.0)
+    r.done = True
+    r.refresh_marks()
+    assert asked[-1] == "s" and len(asked) == 5
+
+
+def test_a_dimmed_fan_slot_is_fainter():
+    menu, sub = state_fan_menus()
+    subs = lambda mid: sub if mid == "s" else None      # noqa: E731
+    marks = {"m": None, "s": [DIMMED, None, None]}
+    plain = ring.Ring.preview(menu, make_cfg(), lambda it: None, submenus=subs, open_path=(1,))
+    dim = ring.Ring.preview(menu, make_cfg(), lambda it: None, submenus=subs, open_path=(1,),
+                            marks=lambda m: marks[m.id])
+    fan = dim.info["layout"]["fans"][0]["slots"][0]
+    cx, cy = dim.info["centre"]
+    at = (round(cx + fan["x"]), round(cy + fan["y"]))
+    assert dim.getpixel(at)[3] / plain.getpixel(at)[3] == pytest.approx(ring.DIM_IDLE, abs=0.03)
+
+
+def test_a_failing_marks_callable_leaves_the_ring_neutral_and_is_logged_once():
+    logs, state = [], {"fail": False}
+
+    def marks(m):
+        if state["fail"]:
+            raise RuntimeError("bad snapshot")
+        return [ON, OFF, DIMMED, None]
+    r = state_ring(state_menu("tttt"), marks, log=logs.append)
+    assert r.sprites is not r._plain
+    state["fail"] = True
+    r.refresh_marks()
+    r.refresh_marks()
+    assert r.sprites is r._plain and r._dims[()] is None
+    assert len([line for line in logs if "marks for 'm' ignored" in line and "bad snapshot" in line]) == 1
+    r._compose(10.0)
+
+
+def test_a_mark_that_cannot_be_drawn_leaves_that_ring_neutral(monkeypatch):
+    logs = []
+    monkeypatch.setattr(ring.Ring, "_mark_pip", lambda self, *a: 1 / 0)
+    r = state_ring(state_menu("tttt"), lambda m: [ON, DIMMED, None, None], log=logs.append)
+    assert r.sprites is r._plain and r._dims[()] is None and r._marks[()] is None
+    assert any("marks not drawn" in line for line in logs)
