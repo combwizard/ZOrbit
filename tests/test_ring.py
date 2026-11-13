@@ -2233,9 +2233,118 @@ def test_a_failing_marks_callable_leaves_the_ring_neutral_and_is_logged_once():
     r._compose(10.0)
 
 
-def test_a_mark_that_cannot_be_drawn_leaves_that_ring_neutral(monkeypatch):
-    logs = []
+def test_a_mark_that_cannot_be_drawn_leaves_that_ring_neutral_and_is_logged_once(monkeypatch):
+    logs, state = [], {"marks": [ON, DIMMED, None, None]}
     monkeypatch.setattr(ring.Ring, "_mark_pip", lambda self, *a: 1 / 0)
-    r = state_ring(state_menu("tttt"), lambda m: [ON, DIMMED, None, None], log=logs.append)
+    r = state_ring(state_menu("tttt"), lambda m: state["marks"], log=logs.append)
     assert r.sprites is r._plain and r._dims[()] is None and r._marks[()] is None
-    assert any("marks not drawn" in line for line in logs)
+    for marks in ([OFF, None, None, None], [ON, ON, None, None]):     # every changing refresh fails the same way
+        state["marks"] = marks
+        r.refresh_marks()
+    assert len([line for line in logs if "marks not drawn" in line]) == 1
+
+
+def test_a_failure_in_a_fan_menu_is_logged_after_one_in_the_ring():
+    menu, sub = state_fan_menus()
+    logs = []
+
+    def marks(m):
+        raise RuntimeError(f"broken {m.id}")
+    r = state_ring(menu, marks, submenus=lambda mid: sub if mid == "s" else None, log=logs.append)
+    r._set_open((1,), 10.0)
+    r.refresh_marks()
+    assert [line for line in logs if "ignored" in line] == [
+        "ring 'm' marks for 'm' ignored: RuntimeError('broken m')",
+        "ring 'm' marks for 's' ignored: RuntimeError('broken s')"]
+
+
+def rim_colour(item, i=1, **over):
+    """The colour on the left of the hover rim of an unmarked slot holding item (slot i of four brushes)."""
+    menu = make_menu(4)
+    menu.items[i] = item
+    r = prepared(menu, **over)
+    hover = r.sprites[i][1]
+    n, r1, _ = pip_at(r, i)
+    return hover.getpixel((math.floor(n / 2 - r1 + 1), n // 2))
+
+
+DEFAULT_COLOURS = config.DEFAULT_RING["colors"]
+HOVER_RIMS = {      # (item, ring settings, the colour its hover rim takes)
+    "a submenu: the highlight": (config.Item("Sub", "menu", {"menu": "x"}), {}, DEFAULT_COLOURS["highlight"]),
+    "its own glow colour": (config.Item("B", "brush", {"brush": "B"}, style={"glow_color": "#0000ff"}), {}, "#0000ff"),
+    "the legacy glow field": (config.Item("B", "brush", {"brush": "B"}, glow="#00ffff"), {}, "#00ffff"),
+    "its tag colour": (config.Item("B", "brush", {"brush": "B"}, color="#00aa00"), {}, "#00aa00"),
+    "its own glow over its tag colour": (config.Item("B", "brush", {"brush": "B"}, color="#00aa00",
+                                                     style={"glow_color": "#0000ff"}), {}, "#0000ff"),
+    "the look's glow colour": (config.Item("B", "brush", {"brush": "B"}), {"glow_color": "#ff00ff"}, "#ff00ff"),
+    "the look's glow colour over a submenu's highlight": (config.Item("Sub", "menu", {"menu": "x"}),
+                                                           {"glow_color": "#ff00ff"}, "#ff00ff"),
+    "anything else: the accent": (config.Item("B", "brush", {"brush": "B"}), {}, DEFAULT_COLOURS["accent"]),
+}
+
+
+@pytest.mark.parametrize("case", HOVER_RIMS.values(), ids=HOVER_RIMS.keys())
+def test_the_hover_rim_of_an_unmarked_slot_takes_its_colour_from_each_source(case):
+    """The glow under the rim brightens it a little, so the rim must be nearest its own colour of all of them."""
+    item, over, colour = case
+    px = rim_colour(item, **over)
+    candidates = {c for _, _, c in HOVER_RIMS.values()}
+
+    def off(c):
+        return sum(abs(a - b) for a, b in zip(px[:3], ring._rgb(c)))
+    assert min(candidates, key=off) == colour and near(px, colour, tol=70)
+
+
+def test_the_same_mark_in_two_looks_gives_two_marked_pictures():
+    r = state_ring(state_menu("tt"), None)
+    it, size, plain = r.items[0], r.sizes[0], r._plain[0]
+    other = ring._Look(ring._merged(make_cfg(), {"colors": {"accent": "#0000ff"}}))
+    first = r._marked(plain, it, size, r.look, (True, None))
+    second = r._marked(plain, it, size, other, (True, None))
+    assert second is not first and second[0].tobytes() != first[0].tobytes()
+    _, _, at = pip_at(r, 0)
+    assert near(first[0].getpixel(at), r.look.accent) and near(second[0].getpixel(at), "#0000ff")
+    again = r._marked(plain, it, size, r.look, (True, None))
+    assert again is first
+
+
+def test_a_sixteen_slot_ring_at_200_percent_with_every_slot_marked_is_kept_whole():
+    menu = state_menu("t" * 16)
+    marks = lambda m: [ON] * 16      # noqa: E731
+    r = ring.Ring(menu, make_cfg(), lambda it: None, lambda *a: None, lambda m: None, held=False, marks=marks)
+    r._geometry(2.0)
+    r._prepare()
+    again = ring.Ring(menu, make_cfg(), lambda it: None, lambda *a: None, lambda m: None, held=False, marks=marks)
+    again._geometry(2.0)
+    again._prepare()
+    assert all(a is b for a, b in zip(again.sprites, r.sprites)) and len(ring._marked_cache) == 16
+
+
+@pytest.mark.parametrize("theme_name, icon", [("dark", (250, 250, 250, 255)), ("light", (8, 8, 8, 255))])
+def test_value_chip_text_stays_readable_over_an_icon_of_the_opposite_brightness(theme_name, icon):
+    r = state_ring(state_menu("ss"), lambda m: [Mark(None, "88888", False), None], theme=theme_name,
+                   colors=theme.ring_colors(theme_name))
+    r._icons = {}
+    r.icon_for = lambda it: Image.new("RGBA", (64, 64), icon)
+    r._prepare()
+    box = diff_box(r.sprites[0][0], r._plain[0][0])
+    pill = r.sprites[0][0].getpixel((box[0] + 2, (box[1] + box[3]) // 2))   # on the pill, left of the text
+    assert theme.contrast(r.look.text, pill) >= 7
+
+
+@pytest.mark.parametrize("shape", ALL_SHAPES)
+@pytest.mark.parametrize("scale", [1.0, 2.0])
+def test_a_five_character_chip_stays_inside_the_slot_in_every_shape(shape, scale):
+    menu = state_menu("sss")
+    marks = lambda m: [Mark(None, t, False) for t in ("-0.25", "12.5k", "88888")]    # noqa: E731
+    r = ring.Ring(menu, make_cfg(slot_shape=shape), lambda it: None, lambda *a: None, lambda m: None, held=False,
+                  marks=marks)
+    r._geometry(scale)
+    r._prepare()
+    for i in range(3):
+        n, r1, _ = pip_at(r, i)
+        x0, y0, x1, y1 = diff_box(r.sprites[i][0], r._plain[i][0])
+        corner = r.look.slot_corner
+        for x in (x0, x1):
+            assert shapes.inside(shape, x - n / 2, y1 - n / 2, r1, corner)       # the lower corners
+        assert y0 > n / 2                                                       # below the centre

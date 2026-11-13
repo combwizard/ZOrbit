@@ -101,9 +101,13 @@ ICON_SIGS = 1024            # icon signatures remembered (_icon_sig); each entry
 MARKABLE = ("press", "set", "toggle")   # the kinds of slot a state mark is drawn on
 MARK_PIP = 0.13             # a toggle pip's width, relative to its slot
 MARK_CHIP_Y = 0.55          # the value chip's centre below the slot centre, relative to the slot's half width
-MARK_TEXT = 8               # a value chip's text is cut to this many characters
+MARK_TEXT = 5               # a value chip's text is cut to this many characters (zstate.format_value gives 5 at most)
+# The value chip's pill is at least this opaque: it sits on the icon, not on the background, so the label pill's 140 of
+# the dark theme would let a white icon through (white text at about 4:1). At 191 the text is 9.1:1 over a white icon;
+# the light theme's pill (210) is already more opaque and keeps it.
+CHIP_PILL_ALPHA = 191
 DIM_IDLE, DIM_HOVER = 0.4, 0.7          # a dimmed slot's and label's opacity, and under the cursor
-MARKED_BYTES = 8 * 2**20    # marked slot pictures kept between opens (_marked_cache) ...
+MARKED_BYTES = 16 * 2**20   # marked slot pictures kept between opens (_marked_cache): a 16-slot ring at 200% ...
 MARKED_PICS = 64            # ... and by count
 MARK_PART_BYTES = 4 * 2**20  # the overlays they are made from (_mark_parts: outlines, pips, value chips)
 MARK_PARTS = 64
@@ -751,7 +755,7 @@ class Ring:
         self._plain = None                         # the ring's slot pictures without marks: _sprite_cache's own list
         self._marks = {}                           # () for the ring, a fan's path for a fan -> its marks (_mark_sig)
         self._dims = {}                            # the same keys -> [dimmed?] per slot, None when none is
-        self._mark_failed = False                  # a failing marks callable is logged once
+        self._mark_failed = set()                  # owners whose marks callable failed (logged once each), and "draw"
 
     # --- public ----------------------------------------------------------------------------------
     @classmethod
@@ -1670,8 +1674,9 @@ class Ring:
         if changed:
             self._last_key = None                  # _tick draws a frame even when nothing else moved
 
-    def _ask_marks(self, menu):
-        """The marks of menu's items as a tuple of _mark_sig (None when none shows anything)."""
+    def _ask_marks(self, owner, menu):
+        """The marks of menu's items as a tuple of _mark_sig (None when none shows anything). A failure is logged once
+        for each owner (the ring, or a fan's path)."""
         try:
             got = self._marks_fn(menu)
             if got is None:
@@ -1681,8 +1686,8 @@ class Ring:
                                  f"{len(menu.items)} items")
             sigs = tuple(_mark_sig(m, it) for m, it in zip(got, menu.items))
         except Exception as e:                     # a broken state never breaks the ring: it shows no state
-            if not self._mark_failed:
-                self._mark_failed = True
+            if owner not in self._mark_failed:
+                self._mark_failed.add(owner)
                 self._log(f"ring '{self.menu.id}' marks for '{getattr(menu, 'id', '?')}' ignored: {e!r}")
             return None
         return sigs if any(sigs) else None
@@ -1692,7 +1697,7 @@ class Ring:
         its path). The kept list is never changed: a ring with marks gets a copy with the marked pictures in it, one
         without gets the kept list back. Only slots whose picture changed are drawn and lose their blends. Returns
         whether anything changed."""
-        sigs = self._ask_marks(menu)
+        sigs = self._ask_marks(owner, menu)
         old = self._marks.get(owner)
         if sigs == old:
             return False
@@ -1714,7 +1719,9 @@ class Ring:
                     if a != b:
                         sprites[i] = plain[i] if b is None else self._marked(plain[i], menu.items[i], sizes[i], look, b)
         except Exception:                          # drawing a mark failed: this ring or fan shows no state
-            self._log(f"ring '{self.menu.id}' marks not drawn:\n" + traceback.format_exc())
+            if "draw" not in self._mark_failed:    # once per ring: every refresh would fail the same way
+                self._mark_failed.add("draw")
+                self._log(f"ring '{self.menu.id}' marks not drawn:\n" + traceback.format_exc())
             sigs, sprites, after = None, plain, [None] * n
         gone = {(owner, i) for i in range(n) if before[i] != after[i] or sprites[i] is not cur[i]}
         if gone:
@@ -1748,8 +1755,9 @@ class Ring:
         if lit is not None:
             parts.append(self._mark_pip(it, look, lit, shape, n, r1))
         if text is not None:
-            chip = self._chip(text, look, r1)      # centred MARK_CHIP_Y of the half width below the centre
-            parts.append((chip, (round(n / 2 - chip.size[0] / 2), round(n / 2 + MARK_CHIP_Y * r1 - chip.size[1] / 2))))
+            chip = self._chip(text, look, r1)
+            y = self._chip_y(chip, shape, corner, r1)
+            parts.append((chip, (round(n / 2 - chip.size[0] / 2), round(n / 2 + y - chip.size[1] / 2))))
         out = []
         for im in pair:
             im = im.copy()
@@ -1812,11 +1820,23 @@ class Ring:
             _mark_parts.put(key, got, w * h * 4)
         return got
 
+    @staticmethod
+    def _chip_y(chip, shape, corner, r1):
+        """How far below the slot centre the chip's centre goes: MARK_CHIP_Y of the half width, lifted in a shape that
+        narrows towards the bottom (a hexagon, a diamond) until the chip's lower corners are inside the slot, clear
+        of its rim. Never above 0.3 of the half width."""
+        hw, hh = chip.size[0] / 2, chip.size[1] / 2
+        y = MARK_CHIP_Y * r1
+        while y > 0.3 * r1 and not shapes.inside(shape, hw, y + hh, r1 * 0.92, corner):
+            y -= 0.5
+        return y
+
     def _chip(self, text, look, r1):
-        """A value chip: the text on a pill like the label's, 9 px bold by scale, cut to fit the disc (half width
-        r1)."""
+        """A value chip: the text on a pill in the label pill's colour but at least CHIP_PILL_ALPHA opaque, 9 px bold
+        by scale, cut to fit the disc (half width r1)."""
         L, s = look, SS
-        key = ("chip", text, r1, self.scale, L.text, L.pre["pill"])
+        pill = tuple(L.pre["pill"][:3]) + (max(L.pre["pill"][3], CHIP_PILL_ALPHA),)
+        key = ("chip", text, r1, self.scale, L.text, pill)
         got = _mark_parts.get(key)
         if got is not None:
             return got
@@ -1830,7 +1850,7 @@ class Ring:
         h = math.ceil((bottom - top + 2 * vp) / s) * s
         im = Image.new("RGBA", (w, h), (0, 0, 0, 0))
         d = ImageDraw.Draw(im)
-        d.rounded_rectangle((0, 0, w - 1, h - 1), radius=(h - 1) / 2, fill=L.pre["pill"])
+        d.rounded_rectangle((0, 0, w - 1, h - 1), radius=(h - 1) / 2, fill=pill)
         d.text(((w - (r_ - l)) / 2 - l, (h - (bottom - top)) / 2 - top), text, font=font, fill=_rgba(L.text, 1.0),
                anchor="ls")
         got = im.resize((w // s, h // s), Image.LANCZOS)
