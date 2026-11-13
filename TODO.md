@@ -22,9 +22,10 @@ worked out.
    0.20 to be used for a while; it ships with no new feature. One decision goes with it: whether the "experimental"
    note on themes and the "under heavy development" note on the docs index stay.
 2. **From the brainstorm of 6 Nov 2026** (issues #188 to #193): [#189](https://github.com/combwizard/ZOrbit/issues/189),
-   the Recent slot, is built. Next is [#188](https://github.com/combwizard/ZOrbit/issues/188), the state channel: the
-   design and its six phases are on the issue, and [#193](https://github.com/combwizard/ZOrbit/issues/193), the subtools
-   fan, follows it. [#190](https://github.com/combwizard/ZOrbit/issues/190),
+   the Recent slot, and [#188](https://github.com/combwizard/ZOrbit/issues/188), the state channel, are built. Before
+   #188 is released it needs its check in a real ZBrush 2026: reads during a stroke, and the round trip against the
+   open animation. Next is [#193](https://github.com/combwizard/ZOrbit/issues/193), the subtools fan, which builds on
+   it. [#190](https://github.com/combwizard/ZOrbit/issues/190),
    [#191](https://github.com/combwizard/ZOrbit/issues/191) and [#192](https://github.com/combwizard/ZOrbit/issues/192)
    wait for votes.
 3. **Done with the strip:** [#40](https://github.com/combwizard/ZOrbit/issues/40), the favourites strip, is built
