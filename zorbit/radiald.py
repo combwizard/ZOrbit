@@ -455,7 +455,7 @@ class App:
         self._popout_zb = None          # (ZBrush hwnd, its install) from when the browser was last opened
         self._browser_pick = None       # brush Item picked in the popout, waiting for ZBrush to have focus
         self._browser_pick_deadline = 0.0
-        self._prefetch_thread = None    # the thread reading the menus' thumbnails (see _prefetch)
+        self._prefetch_threads = []     # the threads still reading the menus' thumbnails (see _prefetch)
         self._warm = None               # the ring warm-up under way (see _warm_tick), or None
         self._warm_gen = 0              # moved by every change that makes a warm-up plan out of date
         self._warm_why = "start"        # what asked for the next warm-up
@@ -725,9 +725,11 @@ class App:
                         pairs.update(g for g in (C.asset_of(i.data) for i in tm.items) if g)
         size = THUMB_PX
         # Kept, so the ring warm-up waits for it: icon_for would otherwise decode on the main thread the same pictures
-        # this thread is decoding and writing to the thumbnail cache.
-        self._prefetch_thread = threading.Thread(target=assets.prefetch, args=(sorted(pairs), size), daemon=True)
-        self._prefetch_thread.start()
+        # this thread is decoding and writing to the thumbnail cache. Every one still running is kept, not only the
+        # newest: a second load can come while the first load's thread is still reading.
+        t = threading.Thread(target=assets.prefetch, args=(sorted(pairs), size), daemon=True)
+        self._prefetch_threads = [p for p in self._prefetch_threads if p.is_alive()] + [t]
+        t.start()
 
     @staticmethod
     def _icon_kind(src):
@@ -1252,10 +1254,9 @@ class App:
         """Something comes first: a ring is open or its hotkey is down, a pick is on its way to ZBrush, the menus'
         thumbnails are still being read, or (for a plan w with recent slots, until its deadline) the first answer about
         ZBrush's recent files has not come yet, so the Recent fan is not planned empty."""
-        t = self._prefetch_thread
         if (self.ring is not None or self.held_vk is not None or self._ack is not None
                 or self._browser_pick is not None or bool(self._commands) or self._apply_watch is not None
-                or (t is not None and t.is_alive())):
+                or any(t.is_alive() for t in self._prefetch_threads)):
             return True
         if w is None or not w["recent"] or time.monotonic() >= w["recent_until"]:
             return False

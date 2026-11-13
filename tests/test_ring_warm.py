@@ -5,6 +5,7 @@ open is played the way open_menu and Ring.show set a ring up, without the window
 """
 import ctypes.wintypes as w
 import json
+import threading
 import time
 
 import pytest
@@ -16,6 +17,7 @@ import ring
 import usage
 import win32 as W
 
+REAL_PREFETCH = radiald.App._prefetch        # the env fixture puts a no-op in its place
 WORK = w.RECT(0, 0, 1920, 1040)
 RECENT = ["D:/Projects/One.zpr", "D:/Models/Two.ztl", "D:/Projects/Three.zpr"]
 MENUS = {
@@ -180,15 +182,45 @@ def test_a_step_does_nothing_while_a_ring_is_open_and_carries_on_after(env):
     assert counts.take() == {"slot": 0, "menu": 0, "static": 0, "lines": 0}
 
 
-@pytest.mark.parametrize("busy", ["held_vk", "_ack", "_browser_pick", "_commands", "_apply_watch", "_prefetch_thread"])
+@pytest.mark.parametrize("busy", ["held_vk", "_ack", "_browser_pick", "_commands", "_apply_watch", "_prefetch_threads"])
 def test_a_step_waits_for_a_hotkey_a_pick_or_the_thumbnails(env, busy):
     app, timers, lines, counts, *_ = env
     app._warm_tick()
     counts.take()
-    value = {"held_vk": 0x51, "_commands": [1], "_prefetch_thread": type("T", (), {"is_alive": lambda self: True})()}
+    value = {"held_vk": 0x51, "_commands": [1],
+             "_prefetch_threads": [type("T", (), {"is_alive": lambda self: True})()]}
     setattr(app, busy, value.get(busy, object()))
     app._warm_tick()
     assert sum(counts.take().values()) == 0 and timers[radiald.TIMER_RING_WARM] == radiald.RING_WARM_HOLD_MS
+
+
+def test_a_step_waits_for_an_older_thumbnail_thread_when_a_newer_one_is_done(env, monkeypatch):
+    app, timers, lines, counts, *_ = env
+    reading, release, calls = threading.Event(), threading.Event(), []
+
+    def prefetch(pairs, size):                 # the first load's thread reads until it is let go, the second ends at once
+        calls.append(size)
+        if len(calls) == 1:
+            reading.set()
+            release.wait(10)
+    monkeypatch.setattr(radiald.assets, "prefetch", prefetch)
+    REAL_PREFETCH(app)
+    assert reading.wait(5)
+    REAL_PREFETCH(app)
+    first, second = app._prefetch_threads
+    second.join(5)
+    assert first.is_alive() and not second.is_alive()
+    app._warm_tick()
+    counts.take()
+    app._warm_tick()
+    assert sum(counts.take().values()) == 0 and timers[radiald.TIMER_RING_WARM] == radiald.RING_WARM_HOLD_MS
+    release.set()
+    first.join(5)
+    run_warm(app, timers)
+    assert sum(counts.take().values()) > 0
+    REAL_PREFETCH(app)                         # the threads that have ended are not kept
+    assert len(app._prefetch_threads) == 1
+    app._prefetch_threads[0].join(5)
 
 
 def test_a_change_mid_way_drops_the_old_plan_and_the_new_one_completes(env):
