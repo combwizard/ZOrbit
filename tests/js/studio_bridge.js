@@ -28,7 +28,8 @@ function element(tag) {
     setAttribute(k, v) { this.attrs[k] = v; },
     addEventListener(type, fn) { (this.on[type] = this.on[type] || []).push(fn); },
     append(...c) { this.kids.push(...c); },
-    replaceChildren(...c) { this.kids = c; } };
+    replaceChildren(...c) { this.kids = c; },
+    querySelectorAll() { return []; }, querySelector() { return null; } };
   return new Proxy(el, { get: (t, p) => (p in t ? t[p] : p === 'then' ? undefined : anything()), set: (t, p, v) => { t[p] = v; return true; } });
 }
 const textOf = n => (typeof n === 'string' ? n : (n.kids || []).map(textOf).join(' '));
@@ -48,14 +49,21 @@ for (const f of ['look.js', 'mode.js']) vm.runInContext(fs.readFileSync(ui(f), '
 const src = fs.readFileSync(ui('app.js'), 'utf8');
 const tail = /\}\)\(\);\s*$/;
 assert(tail.test(src), 'app.js no longer ends with its closing })();');
-const hook = 'window.__t = { S, describeProblem, describeChanges, bridgeShowState, bridgeStateRow, fullOnlyChanges };\n})();';
+const hook = 'window.__t = { S, describeProblem, describeChanges, bridgeShowState, bridgeStateRow, fullOnlyChanges, normaliseMenus, buildSettingsScreen };\n})();';
 vm.runInContext(src.replace(tail, hook), sandbox, { filename: 'app.js' });
 const T = win.__t;
 assert(T, 'app.js did not hand out its functions');
 const { S } = T;
 
 const LABEL = 'Show ZBrush’s state on the ring';
-const open = cfg => { S.cfg = JSON.parse(JSON.stringify(cfg)); S.savedStr = JSON.stringify(cfg); S.defaults = { hint: true, flick: true }; S.ready = true; };
+/* Opens a config the way a loaded file is adopted: normaliseMenus drops a section that is not an object before Studio sees it. */
+const open = cfg => {
+  S.cfg = JSON.parse(JSON.stringify(cfg));
+  T.normaliseMenus(S.cfg);
+  S.savedStr = JSON.stringify(S.cfg);
+  S.defaults = { flick: true, hint: true, hover_submenus: true };
+  S.ready = true;
+};
 const row = () => T.bridgeStateRow();
 const switchOf = r => find(r, n => n.tag === 'input' && n.attrs['aria-label'] === LABEL)[0];
 const flip = async (r, to) => { const inp = switchOf(r); inp.checked = to; for (const f of inp.on.change) await f(); };
@@ -118,12 +126,15 @@ test('a saved true is dropped when the switch is turned on, not written back', a
   same(S.cfg.bridge, { key: 'F11' });
 });
 
-test('a bridge section that is not an object is replaced when the switch is turned off, and left alone when it is turned on', async () => {
+test('a bridge section that is not an object never reaches the switch: loading drops it, so the switch is on and the first write starts a new one', async () => {
   open({ menus: {}, bridge: 'nonsense' });
-  await flip(row(), true);
-  assert.strictEqual(S.cfg.bridge, 'nonsense');
+  assert(!('bridge' in S.cfg), 'normaliseMenus should have dropped it');
+  assert.strictEqual(switchOf(row()).checked, true);
   await flip(row(), false);
   same(S.cfg.bridge, { show_state: false });
+  await flip(row(), true);
+  assert(!('bridge' in S.cfg));
+  assert.strictEqual(JSON.stringify(S.cfg), S.savedStr);
 });
 
 test('the save summary names the change, in the ZBrush bridge group, both ways', () => {
@@ -172,6 +183,94 @@ test('Full only: the note names ZBrush bridge when show_state is false and not w
   same(T.fullOnlyChanges({ bridge: { show_state: true } }, undefined, ctx), []);
   same(T.fullOnlyChanges({ bridge: {} }, undefined, ctx), []);
   same(T.fullOnlyChanges({}, undefined, ctx), []);
+});
+
+/* The Settings screen, built by the real builder. The cards are <section class="card"> with a heading; a row is found inside its card. */
+const screen = () => {
+  const root = element('div');
+  T.buildSettingsScreen(root);
+  return root;
+};
+const cardNamed = (root, title) => find(root, n => n.tag === 'section' && n.className === 'card' && textOf((n.kids || [])[0] || '').trim().startsWith(title))[0];
+const inputsIn = n => find(n, x => x.tag === 'input' && x.attrs['aria-label']);
+const inputNamed = (n, label) => inputsIn(n).find(x => x.attrs['aria-label'] === label);
+const fire = async (inp, to) => { inp.checked = to; for (const f of inp.on.change) await f(); };
+
+test('the switch is on the ZBrush bridge card, after the bridge key field, and nowhere else', () => {
+  open({ menus: {}, bridge: { show_state: false } });
+  S.prefs = { mode: 'full' };
+  const root = screen(), bridgeCard = cardNamed(root, 'ZBrush bridge');
+  assert(bridgeCard, 'no ZBrush bridge card on the Settings screen');
+  const inp = inputNamed(bridgeCard, LABEL);
+  assert(inp, 'the switch is not on the ZBrush bridge card');
+  assert.strictEqual(inp.checked, false, 'it starts in the position the config holds');
+  assert.strictEqual(inputsIn(root).filter(x => x.attrs['aria-label'] === LABEL).length, 1, 'the switch should be on one card only');
+  const order = find(bridgeCard, n => (n.attrs && n.attrs['aria-label'] === LABEL) || n.className === 'bridge-key');
+  assert.strictEqual(order.length, 2);
+  assert(order[0].className === 'bridge-key' && order[1] === inp, 'the switch should follow the bridge key field');
+  assert(textOf(bridgeCard).includes('ZBrush 2026 or newer'));
+});
+
+test('the card flips the config from the screen as it does from the row', async () => {
+  open({ menus: {} });
+  S.prefs = { mode: 'full' };
+  const inp = inputNamed(cardNamed(screen(), 'ZBrush bridge'), LABEL);
+  assert.strictEqual(inp.checked, true);
+  await fire(inp, false);
+  same(S.cfg.bridge, { show_state: false });
+  await fire(inp, true);
+  assert(!('bridge' in S.cfg));
+});
+
+test('Simple mode builds no ZBrush bridge card, so no switch', () => {
+  open({ menus: {}, bridge: { show_state: false } });
+  S.prefs = { mode: 'simple' };
+  const root = screen();
+  assert(!cardNamed(root, 'ZBrush bridge'));
+  assert(!inputNamed(root, LABEL));
+});
+
+/* switchRow's own default get and put, which the new row passes around: the ring switches on the Behaviour card. */
+const RING_SWITCHES = [['flick', 'Flick to pick'], ['hint', 'Show the hint'], ['hover_submenus', 'Open submenus on hover']];
+const behaviour = label => inputNamed(cardNamed(screen(), 'Behaviour'), label);
+
+test('the ring switches start on when the key is absent or true and off when it is false', () => {
+  S.prefs = { mode: 'full' };
+  for (const [key, label] of RING_SWITCHES) {
+    for (const [ring, on] of [[undefined, true], [{}, true], [{ [key]: true }, true], [{ [key]: false }, false]]) {
+      open(ring === undefined ? { menus: {} } : { menus: {}, ring });
+      const inp = behaviour(label);
+      assert(inp, label + ' is not on the Behaviour card');
+      assert.strictEqual(inp.checked, on, label + ' with ring ' + JSON.stringify(ring));
+    }
+  }
+});
+
+test('the ring switches write false when turned off and drop the key when turned on, and nothing else changes', async () => {
+  S.prefs = { mode: 'full' };
+  for (const [key, label] of RING_SWITCHES) {
+    open({ menus: {}, ring: { radius: 200 } });
+    let inp = behaviour(label);
+    await fire(inp, false);
+    same(S.cfg.ring, { radius: 200, [key]: false }, label + ' off');
+    await fire(inp, true);
+    same(S.cfg.ring, { radius: 200 }, label + ' on again');
+    assert.strictEqual(JSON.stringify(S.cfg), S.savedStr, label + ': back where it started');
+
+    open({ menus: {} });
+    inp = behaviour(label);
+    await fire(inp, false);
+    same(S.cfg.ring, { [key]: false }, label + ' off, no ring block before');
+    await fire(inp, true);
+    assert(!('ring' in S.cfg), label + ': an empty ring block was left behind');
+
+    open({ menus: {}, ring: { [key]: true } });                    // a saved true is the default too: it is dropped, not written back
+    inp = behaviour(label);
+    await fire(inp, false);
+    assert.strictEqual(S.cfg.ring[key], false);
+    await fire(inp, true);
+    assert(!(key in S.cfg.ring), label + ': the default is not written');
+  }
 });
 
 (async () => {
