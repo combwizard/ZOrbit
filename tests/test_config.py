@@ -251,6 +251,34 @@ def test_empty_bridge_key_is_f9_without_a_problem(load_menus):
     assert cfg.errors == []
 
 
+def test_show_state_is_on_by_default(load_menus):
+    assert load_menus(GOOD_MENUS).bridge_show_state is True
+    assert load_menus(GOOD_MENUS, bridge={"mode": "auto"}).bridge_show_state is True
+    assert config.Config(path="", mtime=0.0).bridge_show_state is True       # the stand-in for a broken file
+
+
+@pytest.mark.parametrize("value", [True, False])
+def test_show_state_takes_true_and_false(load_menus, value):
+    cfg = load_menus(GOOD_MENUS, bridge={"mode": "key", "key": "F11", "show_state": value})
+    assert cfg.bridge_show_state is value
+    assert cfg.errors == []
+    assert cfg.bridge_mode == "key" and cfg.bridge_key == config.parse_hotkey("F11")
+
+
+@pytest.mark.parametrize("value", [1, 0, "false", "yes", None, [], {}])
+def test_show_state_of_another_type_is_reported_and_stays_on(load_menus, value):
+    cfg = load_menus(GOOD_MENUS, bridge={"show_state": value})
+    assert cfg.bridge_show_state is True
+    assert problems(cfg, f"bridge.show_state {value!r} must be true or false; using true")
+    assert len(cfg.errors) == 1
+
+
+def test_an_unknown_bridge_key_is_still_reported_beside_show_state(load_menus):
+    cfg = load_menus(GOOD_MENUS, bridge={"show_state": False, "show_states": True})
+    assert cfg.bridge_show_state is False
+    assert cfg.errors == ["bridge.show_states: unknown setting (did you mean show_state?)"]
+
+
 # --- ring ---------------------------------------------------------------------------------------
 
 

@@ -10,6 +10,8 @@ Schema (all keys optional except menus):
       #                 Hotkeys > Store)
       # mode "auto":    message if the listener is alive, else key; and key as a fallback if a message
       #                 was not picked up within 0.5 s
+      # "show_state": true (the default): the ring shows ZBrush's state (lit toggles, slider values, dimmed
+      #                 slots), asked of the plugin in ZBrush 2026 and later as a ring opens (zstate.py)
   "ring": {"radius": 145, "slot": 72, "dead_zone": 38, "hub": 10, "tap_ms": 250, "timeout_s": 20,
            # hub: diameter in px of the hub in the middle, 0 to 64 (0 = no hub); dead_zone is separate
            # hub_style (dot disc ring icon), hub_color, hub_glow, slot_corner, border_width, icon_scale,
@@ -129,7 +131,7 @@ _NAMED_VK = {
     "'": 0xDE, ",": 0xBC, ".": 0xBE, "/": 0xBF,
 }
 MENU_KEYS = ("title", "hotkey", "swallow", "animation", "fan", "look", "icon", "keep_slots", "items")
-BRIDGE_KEYS = ("mode", "key")
+BRIDGE_KEYS = ("mode", "key", "show_state")
 BROWSER_KEYS = ("hotkey", "quit_after_minutes")
 BROWSER_QUIT_MAX = 1440            # minutes: a day
 PROFILE_KEYS = ("next_hotkey",)
@@ -185,6 +187,7 @@ class Config:
     mtime: float
     bridge_mode: str = "auto"
     bridge_key: Hotkey = field(default_factory=lambda: parse_hotkey(DEFAULT_BRIDGE_KEY))
+    bridge_show_state: bool = True     # bridge.show_state: the ring asks the plugin for ZBrush's state
     browser_key: Hotkey | None = None
     browser_quit_minutes: int = 0      # a hidden browser quits after this long unused; 0 = never
     profile_key: Hotkey | None = None
@@ -525,6 +528,11 @@ def load(path: str, tags=None, theme: str = "dark") -> Config:
                           f"or F10 sent by ZOrbit; use a bare F-key such as F9 or F11; using {DEFAULT_BRIDGE_KEY}")
         else:
             cfg.bridge_key = key
+    show_state = bridge.get("show_state", True)
+    if isinstance(show_state, bool):
+        cfg.bridge_show_state = show_state
+    else:
+        errors.append(f"bridge.show_state {show_state!r} must be true or false; using true")
     ring = raw.get("ring")
     if ring is None:
         ring = {}

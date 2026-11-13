@@ -59,6 +59,7 @@ import theme                # noqa: E402
 import usage                # noqa: E402
 import win32 as W           # noqa: E402
 import zscript_bridge       # noqa: E402
+import zstate               # noqa: E402
 
 try:
     import assets           # noqa: E402
@@ -90,6 +91,7 @@ WM_APP_BROWSER_PICK = W.WM_APP + 15   # control window -> itself: a brush was pi
 WM_APP_TYPING = W.WM_APP + 16         # hook -> control window: a key was typed while a tapped ring waited for a click
 WM_APP_COMMAND = W.WM_APP + 17        # control window -> itself: run the next command from another program
 WM_APP_PROFILE = W.WM_APP + 18        # hook -> control window: the next-profile hotkey
+WM_APP_STATE_READY = zstate.WM_APP_STATE_READY   # (+19) the plugin -> control window: zstate.json is new
 WM_HOOK_REHOOK = W.WM_APP + 20        # main thread -> hook thread: install the hook again
 WM_HOOK_RELEASE_HELD = W.WM_APP + 21  # main thread -> hook thread: let go of the held hotkey (wparam = its vk)
 WM_HOOK_RELEASE_BROWSER = W.WM_APP + 22   # ... and of the browser hotkey
@@ -461,6 +463,8 @@ class App:
         self._warm_why = "start"        # what asked for the next warm-up
         self._warm_scale = None         # the display scale the last warm-up was planned for
         self._zb_monitor = None         # (work area, scale) of ZBrush's monitor when it was last seen in front
+        self.state = None               # zstate.Channel, made with the control window: ZBrush's state on the ring
+        self._state_failed = set()      # its methods that raised, logged once
 
     # --- library folders -------------------------------------------------------------------------
     def _check_library_folders(self) -> None:
@@ -999,6 +1003,10 @@ class App:
             if msg == WM_APP_PROFILE:
                 self._hotkey_profile()
                 return 0
+            if msg == WM_APP_STATE_READY:
+                if self._state_call("on_ready", wparam) and self.ring is not None:
+                    self.ring.refresh_marks()
+                return 0
             if msg == W.WM_COPYDATA:
                 return self._on_copydata(wparam, lparam)
             if msg == W.WM_TIMER:
@@ -1165,8 +1173,9 @@ class App:
     def open_menu(self, menu, pos, held, nested=False):
         from ring import Ring
         menu = self.expander.menu(menu)
+        zb_pid, listener, capable, asks = self._state_question()
         ring = Ring(menu, self.cfg.ring, self.icon_for, self._on_ring_done, log, held=held, nested=nested,
-                    submenus=self.expander.resolve)
+                    submenus=self.expander.resolve, marks=(lambda m: self._state_marks(m, zb_pid)) if asks else None)
         self.ring = ring
         try:
             ring.show(*pos)
@@ -1178,6 +1187,35 @@ class App:
         self.activity.note_open(menu.id, nested)
         if not nested:
             self._activity_menu = menu.id
+        if self.state is not None:          # after show(): the ring is on screen before the question is written
+            self._state_call("ask", menu, self.expander.resolve, pid=zb_pid, listener=listener, capable=capable,
+                             enabled=self.cfg.bridge_show_state)
+            if asks:
+                ring.refresh_marks()        # the first frame had marks only if the last question was to this ZBrush
+
+    def _state_question(self):
+        """(pid of the ZBrush in front, its listener window or None, whether its listener answers the state channel,
+        whether the ring asks it). Nothing is looked up without a channel or with the setting off."""
+        if self.state is None or not self.cfg.bridge_show_state:
+            return 0, None, False, False
+        pid = self._front_pid()
+        listener, capable = self._listener_info(pid, quiet=True)
+        return pid, listener, capable, listener is not None and capable
+
+    def _state_marks(self, menu, pid):
+        """The ring's marks: the channel's, while its last question went to this ZBrush (the ring's first frame is
+        drawn before the question)."""
+        return self._state_call("marks", menu) if self.state.pid == pid else None
+
+    def _state_call(self, name, *args, **kw):
+        """Calls the state channel. A failure there is logged once per method and changes nothing else."""
+        try:
+            return getattr(self.state, name)(*args, **kw) if self.state is not None else None
+        except Exception:
+            if name not in self._state_failed:
+                self._state_failed.add(name)
+                log(f"ZBrush state: {name} failed; the ring and picks go on without it:\n" + traceback.format_exc())
+            return None
 
     def _on_ring_done(self, item, reason, at=None):
         self.ring = None
@@ -1778,17 +1816,24 @@ class App:
     def _listener(self, pid):
         """The verified listener window of the ZBrush with process id pid (the one the pick is for), else None.
         listener.json holds whichever ZBrush wrote it last, so with two running it can be the wrong one."""
+        return self._listener_info(pid)[0]
+
+    def _listener_info(self, pid, quiet=False):
+        """(_listener(pid), whether that listener answers the state channel: its listener.json says "state": 1),
+        from one read of the file; (None, False) without one. quiet: a mismatch is not logged (a ring opening)."""
         try:
             with open(LISTENER_FILE, encoding="utf-8") as f:
                 info = json.load(f)
             hwnd = W.w.HWND(int(info["hwnd"]))
             owner = int(info["pid"])
             if not (info.get("verified") and W.IsWindow(hwnd)):
-                return None
+                return None, False
         except (OSError, ValueError, KeyError, TypeError):
-            return None
+            return None, False
         if owner == pid and self._exe_of(owner) == self.target_exe:
-            return hwnd
+            return hwnd, info.get("state") == zstate.VERSION
+        if quiet:
+            return None, False
         if pid not in self._listener_skipped and len(self._listener_skipped) < 20:
             self._listener_skipped.add(pid)
             if owner != pid:
@@ -1797,7 +1842,7 @@ class App:
             else:
                 log(f"listener.json's process (pid {owner}) is {self._exe_of(owner) or 'unreadable'}, "
                     f"not {self.target_exe}; using the bridge key")
-        return None
+        return None, False
 
     @staticmethod
     def _front_pid():
@@ -1816,6 +1861,7 @@ class App:
     def _drop_request(self, seq):
         """A pick nobody will carry out must not wait for the Apply button or the bridge key press that comes
         later: that would apply it long after the user asked."""
+        self._state_call("dropped", seq)            # nothing changed in ZBrush: what the ring knew is true again
         for p in (REQUEST_FILE, zscript_bridge.REQUEST_TXT):
             try:
                 os.remove(p)
@@ -1854,6 +1900,7 @@ class App:
             sent, reason = self.press_bridge_key(seq)
             self.activity.note_pick(seq, item, "zscript", sent, source, self._activity_menu, reason)
             if sent:
+                self._state_picked(seq)
                 self._watch_zscript_result(seq, before)
                 self._watch_apply(seq, legacy)
             else:
@@ -1866,6 +1913,7 @@ class App:
             ok = W.PostMessageW(listener, WM_APP_PICK, seq, 0)
             log(f"pick #{seq} '{item.label}' -> listener {int(listener.value)} (posted={bool(ok)})")
             if ok:
+                self._state_picked(seq, zb_pid)     # once: the bridge-key fallback in _check_ack is the same pick
                 self.activity.note_pick(seq, item, "listener", True, source, self._activity_menu)
                 now = time.time()
                 self._ack = [seq, now + ACK_WAIT_S, now + ACK_HOLD_MAX_S, False]
@@ -1882,9 +1930,16 @@ class App:
             return
         sent, reason = self.press_bridge_key(seq)
         self.activity.note_pick(seq, item, "key", sent, source, self._activity_menu, reason)
-        if not sent:
+        if sent:
+            self._state_picked(seq)
+        else:
             self._drop_request(seq)
         W.nudge_mouse()
+
+    def _state_picked(self, seq, pid=0):
+        """Pick seq was handed to a ZBrush: to the listener of pid, or by the bridge key to the one in front."""
+        if self.state is not None:
+            self._state_call("picked", seq, pid or self._front_pid())
 
     def _check_ack(self):
         if self._ack is None:
@@ -2138,6 +2193,7 @@ class App:
         if self.cfg is None:
             return 1
         self._create_ctrl()
+        self.state = zstate.Channel(W.PostMessageW, self.ctrl, DATA_DIR, log=log)
         self._schedule_prewarm()
         self._warm_soon("start")                    # the load above came before the window its timer needs
         self.start_hook()
@@ -2157,6 +2213,7 @@ class App:
         finally:
             self._destroy_tray()
             self.stop_hook()                        # ends the hook thread, which removes the hook
+            self._state_call("stop")                # takes the question away: the plugin stops its unasked answers
         popout = W.find_message_window(POPOUT_CLASS)
         if popout:
             W.send_copydata(popout, COPYDATA_QUIT, b"{}")
