@@ -13,7 +13,7 @@ app posts it a window message. The app and the plugin talk through two small fil
     request the plugin carried out. Snapshot is that file, parse_snapshot() reads it.
   * WM_APP_STATE_READY (the plugin -> the app's control window, wparam the snapshot id) says the file is new.
 
-Nothing here waits. Channel asks after the ring is on screen, keeps one question in flight, and hands the ring marks for
+Nothing here waits. Channel asks after the ring is on screen, keeps one question in flight per listener, and hands the ring marks for
 what it knows: Cache holds the entries of the snapshots, drawable only while they are fresh and not older than the last
 pick, and marks_for() turns a menu's items into Mark objects, one per item (a pip lit or hollow on a Toggle or on the Set
 slot whose value is the current one, a value chip on a Set, a dimmed slot for an item ZBrush does not have or has greyed).
@@ -40,7 +40,11 @@ STATE_FILE = "zstate.json"
 MAX_PATHS = 128                              # paths in one query
 MAX_FILE = 256 * 1024                        # a snapshot file over this is refused
 CACHE_TTL_S = 30.0                           # an entry older than this is not drawn
-LOST_S = 2.0                                 # a question with no answer after this long counts as lost
+WRITE_TRIES, WRITE_RETRY_S = 3, 0.002        # the query is written again when the plugin has it open
+LOST_S = 2.0                                # a question with no answer after this long counts as lost
+PICK_GRACE_S = 2.0                           # a pick not seen by the plugin this long after it was sent is taken as dropped or held
+_MAX_PICKS = 8                               # pids whose last pick is remembered
+_MAX_FLIGHTS = 8                             # listeners whose message in flight is remembered
 FAN_DEPTH = 3                                # fans inside fans whose items are queried (ring.FAN_DEPTH)
 KINDS = ("press", "set", "toggle")           # the item kinds that are queried
 _RANK = {"press": 0, "toggle": 1, "set": 2}  # a path asked for twice is asked as the kind that tells the most
@@ -80,12 +84,17 @@ def paths_for(menu, resolve, cap=MAX_PATHS) -> list:
     """The paths to ask about for a menu, as (path, kind) pairs, in order: the menu's own press, set and toggle items;
     then the items of the fan submenus, down to FAN_DEPTH; then the items of the ring submenus one level down (they ask
     again when they open: this only warms their first frame). A path used twice is asked once, as the kind that tells
-    the most (set over toggle over press). Steps, asset, capture, file and tag items are never queried. At most cap paths.
+    the most (set over toggle over press). Steps, asset, capture, file and tag items are never queried. At most cap paths: collecting and resolving stop when they are reached.
     resolve(menu_id) gives a submenu as expand.Expander.resolve does (None if there is none)."""
     got = {}                                 # path -> kind, in the order the paths first appear
 
+    def full():
+        return len(got) >= cap
+
     def take(items):
         for it in items:
+            if full():
+                return
             pk = _item_path(it)
             if pk is None:
                 continue
@@ -100,23 +109,29 @@ def paths_for(menu, resolve, cap=MAX_PATHS) -> list:
         if not isinstance(mid, str) or mid.startswith(_ASSET_MENUS):
             return None
         try:
-            return resolve(mid)
+            s = resolve(mid)
         except Exception:                    # a menu that cannot be built is not a reason to stop the ring
             return None
+        if not isinstance(getattr(s, "items", None), list) or not isinstance(getattr(s, "id", None), str):
+            return None
+        return s
 
     take(menu.items)
     rings = []                               # ring submenus found on the way: handled last
     seen_rings = set()
 
     def fans(m, depth, path):
+        if depth >= FAN_DEPTH:               # the fans of the deepest fans are not read, so nothing is resolved for them
+            return
         for it in m.items:
+            if full():                       # nothing more can be added: stop resolving menus
+                return
             s = sub(it)
             if s is None or not s.items or s.id in path:
                 continue
             if getattr(s, "fan", False):
-                if depth < FAN_DEPTH:
-                    take(s.items)
-                    fans(s, depth + 1, path | {s.id})
+                take(s.items)
+                fans(s, depth + 1, path | {s.id})
             elif s.id != menu.id and s.id not in seen_rings:
                 seen_rings.add(s.id)
                 rings.append(s)
@@ -124,7 +139,7 @@ def paths_for(menu, resolve, cap=MAX_PATHS) -> list:
     fans(menu, 0, frozenset((menu.id,)))
     for r in rings:
         take(r.items)
-    return list(got.items())[:cap]
+    return list(got.items())
 
 
 # --- what the plugin answered --------------------------------------------------------------------------------------
@@ -221,13 +236,14 @@ def parse_snapshot(raw, asked=None) -> Snapshot:
 
 def accept(snap, *, newest, pid, picked=0) -> bool:
     """Whether the app takes this snapshot: it came from the ZBrush the query went to (pid), and its id is the newest
-    asked (newest), or it is the plugin's refresh after a pick of ours (picked is the id of our last pick: the snapshot
-    saw it carried out, and answers a query we asked, so no later than the newest)."""
+    asked (newest), or it is the plugin's refresh after a pick of ours (picked is the id of our last pick to this ZBrush,
+    Cache.pick_seq: the snapshot's "pick" is exactly that id, and it answers a query we asked, so no later than the
+    newest)."""
     if not newest or snap.pid != pid:
         return False
     if snap.id == newest:
         return True
-    return picked > 0 and snap.pick >= picked and 0 < snap.id < newest
+    return picked > 0 and snap.pick == picked and 0 < snap.id < newest
 
 
 # --- what is known -------------------------------------------------------------------------------------------------
@@ -235,45 +251,83 @@ def accept(snap, *, newest, pid, picked=0) -> bool:
 class _Held:
     entry: Entry
     at: float                                # when the app merged it (its clock)
-    pick: int                                # the pick the snapshot it came from had seen
+
+
+@dataclass
+class _Pick:
+    seq: int                                 # the id of the pick the app sent
+    sent_at: float                           # the app's clock when it was sent
+    seen_at: float | None = None             # when a snapshot that had seen it was merged
 
 
 class Cache:
-    """The entries of the snapshots so far, one per path, from the ZBrush that answered last. An entry is drawable when
-    it is from the ZBrush in front (pid), under ttl seconds old, and not older than the last pick: picked(seq) is told
-    of each pick, and an entry whose snapshot had not yet seen pick seq (its "pick" is lower) stays undrawable until a
-    newer snapshot replaces it. A different pid or session (ZBrush was restarted) drops everything."""
+    """The entries of the snapshots so far, one per path, from the ZBrush that answered last. A different pid (or two
+    different, non-empty sessions: ZBrush was restarted) drops them all.
+
+    An entry is drawable when it is from the ZBrush in front (pid), under ttl seconds old and not older than the last
+    pick sent to that ZBrush. Per pid the cache keeps one pick record (picked(seq, pid, now)): once a snapshot whose "pick"
+    is exactly seq has been merged, the pick is seen, and only entries merged at or after that moment are drawn. Until
+    then the entries merged less than PICK_GRACE_S after the pick was sent are not drawn; one merged later is: a pick the
+    plugin has not seen by then was dropped or is held back (a pen stroke), and ZBrush's state at that moment is the
+    true one. When the held pick is applied, the entries merged before it are hidden again. dropped(seq) takes a pick
+    back. A restart never touches the pick records."""
 
     def __init__(self, ttl=CACHE_TTL_S):
         self.ttl = ttl
         self.pid = 0
         self.session = ""
-        self.floor = 0                       # the id of the last pick sent
         self._held = {}
+        self._picks = collections.OrderedDict()      # pid -> _Pick, the newest last
 
     def merge(self, snap, now):
-        if (snap.pid, snap.session) != (self.pid, self.session):
-            self._held.clear()
-            self.pid, self.session = snap.pid, snap.session
-            self.floor = 0                   # the picks counted so far went to another ZBrush
+        other = snap.pid != self.pid
+        if other or (snap.session and self.session and snap.session != self.session):
+            self._held.clear()               # another ZBrush, or the same pid restarted (an empty session says nothing)
+        self.session = snap.session or ("" if other else self.session)
+        self.pid = snap.pid
+        rec = self._picks.get(snap.pid)
+        if rec is not None and rec.seen_at is None and snap.pick == rec.seq:
+            rec.seen_at = now                # before the entries are stored: they count as after the pick
         for p, e in snap.items.items():
-            self._held[p] = _Held(e, now, snap.pick)
+            self._held[p] = _Held(e, now)
         if len(self._held) > _MAX_HELD:
             self._held = {p: h for p, h in self._held.items() if now - h.at < self.ttl}
 
-    def picked(self, seq):
-        self.floor = max(self.floor, seq)
+    def picked(self, seq, pid, now):
+        """A pick with this id was sent to the ZBrush with this process id, at this time of the app's clock."""
+        old = self._picks.get(pid)
+        if old is not None and seq < old.seq:
+            return
+        self._picks[pid] = _Pick(seq, now)
+        self._picks.move_to_end(pid)
+        while len(self._picks) > _MAX_PICKS:
+            self._picks.popitem(last=False)
+
+    def dropped(self, seq):
+        """The app took this pick back (it was never delivered): nothing changed in ZBrush."""
+        for pid in [p for p, r in self._picks.items() if r.seq == seq]:
+            del self._picks[pid]
+
+    def pick_seq(self, pid) -> int:
+        """The id of the last pick sent to this ZBrush that is still on record, else 0."""
+        rec = self._picks.get(pid)
+        return rec.seq if rec is not None else 0
 
     def get(self, path, pid, now):
         """The entry for path when it may be drawn, else None."""
         h = self._held.get(path)
-        if h is None or pid != self.pid or now - h.at >= self.ttl or h.pick < self.floor:
+        if h is None or pid != self.pid or now - h.at >= self.ttl:
+            return None
+        rec = self._picks.get(pid)
+        if rec is not None and h.at < (rec.seen_at if rec.seen_at is not None else rec.sent_at + PICK_GRACE_S):
             return None
         return h.entry
 
     def clear(self):
+        """Forgets everything, the pick records too."""
         self._held.clear()
-        self.pid, self.session, self.floor = 0, "", 0
+        self._picks.clear()
+        self.pid, self.session = 0, ""
 
 
 # --- what to draw --------------------------------------------------------------------------------------------------
@@ -326,13 +380,15 @@ def _render(v, lo, hi, target=None):
             if len(text) <= 5:
                 return text, 0.5 * div * 10 ** -p
     mantissa, _, exp = f"{v:.0e}".partition("e")      # beyond any slider: the least that fits, as -1e12
-    return f"{mantissa}e{int(exp)}", abs(v)
+    text = f"{mantissa}e{int(exp)}"
+    return (text if len(text) <= 5 else ("-big" if v < 0 else "big")), abs(v)
 
 
 def format_value(v, lo=None, hi=None, target=None) -> str:
     """The text of a slider's value for the chip. With a range (lo, hi): a span of 100 or more gives no decimals, 10 or
     more one, 1 or more two, else three; at least as many decimals as the slot's own target has; trailing zeros are
-    removed. 10000 or more is written 12.5k. At most 5 characters. With no range, at most 2 decimals."""
+    removed. 10000 or more is written 12.5k (then 1235k, 100M, 1e12, and "big" for what no slider has). At most 5
+    characters. With no range, at most 2 decimals."""
     return _render(v, lo, hi, target)[0]
 
 
@@ -382,8 +438,8 @@ def marks_for(menu, cache, pid, now):
 
 # --- the conversation ----------------------------------------------------------------------------------------------
 class Channel:
-    """Asks the plugin, takes its answers and hands the ring marks. It does no waiting and posts at most one message while
-    a question is unanswered.
+    """Asks the plugin, takes its answers and hands the ring marks. It does no waiting and posts at most one message to a
+    listener while its question is unanswered.
 
     post(hwnd, msg, wparam, lparam): posts a window message and says whether it was posted (win32.PostMessageW).
     ctrl: the app's control window, passed as lparam so the plugin knows where to answer. data_dir: the folder of the two
@@ -401,30 +457,40 @@ class Channel:
         self._id = 0                         # the id of the newest query written
         self._queries = collections.OrderedDict()    # id -> the paths asked, for the last few queries
         self._at = 0.0                       # when the newest query was written
-        self._flight = None                  # (when, listener key) of the message posted and not yet answered
-        self._listener = None
+        self._flights = collections.OrderedDict()    # listener key -> when its message was posted, until it answers
+        self._listener = None                # the listener the newest query is for, and its key
+        self._key = None
         self._asked_pid = 0                  # the ZBrush the newest query went to
-        self._picked = 0                     # the id of the last pick sent
+        self._wrote = False                  # a query file of ours is on disk
         self._said = set()                   # (what, who) pairs already logged: a line once per ZBrush
 
     # --- asking
     def ask(self, menu, resolve, *, pid, listener, capable, enabled=True) -> bool:
-        """Writes the query for the menu and posts WM_APP_STATE, unless one question is already waiting for its answer
-        (then only the file is rewritten: the message in flight answers the newest query). Called after the ring is shown.
-        pid: the ZBrush in front. listener: its verified listener window, or None. capable: its listener.json says
-        "state": 1. enabled: bridge.show_state. Without all four nothing is written or posted and marks() gives None.
-        Returns whether a question is now waiting."""
+        """Writes the query for the menu and posts WM_APP_STATE, unless the listener already has a question waiting for its
+        answer (then only the file is rewritten: the message in flight answers the newest query). Called after the ring is
+        shown, and never raises. pid: the ZBrush in front. listener: its verified listener window, or None. capable: its
+        listener.json says "state": 1. enabled: bridge.show_state. Without all four nothing is written or posted and
+        marks() gives None; told enabled=False or capable=False after having asked, it also takes its query file away
+        (stop()). Returns whether a question is now waiting."""
         self.pid = 0
-        if not enabled or not capable or listener is None or not pid:
+        if not enabled or not capable:
+            self.stop()
+            return False
+        if listener is None or not pid:
             return False
         self.pid = pid                       # the ring draws from the cache for this ZBrush even if nothing is asked
-        paths = paths_for(menu, resolve)
+        try:
+            paths = paths_for(menu, resolve)
+        except Exception as e:               # a menu that cannot be read must never stop a ring from opening
+            self._note("paths", pid, f"ZBrush state: could not list the paths of a menu: {e!r}")
+            return False
         if not paths:
             return False
         now = self.clock()
         key = getattr(listener, "value", listener)
-        waiting = self._flight is not None and self._flight[1] == key and now - self._flight[0] < LOST_S
-        if self._flight is not None and not waiting and self._flight[1] == key:
+        sent = self._flights.get(key)
+        waiting = sent is not None and now - sent < LOST_S
+        if sent is not None and not waiting:
             self._note("lost", pid, f"ZBrush state: no answer from pid {pid} in {LOST_S:g} s; asking again")
         q = Query(self._id + 1, self.wall(), tuple(paths))
         try:
@@ -436,16 +502,20 @@ class Channel:
         self._queries[q.id] = frozenset(p for p, _ in q.paths)
         while len(self._queries) > _KEPT_QUERIES:
             self._queries.popitem(last=False)
-        self._at, self._asked_pid, self._listener = now, pid, listener
+        self._at, self._asked_pid, self._listener, self._key = now, pid, listener, key
         if waiting:
             return True
-        return self._post(now, key)
+        return self._post(now)
 
-    def _post(self, now, key) -> bool:
+    def _post(self, now) -> bool:
+        key = self._key
         if self.post(self._listener, WM_APP_STATE, self._id, self.ctrl):
-            self._flight = (now, key)
+            self._flights[key] = now
+            self._flights.move_to_end(key)
+            while len(self._flights) > _MAX_FLIGHTS:
+                self._flights.popitem(last=False)
             return True
-        self._flight = None
+        self._flights.pop(key, None)
         self._note("post", self._asked_pid, f"ZBrush state: could not post to the listener of pid {self._asked_pid}")
         return False
 
@@ -455,12 +525,38 @@ class Channel:
         tmp = path + ".tmp"
         with open(tmp, "w", encoding="utf-8") as f:
             f.write(q.to_json())
-        os.replace(tmp, path)                # atomic: the plugin never sees half a query
+        for attempt in range(WRITE_TRIES):
+            try:
+                os.replace(tmp, path)        # atomic: the plugin never sees half a query
+                break
+            except PermissionError:          # the plugin has the query open just now
+                if attempt == WRITE_TRIES - 1:
+                    raise
+                time.sleep(WRITE_RETRY_S)
+        self._wrote = True
 
-    def picked(self, seq):
-        """A pick with this id was sent: what the cache knew is not drawn until the plugin's refresh has seen it."""
-        self._picked = max(self._picked, seq)
-        self.cache.picked(seq)
+    def stop(self):
+        """Takes the query file away if this channel wrote one (the plugin stops its unasked refreshes when it is gone) and
+        forgets the questions in flight. For a setting turned off, a ZBrush that cannot answer, and the app quitting."""
+        self._flights.clear()
+        if not self._wrote:
+            return
+        self._wrote = False
+        try:
+            os.remove(os.path.join(self.data_dir, QUERY_FILE))
+        except FileNotFoundError:
+            pass
+        except OSError as e:
+            self._note("remove", 0, f"ZBrush state: could not remove {QUERY_FILE}: {e!r}")
+
+    def picked(self, seq, pid):
+        """A pick with this id was sent to the ZBrush with this process id: what the cache knew is not drawn until the
+        plugin has seen it (or PICK_GRACE_S has passed without)."""
+        self.cache.picked(seq, pid, self.clock())
+
+    def dropped(self, seq):
+        """The pick with this id was taken back: nothing changed in ZBrush."""
+        self.cache.dropped(seq)
 
     # --- answers
     def on_ready(self, snapshot_id=0) -> bool:
@@ -476,15 +572,16 @@ class Channel:
             return False
         if snap.pid != self._asked_pid:
             return False
-        if not accept(snap, newest=self._id, pid=self._asked_pid, picked=self._picked) or snap.id not in self._queries:
-            if 0 < snap.id < self._id and self._flight is not None:
-                self._post(self.clock(), self._flight[1])    # the plugin is free: it answers the newest query now
+        picked = self.cache.pick_seq(self._asked_pid)
+        if not accept(snap, newest=self._id, pid=self._asked_pid, picked=picked) or snap.id not in self._queries:
+            if 0 < snap.id < self._id and self._key in self._flights:
+                self._post(self.clock())     # the plugin is free: it answers the newest query now
             return False
         now = self.clock()
         snap = snap.only(self._queries[snap.id])
         self.cache.merge(snap, now)
         if snap.id == self._id:
-            self._flight = None
+            self._flights.pop(self._key, None)
         self._timing(snap, now)
         return True
 

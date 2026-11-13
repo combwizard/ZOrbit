@@ -3,6 +3,7 @@ conversation between the two (Channel). The sample query and snapshot are the on
 the plugin's tests parse the same text."""
 import json
 import os
+import types
 
 import pytest
 
@@ -175,6 +176,7 @@ def test_a_wrong_id_or_pid_is_not_taken():
 def test_the_refresh_after_a_pick_is_taken_though_its_query_is_older():
     assert Z.accept(snap_of(id=40, pick=17), newest=42, pid=9120, picked=17)
     assert not Z.accept(snap_of(id=40, pick=16), newest=42, pid=9120, picked=17)    # not yet seen the pick
+    assert not Z.accept(snap_of(id=40, pick=500), newest=42, pid=9120, picked=17)   # another run's count: equal, not more
     assert not Z.accept(snap_of(id=40, pick=17), newest=42, pid=9120, picked=0)     # no pick of ours
     assert not Z.accept(snap_of(id=40, pick=17), newest=42, pid=1, picked=17)
     assert not Z.accept(snap_of(id=0, pick=17), newest=42, pid=9120, picked=17)
@@ -279,35 +281,91 @@ def test_an_entry_is_drawn_for_under_thirty_seconds():
     assert c.get(SYM, 9120, 500.0) is None
 
 
-def test_after_a_pick_the_cache_waits_for_a_snapshot_that_saw_it():
+def test_a_pick_hides_what_was_merged_before_it_until_a_snapshot_has_seen_it():
     c = Z.Cache()
     merged(c, now=0.0, pick=17)
-    c.picked(18)
+    c.picked(18, 9120, 10.0)
+    assert c.pick_seq(9120) == 18 and c.pick_seq(1) == 0
+    assert c.get(SYM, 9120, 10.5) is None                   # taken before the pick
+    merged(c, now=11.0, pick=17)                            # an answer from before the pick was carried out
+    assert c.get(SYM, 9120, 11.5) is None
+    merged(c, now=11.5, pick=18)                            # the refresh: the pick is seen
+    assert c.get(SYM, 9120, 12.0) is not None
+    merged(c, now=13.0, pick=20)                            # a later pick seen as well changes nothing
+    assert c.get(SYM, 9120, 13.5) is not None
+
+
+def test_a_pick_is_seen_only_by_a_snapshot_whose_pick_is_exactly_its_id():
+    c = Z.Cache()
+    c.picked(1, 9120, 10.0)                                 # the app restarted: its ids count from 1 again
+    merged(c, now=10.5, pick=500)                           # the plugin's count is from before
+    assert c.get(SYM, 9120, 11.0) is None                   # not taken for the pick being seen
+    merged(c, now=12.5, pick=500)                           # but the grace is over: ZBrush's true state
+    assert c.get(SYM, 9120, 13.0) is not None
+
+
+def test_a_pick_not_seen_within_the_grace_is_taken_as_dropped_or_held():
+    c = Z.Cache()
+    c.picked(5, 9120, 100.0)
+    merged(c, now=101.9, pick=4)
+    assert c.get(SYM, 9120, 102.0) is None
+    merged(c, now=102.0, pick=4)
+    assert c.get(SYM, 9120, 102.1) is not None
+    assert Z.PICK_GRACE_S == 2.0
+
+
+def test_a_held_pick_that_is_applied_later_hides_what_was_merged_before_it():
+    c = Z.Cache()
+    c.picked(5, 9120, 0.0)
+    merged(c, now=3.0, pick=4, items={SYM: {"s": "ok", "v": 1.0}})
+    assert c.get(SYM, 9120, 3.5).value == 1.0               # the true state while the pick is held
+    merged(c, now=10.0, pick=5, items={SIZE: {"s": "ok", "v": 9.0}})      # applied: the refresh covers other paths only
+    assert c.get(SYM, 9120, 10.5) is None                   # older than the moment the pick was seen
+    assert c.get(SIZE, 9120, 10.5).value == 9.0
+
+
+def test_dropped_takes_the_record_back_whichever_pid_has_it():
+    c = Z.Cache()
+    merged(c, now=0.0)
+    c.picked(5, 9120, 1.0)
+    c.picked(6, 7, 1.0)
+    assert c.get(SYM, 9120, 1.5) is None
+    c.dropped(5)
+    assert c.get(SYM, 9120, 1.5) is not None
+    assert c.pick_seq(9120) == 0 and c.pick_seq(7) == 6
+    c.dropped(99)                                           # unknown: nothing happens
+    assert c.pick_seq(7) == 6
+
+
+def test_a_pick_to_another_zbrush_does_not_hide_this_ones_entries():
+    c = Z.Cache()
+    merged(c, now=0.0)
+    c.picked(5, 7, 1.0)                                     # a ZBrush with no state plugin, or another instance
+    assert c.get(SYM, 9120, 1.5) is not None
+
+
+def test_a_newer_pick_replaces_the_record_of_its_pid_and_an_older_one_does_not():
+    c = Z.Cache()
+    c.picked(5, 9120, 1.0)
+    c.picked(7, 9120, 2.0)
+    c.picked(6, 9120, 3.0)
+    assert c.pick_seq(9120) == 7
+
+
+def test_the_cache_remembers_the_picks_of_eight_zbrushes():
+    c = Z.Cache()
+    for pid in range(1, 12):
+        c.picked(pid, pid, float(pid))
+    assert [c.pick_seq(pid) for pid in (1, 2, 3, 4, 11)] == [0, 0, 0, 4, 11]
+
+
+def test_a_pick_sent_before_the_first_snapshot_is_not_forgotten():
+    c = Z.Cache()
+    c.picked(5, 9120, 0.0)
+    merged(c, now=0.5, pick=4)                              # the first snapshot of this ZBrush
     assert c.get(SYM, 9120, 1.0) is None
-    merged(c, now=2.0, pick=17)                             # an answer taken before the pick was carried out
-    assert c.get(SYM, 9120, 3.0) is None
-    merged(c, now=4.0, pick=18)
-    assert c.get(SYM, 9120, 5.0) is not None
-    merged(c, now=6.0, pick=20)                             # a later pick seen as well
-    assert c.get(SYM, 9120, 7.0) is not None
-
-
-def test_an_old_pick_does_not_hold_back_a_newer_snapshot_and_picks_only_count_up():
-    c = Z.Cache()
-    c.picked(18)
-    c.picked(5)
-    assert c.floor == 18
-    merged(c, now=0.0, pick=25)
-    assert c.get(SYM, 9120, 1.0) is not None
-
-
-def test_an_entry_the_refresh_did_not_ask_about_stays_hidden_until_asked_again():
-    c = Z.Cache()
-    merged(c, now=0.0, pick=1, items={SYM: {"s": "ok", "v": 1.0}, SIZE: {"s": "ok", "v": 5.0}})
-    c.picked(2)
-    merged(c, now=1.0, pick=2, items={SYM: {"s": "ok", "v": 0.0}})
-    assert c.get(SYM, 9120, 2.0) == Z.Entry("ok", 0.0)
-    assert c.get(SIZE, 9120, 2.0) is None
+    merged(c, now=1.0, pick=5)
+    assert c.get(SYM, 9120, 1.5) is not None
 
 
 def test_entries_merge_across_replies():
@@ -319,14 +377,44 @@ def test_entries_merge_across_replies():
     assert c.get(SYM, 9120, 4.0).value == 0.0
 
 
-@pytest.mark.parametrize("over", [{"pid": 7}, {"session": "other"}])
-def test_a_restarted_zbrush_drops_the_cache(over):
+def test_another_pid_drops_the_entries_but_not_the_pick_records():
     c = Z.Cache()
     merged(c, now=0.0, items={SYM: {"s": "ok", "v": 1.0}})
-    c.picked(99)
-    merged(c, now=1.0, pick=0, items={SIZE: {"s": "ok", "v": 5.0}}, **over)
+    c.picked(99, 9120, 0.0)
+    merged(c, now=1.0, pid=7, session="x", items={SIZE: {"s": "ok", "v": 5.0}})
+    assert c.get(SYM, 9120, 2.0) is None and c.get(SYM, 7, 2.0) is None
+    assert c.get(SIZE, 7, 2.0) == Z.Entry("ok", 5.0)
+    assert c.pick_seq(9120) == 99
+
+
+def test_a_new_session_of_the_same_pid_drops_the_entries():
+    c = Z.Cache()
+    merged(c, now=0.0, items={SYM: {"s": "ok", "v": 1.0}})
+    merged(c, now=1.0, session="other", items={SIZE: {"s": "ok", "v": 5.0}})
     assert c.get(SYM, 9120, 2.0) is None
-    assert c.get(SIZE, over.get("pid", 9120), 2.0) == Z.Entry("ok", 5.0)    # and the old picks do not hide the new ZBrush
+    assert c.get(SIZE, 9120, 2.0) == Z.Entry("ok", 5.0)
+
+
+def test_an_empty_session_says_nothing_about_a_restart():
+    c = Z.Cache()
+    merged(c, now=0.0, items={SYM: {"s": "ok", "v": 1.0}})
+    merged(c, now=1.0, session="", items={SIZE: {"s": "ok", "v": 5.0}})        # the plugin could not read its session
+    assert c.get(SYM, 9120, 2.0) is not None and c.get(SIZE, 9120, 2.0) is not None
+    assert c.session == "429428"
+    merged(c, now=2.0, session="other", items={})
+    assert c.get(SYM, 9120, 3.0) is None
+    fresh = Z.Cache()
+    merged(fresh, now=0.0, session="", items={SYM: {"s": "ok", "v": 1.0}})     # no session known yet
+    merged(fresh, now=1.0, session="new", items={SIZE: {"s": "ok", "v": 5.0}})
+    assert fresh.get(SYM, 9120, 2.0) is not None
+
+
+def test_clear_forgets_the_pick_records_too():
+    c = Z.Cache()
+    merged(c)
+    c.picked(5, 9120, 0.0)
+    c.clear()
+    assert c.get(SYM, 9120, 1.0) is None and c.pick_seq(9120) == 0
 
 
 def test_the_cache_does_not_grow_without_end():
@@ -371,6 +459,10 @@ def test_the_cache_does_not_grow_without_end():
     (1234.5678, None, None, None, "1235"),          # five characters at most: the decimals go
     (7, 5, 5, None, "7"),                            # an empty range counts as none
     (7.126, 9, 5, None, "7.13"),
+    (-1e100, 0, 10, None, "-big"),                   # no slider has these
+    (1e100, 0, 10, None, "1e100"),
+    (-1e101, 0, 10, None, "-big"),
+    (-1e12, 0, 10, None, "-1e12"),
     (float("nan"), 0, 10, None, ""),
     (float("inf"), 0, 10, None, ""),
     (None, 0, 10, None, ""),
@@ -382,7 +474,7 @@ def test_format_value(v, lo, hi, target, text):
 
 
 def test_format_value_is_never_longer_than_five_characters():
-    for v in (0, 1, -1, 0.001, -0.001, 99.995, -99.995, 999.9, 9999.5, -9999.5, 12345.6, -99999, 1e6, 1e9, -1e12, 1e30):
+    for v in (0, 1, -1, 0.001, -0.001, 99.995, -99.995, 999.9, 9999.5, -9999.5, 12345.6, -99999, 1e6, 1e9, -1e12, 1e30, -1e30, 1e100, -1e100, 1e308, -1e308):
         for lo, hi in ((None, None), (0, 1), (0, 10), (0, 100), (0, 1e6)):
             assert len(Z.format_value(v, lo, hi, 0.123)) <= 5, (v, lo, hi)
 
@@ -645,7 +737,7 @@ def test_a_reply_from_another_zbrush_is_ignored(rig):
     rig.ask()
     assert rig.answer(id=1, pid=1) is False
     assert rig.ch.marks(rig.menu) is None
-    assert rig.ch._flight is not None                                  # still waiting for the right one
+    assert rig.ch._flights                                             # still waiting for the right one
 
 
 def test_a_reply_for_an_id_never_asked_or_from_the_future_is_ignored(rig):
@@ -684,10 +776,13 @@ def test_after_a_pick_the_old_marks_are_hidden_until_the_refresh_arrives(rig):
     rig.ask()
     rig.answer(id=1, pick=4)
     assert rig.ch.marks(rig.menu) is not None
-    rig.ch.picked(5)
+    rig.t += 1
+    rig.ch.picked(5, PID)
     assert rig.ch.marks(rig.menu) is None                              # neutral, never a stale pip
+    rig.t += 0.5
     assert rig.answer(id=1, pick=4) is True                            # an answer that predates the pick: kept, not drawn
     assert rig.ch.marks(rig.menu) is None
+    rig.t += 0.5
     assert rig.answer(id=1, pick=5, items={SYM: {"s": "ok", "v": 0.0}, SIZE: {"s": "ok", "v": 64.0},
                                            CLEAR: {"s": "missing"}}) is True      # the unasked refresh of the last query
     assert rig.ch.marks(rig.menu)[0] == Z.Mark(False)
@@ -696,12 +791,103 @@ def test_after_a_pick_the_old_marks_are_hidden_until_the_refresh_arrives(rig):
 def test_the_refresh_after_a_pick_is_taken_though_a_newer_query_was_written(rig):
     rig.ask()
     rig.answer(id=1, pick=4)
-    rig.ch.picked(5)
+    rig.ch.picked(5, PID)
     rig.t += 1
     rig.ask()                                                          # query 2, not yet read by the plugin
     assert rig.answer(id=1, pick=5) is True                            # the refresh answers the older query
     assert rig.ch.cache.get(SYM, PID, rig.t) is not None
-    assert rig.ch._flight is not None                                  # query 2 is still to be answered
+    assert rig.ch._flights                                             # query 2 is still to be answered
+
+
+def test_a_refresh_that_has_not_seen_the_pick_is_not_taken_for_an_older_query(rig):
+    rig.ask()
+    rig.answer(id=1, pick=4)
+    rig.ch.picked(5, PID)
+    rig.t += 1
+    rig.ask()
+    assert rig.answer(id=1, pick=4) is False
+
+
+def test_a_pick_that_is_dropped_leaves_the_ring_dark_for_two_seconds_only(rig):
+    rig.ask()
+    rig.answer(id=1, pick=4)
+    rig.t += 1
+    rig.ch.picked(5, PID)                                              # sent, then not delivered, and no dropped() call
+    rig.ask()
+    rig.t += 0.1
+    rig.answer(id=2, pick=4)
+    assert rig.ch.marks(rig.menu) is None
+    rig.t += 2.0
+    rig.ask()
+    rig.answer(id=3, pick=4)
+    assert rig.ch.marks(rig.menu)[0] == Z.Mark(True)                   # ZBrush's true state
+
+
+def test_a_pick_that_is_dropped_and_told_so_does_not_darken_the_ring(rig):
+    rig.ask()
+    rig.answer(id=1, pick=4)
+    rig.ch.picked(5, PID)
+    rig.ch.dropped(5)
+    assert rig.ch.marks(rig.menu) is not None
+
+
+def test_a_pick_to_another_zbrush_leaves_this_ones_marks_alone(rig):
+    rig.ask()
+    rig.answer(id=1, pick=4)
+    rig.ch.picked(5, 777)
+    assert rig.ch.marks(rig.menu) is not None
+
+
+def test_ids_that_collide_after_an_app_restart_do_not_pass_for_a_seen_pick(rig):
+    rig.ask()
+    rig.ch.picked(1, PID)                                              # the app's ids start at 1 again
+    rig.t += 0.5
+    rig.answer(id=1, pick=500)                                         # the plugin has counted to 500 before
+    assert rig.ch.marks(rig.menu) is None                              # not taken for "seen": 500 is not 1
+    rig.t += 2.0
+    rig.ask()
+    rig.answer(id=2, pick=500)
+    assert rig.ch.marks(rig.menu) is not None
+
+
+def test_a_pick_sent_before_the_first_snapshot_is_not_forgotten(rig):
+    rig.ch.picked(5, PID)
+    rig.ask()
+    rig.t += 0.1
+    rig.answer(id=1, pick=4)
+    assert rig.ch.marks(rig.menu) is None
+    rig.t += 0.1
+    rig.answer(id=1, pick=5)
+    assert rig.ch.marks(rig.menu) is not None
+
+
+def test_a_pick_held_back_for_ten_seconds_with_rings_opened_meanwhile(rig):
+    rig.ask()
+    rig.answer(id=1, pick=4)
+    rig.ch.picked(5, PID)                                              # a pen stroke holds the pick back
+    shown = []
+    for i in range(2, 10):
+        rig.t += 1.0
+        rig.ask()
+        rig.answer(id=i, pick=4)                                       # ZBrush still has the old state
+        shown.append(rig.ch.marks(rig.menu))
+    assert shown[0] is None                                            # dark until two seconds after the pick
+    assert all(m[0] == Z.Mark(True) for m in shown[1:])                # then ZBrush's true state
+    rig.t += 1.0
+    rig.ask()
+    rig.answer(id=10, pick=5, items={SYM: {"s": "ok", "v": 0.0}, SIZE: {"s": "ok", "v": 64.0}, CLEAR: {"s": "missing"}})
+    assert rig.ch.marks(rig.menu)[0] == Z.Mark(False)                  # the pick is applied: the new state
+    assert rig.ch.cache.get(SYM, PID, rig.t).value == 0.0
+
+
+def test_a_session_the_plugin_could_not_read_does_not_drop_the_marks(rig):
+    rig.ask()
+    rig.answer(id=1)
+    rig.t += 1
+    rig.ask()
+    rig.answer(id=2, session="", items={SYM: {"s": "ok", "v": 0.0}})
+    assert rig.ch.marks(rig.menu)[0] == Z.Mark(False)
+    assert rig.ch.marks(rig.menu)[1] == Z.Mark(True, "64", False)      # the entry from the first answer is still there
 
 
 def test_a_restarted_zbrush_starts_from_nothing(rig):
@@ -719,6 +905,124 @@ def test_a_second_zbrush_is_posted_to_even_while_the_first_is_waiting(rig):
     rig.t += 0.1
     rig.ask(pid=777, listener=0x55)
     assert [(s[0], s[2]) for s in rig.sent] == [(LISTENER, 1), (0x55, 2)]
+
+
+def test_each_listener_has_one_question_in_flight_even_when_the_zbrushes_alternate(rig):
+    rig.ask()                                                          # A
+    rig.t += 0.1
+    rig.ask(pid=777, listener=0x55)                                    # B
+    rig.t += 0.1
+    rig.ask()                                                          # A again: its message is still queued
+    rig.t += 0.1
+    rig.ask(pid=777, listener=0x55)
+    assert [s[0] for s in rig.sent] == [LISTENER, 0x55]
+    rig.t += 2.0
+    rig.ask()
+    assert [s[0] for s in rig.sent] == [LISTENER, 0x55, LISTENER]
+
+
+def test_the_listeners_remembered_are_bounded(rig):
+    for i in range(30):
+        rig.ask(pid=1000 + i, listener=0x100 + i)
+    assert len(rig.ch._flights) <= 8
+
+
+def test_a_real_window_handle_is_told_apart_by_its_value(rig):
+    from ctypes import wintypes
+    rig.ask(listener=wintypes.HWND(0x1234))
+    rig.t += 0.1
+    rig.ask(listener=wintypes.HWND(0x1234))                            # another object, the same window
+    assert len(rig.sent) == 1
+    rig.ask(pid=777, listener=wintypes.HWND(0x5678))
+    assert len(rig.sent) == 2
+    assert rig.sent[0][0].value == 0x1234 and rig.sent[1][0].value == 0x5678
+
+
+def test_stop_takes_the_query_file_away_and_forgets_the_question(rig):
+    path = os.path.join(rig.dir, Z.QUERY_FILE)
+    rig.ask()
+    assert os.path.exists(path)
+    rig.ch.stop()
+    assert not os.path.exists(path)
+    assert not rig.ch._flights
+    rig.ch.stop()                                                      # twice: no error
+    rig.t += 0.1
+    rig.ask()
+    assert os.path.exists(path) and len(rig.sent) == 2                 # the question was forgotten, so it is asked again
+
+
+def test_stop_without_a_file_or_with_the_file_already_gone_is_no_error(rig):
+    rig.ch.stop()
+    rig.ask()
+    os.remove(os.path.join(rig.dir, Z.QUERY_FILE))
+    rig.ch.stop()
+
+
+@pytest.mark.parametrize("kw", [{"enabled": False}, {"capable": False}])
+def test_asking_with_the_switch_off_or_an_old_plugin_removes_the_file_once(rig, kw):
+    path = os.path.join(rig.dir, Z.QUERY_FILE)
+    rig.ask()
+    assert os.path.exists(path)
+    assert rig.ask(**kw) is False
+    assert not os.path.exists(path)
+    open(path, "w").close()                                            # not ours any more: left alone
+    assert rig.ask(**kw) is False
+    assert os.path.exists(path)
+
+
+def test_a_listener_that_is_missing_does_not_remove_the_file(rig):
+    rig.ask()
+    rig.ask(listener=None)
+    assert os.path.exists(os.path.join(rig.dir, Z.QUERY_FILE))
+
+
+def test_the_query_is_written_again_when_the_plugin_has_it_open(rig, monkeypatch):
+    real, calls = os.replace, []
+
+    def flaky(a, b):
+        calls.append(1)
+        if len(calls) < 3:
+            raise PermissionError("in use")
+        real(a, b)
+    monkeypatch.setattr(os, "replace", flaky)
+    assert rig.ask() is True
+    assert len(calls) == 3 and os.path.exists(os.path.join(rig.dir, Z.QUERY_FILE))
+
+
+def test_three_refused_writes_give_up(rig, monkeypatch):
+    calls = []
+
+    def refuse(a, b):
+        calls.append(1)
+        raise PermissionError("in use")
+    monkeypatch.setattr(os, "replace", refuse)
+    assert rig.ask() is False
+    assert len(calls) == 3 and rig.sent == []
+
+
+def test_paths_for_stops_resolving_once_the_cap_is_reached():
+    calls = []
+
+    def resolve(mid):
+        calls.append(mid)
+        return menu(mid, *[press(f"{mid}:{i}") for i in range(12)], *[sub(f"{mid}_{i}") for i in range(12)], fan=True)
+    got = Z.paths_for(menu("main", *[sub(f"f{i}") for i in range(12)]), resolve)
+    assert len(got) == Z.MAX_PATHS
+    assert len(calls) < 30                                             # the whole walk is 1,884 calls
+
+
+def test_a_resolver_that_gives_something_that_is_not_a_menu_is_no_menu():
+    m = menu("main", sub("x"), press("M:1"))
+    assert Z.paths_for(m, lambda mid: object()) == [("M:1", "press")]
+    assert Z.paths_for(m, lambda mid: types.SimpleNamespace(id=5, items=[], fan=True)) == [("M:1", "press")]
+
+
+def test_ask_never_raises_for_a_menu_it_cannot_read(rig):
+    rig.menu = types.SimpleNamespace(id="main", items=[object()])
+    assert rig.ask() is False
+    assert rig.ask() is False
+    assert rig.sent == []
+    assert len([ln for ln in rig.lines if "could not list" in ln]) == 1
 
 
 def test_missing_paths_the_timing_and_a_cut_snapshot_are_logged_once_per_session(rig):
