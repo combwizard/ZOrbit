@@ -23,8 +23,8 @@ worked out.
    note on themes and the "under heavy development" note on the docs index stay.
 2. **From the brainstorm of 6 Nov 2026** (issues #188 to #193): [#189](https://github.com/combwizard/ZOrbit/issues/189),
    the Recent slot, and [#188](https://github.com/combwizard/ZOrbit/issues/188), the state channel, are built. #188
-   passed its check in ZBrush 2026 on 17 Nov 2026 (answers during a mouse and a pen stroke, marks about 20 ms after
-   the ring shows, the ring not held up by a long DynaMesh). Next is [#193](https://github.com/combwizard/ZOrbit/issues/193), the
+   passed its check in ZBrush 2026 on 17 Nov 2026 (answers during a stroke, marks about 20 ms after the ring shows);
+   a stroke with a pen is still to try by hand. Next is [#193](https://github.com/combwizard/ZOrbit/issues/193), the
    subtools fan, which builds on it. [#190](https://github.com/combwizard/ZOrbit/issues/190),
    [#191](https://github.com/combwizard/ZOrbit/issues/191) and [#192](https://github.com/combwizard/ZOrbit/issues/192)
    wait for votes.
