@@ -4,7 +4,12 @@ All notable changes to this project are listed here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.25.0] - 2026-11-17
+
+ZOrbit 0.25.0 lets the ring show what ZBrush is doing, in ZBrush 2026 and newer. A **Toggle** slot shows whether
+its switch is on, a **Set** slot shows where its slider is, and a slot ZBrush would ignore right now is dimmed. The
+ring asks as it opens and never waits for the answer, which usually comes in about 20 ms. Restart ZBrush once after
+updating so it loads the new plugin.
 
 ### Added
 
@@ -1072,6 +1077,7 @@ First public release.
   only brushes included with ZBrush.
 - Documentation: README, user guide, third-party notices and contributing guide.
 
+[0.25.0]: https://github.com/combwizard/zorbit/releases/tag/v0.25.0
 [0.24.0]: https://github.com/combwizard/zorbit/releases/tag/v0.24.0
 [0.23.0]: https://github.com/combwizard/zorbit/releases/tag/v0.23.0
 [0.22.0]: https://github.com/combwizard/zorbit/releases/tag/v0.22.0
