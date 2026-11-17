@@ -190,7 +190,11 @@ A dimmed slot is one that ZBrush told ZOrbit it would ignore now: the button is 
 
 The usual cause is a button that only exists in some states. Everything under **Tool:Masking**, and **Transform:Activate Symmetry**, are there only while a 3D model is in Edit mode, so with a 2.5D tool on the canvas those slots are dimmed. Put a model on the canvas, press **Edit** and open the ring again. The ring asks ZBrush as it opens, so the first picture can still show the state from before, and the slot lights up a moment later.
 
-If a slot stays dimmed with a model in Edit mode, its path is probably not the one ZBrush has. `radiald.log` has a line `ZBrush state: '<path>' is not in ZBrush (or not there now); drawn dimmed` for it, and picking it gives the same "no such interface item" in `bridge.log` (see [Finding a button's path](menus.md#finding-a-buttons-path)). Dimming is only a hint and never stops a pick. To have no marks at all, switch off **Show ZBrush's state on the ring** in **Settings > ZBrush bridge** (Full mode).
+If a slot stays dimmed with a model in Edit mode, its path is probably not the one ZBrush has. `radiald.log` has a line `ZBrush state: '<path>' is not in ZBrush (or not there now); drawn dimmed` for it, and picking it gives the same "no such interface item" in `bridge.log` (see [Finding a button's path](menus.md#finding-a-buttons-path)). Dimming is only a hint and never stops a pick.
+
+**Edit:Undo** and **Edit:Redo** are always dimmed, even with a step to undo: ZBrush tells the plugin they are greyed. A slot that presses **Edit:Undo** does nothing in ZBrush 2026 either, so for undo use ZBrush's own **Ctrl+Z**.
+
+To have no marks at all, switch off **Show ZBrush's state on the ring** in **Settings > ZBrush bridge** (Full mode).
 
 ### My slots show no state
 
