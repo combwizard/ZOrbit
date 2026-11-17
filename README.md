@@ -19,6 +19,7 @@ If you know pie menus from Blender or marking menus from Maya, ZOrbit brings tha
 - A slot can select a brush, load an alpha, material, texture, tool or interface layout, open a project, press any ZBrush button, set a slider, flip a switch, save the document as a PNG, or run several of those in a row.
 - A slot can open another ring. A submenu can also fan out in place, beside the ring you came from, and fans can open fans up to three deep.
 - An auto slot holds a brush you pick often, and ZOrbit fills it for you. A Recent slot opens a fan of the projects and tools ZBrush opened last.
+- In ZBrush 2026 and newer the ring shows ZBrush's state: a dot on a switch that is on, a Set slot's current value, and a slot dimmed when ZBrush would ignore the button.
 - Tag your brushes, alphas, materials and textures, colour their slots by tag, and give a slot a tag to open a fan of every item that carries it.
 - **Alt+B** opens a browser over ZBrush with search, folders, tag chips and thumbnails. It lists ZBrush's own items and, in ZBrush 2026 and newer, folders you add. Star your favourites and keep them in a small strip over ZBrush, where one click picks them.
 - ZOrbit Studio edits your menus with a live preview of the real ring. Drag brushes in from a library with thumbnails, record hotkeys, and pick a dark or light theme or match ZBrush's own colours.

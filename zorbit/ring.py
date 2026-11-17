@@ -36,6 +36,14 @@ rotates or blurs sprites and composites them, so a frame costs a few millisecond
 staggered per slot (modes below); hover eases over 120 ms; closing is instant so picks never wait. Fan slot
 sprites are rendered while the ring is idle, so a fan opens without a hitch.
 
+ZBrush's state (the state channel, zstate.py): Ring(..., marks=f) asks f(menu) for the ring's menu and for each fan
+menu, and gets a mark or None per item. A mark has lit (True: a filled pip at the upper right and an outline in the
+slot's hover colour; False: a hollow pip; None: no pip), value_text (a value chip in the lower part of the disc) and
+dim (slot and label drawn at DIM_IDLE opacity, DIM_HOVER under the cursor). Only Press, Set and Toggle slots
+(MARKABLE) show one. A mark is laid over copies of the slot's idle and hover pictures (_marked_cache); the pictures
+kept between opens, their keys and the static layer never change with the state, and a ring without marks draws
+exactly what it drew before. refresh_marks() asks again and redraws only the slots whose mark changed.
+
 The window never takes focus (WS_EX_NOACTIVATE from creation, MA_NOACTIVATE on clicks), so the target app
 keeps keyboard focus and sees every key-up.
 
@@ -90,6 +98,19 @@ STATIC_LAYERS = 48
 FAN_LINE_BYTES = 4 * 2**20  # the same for the dashed lines of fans (Ring._fan_lines)
 FAN_LINE_IMAGES = 32
 ICON_SIGS = 1024            # icon signatures remembered (_icon_sig); each entry lives only as long as its image
+MARKABLE = ("press", "set", "toggle")   # the kinds of slot a state mark is drawn on
+MARK_PIP = 0.13             # a toggle pip's width, relative to its slot
+MARK_CHIP_Y = 0.55          # the value chip's centre below the slot centre, relative to the slot's half width
+MARK_TEXT = 5               # a value chip's text is cut to this many characters (zstate.format_value gives 5 at most)
+# The value chip's pill is at least this opaque: it sits on the icon, not on the background, so the label pill's 140 of
+# the dark theme would let a white icon through (white text at about 4:1). At 191 the text is 9.1:1 over a white icon;
+# the light theme's pill (210) is already more opaque and keeps it.
+CHIP_PILL_ALPHA = 191
+DIM_IDLE, DIM_HOVER = 0.4, 0.7          # a dimmed slot's and label's opacity, and under the cursor
+MARKED_BYTES = 16 * 2**20   # marked slot pictures kept between opens (_marked_cache): a 16-slot ring at 200% ...
+MARKED_PICS = 64            # ... and by count
+MARK_PART_BYTES = 4 * 2**20  # the overlays they are made from (_mark_parts: outlines, pips, value chips)
+MARK_PARTS = 64
 _class_registered = False
 _wndproc_ref = None
 try:
@@ -290,6 +311,10 @@ class _ImageLRU:
 
 _static_layers = _ImageLRU(STATIC_BYTES, STATIC_LAYERS)       # Ring._static_key -> the static layer
 _fan_line_cache = _ImageLRU(FAN_LINE_BYTES, FAN_LINE_IMAGES)  # Ring._fan_lines' key -> (image, top-left)
+# (Ring._slot_key, picture part of a mark) -> (idle, hover) with the mark laid over them. Their own cache, not
+# _slot_cache: that one's budget is shared with the warm-up.
+_marked_cache = _ImageLRU(MARKED_BYTES, MARKED_PICS)
+_mark_parts = _ImageLRU(MARK_PART_BYTES, MARK_PARTS)          # Ring._mark_outline, _mark_pip and _chip's pictures
 _icon_sigs = {}             # id(image) -> (weak reference to the image, its signature)
 
 
@@ -460,6 +485,27 @@ def _item_sig(it):
 
 def _style(it):
     return getattr(it, "style", None) or {}
+
+
+def _hover_hue(it, look):
+    """The colour of a slot's hover rim and glow: its own glow colour, else its tag colour, else the look's glow
+    colour, else the highlight for a submenu and the accent for anything else."""
+    glow_own = _role(_style(it).get("glow_color"), look.colors) or getattr(it, "glow", "")
+    return glow_own or _chrome(it, look) or look.glow_color or (look.hi if it.kind == "menu" else look.accent)
+
+
+def _mark_sig(mark, it):
+    """A state mark as (lit, value text, dim) for the slot of item it, or None when there is nothing to show (no
+    mark, a neutral one, or a slot of a kind that never shows one). Only exact types count: lit True, False or
+    None, value_text a string, dim a bool; anything else reads as none."""
+    if mark is None or it.kind not in MARKABLE:
+        return None
+    lit = getattr(mark, "lit", None)
+    text = getattr(mark, "value_text", None)
+    dim = getattr(mark, "dim", False)
+    text = (text.strip()[:MARK_TEXT] or None) if isinstance(text, str) else None
+    sig = (lit if isinstance(lit, bool) else None, text, dim if isinstance(dim, bool) else False)
+    return None if sig == (None, None, False) else sig
 
 
 def _glyph_more(draw, cx, cy, size, fill):
@@ -654,18 +700,23 @@ class _Fan:
         self.t_open = 0.0
         self.look = None                           # its styling: its menu's own look, else the ring's
         self.sprites = self.labels = self.lines = None
+        self.plain = None                          # its slot pictures without marks (sprites may hold marked copies)
         self.motion = (0, 0, 0, None)              # duration, fade, stagger (ms), curve
         self.total = 0
 
 
 class Ring:
-    def __init__(self, menu, ring_cfg: dict, icon_for, on_done, log, held: bool, nested=False, submenus=None):
+    def __init__(self, menu, ring_cfg: dict, icon_for, on_done, log, held: bool, nested=False, submenus=None,
+                 marks=None):
         """menu: config.Menu. icon_for(item) -> PIL RGBA image or None. on_done(item|None, reason, at).
         held: True when opened by a hotkey that is still down (enables hold-and-release picking).
         nested: opened by flicking or hovering onto a submenu slot of another ring: the dead zone covers that
         slot's disc, and releasing the hotkey in the centre keeps the ring open for a click.
         submenus(menu_id) -> config.Menu or None: lets submenus that fan out open in place; without it every
-        submenu is handed back through on_done."""
+        submenu is handed back through on_done.
+        marks(menu) -> a list as long as menu.items of marks (lit, value_text, dim) or None, or None for none: ZBrush's
+        state, asked for this menu and each fan menu when it is drawn and again by refresh_marks(). A callable that
+        raises or gives a list of the wrong length leaves the ring as it is without marks."""
         self.menu = menu
         self.items = menu.items
         self.cfg = ring_cfg                        # behaviour keys (tap, flick, animation ...) are read from here
@@ -700,18 +751,23 @@ class Ring:
         self._static_cache = None                  # the static layer this ring draws (see _static)
         self._blend_cache, self._resized = {}, {}  # made again by _prepare
         self._icons = {}                           # id(item) -> its icon image, for _sprite_key and the sprites
+        self._marks_fn = marks
+        self._plain = None                         # the ring's slot pictures without marks: _sprite_cache's own list
+        self._marks = {}                           # () for the ring, a fan's path for a fan -> its marks (_mark_sig)
+        self._dims = {}                            # the same keys -> [dimmed?] per slot, None when none is
+        self._mark_failed = set()                  # owners whose marks callable failed (logged once each), and "draw"
 
     # --- public ----------------------------------------------------------------------------------
     @classmethod
     def preview(cls, menu, ring_cfg: dict, icon_for, hover=None, scale=1.0, t=None, submenus=None,
-                open_path=None, held=False, open_age=None):
+                open_path=None, held=False, open_age=None, marks=None):
         """Renders the ring to a PIL RGBA image without a window (Studio). t: seconds since open, or None
         for the settled look. open_path: indices of the fans to show open (needs submenus). The ring centre
         is in im.info["centre"] (and the hovered slot in im.info["hover_at"]): with a fan open the image is no
         longer square around it. im.info["layout"] is layout_map(): where every slot, gap and open fan is. hover: an item index, or a path (a tuple) for a slot inside an open fan.
         held: draw the hold-mode hint instead of the click-mode one. open_age: seconds since the fans opened,
-        a number for all of them or {path: seconds}; None for settled."""
-        r = cls(menu, ring_cfg, icon_for, lambda *a: None, lambda m: None, held=held, submenus=submenus)
+        a number for all of them or {path: seconds}; None for settled. marks: as for Ring (Studio passes none)."""
+        r = cls(menu, ring_cfg, icon_for, lambda *a: None, lambda m: None, held=held, submenus=submenus, marks=marks)
         r._geometry(scale)
         r._relayout()
         r._prepare()
@@ -1080,6 +1136,9 @@ class Ring:
         fan.look = self._look_for(menu)
         art = self._fan_art(menu)
         fan.sprites, fan.labels = [a[0] for a in art], [a[1] for a in art]
+        fan.plain = fan.sprites
+        if self._marks_fn is not None:
+            self._mark_slots(path, menu, fan)
         fan.lines = self._fan_lines(anchor, anchor_r, fan.pos, fan.csizes, _chrome(self._item(path), self._look_at(path)),
                                     fan.look)
         mode = MODES.get(menu.animation or self.cfg.get("animation", "smooth"), MODES["smooth"])
@@ -1403,6 +1462,11 @@ class Ring:
         self.hv = [[0.0, 0.0, 0.0] for _ in self.items]       # per slot: from, to, t0
         self._blend_cache = {}
         self._resized = {}                                      # per slot: (picture, pixel size, it resized)
+        self._plain = self.sprites                              # read only: shared by every open of this menu
+        self._marks.pop((), None)
+        self._dims.pop((), None)
+        if self._marks_fn is not None:
+            self._mark_slots((), self.menu)
 
     def _icon(self, it):
         """The icon image of an item (or None), asked of icon_for once per ring."""
@@ -1451,7 +1515,7 @@ class Ring:
         more = _is_more(it) and not getattr(it, "icon", "")
         col = _chrome(it, L)
         glow_own = _role(st.get("glow_color"), L.colors) or getattr(it, "glow", "")   # the slot's own glow colour
-        hue = glow_own or col or L.glow_color or (L.hi if sub else L.accent)   # a glow colour of its own wins
+        hue = _hover_hue(it, L)                    # a glow colour of its own wins
         mode = L.tag_colors
         tint = bool(col) and (mode in ("tint", "both") or bool(it.tag))
         glow_a = L.tag_glow_opacity
@@ -1596,6 +1660,202 @@ class Ring:
             d.text((pad - l, pad - top), text, font=font, fill=_rgba(hue, 1.0), anchor="ls")
             out.append(im.resize((max(1, int(Wd / s)), max(1, int(Hd / s))), Image.LANCZOS))
         return out
+
+    # --- state marks -----------------------------------------------------------------------------
+    def refresh_marks(self):
+        """Asks marks again for the ring and its fans, and redraws on the next tick only the slots whose mark changed.
+        Safe at any time: before show() it does nothing (the marks are asked when the ring is drawn), and after the
+        ring is done too."""
+        if self.done or self._marks_fn is None or self._plain is None:
+            return
+        changed = self._mark_slots((), self.menu)
+        for fan in list(self.fans.values()):
+            changed = self._mark_slots(fan.path, fan.menu, fan) or changed
+        if changed:
+            self._last_key = None                  # _tick draws a frame even when nothing else moved
+
+    def _ask_marks(self, owner, menu):
+        """The marks of menu's items as a tuple of _mark_sig (None when none shows anything). A failure is logged once
+        for each owner (the ring, or a fan's path)."""
+        try:
+            got = self._marks_fn(menu)
+            if got is None:
+                return None
+            if not isinstance(got, (list, tuple)) or len(got) != len(menu.items):
+                raise ValueError(f"{len(got) if isinstance(got, (list, tuple)) else type(got).__name__} marks for "
+                                 f"{len(menu.items)} items")
+            sigs = tuple(_mark_sig(m, it) for m, it in zip(got, menu.items))
+        except Exception as e:                     # a broken state never breaks the ring: it shows no state
+            if owner not in self._mark_failed:
+                self._mark_failed.add(owner)
+                self._log(f"ring '{self.menu.id}' marks for '{getattr(menu, 'id', '?')}' ignored: {e!r}")
+            return None
+        return sigs if any(sigs) else None
+
+    def _mark_slots(self, owner, menu, fan=None):
+        """Lays the marks of menu's items over the slot pictures of the ring (owner (), fan None) or of a fan (owner
+        its path). The kept list is never changed: a ring with marks gets a copy with the marked pictures in it, one
+        without gets the kept list back. Only slots whose picture changed are drawn and lose their blends. Returns
+        whether anything changed."""
+        sigs = self._ask_marks(owner, menu)
+        old = self._marks.get(owner)
+        if sigs == old:
+            return False
+        plain = self._plain if fan is None else fan.plain
+        cur = self.sprites if fan is None else fan.sprites
+        n = len(plain)
+
+        def pics(ss):
+            return [None if s is None or s[:2] == (None, None) else s[:2] for s in (ss or (None,) * n)]
+        before, after = pics(old), pics(sigs)
+        try:
+            if not any(after):
+                sprites = plain
+            else:
+                sprites = list(cur)
+                look = self.look if fan is None else fan.look
+                sizes = self.sizes if fan is None else fan.csizes
+                for i, (a, b) in enumerate(zip(before, after)):
+                    if a != b:
+                        sprites[i] = plain[i] if b is None else self._marked(plain[i], menu.items[i], sizes[i], look, b)
+        except Exception:                          # drawing a mark failed: this ring or fan shows no state
+            if "draw" not in self._mark_failed:    # once per ring: every refresh would fail the same way
+                self._mark_failed.add("draw")
+                self._log(f"ring '{self.menu.id}' marks not drawn:\n" + traceback.format_exc())
+            sigs, sprites, after = None, plain, [None] * n
+        gone = {(owner, i) for i in range(n) if before[i] != after[i] or sprites[i] is not cur[i]}
+        if gone:
+            for k in [k for k in self._blend_cache if k[0] in gone]:
+                del self._blend_cache[k]
+        if fan is None:
+            self.sprites = sprites
+        else:
+            fan.sprites = sprites
+        self._marks[owner] = sigs
+        dims = [bool(s and s[2]) for s in sigs] if sigs else []
+        self._dims[owner] = dims if any(dims) else None
+        return True
+
+    def _marked(self, pair, it, size, look, pic):
+        """The (idle, hover) pictures pair of a slot with the picture part of a mark, pic = (lit, value text), laid
+        over copies of them. Kept between opens in _marked_cache by the slot's key and pic."""
+        key = (self._slot_key(it, size, look), pic)
+        got = _marked_cache.get(key)
+        if got is not None:
+            return got
+        lit, text = pic
+        shape, corner = self._shape_of(it, look)
+        D = size * 1.12 * SS                       # the disc and canvas widths, supersampled, as _slot_sprites has them
+        C = int(D + 2 * 30 * self.scale * SS + shapes.pad_extra(shape, D))
+        n = int(C / SS)                            # the pictures' width ...
+        r1 = D / 2 * n / C                         # ... and the disc's half width in them
+        parts = []
+        if lit:
+            parts.append(self._mark_outline(it, look, shape, corner, n, r1))
+        if lit is not None:
+            parts.append(self._mark_pip(it, look, lit, shape, n, r1))
+        if text is not None:
+            chip = self._chip(text, look, r1)
+            y = self._chip_y(chip, shape, corner, r1)
+            parts.append((chip, (round(n / 2 - chip.size[0] / 2), round(n / 2 + y - chip.size[1] / 2))))
+        out = []
+        for im in pair:
+            im = im.copy()
+            for part, (x, y) in parts:
+                _blit(im, part, x, y)
+            out.append(im)
+        got = tuple(out)
+        _marked_cache.put(key, got, sum(im.size[0] * im.size[1] * 4 for im in got))
+        return got
+
+    # The overlays are drawn supersampled on pictures just big enough for them and placed where they belong in the
+    # slot's pictures (n wide, the disc centred with half width r1), so drawing one costs little and lands exactly.
+    def _mark_outline(self, it, look, shape, corner, n, r1):
+        """(picture, top-left) of a lit slot's outline: the slot's shape in its hover colour, max(2, border width)
+        wide like the hover rim."""
+        s = SS
+        hue = _hover_hue(it, look)
+        bw = _num(_style(it).get("border_width"), look.border_width, 0, 6)
+        key = ("outline", shape, corner, n, r1, self.scale, hue, bw)
+        got = _mark_parts.get(key)
+        if got is None:
+            e = r1 * (shapes.DIAMOND_K if shape == "diamond" else 1.0) + 2
+            x0 = math.floor(n / 2 - e)
+            w = math.ceil(n / 2 + e) - x0
+            im = Image.new("RGBA", (w * s, w * s), (0, 0, 0, 0))
+            c = (n / 2 - x0) * s
+            shapes.draw(ImageDraw.Draw(im), shape, c, c, r1 * s, corner, outline=_rgba(hue, 1.0),
+                        width=max(1, int(max(2, bw) * self.scale * s)))
+            got = (im.resize((w, w), Image.LANCZOS), (x0, x0))
+            _mark_parts.put(key, got, w * w * 4)
+        return got
+
+    def _mark_pip(self, it, look, lit, shape, n, r1):
+        """(picture, top-left) of a toggle's pip, MARK_PIP of the slot wide, at the upper right: the submenu badge's
+        corner (shapes.badge, so it follows the shape) mirrored upwards. Lit: filled in the slot's hover colour with
+        a rim in the background colour. Off: a hollow ring in the text colour at 35 percent."""
+        s = SS
+        hue = _hover_hue(it, look)
+        key = ("pip", lit, shape, n, r1, self.scale, hue, look.bg, look.text)
+        got = _mark_parts.get(key)
+        if got is None:
+            b = shapes.badge(shape)
+            fx, fy, pr = n / 2 + r1 * b, n / 2 - r1 * b, MARK_PIP * r1
+            rim = 1.5 * self.scale
+            e = pr + rim + 1
+            x0, y0 = math.floor(fx - e), math.floor(fy - e)
+            w, h = math.ceil(fx + e) - x0, math.ceil(fy + e) - y0
+            im = Image.new("RGBA", (w * s, h * s), (0, 0, 0, 0))
+            d = ImageDraw.Draw(im)
+            cx, cy = (fx - x0) * s, (fy - y0) * s
+
+            def disc(rr, **kw):
+                d.ellipse((cx - rr * s, cy - rr * s, cx + rr * s, cy + rr * s), **kw)
+            if lit:
+                disc(pr + rim, fill=_rgba(look.bg, 1.0))
+                disc(pr, fill=_rgba(hue, 1.0))
+            else:
+                disc(pr, outline=_rgba(look.text, 0.35), width=max(1, int(1.5 * self.scale * s)))
+            got = (im.resize((w, h), Image.LANCZOS), (x0, y0))
+            _mark_parts.put(key, got, w * h * 4)
+        return got
+
+    @staticmethod
+    def _chip_y(chip, shape, corner, r1):
+        """How far below the slot centre the chip's centre goes: MARK_CHIP_Y of the half width, lifted in a shape that
+        narrows towards the bottom (a hexagon, a diamond) until the chip's lower corners are inside the slot, clear
+        of its rim. Never above 0.3 of the half width."""
+        hw, hh = chip.size[0] / 2, chip.size[1] / 2
+        y = MARK_CHIP_Y * r1
+        while y > 0.3 * r1 and not shapes.inside(shape, hw, y + hh, r1 * 0.92, corner):
+            y -= 0.5
+        return y
+
+    def _chip(self, text, look, r1):
+        """A value chip: the text on a pill in the label pill's colour but at least CHIP_PILL_ALPHA opaque, 9 px bold
+        by scale, cut to fit the disc (half width r1)."""
+        L, s = look, SS
+        pill = tuple(L.pre["pill"][:3]) + (max(L.pre["pill"][3], CHIP_PILL_ALPHA),)
+        key = ("chip", text, r1, self.scale, L.text, pill)
+        got = _mark_parts.get(key)
+        if got is not None:
+            return got
+        font = _font_for(text, int(9 * self.scale * s))
+        tmp = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
+        hp, vp = 4 * self.scale * s, 1.5 * self.scale * s       # how far the pill reaches past the text
+        text = _shorten(tmp, text, font, 1.6 * r1 * s - 2 * hp)
+        l, _, r_, _ = tmp.textbbox((0, 0), text, font=font, anchor="ls")
+        top, bottom = tmp.textbbox((0, 0), "0k", font=font, anchor="ls")[1::2]   # one height for every chip
+        w = math.ceil((r_ - l + 2 * hp) / s) * s
+        h = math.ceil((bottom - top + 2 * vp) / s) * s
+        im = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+        d = ImageDraw.Draw(im)
+        d.rounded_rectangle((0, 0, w - 1, h - 1), radius=(h - 1) / 2, fill=pill)
+        d.text(((w - (r_ - l)) / 2 - l, (h - (bottom - top)) / 2 - top), text, font=font, fill=_rgba(L.text, 1.0),
+               anchor="ls")
+        got = im.resize((w // s, h // s), Image.LANCZOS)
+        _mark_parts.put(key, got, got.size[0] * got.size[1] * 4)
+        return got
 
     def _hub(self):
         """The centre dot's diameter in unscaled px (0 = none)."""
@@ -1974,10 +2234,13 @@ class Ring:
             _blit(canvas, dd, cx - k / 2, cy - k / 2)
         order = sorted(range(self.n), key=lambda i: self.hv[i][1])  # hovered slot drawn last (on top)
         labels = []
+        dim = self._dims.get(())
         for i in order:                            # every disc first, then every label, so no disc covers a name
             sc, alpha, dx, dy, rot, blur = self._slot_state(i, now)
             ux, uy = self.seats[i]
             px, py, h = cx + ux * self.rad[i] + dx, cy + uy * self.rad[i] + dy, self._hover_val(self.hv, i, now)
+            if dim is not None and dim[i]:         # ZBrush has the item greyed out or not there
+                alpha *= DIM_IDLE + (DIM_HOVER - DIM_IDLE) * h
             self._draw_disc(canvas, ((), i), self.sprites[i], px, py, sc, alpha, h, rot, blur)
             labels.append((self.labels[i], px, py, sc, alpha, h, self.sizes[i]))
         for args in labels:
@@ -1997,6 +2260,7 @@ class Ring:
         if im is not None:
             _blit(canvas, im, cx + lx, cy + ly)
         labels = []
+        dim = self._dims.get(fan.path)
         for k in sorted(range(len(fan.items)), key=lambda j: fan.hv[j][1]):
             e, alpha = 1.0, 1.0
             if dur > 0:
@@ -2005,6 +2269,8 @@ class Ring:
                 alpha = min(1.0, max(0.0, ek / fade))
             px, py = cx + ax + (fan.pos[k][0] - ax) * e, cy + ay + (fan.pos[k][1] - ay) * e
             sc, h = 0.6 + 0.4 * e, self._hover_val(fan.hv, k, now)
+            if dim is not None and dim[k]:
+                alpha *= DIM_IDLE + (DIM_HOVER - DIM_IDLE) * h
             self._draw_disc(canvas, (fan.path, k), fan.sprites[k], px, py, sc, alpha, h, 0, 0.0)
             labels.append((fan.labels[k], px, py, sc, alpha, h, fan.csizes[k]))
         for args in labels:

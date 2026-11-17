@@ -44,7 +44,7 @@
     const b = cfg && cfg.bridge;
     if (isObj(b)) {
       const key = String(b.key || '').trim().toLowerCase();
-      if ((b.mode !== undefined && b.mode !== 'auto') || (key && key !== 'f9')) add('ZBrush bridge');
+      if ((b.mode !== undefined && b.mode !== 'auto') || (key && key !== 'f9') || b.show_state === false) add('ZBrush bridge');
     }
     const p = cfg && cfg.profile;
     if (isObj(p) && p.next_hotkey) add('Next profile hotkey');
