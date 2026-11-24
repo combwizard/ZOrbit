@@ -4,6 +4,18 @@ All notable changes to this project are listed here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+
+- ZBrush 2027.1 names its folder under `%APPDATA%\Maxon` by its full version (`ZBrush 2027.1.0_...`), which ZOrbit
+  did not recognise. The library and the Recent slot then read ZBrush 2027.0's user assets folder instead of 2027.1's.
+
+### Changed
+
+- Two ZBrush installs of the same year, such as 2027.0.1 and 2027.1.0, are named by their full version on Studio's
+  **Setup** screen instead of both reading **ZBrush 2027**.
+
 ## [0.25.0] - 2026-11-17
 
 ZOrbit 0.25.0 lets the ring show what ZBrush is doing, in ZBrush 2026 and newer. A **Toggle** slot shows whether

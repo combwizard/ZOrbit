@@ -683,6 +683,23 @@ def test_a_running_older_zbrush_has_no_user_assets_folder(tmp_path, monkeypatch)
     assert d["install"] == old and d["user_assets"] is None     # 2022 keeps everything in the installation
 
 
+def test_a_point_release_has_its_own_stamp_folder(tmp_path, monkeypatch):
+    m = maxon(tmp_path, monkeypatch)
+    ins = _two_stamped(tmp_path, m)                              # 2027 is 2027.0 here
+    point = tmp_path / "ZBrush 2027.1.0"
+    touch(point / "ZBrush.exe")
+    stamp = m / "ZBrush 2027.1.0_1A2B3C4D"                      # ZBrush 2027.1 names its folder by the full version
+    touch(stamp / "installpath.txt").write_text(str(point), encoding="utf-8")
+    touch(stamp / "userassets_path.txt").write_text(str(tmp_path / "assets2027.1"), encoding="utf-8")
+    assert [d.name for _, d in brushes._maxon_stamps()][:2] == ["ZBrush 2027.1.0_1A2B3C4D", "ZBrush 2027_AAAA"]
+    assert brushes.stamp_of(_install(point, 2027)) == stamp
+    assert brushes.user_assets_of(_install(point, 2027)) == tmp_path / "assets2027.1"
+    assert brushes.user_assets_of(_install(ins[2027], 2027)) == tmp_path / "assets2027"
+    assert brushes.zbrush_dirs()["install"] == point            # none running: the newest version
+    monkeypatch.setattr(brushes._installs, "running_installs", lambda: [_install(point, 2027)])
+    assert brushes.zbrush_dirs()["user_assets"] == tmp_path / "assets2027.1"
+
+
 def test_a_running_zbrush_matched_by_year_or_by_the_newest_stamp(tmp_path, monkeypatch):
     m = maxon(tmp_path, monkeypatch)
     ins = _two_stamped(tmp_path, m)

@@ -20,7 +20,8 @@ except ImportError:  # run as a plain module / script
     import tags as _tags
     import zbp as _zbp
 
-_DIR_RE = re.compile(r"^(?:Maxon )?ZBrush (\d{4})_", re.I)
+# "ZBrush 2026_0C9212BE", and from 2027.1 on with the full version: "ZBrush 2027.1.0_1A2B3C4D"
+_DIR_RE = re.compile(r"^(?:Maxon )?ZBrush (\d{4})((?:\.\d+)*)_", re.I)
 _index: dict[str, Path] | None = None
 _install_index: dict[str, dict[str, Path]] = {}
 _index_lock = threading.Lock()         # held only to swap what a walk made in: find_brush() never waits for a walk
@@ -49,7 +50,7 @@ def _read_path(p: Path) -> Path | None:
 
 def _maxon_stamps() -> list[tuple[int, Path]]:
     """The per-version folders ZBrush 2026 and newer keep under %APPDATA%\\Maxon (installpath.txt and
-    userassets_path.txt live there), newest year first. Empty without APPDATA or a Maxon folder."""
+    userassets_path.txt live there), newest version first. Empty without APPDATA or a Maxon folder."""
     appdata = os.environ.get("APPDATA")
     if not appdata:
         return []
@@ -58,10 +59,11 @@ def _maxon_stamps() -> list[tuple[int, Path]]:
         for d in (Path(appdata) / "Maxon").iterdir():
             m = _DIR_RE.match(d.name)
             if m and d.is_dir():
-                cands.append((int(m.group(1)), d.name, d))
+                point = tuple(int(x) for x in m.group(2).split(".") if x)     # 2027.1.0 after 2027
+                cands.append((int(m.group(1)), point, d.name, d))
     except OSError:
         pass                                    # no Maxon folder: ZBrush 2022 to 2025 only, or none at all
-    return [(year, d) for year, _, d in sorted(cands, reverse=True)]
+    return [(year, d) for year, _, _, d in sorted(cands, reverse=True)]
 
 
 def _newest_user_assets(stamps) -> Path | None:

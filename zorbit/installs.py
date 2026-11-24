@@ -8,9 +8,13 @@ Public API:
 older ones (2022-2025) need the ZScript bridge. "supported" is False for a year before 2022 (kept in the
 list so the page can show it greyed out). Sources, all optional: the uninstall entries in the registry,
 %APPDATA%\\Maxon\\*\\installpath.txt (written by recent versions), and the usual Program Files folders.
+The name is "ZBrush <year>"; when two installations would share one (ZBrush 2027.0.1 and 2027.1.0 side by side),
+each is named by the full version its ZBrush.exe carries instead.
 """
 from __future__ import annotations
 
+import collections
+import ctypes
 import glob
 import os
 import re
@@ -27,6 +31,31 @@ def _norm(p) -> str:
 
 def has_python_api(path) -> bool:
     return bool(glob.glob(os.path.join(str(path), "python3*.dll")))
+
+
+def exe_version(path) -> tuple[int, int, int] | None:
+    """(major, minor, patch) from the version resource of path\\ZBrush.exe, such as (2027, 1, 0); None when it has
+    none or it cannot be read. The registry is no help here: ZBrush leaves an uninstall entry per update, all
+    naming the same folder, and the folder name is the user's choice."""
+    try:
+        ver = ctypes.WinDLL("version")
+        exe = os.path.join(str(path), "ZBrush.exe")
+        size = ver.GetFileVersionInfoSizeW(exe, None)
+        if not size:
+            return None
+        buf = ctypes.create_string_buffer(size)
+        if not ver.GetFileVersionInfoW(exe, 0, size, buf):
+            return None
+        fixed, n = ctypes.c_void_p(), ctypes.c_uint()
+        if not ver.VerQueryValueW(buf, "\\", ctypes.byref(fixed), ctypes.byref(n)) or n.value < 52 or not fixed:
+            return None
+        info = ctypes.cast(fixed, ctypes.POINTER(ctypes.c_uint32 * 13)).contents   # VS_FIXEDFILEINFO
+        if info[0] != 0xFEEF04BD:                                                  # its signature
+            return None
+        ms, ls = info[2], info[3]                                                  # dwFileVersionMS, LS
+        return ms >> 16, ms & 0xFFFF, ls >> 16
+    except (OSError, AttributeError, ValueError):
+        return None
 
 
 def entry(path, name_hint="") -> dict | None:
@@ -118,7 +147,12 @@ def find_installs() -> list[dict]:
                     found[key] = e
         except OSError:
             continue
-    return sorted(found.values(), key=lambda e: (e["year"] or 0, e["path"].lower()))
+    out = sorted(found.values(), key=lambda e: (e["year"] or 0, e["path"].lower()))
+    names = collections.Counter(e["name"] for e in out)
+    for e in out:
+        if names[e["name"]] > 1 and (v := exe_version(e["path"])):
+            e["name"] = "ZBrush {}.{}.{}".format(*v)
+    return out
 
 
 def running_installs() -> list[dict]:
