@@ -119,3 +119,29 @@ def test_running_installs_lists_each_running_zbrush_once_newest_first(tmp_path, 
     monkeypatch.setattr(win32, "pids_named", lambda name: sorted(images) if name == "zbrush.exe" else [])
     monkeypatch.setattr(win32, "process_image", lambda pid: images[pid])
     assert [e["path"] for e in installs.running_installs()] == [str(new), str(old)]
+
+
+def test_installs_sharing_a_name_are_named_by_their_version(tmp_path, monkeypatch):
+    a = zbrush(tmp_path, "ZBrush 2027", True)
+    b = zbrush(tmp_path, "ZBrush 2027.1.0", True)
+    c = zbrush(tmp_path, "ZBrush 2026", True)
+    no_sources(monkeypatch, folders=[(a, "ZBrush 2027"), (b, "ZBrush 2027.1.0"), (c, "ZBrush 2026")])
+    versions = {a: (2027, 0, 1), b: (2027, 1, 0), c: (2026, 2, 1)}
+    monkeypatch.setattr(installs, "exe_version", lambda p: versions[p])
+    assert [e["name"] for e in installs.find_installs()] == ["ZBrush 2026", "ZBrush 2027.0.1", "ZBrush 2027.1.0"]
+
+
+def test_a_shared_name_stays_when_the_version_cannot_be_read(tmp_path, monkeypatch):
+    a, b = zbrush(tmp_path, "ZBrush 2027"), zbrush(tmp_path, "ZBrush 2027.1.0")
+    no_sources(monkeypatch, folders=[(a, ""), (b, "")])
+    assert [e["name"] for e in installs.find_installs()] == ["ZBrush 2027", "ZBrush 2027"]   # empty exes
+
+
+def test_exe_version_reads_the_version_resource(tmp_path):
+    import shutil
+    import sys
+    d = tmp_path / "Z"
+    d.mkdir()
+    shutil.copy(sys.executable, d / "ZBrush.exe")          # any exe with a version resource
+    assert installs.exe_version(d)[:2] == sys.version_info[:2]
+    assert installs.exe_version(tmp_path / "missing") is None
